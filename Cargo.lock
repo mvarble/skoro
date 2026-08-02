@@ -5650,6 +5650,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-riemann"
+version = "0.0.0"
+dependencies = [
+ "ndarray 0.17.2",
+ "skoro-backend",
+ "skoro-core",
+ "skoro-operation",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

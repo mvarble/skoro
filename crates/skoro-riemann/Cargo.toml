@@ -1,0 +1,12 @@
+[package]
+name = "skoro-riemann"
+description = "Encodings of Riemannian manifolds in Skoro."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+ndarray.workspace = true
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-operation.workspace = true
