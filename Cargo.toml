@@ -18,3 +18,4 @@ num-traits = "0.2"
 
 skoro-backend = { path = "./crates/skoro-backend" }
 skoro-core = { path = "./crates/skoro-core" }
+skoro-operation = { path = "./crates/skoro-operation" }

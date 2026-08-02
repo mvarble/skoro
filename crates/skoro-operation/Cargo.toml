@@ -1,0 +1,13 @@
+[package]
+name = "skoro-operation"
+description = "Tensor operation wrappers in Skoro."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+skoro-backend.workspace = true
+skoro-core.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
