@@ -1,0 +1,15 @@
+[package]
+name = "skoro-graph"
+description = "Generative graph structure for Skoro models"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[features]
+test-utils = []
+
+[dependencies]
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-operation.workspace = true
+skoro-riemann.workspace = true
