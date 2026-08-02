@@ -5690,6 +5690,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-normal"
+version = "0.0.0"
+dependencies = [
+ "approx",
+ "burn",
+ "skoro-backend",
+ "skoro-core",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-operation",
+ "skoro-pointwise",
+ "skoro-riemann",
+]
+
+[[package]]
 name = "skoro-operation"
 version = "0.0.0"
 dependencies = [

@@ -22,6 +22,7 @@ skoro-operation = { path = "./crates/skoro-operation" }
 skoro-graph = { path = "./crates/skoro-graph" }
 skoro-linalg = { path = "./crates/skoro-linalg" }
 skoro-model = { path = "./crates/skoro-model" }
+skoro-normal = { path = "./crates/skoro-normal" }
 skoro-riemann = { path = "./crates/skoro-riemann" }
 skoro-pointwise = { path = "./crates/skoro-pointwise" }
 skoro-so3 = { path = "./crates/skoro-so3" }

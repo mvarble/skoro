@@ -1,0 +1,175 @@
+use burn::tensor::Distribution as BurnDistribution;
+use std::marker::PhantomData;
+
+use skoro_backend::{Backend, ElementConversion, Point, Tensor};
+use skoro_core::{id::Id, kind::Continuous, sampler::Sampler};
+use skoro_graph::quantity::ContinuousQuantity;
+use skoro_linalg::{
+    tril::{Tril, TrilOps, TrilVectorProduct},
+    vector::LinalgVectorOps,
+};
+use skoro_model::{distribution::Distribution, q::Q};
+use skoro_operation::{
+    Input,
+    diff::{DiffModeState, DiffOperation, DiffOperationForward},
+};
+use skoro_pointwise::PointwiseOps;
+use skoro_riemann::{DynManifold, real::Real};
+
+/// Sampler associated with a normal distribution.
+pub struct NormalSampler<B: Backend, T: ContinuousQuantity<B>> {
+    quantity_type: T,
+    _phantom: PhantomData<B>,
+}
+
+impl<B: Backend, T: ContinuousQuantity<B>> std::fmt::Debug for NormalSampler<B, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NormalSampler")
+            .field("quantity_type", &self.quantity_type)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<B: Backend, T: ContinuousQuantity<B>> Clone for NormalSampler<B, T> {
+    fn clone(&self) -> Self {
+        Self {
+            quantity_type: self.quantity_type.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<B: Backend, T: ContinuousQuantity<B>> NormalSampler<B, T> {
+    pub fn new(quantity_type: T) -> Self {
+        Self {
+            quantity_type,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn sample(&self, mean: Point<B>, std_dev: Point<B>) -> Point<B> {
+        let batch_size = mean.dims()[0];
+        let tangent_dim = self.quantity_type.dimension();
+        let tangent = Tensor::<B, 2>::random(
+            [batch_size, tangent_dim],
+            BurnDistribution::Normal(0.0, 1.0),
+            &mean.device(),
+        );
+        let DiffOperationForward::ForwardOnly { output: tangent } = TrilVectorProduct.forward(
+            vec![Input::Float(std_dev), Input::Float(tangent)],
+            DiffModeState::ForwardOnly,
+        ) else {
+            panic!("DiffModeState::ForwardOnly should map to DiffOperationForward::ForwardOnly.")
+        };
+        self.quantity_type.retract(mean, tangent)
+    }
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> Sampler<B, Continuous> for NormalSampler<B, M> {
+    fn sample(&self, batch_size: usize, parameters: Vec<Input<B>>) -> Point<B> {
+        let [mean, std_dev] = parameters.try_into().unwrap();
+        let mean = mean.into_float();
+        let std_dev = std_dev.into_float();
+        assert_eq!(batch_size, mean.dims()[0]);
+        self.sample(mean, std_dev)
+    }
+}
+
+/// Normal distribution.
+pub struct Normal<B: Backend, M: ContinuousQuantity<B>> {
+    mean: Q<B, M>,
+    std_dev: Q<B, Tril>,
+    quantity_type: M,
+    constant: f64,
+    ids: [Id; 2],
+    _phantom: PhantomData<B>,
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> std::fmt::Debug for Normal<B, M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Normal")
+            .field("mean", &self.mean)
+            .field("std_dev", &self.std_dev)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> Clone for Normal<B, M> {
+    fn clone(&self) -> Self {
+        Self {
+            mean: self.mean.clone(),
+            ids: self.ids,
+            std_dev: self.std_dev.clone(),
+            quantity_type: self.mean.get_quantity_type(),
+            constant: self.constant,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> Normal<B, M>
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>,
+{
+    pub fn new(mean: Q<B, M>, std_dev: Q<B, Tril>) -> Self {
+        let quantity_type = mean.get_quantity_type();
+        Self {
+            ids: [mean.id, std_dev.id],
+            mean,
+            std_dev,
+            constant: -0.5 * quantity_type.dimension() as f64 * std::f64::consts::TAU.ln(),
+            quantity_type,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn mean(&self) -> &Q<B, M> {
+        &self.mean
+    }
+
+    pub fn std_dev(&self) -> &Q<B, Tril> {
+        &self.std_dev
+    }
+
+    pub fn constant(&self) -> B::FloatElem {
+        B::FloatElem::from_elem(self.constant)
+    }
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> Distribution<B, Continuous> for Normal<B, M>
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>,
+{
+    type Qty = M;
+    type Sampler = NormalSampler<B, M>;
+
+    fn quantity_type(&self) -> M {
+        self.quantity_type.clone()
+    }
+
+    fn sampler(&self) -> Self::Sampler {
+        NormalSampler::new(self.quantity_type.clone())
+    }
+
+    fn parent_ids(&self) -> &[Id] {
+        &self.ids
+    }
+
+    fn log_density(&self, x: &Q<B, M>) -> Q<B, Real> {
+        let colored_tangent = self.mean.inverse_retract(x);
+        let std_dev_inv = self.std_dev.invert();
+        // The covariance factor and the tangent share a dimension by
+        // construction of `Normal`, so this product cannot fail.
+        let white_tangent = std_dev_inv
+            .vector_product(&colored_tangent)
+            .expect("internal: Normal covariance factor and tangent dimensions should match");
+        let log_det = std_dev_inv.diag().abs().log().sum();
+        self.constant + -0.5 * white_tangent.norm_squared() + log_det
+    }
+}

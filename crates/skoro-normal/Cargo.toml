@@ -1,0 +1,21 @@
+[package]
+name = "skoro-normal"
+description = "Normal distribution interface for Skoro."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+burn.workspace = true
+
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-operation.workspace = true
+skoro-graph.workspace = true
+skoro-linalg.workspace = true
+skoro-model.workspace = true
+skoro-riemann.workspace = true
+skoro-pointwise.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
