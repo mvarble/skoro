@@ -5699,6 +5699,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-pointwise"
+version = "0.0.0"
+dependencies = [
+ "approx",
+ "burn",
+ "skoro-backend",
+ "skoro-core",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-operation",
+ "skoro-riemann",
+]
+
+[[package]]
 name = "skoro-riemann"
 version = "0.0.0"
 dependencies = [
