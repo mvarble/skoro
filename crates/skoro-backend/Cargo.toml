@@ -1,0 +1,12 @@
+[package]
+name = "skoro-backend"
+description = "Backend trait for the Skoro library and relevant Burn aliases."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+burn.workspace = true
+burn-cubecl.workspace = true
+burn-ndarray.workspace = true
+num-traits.workspace = true
