@@ -1,0 +1,16 @@
+[package]
+name = "skoro-model"
+description = "General model interface for skoro."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-operation.workspace = true
+skoro-graph.workspace = true
+skoro-riemann.workspace = true
+lazy_static = "1.5.0"
+dashmap = "6.1.0"
+crossbeam-queue = "0.3.12"
