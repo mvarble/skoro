@@ -24,3 +24,4 @@ skoro-linalg = { path = "./crates/skoro-linalg" }
 skoro-model = { path = "./crates/skoro-model" }
 skoro-riemann = { path = "./crates/skoro-riemann" }
 skoro-pointwise = { path = "./crates/skoro-pointwise" }
+skoro-so3 = { path = "./crates/skoro-so3" }

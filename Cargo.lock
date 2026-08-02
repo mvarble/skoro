@@ -5724,6 +5724,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-so3"
+version = "0.0.0"
+dependencies = [
+ "approx",
+ "burn",
+ "burn-wgpu",
+ "cubecl",
+ "num-traits",
+ "skoro-backend",
+ "skoro-core",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-operation",
+ "skoro-riemann",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
