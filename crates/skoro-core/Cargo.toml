@@ -1,0 +1,9 @@
+[package]
+name = "skoro-core"
+description = "Core utilities for the Skoro library."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+skoro-backend.workspace = true

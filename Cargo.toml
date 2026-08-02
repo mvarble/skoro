@@ -17,3 +17,4 @@ ndarray = "0.17.2"
 num-traits = "0.2"
 
 skoro-backend = { path = "./crates/skoro-backend" }
+skoro-core = { path = "./crates/skoro-core" }
