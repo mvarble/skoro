@@ -5633,6 +5633,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
+name = "skoro"
+version = "0.0.0"
+dependencies = [
+ "skoro-backend",
+ "skoro-core",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-normal",
+ "skoro-operation",
+ "skoro-pointwise",
+ "skoro-riemann",
+ "skoro-se3",
+ "skoro-so3",
+]
+
+[[package]]
 name = "skoro-backend"
 version = "0.0.0"
 dependencies = [
