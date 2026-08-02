@@ -5724,6 +5724,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-se3"
+version = "0.0.0"
+dependencies = [
+ "approx",
+ "burn",
+ "burn-wgpu",
+ "cubecl",
+ "num-traits",
+ "skoro-backend",
+ "skoro-core",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-operation",
+ "skoro-riemann",
+ "skoro-so3",
+]
+
+[[package]]
 name = "skoro-so3"
 version = "0.0.0"
 dependencies = [
