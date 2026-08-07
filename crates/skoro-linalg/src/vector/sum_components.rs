@@ -29,13 +29,12 @@ impl<B: Backend> DiffOperation<B> for SumComponents {
                 let dim = if diff { Some(x.dims()[1]) } else { None };
                 DiffOperationForward::vjp(x.sum_dim(1), dim)
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                let dim = if dx.is_some() {
-                    Some(x.dims()[1])
-                } else {
-                    None
-                };
+                let dim = if diffs[0] { Some(x.dims()[1]) } else { None };
                 DiffOperationForward::hvp(x.sum_dim(1), dx.map(|dx| dx.sum_dim(1)), dim, ())
             }
         }

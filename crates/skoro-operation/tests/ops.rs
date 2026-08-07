@@ -70,7 +70,10 @@ fn pointwise_mul() {
         ..
     } = kernel.forward(
         vec![Input::Float(x), Input::Float(y)],
-        DiffModeState::Hvp(vec![Some(dx_vec), Some(dy_vec)]),
+        DiffModeState::Hvp {
+            diffs: vec![true, true],
+            tangents: vec![Some(dx_vec), Some(dy_vec)],
+        },
     )
     else {
         panic!("Expected Hvp");
@@ -142,7 +145,10 @@ fn addition() {
         ..
     } = kernel.forward(
         vec![Input::Float(x), Input::Float(y)],
-        DiffModeState::Hvp(vec![Some(dx_vec), Some(dy_vec)]),
+        DiffModeState::Hvp {
+            diffs: vec![true, true],
+            tangents: vec![Some(dx_vec), Some(dy_vec)],
+        },
     )
     else {
         panic!("Expected Hvp");
@@ -215,7 +221,10 @@ fn subtraction() {
         ..
     } = kernel.forward(
         vec![Input::Float(x), Input::Float(y)],
-        DiffModeState::Hvp(vec![Some(dx_vec), Some(dy_vec)]),
+        DiffModeState::Hvp {
+            diffs: vec![true, true],
+            tangents: vec![Some(dx_vec), Some(dy_vec)],
+        },
     )
     else {
         panic!("Expected Hvp");
@@ -280,7 +289,10 @@ fn literal_pointwise_mul() {
         ..
     } = kernel.forward(
         vec![Input::Float(x)],
-        DiffModeState::Hvp(vec![Some(dx_vec)]),
+        DiffModeState::Hvp {
+            diffs: vec![true],
+            tangents: vec![Some(dx_vec)],
+        },
     )
     else {
         panic!("Expected Hvp");

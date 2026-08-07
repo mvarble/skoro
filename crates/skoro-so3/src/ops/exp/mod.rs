@@ -6,6 +6,3 @@ pub use sugar::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SO3Exp;
-
-#[cfg(test)]
-pub(crate) mod tests;

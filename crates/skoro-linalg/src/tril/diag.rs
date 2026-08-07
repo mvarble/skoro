@@ -1,4 +1,4 @@
-use skoro_backend::{Backend, CotangentFrame, Int, Point, Tensor, TensorData};
+use skoro_backend::{Backend, CotangentFrame, ElementConversion, Int, Point, Tensor, TensorData};
 use skoro_core::pack::NumComponents;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_operation::{
@@ -20,21 +20,24 @@ fn diagonal<B: Backend, const D: usize>(tril: Tensor<B, D>) -> Tensor<B, D> {
         let n = k_to_n(k);
         let mut indices = Vec::with_capacity(n);
         for i in 0..n {
-            indices.push((i * (i + 3) / 2) as i32);
+            indices.push(B::IntElem::from_elem(i * (i + 3) / 2));
         }
-        Tensor::<B, 1, Int>::from_data(TensorData::new(indices, [n]), &device)
+        Tensor::<B, 1, Int>::from_data(
+            TensorData::new(indices, [n]).convert::<B::IntElem>(),
+            &device,
+        )
     };
     tril.select(1, indices)
 }
 
 fn packed_diagonal_mask<B: Backend>(n: usize, device: &B::Device) -> Tensor<B, 1> {
     let k = n * (n + 1) / 2;
-    let mut mask = vec![0.0f32; k];
+    let mut mask = vec![B::FloatElem::from_elem(0.0); k];
     for i in 0..n {
         let diag_idx = i * (i + 3) / 2;
-        mask[diag_idx] = 1.0;
+        mask[diag_idx] = B::FloatElem::from_elem(1.0);
     }
-    Tensor::<B, 1>::from_data(TensorData::new(mask, [k]), device)
+    Tensor::<B, 1>::from_data(TensorData::new(mask, [k]).convert::<B::FloatElem>(), device)
 }
 
 impl<B: Backend> DiffOperation<B> for TrilDiag {
@@ -60,16 +63,18 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
                 }
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(diag, diffs[0]),
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dmat_packed] = tvecs.try_into().unwrap();
-                if let Some(dmat_packed) = dmat_packed {
+                let tangent = dmat_packed.map(|dmat_packed| {
                     let [_, k] = dmat_packed.dims();
                     let n = k_to_n(k);
                     let mask = packed_diagonal_mask(n, &dmat_packed.device()).reshape([1, k]);
-                    DiffOperationForward::hvp(diag, Some(diagonal(dmat_packed * mask)), true, ())
-                } else {
-                    DiffOperationForward::hvp(diag, None, false, ())
-                }
+                    diagonal(dmat_packed * mask)
+                });
+                DiffOperationForward::hvp(diag, tangent, diffs[0], ())
             }
         }
     }
@@ -83,16 +88,21 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
             let device = omega.device();
             let [_, n, _] = omega.dims();
             let k = n * (n + 1) / 2;
-            let mut indices = vec![0; k];
-            let mut mask = vec![0.0f32; k];
+            let mut indices = vec![B::IntElem::from_elem(0); k];
+            let mut mask = vec![B::FloatElem::from_elem(0.0); k];
             for i in 0..n {
                 let diag_idx = i * (i + 3) / 2;
-                indices[diag_idx] = i as i32;
-                mask[diag_idx] = 1.0;
+                indices[diag_idx] = B::IntElem::from_elem(i);
+                mask[diag_idx] = B::FloatElem::from_elem(1.0);
             }
-            let indices_tensor =
-                Tensor::<B, 1, Int>::from_data(TensorData::new(indices, [k]), &device);
-            let mask_tensor = Tensor::<B, 3>::from_data(TensorData::new(mask, [1, k, 1]), &device);
+            let indices_tensor = Tensor::<B, 1, Int>::from_data(
+                TensorData::new(indices, [k]).convert::<B::IntElem>(),
+                &device,
+            );
+            let mask_tensor = Tensor::<B, 3>::from_data(
+                TensorData::new(mask, [1, k, 1]).convert::<B::FloatElem>(),
+                &device,
+            );
             let expanded = omega.select(1, indices_tensor);
             vec![Some(expanded * mask_tensor)]
         } else {

@@ -21,7 +21,15 @@ pub trait TrilOps<B: Backend> {
     fn diag(&self) -> Q<B, EuclideanD>;
 }
 
-impl<B: Backend> TrilOps<B> for Q<B, Tril> {
+impl<B: Backend> TrilOps<B> for Q<B, Tril>
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
+{
     #[inline(always)]
     fn vector_product<T: TrilVector<B>>(&self, vector: &Q<B, T>) -> SkoroResult<Q<B, T>> {
         vector_product(self, vector)
@@ -35,6 +43,3 @@ impl<B: Backend> TrilOps<B> for Q<B, Tril> {
         diag(self)
     }
 }
-
-#[cfg(test)]
-mod tests;

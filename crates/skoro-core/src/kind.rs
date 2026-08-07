@@ -7,9 +7,11 @@
 //! `Sampler<B, K>`), the blanket implementations for the two kinds live on
 //! different trait instantiations and never conflict.
 
-use skoro_backend::{Backend, DiscretePoint, Element, Point};
+use skoro_backend::{
+    Backend, DiscretePoint, Element, Point, UnbatchedDiscretePoint, UnbatchedPoint,
+};
 
-use crate::operation_input::OperationInput;
+use crate::{constant_value::ConstantValue, operation_input::OperationInput};
 
 /// Runtime discriminator for the two quantity kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,13 +34,25 @@ pub trait Kind<B: Backend>: 'static + Send + Sync + std::fmt::Debug + private::S
     const KIND: QuantityKind;
     /// The tensor element type that values of this kind pack into.
     type Elem: Element;
+    /// The unbatched (rank-1) point type of this kind.
+    type UnbatchedPoint: Clone;
     /// The batched (rank-2) point type of this kind.
     type Point: Clone;
+
+    /// Wrap a kinded unbatched point into the erased [`ConstantValue`] operand.
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> ConstantValue<B>;
+
     /// Wrap a kinded point into the erased [`OperationInput`] operand.
-    fn wrap(point: Self::Point) -> OperationInput<B>;
+    fn wrap_point(point: Self::Point) -> OperationInput<B>;
+
     /// Borrow the kinded point inside an erased [`OperationInput`], if the kind
     /// matches.
-    fn as_point(input: &OperationInput<B>) -> Option<&Self::Point>;
+    fn as_point_ref(input: &OperationInput<B>) -> Option<&Self::Point>;
+
+    /// Unwrap kinded point inside an erased [`OperationInput`], if the kind
+    /// matches.
+    fn unwrap_point(input: OperationInput<B>) -> Option<Self::Point>;
+
     /// Extract the row-major elements of a kinded point.
     fn to_elements(point: &Self::Point) -> Vec<Self::Elem>;
 }
@@ -57,15 +71,29 @@ impl private::Sealed for Discrete {}
 impl<B: Backend> Kind<B> for Continuous {
     const KIND: QuantityKind = QuantityKind::Continuous;
     type Elem = B::FloatElem;
+    type UnbatchedPoint = UnbatchedPoint<B>;
     type Point = Point<B>;
 
     #[inline(always)]
-    fn wrap(point: Self::Point) -> OperationInput<B> {
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> ConstantValue<B> {
+        ConstantValue::Float(point)
+    }
+
+    #[inline(always)]
+    fn wrap_point(point: Self::Point) -> OperationInput<B> {
         OperationInput::Float(point)
     }
 
     #[inline(always)]
-    fn as_point(input: &OperationInput<B>) -> Option<&Self::Point> {
+    fn as_point_ref(input: &OperationInput<B>) -> Option<&Self::Point> {
+        match input {
+            OperationInput::Float(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    #[inline(always)]
+    fn unwrap_point(input: OperationInput<B>) -> Option<Self::Point> {
         match input {
             OperationInput::Float(t) => Some(t),
             _ => None,
@@ -84,15 +112,29 @@ impl<B: Backend> Kind<B> for Continuous {
 impl<B: Backend> Kind<B> for Discrete {
     const KIND: QuantityKind = QuantityKind::Discrete;
     type Elem = B::IntElem;
+    type UnbatchedPoint = UnbatchedDiscretePoint<B>;
     type Point = DiscretePoint<B>;
 
     #[inline(always)]
-    fn wrap(point: Self::Point) -> OperationInput<B> {
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> ConstantValue<B> {
+        ConstantValue::Int(point)
+    }
+
+    #[inline(always)]
+    fn wrap_point(point: Self::Point) -> OperationInput<B> {
         OperationInput::Int(point)
     }
 
     #[inline(always)]
-    fn as_point(input: &OperationInput<B>) -> Option<&Self::Point> {
+    fn unwrap_point(input: OperationInput<B>) -> Option<Self::Point> {
+        match input {
+            OperationInput::Int(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    #[inline(always)]
+    fn as_point_ref(input: &OperationInput<B>) -> Option<&Self::Point> {
         match input {
             OperationInput::Int(t) => Some(t),
             _ => None,

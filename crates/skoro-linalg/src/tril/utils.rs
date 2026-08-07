@@ -1,4 +1,4 @@
-use skoro_backend::{Backend, Int, Tensor, TensorData};
+use skoro_backend::{Backend, ElementConversion, Int, Tensor, TensorData};
 
 #[inline]
 pub(super) fn k_to_n(k: usize) -> usize {
@@ -26,19 +26,19 @@ pub fn unpack<B: Backend, const D: usize, const D2: usize>(
     let n = k_to_n(k);
 
     // 1. Generate indices and mask
-    let mut indices = Vec::with_capacity(n * n);
-    let mut mask = Vec::with_capacity(n * n);
+    let mut indices = Vec::<B::IntElem>::with_capacity(n * n);
+    let mut mask = Vec::<B::FloatElem>::with_capacity(n * n);
 
     for i in 0..n {
         for j in 0..n {
             if i >= j {
-                indices.push((i * (i + 1) / 2 + j) as i32);
-                mask.push(1.0f32);
+                indices.push(B::IntElem::from_elem(i * (i + 1) / 2 + j));
+                mask.push(B::FloatElem::from_elem(1.0));
             } else {
                 // Out-of-bounds protection: just point to 0,
                 // it will be zeroed out by the mask anyway.
-                indices.push(0);
-                mask.push(0.0f32);
+                indices.push(B::IntElem::from_elem(0));
+                mask.push(B::FloatElem::from_elem(0.0));
             }
         }
     }

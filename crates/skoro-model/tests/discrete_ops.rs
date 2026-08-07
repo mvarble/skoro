@@ -48,15 +48,12 @@ fn int_value(out: &PointMap<B>, id: &Id) -> i32 {
         .unwrap()[0]
 }
 
-// ----- M6b: discrete arithmetic / comparison / logical -----
-
 #[test]
 fn discrete_arithmetic_operators() {
     let model = ModelClient::<B>::default();
     let a = model.add_constant(Integer, &3i32);
     let b = model.add_constant(Integer, &4i32);
 
-    // `a + b` goes through the unified `Add` impl (β) -> discrete `register`.
     let sum = a.clone() + b.clone();
     let prod = a.clone() * b.clone();
 
@@ -92,8 +89,6 @@ fn discrete_comparison_and_logic() {
     assert_eq!(g(&either), 1);
     assert_eq!(g(&neither), 0);
 }
-
-// ----- M6d: bridges -----
 
 #[test]
 fn embedding_bridge_disc_to_cont() {
@@ -143,8 +138,8 @@ impl DiffOperation<B> for Scale {
                 DiffOperationForward::jvp(out, tangent)
             }
             DiffModeState::Vjp(_) => DiffOperationForward::vjp(out, factor),
-            DiffModeState::Hvp(tvecs) => {
-                let [dx, _dn] = tvecs.try_into().unwrap();
+            DiffModeState::Hvp { tangents, .. } => {
+                let [dx, _dn] = tangents.try_into().unwrap();
                 let tangent = dx.map(|dx| dx * factor.clone());
                 DiffOperationForward::hvp(out, tangent, factor, ())
             }
@@ -209,8 +204,6 @@ fn mixed_kernel_gradient_flows_to_continuous_input_only() {
     assert!(!grad.cotangents.contains_key(&n.id));
 }
 
-// ----- discrete leaves coexist; categorical surfaces -----
-
 #[test]
 fn categorical_constant_value() {
     let model = ModelClient::<B>::default();
@@ -219,15 +212,11 @@ fn categorical_constant_value() {
     assert_eq!(int_value(&out.constants, &z.id), 2);
 }
 
-// ----- discrete distributions through the unified `add_quantity` -----
-
 use skoro_core::kind::Discrete;
 use skoro_core::sampler::Sampler;
 use skoro_model::distribution::Distribution;
 use skoro_riemann::real::Real;
 
-/// A trivial discrete distribution: a point mass at `true` with a constant
-/// (zero) log-probability-mass.
 #[derive(Debug, Clone)]
 struct PointMass;
 

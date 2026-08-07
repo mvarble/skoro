@@ -15,7 +15,6 @@
 //!   `Deref` to [`ModelClient`]).
 
 use std::collections::HashMap;
-use std::ops::{AddAssign, Div, Mul, Neg};
 
 use skoro_backend::{
     Backend, CotangentFrame, ElementConversion, Point, TangentFrame, TangentVector,
@@ -46,18 +45,22 @@ use crate::distribution::Normal;
 /// Mirrors the `where` clause on [`Normal::new`].
 pub trait GaussianElem: Backend
 where
-    Self::FloatElem: Div<Self::FloatElem, Output = Self::FloatElem>
-        + Mul<Self::FloatElem, Output = Self::FloatElem>
-        + AddAssign<Self::FloatElem>
-        + Neg<Output = Self::FloatElem>,
+    Self::FloatElem: std::ops::Div<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Mul<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Add<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Sub<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Neg<Output = Self::FloatElem>
+        + std::ops::AddAssign<Self::FloatElem>,
 {
 }
 
 impl<B: Backend> GaussianElem for B where
-    B::FloatElem: Div<B::FloatElem, Output = B::FloatElem>
-        + Mul<B::FloatElem, Output = B::FloatElem>
-        + AddAssign<B::FloatElem>
-        + Neg<Output = B::FloatElem>
+    B::FloatElem: std::ops::Div<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Mul<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Add<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Sub<Self::FloatElem, Output = Self::FloatElem>
+        + std::ops::Neg<Output = Self::FloatElem>
+        + std::ops::AddAssign<Self::FloatElem>
 {
 }
 
@@ -67,10 +70,12 @@ impl<B: Backend> GaussianElem for B where
 /// which is semantically `add_quantity` with a [`Normal`] distribution.
 pub trait GaussianModelClientOps<B: Backend>: ModelClientOps<B>
 where
-    B::FloatElem: Div<B::FloatElem, Output = B::FloatElem>
-        + Mul<B::FloatElem, Output = B::FloatElem>
-        + AddAssign<B::FloatElem>
-        + Neg<Output = B::FloatElem>,
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
 {
     /// Add a quantity with a `Normal(mean, std_dev)` conditional distribution,
     /// where `std_dev` is a lower-triangular covariance factor.
@@ -83,10 +88,12 @@ where
 
 impl<B: Backend> GaussianModelClientOps<B> for ModelClient<B>
 where
-    B::FloatElem: Div<B::FloatElem, Output = B::FloatElem>
-        + Mul<B::FloatElem, Output = B::FloatElem>
-        + AddAssign<B::FloatElem>
-        + Neg<Output = B::FloatElem>,
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
 {
     fn add_gaussian_quantity<T: ContinuousQuantity<B>>(
         &self,
@@ -370,10 +377,12 @@ impl<B: Backend> ModelClientOps<B> for GaussianModelClient<B> {
 
 impl<B: Backend> GaussianModelClientOps<B> for GaussianModelClient<B>
 where
-    B::FloatElem: Div<B::FloatElem, Output = B::FloatElem>
-        + Mul<B::FloatElem, Output = B::FloatElem>
-        + AddAssign<B::FloatElem>
-        + Neg<Output = B::FloatElem>,
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
 {
     fn add_gaussian_quantity<T: ContinuousQuantity<B>>(
         &self,

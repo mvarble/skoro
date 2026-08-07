@@ -2,13 +2,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use skoro_backend::Backend;
-use skoro_core::{id::Id, kind::QuantityKind};
+use skoro_core::{constant_value::ConstantValue, id::Id, kind::QuantityKind};
 
-use crate::{
-    operation::GraphOperation,
-    quantity::{DynQuantityType, QValue},
-    sampler::GraphSampler,
-};
+use crate::{operation::GraphOperation, quantity::DynQuantityType, sampler::GraphSampler};
 
 #[derive(Clone)]
 pub enum Node<B: Backend> {
@@ -71,7 +67,7 @@ impl<B: Backend> Node<B> {
 #[derive(Clone)]
 pub struct ConstantNode<B: Backend> {
     pub id: Id,
-    pub value: QValue<B>,
+    pub value: ConstantValue<B>,
     pub quantity_type: Arc<dyn DynQuantityType<B>>,
 }
 
@@ -125,7 +121,7 @@ impl<B: Backend> Debug for StochasticMultiNode<B> {
 #[derive(Clone)]
 pub struct ObservedNode<B: Backend> {
     pub id: Id,
-    pub value: QValue<B>,
+    pub value: ConstantValue<B>,
     pub sampler: Arc<dyn GraphSampler<B>>,
     pub parent_ids: Vec<Id>,
     pub quantity_type: Arc<dyn DynQuantityType<B>>,
@@ -151,7 +147,7 @@ pub struct MappedNode<B: Backend> {
     pub op: Arc<dyn GraphOperation<B>>,
     pub parent_ids: Vec<Id>,
     pub quantity_type: Arc<dyn DynQuantityType<B>>,
-    pub value: Option<QValue<B>>,
+    pub value: Option<ConstantValue<B>>,
 }
 
 /// A mapped real value that corresponds to a log-density in the model.
@@ -164,5 +160,5 @@ pub struct LogDensityNode<B: Backend> {
     pub op: Arc<dyn GraphOperation<B>>,
     pub stochastic_id: Option<Id>,
     pub parent_ids: Vec<Id>,
-    pub value: Option<QValue<B>>,
+    pub value: Option<ConstantValue<B>>,
 }

@@ -44,7 +44,7 @@ impl<B: Backend> DiffOperation<B> for IntToReal {
             // The single input is discrete (non-differentiable), so no tangents.
             DiffModeState::Jvp(_) => DiffOperationForward::jvp(out, None),
             DiffModeState::Vjp(_) => DiffOperationForward::vjp(out, ()),
-            DiffModeState::Hvp(_) => DiffOperationForward::hvp(out, None, (), ()),
+            DiffModeState::Hvp { .. } => DiffOperationForward::hvp(out, None, (), ()),
         }
     }
 

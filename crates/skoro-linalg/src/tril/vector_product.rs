@@ -58,9 +58,12 @@ impl<B: Backend> DiffOperation<B> for TrilVectorProduct {
                     ],
                 )
             }
-            DiffModeState::Hvp(cvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: cvecs,
+            } => {
                 let [dmat_packed, dv] = cvecs.try_into().unwrap();
-                let [diff_mat, diff_v] = [dmat_packed.is_some(), dv.is_some()];
+                let [diff_mat, diff_v] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     output,
                     sum_opt_tensors([

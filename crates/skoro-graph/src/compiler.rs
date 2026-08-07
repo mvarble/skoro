@@ -2,6 +2,7 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use skoro_backend::{Backend, CotangentFrame, TangentFrame, TangentVector, Tensor};
 use skoro_core::{
+    constant_value::ConstantValue,
     error::{SkoroError, SkoroResult},
     id::Id,
     kind::QuantityKind,
@@ -9,16 +10,13 @@ use skoro_core::{
 };
 use skoro_operation::{DynSequenceOperation, Input, tape::Tape};
 
-use crate::{
-    point_map::PointMap,
-    quantity::{DynQuantityType, QValue},
-};
+use crate::{point_map::PointMap, quantity::DynQuantityType};
 
 #[derive(Debug)]
 pub enum CompiledStep<B: Backend> {
     Constant {
         id: Id,
-        value: QValue<B>,
+        value: ConstantValue<B>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
     },
     Parameter {
@@ -38,7 +36,7 @@ pub enum CompiledStep<B: Backend> {
     Operation {
         id: Id,
         op: Box<dyn DynSequenceOperation<B>>,
-        value: Option<QValue<B>>,
+        value: Option<ConstantValue<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
         from_multi: bool,
         /// If true, the operation is non-differentiable (e.g. a discrete
@@ -618,7 +616,7 @@ fn non_op_forward<B: Backend>(
 fn forward_only_op<B: Backend>(
     id: Id,
     op: &Box<dyn DynSequenceOperation<B>>,
-    value: &Option<QValue<B>>,
+    value: &Option<ConstantValue<B>>,
     quantity_type: &Arc<dyn DynQuantityType<B>>,
     index: usize,
     options: &ForwardOptions,

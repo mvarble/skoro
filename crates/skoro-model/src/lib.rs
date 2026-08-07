@@ -12,6 +12,7 @@
 pub mod client_ops;
 pub mod discrete;
 pub mod distribution;
+pub mod hash_map_builders;
 pub mod map;
 pub mod model;
 pub mod ops;
@@ -24,5 +25,5 @@ pub use client_ops::ModelClientOps;
 /// `skoro-core`.
 pub use skoro_core::error::{SkoroError, SkoroResult};
 
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub mod test_utils;

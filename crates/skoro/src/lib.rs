@@ -65,7 +65,7 @@ pub mod prelude {
 
     // ----- kind-erased values (the unified value map threaded through evaluation) -----
     pub use skoro_core::kind::{Continuous, Discrete, Kind, QuantityKind};
-    pub use skoro_graph::point_map::{PointMap, points};
+    pub use skoro_graph::point_map::PointMap;
     pub use skoro_operation::{Input, ValueMap};
 
     // ----- the model interface -----

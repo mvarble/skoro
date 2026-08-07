@@ -45,19 +45,14 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                     DiffOperationForward::vjp(omega, None)
                 }
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dr] = tvecs.try_into().unwrap();
-                if let Some(dr) = dr {
-                    let eta = log_jvp(omega.clone(), dr.unsqueeze_dim(2)).squeeze_dim(2);
-                    DiffOperationForward::hvp(
-                        omega.clone(),
-                        Some(eta.clone()),
-                        Some(omega),
-                        Some(eta),
-                    )
-                } else {
-                    DiffOperationForward::hvp(omega, None, None, None)
-                }
+                let eta = dr.map(|dr| log_jvp(omega.clone(), dr.unsqueeze_dim(2)).squeeze_dim(2));
+                let vjp_state = diffs[0].then(|| omega.clone());
+                DiffOperationForward::hvp(omega, eta.clone(), vjp_state, eta)
             }
         }
     }
@@ -282,35 +277,102 @@ pub fn log_hvp<R: CubeRuntime, F: CubeFloat, I: CubeInt>(
 // ```
 // This function returns the coefficients
 // ```
-// c(|ω|)      = (1/|ω|²) (1 - (|ω|/2) cot(|ω|/2)))
-// c'(|ω|)/|ω| = (1/|ω|⁴) ((|ω|/2) cot(|ω|/2) + (|ω|/2)² csc²(|ω|/2) - 2)
+// c    = (1/θ²) (1 - (θ/2) cot(θ/2))
+// c_p  = c'(θ)/θ = (1/θ⁴) ((θ/2) cot(θ/2) + (θ/2)² csc²(θ/2) - 2)
 // ```
-// as well as a numerically stable approximation for small values.
+// Both closed forms cancel as θ → 0 — `c_p` at fourth order — so below a cutoff we use a truncated
+// Taylor series in θ² instead. See the extended note on the `ndarray` twin of this function
+// (`crates/skoro-so3/src/ops/log/ndarray.rs`) for the derivation and the measured error table; the
+// series and the cutoffs are identical.
 // ```
-// c(|ω|) = 1/12 + 1/360 |ω| + O(|ω|³)
-// c'(|ω|)/|ω| = 1/360 + O(|ω|²)
+// c   = 1/12  + θ²/720  + θ⁴/30240  + θ⁶/1209600 + θ⁸/47900160
+//             + 691θ¹⁰/1307674368000 + θ¹²/74724249600 + 3617θ¹⁴/10670622842880000
+// c_p = 1/360 + θ²/7560 + θ⁴/201600  + θ⁶/5987520 + 691θ⁸/130767436800
+//             + θ¹⁰/6227020800 + 3617θ¹²/762187345920000 + 43867θ¹⁴/319318388573184000
 // ```
-#[cube]
-fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F) {
-    // Default to Taylor series expansions at theta = 0
-    let mut c = F::new(1.0 / 12.0);
-    let mut d = F::new(1.0 / 360.0);
+// This matters most on GPU: the device `tan` is less accurate than libm's, which widens the dead
+// zone the closed forms leave around θ = 0.
+//
+// **Note:** the constants below go through `F::new`, which takes an `f32`, so on an `f64` runtime
+// they carry only `f32` precision. That is a limitation of the `Float` frontend, not of the series;
+// the `f32` path this kernel actually runs on is unaffected.
+//
+// This is a hand transcription of the `ndarray` function, so it can drift from it silently.
+// `coefficients::log_hvp_tracks_the_f64_reference` pins it against the frozen `f64` table in
+// `crates/skoro-so3/tests/common/coefficients.rs`, across both cutoffs.
 
-    // For non-small theta, evaluate actual trig function.
-    if theta_sq > F::new(1e-6) {
+/// The scalar coefficients of `J(ω)` for the logarithm, both functions of `θ = |ω|` alone.
+///
+/// The `ndarray` twin of this type carries the same fields and the same meanings. Note this is a
+/// *different* Jacobian from `exp::cube::ExpJacobianCoeffs` — that one is `Exp`'s, this one is
+/// `Log`'s.
+#[derive(CubeType)]
+pub struct LogJacobianCoeffs<F: Float> {
+    /// `(1 - (θ/2) cot(θ/2)) / θ²`
+    pub c: F,
+    /// `c'(θ) / θ`
+    pub c_p: F,
+}
+
+// `#[cube]` has no `if` expression, so the coefficients have to be declared before the branch and
+// assigned inside it; the placeholder initializers are dead by construction.
+#[allow(unused_assignments)]
+#[cube]
+fn log_jacobian_coeffs<F: Float>(theta_sq: F) -> LogJacobianCoeffs<F> {
+    // Measured crossing points of the two branches. Anything coarser than `f64` takes the wider
+    // Taylor region, which is the safe direction.
+    let mut cutoff_sq = F::new(0.3);
+    if F::EPSILON > F::new(1e-10) {
+        cutoff_sq = F::new(5.0);
+    }
+
+    let mut c = F::new(0.0);
+    let mut c_p = F::new(0.0);
+
+    if theta_sq > cutoff_sq {
         let one = F::new(1.0);
-        let half = F::new(0.5);
         let theta = theta_sq.sqrt();
         let theta_fourth = theta_sq * theta_sq;
-        let halftheta = half * theta;
+        let halftheta = F::new(0.5) * theta;
         let cot_halfth = one / halftheta.tan();
         let halfth_cot_halfth = halftheta * cot_halfth;
         let csc2 = one + cot_halfth * cot_halfth;
+
         c = (one / theta_sq) * (one - halfth_cot_halfth);
-        d = (one / theta_fourth) * (halfth_cot_halfth + halftheta * halftheta * csc2 - F::new(2.0));
+        c_p =
+            (one / theta_fourth) * (halfth_cot_halfth + halftheta * halftheta * csc2 - F::new(2.0));
+    } else {
+        // Horner in θ², highest power first.
+        let t = theta_sq;
+        c = ((((((F::new(3617.0 / 10670622842880000.0) * t + F::new(1.0 / 74724249600.0)) * t
+            + F::new(691.0 / 1307674368000.0))
+            * t
+            + F::new(1.0 / 47900160.0))
+            * t
+            + F::new(1.0 / 1209600.0))
+            * t
+            + F::new(1.0 / 30240.0))
+            * t
+            + F::new(1.0 / 720.0))
+            * t
+            + F::new(1.0 / 12.0);
+        c_p = ((((((F::new(43867.0 / 319318388573184000.0) * t
+            + F::new(3617.0 / 762187345920000.0))
+            * t
+            + F::new(1.0 / 6227020800.0))
+            * t
+            + F::new(691.0 / 130767436800.0))
+            * t
+            + F::new(1.0 / 5987520.0))
+            * t
+            + F::new(1.0 / 201600.0))
+            * t
+            + F::new(1.0 / 7560.0))
+            * t
+            + F::new(1.0 / 360.0);
     }
 
-    (c, d)
+    LogJacobianCoeffs::<F> { c, c_p }
 }
 
 // Calculate the SO3 logarithm, returning both the vectors and their square norms.
@@ -449,7 +511,7 @@ fn log_jvp_kernel<F: Float>(omega: &Tensor<F>, v: &Tensor<F>, out: &mut Tensor<F
     let theta_sq = w_x * w_x + w_y * w_y + w_z * w_z;
 
     // c(|ω|)
-    let (c, _) = get_so3_coeffs::<F>(theta_sq);
+    let c = log_jacobian_coeffs::<F>(theta_sq).c;
 
     // ω × v
     let (wxv_x, wxv_y, wxv_z) = cross_product::<F>(w_x, w_y, w_z, v_x, v_y, v_z);
@@ -506,7 +568,7 @@ fn log_vjp_kernel<F: Float>(omega: &Tensor<F>, v: &Tensor<F>, out: &mut Tensor<F
     let theta_sq = w_x * w_x + w_y * w_y + w_z * w_z;
 
     // c(|ω|)
-    let (c, _) = get_so3_coeffs::<F>(theta_sq);
+    let c = log_jacobian_coeffs::<F>(theta_sq).c;
 
     // ω × v
     let (wxv_x, wxv_y, wxv_z) = cross_product::<F>(w_x, w_y, w_z, v_x, v_y, v_z);
@@ -533,7 +595,7 @@ fn log_vjp_kernel<F: Float>(omega: &Tensor<F>, v: &Tensor<F>, out: &mut Tensor<F
 // DvJ(R)⊤α
 //  = -0.5 (η × α)
 //      + c(|ω|) ( η × (ω × α) + ω × (η × α) )
-//      + d(|ω|) (ω⊤ η) (ω × (ω × α))
+//      + c_p(|ω|) (ω⊤ η) (ω × (ω × α))
 // ```
 // where `η = J(R)v`.
 #[cube(launch)]
@@ -573,8 +635,10 @@ fn log_hvp_kernel<F: Float>(
     // |ω|²
     let theta_sq = w_x * w_x + w_y * w_y + w_z * w_z;
 
-    // c(|ω|), d(|ω|)
-    let (c, d) = get_so3_coeffs::<F>(theta_sq);
+    // c(|ω|), c'(|ω|)/|ω|
+    let k = log_jacobian_coeffs::<F>(theta_sq);
+    let c = k.c;
+    let c_p = k.c_p;
 
     // η × α
     let (exa_x, exa_y, exa_z) = cross_product::<F>(e_x, e_y, e_z, a_x, a_y, a_z);
@@ -599,8 +663,9 @@ fn log_hvp_kernel<F: Float>(
     let o_sb = out.stride(0);
     let o_sd = out.stride(1);
     let o_sf = out.stride(2);
-    out[b * o_sb + f * o_sf] = -half * exa_x + c * (exwxa_x + wxexa_x) + d * wdote * wxwxa_x;
-    out[b * o_sb + o_sd + f * o_sf] = -half * exa_y + c * (exwxa_y + wxexa_y) + d * wdote * wxwxa_y;
+    out[b * o_sb + f * o_sf] = -half * exa_x + c * (exwxa_x + wxexa_x) + c_p * wdote * wxwxa_x;
+    out[b * o_sb + o_sd + f * o_sf] =
+        -half * exa_y + c * (exwxa_y + wxexa_y) + c_p * wdote * wxwxa_y;
     out[b * o_sb + 2 * o_sd + f * o_sf] =
-        -half * exa_z + c * (exwxa_z + wxexa_z) + d * wdote * wxwxa_z;
+        -half * exa_z + c * (exwxa_z + wxexa_z) + c_p * wdote * wxwxa_z;
 }

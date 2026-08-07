@@ -68,10 +68,16 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt, const D: usize> ToCubeTensor<R>
     }
 }
 
+/// Unbatched point packed into a tensor.
+pub type UnbatchedPoint<B> = Tensor<B, 1>;
+
 /// Batch of points packed into a tensor.
 ///
 /// The shape convention is `[batch, storage-size]`.
 pub type Point<B> = Tensor<B, 2>;
+
+/// Unbatched discrete point packed into a tensor.
+pub type UnbatchedDiscretePoint<B> = Tensor<B, 1, Int>;
 
 /// Batch of discrete points packed into a tensor.
 ///
@@ -90,10 +96,10 @@ pub type CotangentVector<B> = Tensor<B, 2>;
 
 /// Batch of tangent frames in a tangent space of a manifold packed into a tensor.
 ///
-/// The shape convention is `[batch, vector, dimension]`.
+/// The shape convention is `[batch, dimension, frame]`.
 pub type TangentFrame<B> = Tensor<B, 3>;
 
 /// Batch of cotangent frames in a tangent space of a manifold packed into a tensor.
 ///
-/// The shape convention is `[batch, vector, dimension]`.
+/// The shape convention is `[batch, dimension, frame]`.
 pub type CotangentFrame<B> = Tensor<B, 3>;

@@ -46,7 +46,7 @@ impl<B: Backend> PointMapAccess<B> for PointMap<B> {
     {
         self.get(&tag.id).map(|(input, quantity_type)| {
             let num_components = quantity_type.num_components();
-            let point = K::as_point(input)
+            let point = K::as_point_ref(input)
                 .expect("internal: point kind should match the quantity type's kind");
             let data = K::to_elements(point);
             let batches = data.len() / num_components;

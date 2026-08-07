@@ -60,10 +60,12 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dr, domega] = tvecs.try_into().unwrap();
-                let r_diff = dr.is_some();
-                let omega_diff = domega.is_some();
+                let [r_diff, omega_diff] = diffs.try_into().unwrap();
                 let expomega = cube::exp(omega.clone()).reshape([b, 3, 3]);
                 let dexp_domega = domega.as_ref().map(|domega| {
                     cube::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
@@ -80,14 +82,11 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                         }),
                         dexp_domega.clone(),
                     ]),
-                    (
-                        if r_diff { Some(expomega) } else { None },
-                        if omega_diff { Some(omega) } else { None },
-                    ),
-                    [
-                        if r_diff { dexp_domega } else { None },
-                        if omega_diff { domega } else { None },
-                    ],
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
+                    (r_diff.then_some(expomega), omega_diff.then_some(omega)),
+                    [dexp_domega, domega],
                 )
             }
         }
@@ -179,10 +178,12 @@ where
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dr, domega] = tvecs.try_into().unwrap();
-                let r_diff = dr.is_some();
-                let omega_diff = dr.is_some();
+                let [r_diff, omega_diff] = diffs.try_into().unwrap();
                 let expomega = ndarray::exp(omega.clone()).reshape([b, 3, 3]);
                 let dexp_domega = domega.as_ref().map(|domega| {
                     ndarray::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
@@ -199,14 +200,11 @@ where
                         }),
                         dexp_domega.clone(),
                     ]),
-                    (
-                        if r_diff { Some(expomega) } else { None },
-                        if omega_diff { Some(omega) } else { None },
-                    ),
-                    [
-                        if r_diff { dexp_domega } else { None },
-                        if omega_diff { domega } else { None },
-                    ],
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
+                    (r_diff.then_some(expomega), omega_diff.then_some(omega)),
+                    [dexp_domega, domega],
                 )
             }
         }

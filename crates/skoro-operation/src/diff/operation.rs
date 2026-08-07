@@ -83,7 +83,7 @@ impl<B: Backend, Op: DiffOperation<B>> SequencedDiffOperation<B, Op> {
     }
 }
 
-impl<B: Backend, K: DiffOperation<B>> SequenceMutator for SequencedDiffOperation<B, K> {
+impl<B: Backend, Op: DiffOperation<B>> SequenceMutator for SequencedDiffOperation<B, Op> {
     fn input_indices(&self) -> &[usize] {
         &self.input_indices
     }
@@ -92,7 +92,7 @@ impl<B: Backend, K: DiffOperation<B>> SequenceMutator for SequencedDiffOperation
     }
 }
 
-impl<B: Backend, K: DiffOperation<B>> DynSequenceOperation<B> for SequencedDiffOperation<B, K> {
+impl<B: Backend, Op: DiffOperation<B>> DynSequenceOperation<B> for SequencedDiffOperation<B, Op> {
     fn input_diffs(&self) -> &[bool] {
         &self.input_diffs
     }
@@ -161,7 +161,10 @@ impl<B: Backend, K: DiffOperation<B>> DynSequenceOperation<B> for SequencedDiffO
     ) {
         match self.operation.forward(
             self.get_inputs(points),
-            DiffModeState::Hvp(self.get_tangents(tangents)),
+            DiffModeState::Hvp {
+                diffs: self.input_diffs.clone(),
+                tangents: self.get_tangents(tangents),
+            },
         ) {
             DiffOperationForward::Hvp {
                 output,

@@ -111,8 +111,10 @@ impl<B: Backend, M: ContinuousQuantity<B>> Normal<B, M>
 where
     B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
         + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
-        + std::ops::AddAssign<B::FloatElem>
-        + std::ops::Neg<Output = B::FloatElem>,
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
 {
     pub fn new(mean: Q<B, M>, std_dev: Q<B, Tril>) -> Self {
         let quantity_type = mean.get_quantity_type();
@@ -143,8 +145,10 @@ impl<B: Backend, M: ContinuousQuantity<B>> Distribution<B, Continuous> for Norma
 where
     B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
         + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
-        + std::ops::AddAssign<B::FloatElem>
-        + std::ops::Neg<Output = B::FloatElem>,
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
 {
     type Qty = M;
     type Sampler = NormalSampler<B, M>;

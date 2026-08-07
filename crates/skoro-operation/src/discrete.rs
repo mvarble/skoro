@@ -41,7 +41,7 @@ pub struct SequencedDiscreteOperation<B: Backend, Op: DiscreteOperation<B>> {
     _phantom: PhantomData<B>,
 }
 
-impl<B: Backend, K: DiscreteOperation<B>> std::fmt::Debug for SequencedDiscreteOperation<B, K> {
+impl<B: Backend, Op: DiscreteOperation<B>> std::fmt::Debug for SequencedDiscreteOperation<B, Op> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SequencedDiscreteOperation")
             .field("input_indices", &self.input_indices)
@@ -51,8 +51,8 @@ impl<B: Backend, K: DiscreteOperation<B>> std::fmt::Debug for SequencedDiscreteO
     }
 }
 
-impl<B: Backend, K: DiscreteOperation<B>> SequencedDiscreteOperation<B, K> {
-    pub fn new(input_indices: Vec<usize>, output_index: usize, operation: K) -> Self {
+impl<B: Backend, Op: DiscreteOperation<B>> SequencedDiscreteOperation<B, Op> {
+    pub fn new(input_indices: Vec<usize>, output_index: usize, operation: Op) -> Self {
         let input_diffs = vec![false; input_indices.len()];
         Self {
             input_indices,
@@ -79,7 +79,7 @@ impl<B: Backend, K: DiscreteOperation<B>> SequencedDiscreteOperation<B, K> {
     }
 }
 
-impl<B: Backend, K: DiscreteOperation<B>> SequenceMutator for SequencedDiscreteOperation<B, K> {
+impl<B: Backend, Op: DiscreteOperation<B>> SequenceMutator for SequencedDiscreteOperation<B, Op> {
     fn input_indices(&self) -> &[usize] {
         &self.input_indices
     }
@@ -88,8 +88,8 @@ impl<B: Backend, K: DiscreteOperation<B>> SequenceMutator for SequencedDiscreteO
     }
 }
 
-impl<B: Backend, K: DiscreteOperation<B>> DynSequenceOperation<B>
-    for SequencedDiscreteOperation<B, K>
+impl<B: Backend, Op: DiscreteOperation<B>> DynSequenceOperation<B>
+    for SequencedDiscreteOperation<B, Op>
 {
     fn input_diffs(&self) -> &[bool] {
         &self.input_diffs

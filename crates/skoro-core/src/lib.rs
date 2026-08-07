@@ -12,6 +12,9 @@
 //!
 //! - stochastic sampling ([`sampler`]),
 //!
+//! - the [`ConstantValue`](constant_value::ConstantValue) wrapper shared by continuous and
+//!   discrete constant quantities ([`constant_value`]),
+//!
 //! - the [`OperationInput`](operation_input::OperationInput) operand shared by continuous and
 //!   discrete operation tracks ([`operation_input`]),
 //!
@@ -19,6 +22,7 @@
 //!
 //! - discrete quantity types ([`discrete`]).
 
+pub mod constant_value;
 pub mod discrete;
 pub mod error;
 pub mod id;

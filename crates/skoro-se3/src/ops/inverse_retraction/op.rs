@@ -4,9 +4,9 @@ use skoro_backend::{
     NdArrayInt, NdArrayTensor, Point, SharedArray, TangentVector, Tensor,
 };
 use skoro_linalg::vector::cross_product::cube::cross_product as cube_cross;
-use skoro_linalg::vector::cross_product::cube::left_broadcast_cross_product as cube_left_broadcast_cross;
+use skoro_linalg::vector::cross_product::cube::left_broadcast_cross_product as cube_lbcross;
 use skoro_linalg::vector::cross_product::ndarray::cross_product as ndarray_cross;
-use skoro_linalg::vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_left_broadcast_cross;
+use skoro_linalg::vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_lbcross;
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -16,14 +16,46 @@ use skoro_so3::ops::log::{cube, ndarray};
 
 use super::SE3InverseRetraction;
 
+// The inverse of the `SE(3)` retraction `R((r, p), (ω, v)) = (r Exp(ω), p + r v)`:
+// ```
+// Rinv((r₀, p₀), (r₁, p₁)) = (ω, q),   Δr = r₀ᵀ r₁,   ω = Log(Δr),   q = r₀ᵀ (p₁ - p₀)
+// ```
+// Both inputs carry the body-frame chart `(a, b) ↦ (r Exp(a), p + r b)`; the output is Euclidean,
+// so its "tangent" is an ordinary difference.
+//
+// **JVP.** With input tangents `(a₀, b₀)` and `(a₁, b₁)`,
+// ```
+// dω = J⁻¹(ω) (a₁ - Δrᵀ a₀)
+// dq = q × a₀ - b₀ + Δr b₁
+// ```
+//
+// **VJP.** Against a cotangent `α = (α_ω, α_q)`,
+// ```
+// ∂(r₀, p₀) = (-Δr J⁻ᵀ(ω) α_ω - q × α_q,  -α_q)
+// ∂(r₁, p₁) = (J⁻ᵀ(ω) α_ω,                 Δrᵀ α_q)
+// ```
+//
+// **HVP.** Writing `h = a₁ - Δrᵀ a₀` for the group-side motion of `ω` and `vjp = J⁻ᵀ(ω) α_ω`,
+// and using `dΔr/dt = -[a₀]× Δr + Δr [a₁]×` and `dq/dt = q × a₀ - b₀ + Δr b₁`,
+// ```
+// ∇∂(r₀, p₀) = (a₀ × (Δr vjp) - Δr (a₁ × vjp) - Δr ∇ₕ vjp
+//                - (q × a₀) × α_q + b₀ × α_q - (Δr b₁) × α_q,   0)
+// ∇∂(r₁, p₁) = (∇ₕ vjp,                                         -h × (Δrᵀ α_q))
+// ```
+// Note the `Δrᵀ` in the last term: it is the transpose of the `Δr` appearing in `dΔr/dt`, and the
+// rotation-equivariance `(Δrᵀu) × (Δrᵀw) = Δrᵀ(u × w)` is what folds the two contributions
+// `Δrᵀ(a₀ × α_q) - a₁ × (Δrᵀ α_q)` into the single cross product above.
 impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I>>
     for SE3InverseRetraction
 {
+    /// `(ω, q, Δr)` when `(r₀, p₀)` is differentiable, `(ω, Δr)` when `(r₁, p₁)` is.
     type VjpState = (
-        Option<Point<CubeBackend<R, F, I>>>,
-        Option<Point<CubeBackend<R, F, I>>>,
-        Option<Tensor<CubeBackend<R, F, I>, 3>>,
-        bool,
+        Option<(
+            Point<CubeBackend<R, F, I>>,
+            Point<CubeBackend<R, F, I>>,
+            Tensor<CubeBackend<R, F, I>, 3>,
+        )>,
+        Option<(Point<CubeBackend<R, F, I>>, Tensor<CubeBackend<R, F, I>, 3>)>,
     );
     type HvpState = [Option<TangentVector<CubeBackend<R, F, I>>>; 2];
 
@@ -47,14 +79,13 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
             .squeeze_dim(2);
         let dr = r0.clone().transpose().matmul(r1.clone());
         let omega = cube::log(dr.clone().reshape([b, 9]));
+        let output = Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1);
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                DiffOperationForward::forward_only(Point::cat(vec![omega, r0inv_dp], 1))
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(output),
             DiffModeState::Jvp(tvecs) => {
                 let [drp0, drp1] = tvecs.try_into().unwrap();
                 DiffOperationForward::jvp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     sum_opt_tensors([
                         drp0.map(|drp0| {
                             let omega0 = drp0.clone().slice_dim(1, 0..3);
@@ -63,14 +94,14 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                                 omega.clone(),
                                 dr.clone().transpose().matmul(omega0.clone()),
                             );
-                            let dpsn = cube_left_broadcast_cross(r0inv_dp.clone(), omega0) - v0;
+                            let dpsn = cube_lbcross(r0inv_dp.clone(), omega0) - v0;
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                         drp1.map(|drp1| {
                             let omega1 = drp1.clone().slice_dim(1, 0..3);
                             let v1 = drp1.clone().slice_dim(1, 3..6);
-                            let drot = cube::log_jvp(omega, omega1);
-                            let dpsn = dr.matmul(v1);
+                            let drot = cube::log_jvp(omega.clone(), omega1);
+                            let dpsn = dr.clone().matmul(v1);
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                     ]),
@@ -79,21 +110,21 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
             DiffModeState::Vjp(diffs) => {
                 let [diff0, diff1] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     (
-                        if diff0 || diff1 { Some(omega) } else { None },
-                        if diff0 { Some(r0inv_dp) } else { None },
-                        if diff0 || diff1 { Some(dr) } else { None },
-                        diff1,
+                        diff0.then(|| (omega.clone(), r0inv_dp, dr.clone())),
+                        diff1.then_some((omega, dr)),
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [drp0, drp1] = tvecs.try_into().unwrap();
-                let diff0 = drp0.is_some();
-                let diff1 = drp1.is_some();
+                let [diff0, diff1] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     sum_opt_tensors([
                         drp0.as_ref().map(|drp0| {
                             let omega0 = drp0.clone().slice_dim(1, 0..3);
@@ -117,11 +148,12 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                     ]),
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
                     (
-                        if diff0 || diff1 { Some(omega) } else { None },
-                        if diff0 { Some(r0inv_dp) } else { None },
-                        if diff0 || diff1 { Some(dr) } else { None },
-                        diff1,
+                        diff0.then(|| (omega.clone(), r0inv_dp, dr.clone())),
+                        diff1.then_some((omega, dr)),
                     ),
                     [drp0, drp1],
                 )
@@ -131,152 +163,106 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
 
     fn vjp(
         &self,
-        vjp_state: &Self::VjpState,
+        (rp0_state, rp1_state): &Self::VjpState,
         alpha: CotangentFrame<CubeBackend<R, F, I>>,
     ) -> Vec<Option<CotangentFrame<CubeBackend<R, F, I>>>> {
-        match vjp_state {
-            (Some(omega), Some(r0inv_dp), Some(dr), true) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
+        let alphar = alpha.clone().slice_dim(1, 0..3);
+        let alphap = alpha.slice_dim(1, 3..6);
+        vec![
+            rp0_state.as_ref().map(|(omega, r0inv_dp, dr)| {
                 let drot0 = -dr
                     .clone()
                     .matmul(cube::log_vjp(omega.clone(), alphar.clone()))
-                    - cube_left_broadcast_cross(r0inv_dp.clone(), alphap.clone());
-                let dpsn0 = -alphap.clone();
-                let drot1 = cube::log_vjp(omega.clone(), alphar);
-                let dpsn1 = dr.clone().transpose().matmul(alphap);
-                vec![
-                    Some(Tensor::cat(vec![drot0, dpsn0], 1)),
-                    Some(Tensor::cat(vec![drot1, dpsn1], 1)),
-                ]
-            }
-            (Some(omega), Some(r0inv_dp), Some(dr), false) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-                let drot0 = -dr
-                    .clone()
-                    .matmul(cube::log_vjp(omega.clone(), alphar.clone()))
-                    - cube_left_broadcast_cross(r0inv_dp.clone(), alphap.clone());
-                let dpsn0 = -alphap.clone();
-                vec![Some(Tensor::cat(vec![drot0, dpsn0], 1)), None]
-            }
-            (Some(omega), None, Some(dr), true) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-                let drot1 = cube::log_vjp(omega.clone(), alphar);
-                let dpsn1 = dr.clone().transpose().matmul(alphap);
-                vec![None, Some(Tensor::cat(vec![drot1, dpsn1], 1))]
-            }
-            (None, None, None, false) => {
-                vec![None, None]
-            }
-            _ => unreachable!(),
-        }
+                    - cube_lbcross(r0inv_dp.clone(), alphap.clone());
+                Tensor::cat(vec![drot0, -alphap.clone()], 1)
+            }),
+            rp1_state.as_ref().map(|(omega, dr)| {
+                let drot1 = cube::log_vjp(omega.clone(), alphar.clone());
+                let dpsn1 = dr.clone().transpose().matmul(alphap.clone());
+                Tensor::cat(vec![drot1, dpsn1], 1)
+            }),
+        ]
     }
 
     fn hvp(
         &self,
-        vjp_state: &Self::VjpState,
-        hvp_state: &Self::HvpState,
+        (rp0_state, rp1_state): &Self::VjpState,
+        [drp0, drp1]: &Self::HvpState,
         alpha: CotangentFrame<CubeBackend<R, F, I>>,
     ) -> Vec<Option<CotangentFrame<CubeBackend<R, F, I>>>> {
-        match (vjp_state, hvp_state) {
-            ((Some(omega), Some(r0inv_dp), Some(dr), true), [Some(drp0), Some(drp1)]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
+        let alphar = alpha.clone().slice_dim(1, 0..3);
+        let alphap = alpha.slice_dim(1, 3..6);
 
-                let omega0 = drp0.clone().slice_dim(1, 0..3);
-                let v0 = drp0.clone().slice_dim(1, 3..6);
+        let omega0 = drp0.as_ref().map(|drp0| drp0.clone().slice_dim(1, 0..3));
+        let v0 = drp0.as_ref().map(|drp0| drp0.clone().slice_dim(1, 3..6));
+        let omega1 = drp1.as_ref().map(|drp1| drp1.clone().slice_dim(1, 0..3));
+        let v1 = drp1.as_ref().map(|drp1| drp1.clone().slice_dim(1, 3..6));
 
-                let omega1 = drp1.clone().slice_dim(1, 0..3);
-                let v1 = drp1.clone().slice_dim(1, 3..6);
+        // `Δr` and `ω` are shared by both blocks; either state slot exposes them.
+        let dr = rp0_state
+            .as_ref()
+            .map(|(_, _, dr)| dr.clone())
+            .or_else(|| rp1_state.as_ref().map(|(_, dr)| dr.clone()));
+        let omega = rp0_state
+            .as_ref()
+            .map(|(omega, _, _)| omega.clone())
+            .or_else(|| rp1_state.as_ref().map(|(omega, _)| omega.clone()));
 
+        // `h = a₁ - Δrᵀ a₀`, the group-side direction along which `ω` moves.
+        let h = dr.as_ref().and_then(|dr| {
+            sum_opt_tensors([
+                omega0.clone().map(|omega0| {
+                    -dr.clone()
+                        .transpose()
+                        .matmul(omega0.unsqueeze_dim(2))
+                        .squeeze_dim(2)
+                }),
+                omega1.clone(),
+            ])
+        });
+        // `log_hvp` differentiates along an ω-space velocity, not a group-side one, so `h` has to
+        // be pushed through `J⁻¹(ω)` first (cf. `SO3Log::forward`, which feeds it `log_jvp(ω, ·)`).
+        let log_hvp = omega.as_ref().zip(h.as_ref()).map(|(omega, h)| {
+            let eta = cube::log_jvp(omega.clone(), h.clone().unsqueeze_dim(2)).squeeze_dim(2);
+            cube::log_hvp(omega.clone(), eta, alphar.clone())
+        });
+
+        vec![
+            rp0_state.as_ref().map(|(omega, r0inv_dp, dr)| {
                 let vjp = cube::log_vjp(omega.clone(), alphar.clone());
-                let a0 = cube_left_broadcast_cross(omega0.clone(), dr.clone().matmul(vjp.clone()));
-                let a1 = dr
-                    .clone()
-                    .matmul(cube_left_broadcast_cross(omega1.clone(), vjp));
-                let neg_dromega0_plus_omega1 = -dr
-                    .clone()
-                    .transpose()
-                    .matmul(omega0.clone().unsqueeze_dim(2))
-                    .squeeze_dim(2)
-                    + omega1.clone();
-                let log_hvp = cube::log_hvp(
-                    omega.clone(),
-                    neg_dromega0_plus_omega1.clone(),
-                    alphar.clone(),
-                );
-
-                let local_so3_hvp = a0 - a1 - dr.clone().matmul(log_hvp.clone());
-
-                let b0 = -cube_left_broadcast_cross(
-                    cube_cross(r0inv_dp.clone(), omega0.clone()),
-                    alphap.clone(),
-                );
-                let b1 = -cube_left_broadcast_cross(
-                    dr.clone().matmul(v1.unsqueeze_dim(2)).squeeze_dim(2) - v0,
-                    alphap.clone(),
-                );
-
-                let hvp_r0 = local_so3_hvp + b0 + b1;
-                let hvp_p0 = alphar.zeros_like();
-                let hvp_r1 = log_hvp;
-                let hvp_p1 =
-                    -cube_left_broadcast_cross(neg_dromega0_plus_omega1, dr.clone().matmul(alphap));
-
-                vec![
-                    Some(Tensor::cat(vec![hvp_r0, hvp_p0], 1)),
-                    Some(Tensor::cat(vec![hvp_r1, hvp_p1], 1)),
-                ]
-            }
-            ((Some(omega), Some(r0inv_dp), Some(dr), false), [Some(drp0), None]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-
-                let omega0 = drp0.clone().slice_dim(1, 0..3);
-                let v0 = drp0.clone().slice_dim(1, 3..6);
-
-                let vjp = cube::log_vjp(omega.clone(), alphar.clone());
-                let a0 = cube_left_broadcast_cross(omega0.clone(), dr.clone().matmul(vjp.clone()));
-                let neg_dromega0 = -dr
-                    .clone()
-                    .transpose()
-                    .matmul(omega0.clone().unsqueeze_dim(2))
-                    .squeeze_dim(2);
-                let log_hvp = cube::log_hvp(omega.clone(), neg_dromega0, alphar.clone());
-
-                let local_so3_hvp = a0 - dr.clone().matmul(log_hvp.clone());
-
-                let b0 = -cube_left_broadcast_cross(
-                    cube_cross(r0inv_dp.clone(), omega0.clone()),
-                    alphap.clone(),
-                );
-                let b1 = cube_left_broadcast_cross(v0, alphap.clone());
-
-                let hvp_r0 = local_so3_hvp + b0 + b1;
-                let hvp_p0 = alphar.zeros_like();
-
-                vec![Some(Tensor::cat(vec![hvp_r0, hvp_p0], 1)), None]
-            }
-            ((Some(omega), None, Some(dr), true), [None, Some(drp1)]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-
-                let omega1 = drp1.clone().slice_dim(1, 0..3);
-
-                let log_hvp = cube::log_hvp(omega.clone(), omega1.clone(), alphar.clone());
-
-                let hvp_r1 = log_hvp;
-                let hvp_p1 = -cube_left_broadcast_cross(omega1, dr.clone().matmul(alphap));
-
-                vec![None, Some(Tensor::cat(vec![hvp_r1, hvp_p1], 1))]
-            }
-            ((None, None, None, false), [None, None]) => {
-                vec![None, None]
-            }
-            _ => unreachable!(),
-        }
+                let rot = sum_opt_tensors([
+                    omega0
+                        .clone()
+                        .map(|omega0| cube_lbcross(omega0, dr.clone().matmul(vjp.clone()))),
+                    omega1
+                        .clone()
+                        .map(|omega1| -dr.clone().matmul(cube_lbcross(omega1, vjp.clone()))),
+                    log_hvp.clone().map(|log_hvp| -dr.clone().matmul(log_hvp)),
+                    omega0.clone().map(|omega0| {
+                        -cube_lbcross(cube_cross(r0inv_dp.clone(), omega0), alphap.clone())
+                    }),
+                    v0.clone().map(|v0| cube_lbcross(v0, alphap.clone())),
+                    v1.clone().map(|v1| {
+                        -cube_lbcross(
+                            dr.clone().matmul(v1.unsqueeze_dim(2)).squeeze_dim(2),
+                            alphap.clone(),
+                        )
+                    }),
+                ])
+                .unwrap_or_else(|| alphar.zeros_like());
+                Tensor::cat(vec![rot, alphap.zeros_like()], 1)
+            }),
+            rp1_state.as_ref().map(|(_, dr)| {
+                let rot = log_hvp.clone().unwrap_or_else(|| alphar.zeros_like());
+                let trans = h
+                    .as_ref()
+                    .map(|h| {
+                        -cube_lbcross(h.clone(), dr.clone().transpose().matmul(alphap.clone()))
+                    })
+                    .unwrap_or_else(|| alphap.zeros_like());
+                Tensor::cat(vec![rot, trans], 1)
+            }),
+        ]
     }
 }
 
@@ -286,11 +272,14 @@ where
     I: NdArrayInt,
     NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
 {
+    /// `(ω, q, Δr)` when `(r₀, p₀)` is differentiable, `(ω, Δr)` when `(r₁, p₁)` is.
     type VjpState = (
-        Option<Point<NdArrayBackend<F, I>>>,
-        Option<Point<NdArrayBackend<F, I>>>,
-        Option<Tensor<NdArrayBackend<F, I>, 3>>,
-        bool,
+        Option<(
+            Point<NdArrayBackend<F, I>>,
+            Point<NdArrayBackend<F, I>>,
+            Tensor<NdArrayBackend<F, I>, 3>,
+        )>,
+        Option<(Point<NdArrayBackend<F, I>>, Tensor<NdArrayBackend<F, I>, 3>)>,
     );
     type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 2];
 
@@ -314,14 +303,13 @@ where
             .squeeze_dim(2);
         let dr = r0.clone().transpose().matmul(r1.clone());
         let omega = ndarray::log(dr.clone().reshape([b, 9]));
+        let output = Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1);
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                DiffOperationForward::forward_only(Point::cat(vec![omega, r0inv_dp], 1))
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(output),
             DiffModeState::Jvp(tvecs) => {
                 let [drp0, drp1] = tvecs.try_into().unwrap();
                 DiffOperationForward::jvp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     sum_opt_tensors([
                         drp0.map(|drp0| {
                             let omega0 = drp0.clone().slice_dim(1, 0..3);
@@ -330,14 +318,14 @@ where
                                 omega.clone(),
                                 dr.clone().transpose().matmul(omega0.clone()),
                             );
-                            let dpsn = ndarray_left_broadcast_cross(r0inv_dp.clone(), omega0) - v0;
+                            let dpsn = ndarray_lbcross(r0inv_dp.clone(), omega0) - v0;
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                         drp1.map(|drp1| {
                             let omega1 = drp1.clone().slice_dim(1, 0..3);
                             let v1 = drp1.clone().slice_dim(1, 3..6);
-                            let drot = ndarray::log_jvp(omega, omega1);
-                            let dpsn = dr.matmul(v1);
+                            let drot = ndarray::log_jvp(omega.clone(), omega1);
+                            let dpsn = dr.clone().matmul(v1);
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                     ]),
@@ -346,21 +334,21 @@ where
             DiffModeState::Vjp(diffs) => {
                 let [diff0, diff1] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     (
-                        if diff0 || diff1 { Some(omega) } else { None },
-                        if diff0 { Some(r0inv_dp) } else { None },
-                        if diff0 || diff1 { Some(dr) } else { None },
-                        diff1,
+                        diff0.then(|| (omega.clone(), r0inv_dp, dr.clone())),
+                        diff1.then_some((omega, dr)),
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [drp0, drp1] = tvecs.try_into().unwrap();
-                let diff0 = drp0.is_some();
-                let diff1 = drp1.is_some();
+                let [diff0, diff1] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
-                    Point::cat(vec![omega.clone(), r0inv_dp.clone()], 1),
+                    output,
                     sum_opt_tensors([
                         drp0.as_ref().map(|drp0| {
                             let omega0 = drp0.clone().slice_dim(1, 0..3);
@@ -384,11 +372,12 @@ where
                             Tensor::cat(vec![drot, dpsn], 1)
                         }),
                     ]),
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
                     (
-                        if diff0 || diff1 { Some(omega) } else { None },
-                        if diff0 { Some(r0inv_dp) } else { None },
-                        if diff0 || diff1 { Some(dr) } else { None },
-                        diff1,
+                        diff0.then(|| (omega.clone(), r0inv_dp, dr.clone())),
+                        diff1.then_some((omega, dr)),
                     ),
                     [drp0, drp1],
                 )
@@ -398,155 +387,105 @@ where
 
     fn vjp(
         &self,
-        vjp_state: &Self::VjpState,
+        (rp0_state, rp1_state): &Self::VjpState,
         alpha: CotangentFrame<NdArrayBackend<F, I>>,
     ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
-        match vjp_state {
-            (Some(omega), Some(r0inv_dp), Some(dr), true) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
+        let alphar = alpha.clone().slice_dim(1, 0..3);
+        let alphap = alpha.slice_dim(1, 3..6);
+        vec![
+            rp0_state.as_ref().map(|(omega, r0inv_dp, dr)| {
                 let drot0 = -dr
                     .clone()
                     .matmul(ndarray::log_vjp(omega.clone(), alphar.clone()))
-                    - ndarray_left_broadcast_cross(r0inv_dp.clone(), alphap.clone());
-                let dpsn0 = -alphap.clone();
-                let drot1 = ndarray::log_vjp(omega.clone(), alphar);
-                let dpsn1 = dr.clone().transpose().matmul(alphap);
-                vec![
-                    Some(Tensor::cat(vec![drot0, dpsn0], 1)),
-                    Some(Tensor::cat(vec![drot1, dpsn1], 1)),
-                ]
-            }
-            (Some(omega), Some(r0inv_dp), Some(dr), false) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-                let drot0 = -dr
-                    .clone()
-                    .matmul(ndarray::log_vjp(omega.clone(), alphar.clone()))
-                    - ndarray_left_broadcast_cross(r0inv_dp.clone(), alphap.clone());
-                let dpsn0 = -alphap.clone();
-                vec![Some(Tensor::cat(vec![drot0, dpsn0], 1)), None]
-            }
-            (Some(omega), None, Some(dr), true) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-                let drot1 = ndarray::log_vjp(omega.clone(), alphar);
-                let dpsn1 = dr.clone().transpose().matmul(alphap);
-                vec![None, Some(Tensor::cat(vec![drot1, dpsn1], 1))]
-            }
-            (None, None, None, false) => {
-                vec![None, None]
-            }
-            _ => unreachable!(),
-        }
+                    - ndarray_lbcross(r0inv_dp.clone(), alphap.clone());
+                Tensor::cat(vec![drot0, -alphap.clone()], 1)
+            }),
+            rp1_state.as_ref().map(|(omega, dr)| {
+                let drot1 = ndarray::log_vjp(omega.clone(), alphar.clone());
+                let dpsn1 = dr.clone().transpose().matmul(alphap.clone());
+                Tensor::cat(vec![drot1, dpsn1], 1)
+            }),
+        ]
     }
 
     fn hvp(
         &self,
-        vjp_state: &Self::VjpState,
-        hvp_state: &Self::HvpState,
+        (rp0_state, rp1_state): &Self::VjpState,
+        [drp0, drp1]: &Self::HvpState,
         alpha: CotangentFrame<NdArrayBackend<F, I>>,
     ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
-        match (vjp_state, hvp_state) {
-            ((Some(omega), Some(r0inv_dp), Some(dr), true), [Some(drp0), Some(drp1)]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
+        let alphar = alpha.clone().slice_dim(1, 0..3);
+        let alphap = alpha.slice_dim(1, 3..6);
 
-                let omega0 = drp0.clone().slice_dim(1, 0..3);
-                let v0 = drp0.clone().slice_dim(1, 3..6);
+        let omega0 = drp0.as_ref().map(|drp0| drp0.clone().slice_dim(1, 0..3));
+        let v0 = drp0.as_ref().map(|drp0| drp0.clone().slice_dim(1, 3..6));
+        let omega1 = drp1.as_ref().map(|drp1| drp1.clone().slice_dim(1, 0..3));
+        let v1 = drp1.as_ref().map(|drp1| drp1.clone().slice_dim(1, 3..6));
 
-                let omega1 = drp1.clone().slice_dim(1, 0..3);
-                let v1 = drp1.clone().slice_dim(1, 3..6);
+        // `Δr` and `ω` are shared by both blocks; either state slot exposes them.
+        let dr = rp0_state
+            .as_ref()
+            .map(|(_, _, dr)| dr.clone())
+            .or_else(|| rp1_state.as_ref().map(|(_, dr)| dr.clone()));
+        let omega = rp0_state
+            .as_ref()
+            .map(|(omega, _, _)| omega.clone())
+            .or_else(|| rp1_state.as_ref().map(|(omega, _)| omega.clone()));
 
+        // `h = a₁ - Δrᵀ a₀`, the group-side direction along which `ω` moves.
+        let h = dr.as_ref().and_then(|dr| {
+            sum_opt_tensors([
+                omega0.clone().map(|omega0| {
+                    -dr.clone()
+                        .transpose()
+                        .matmul(omega0.unsqueeze_dim(2))
+                        .squeeze_dim(2)
+                }),
+                omega1.clone(),
+            ])
+        });
+        // `log_hvp` differentiates along an ω-space velocity, not a group-side one, so `h` has to
+        // be pushed through `J⁻¹(ω)` first (cf. `SO3Log::forward`, which feeds it `log_jvp(ω, ·)`).
+        let log_hvp = omega.as_ref().zip(h.as_ref()).map(|(omega, h)| {
+            let eta = ndarray::log_jvp(omega.clone(), h.clone().unsqueeze_dim(2)).squeeze_dim(2);
+            ndarray::log_hvp(omega.clone(), eta, alphar.clone())
+        });
+
+        vec![
+            rp0_state.as_ref().map(|(omega, r0inv_dp, dr)| {
                 let vjp = ndarray::log_vjp(omega.clone(), alphar.clone());
-                let a0 =
-                    ndarray_left_broadcast_cross(omega0.clone(), dr.clone().matmul(vjp.clone()));
-                let a1 = dr
-                    .clone()
-                    .matmul(ndarray_left_broadcast_cross(omega1.clone(), vjp));
-                let neg_dromega0_plus_omega1 = -dr
-                    .clone()
-                    .transpose()
-                    .matmul(omega0.clone().unsqueeze_dim(2))
-                    .squeeze_dim(2)
-                    + omega1.clone();
-                let log_hvp = ndarray::log_hvp(
-                    omega.clone(),
-                    neg_dromega0_plus_omega1.clone(),
-                    alphar.clone(),
-                );
-
-                let local_so3_hvp = a0 - a1 - dr.clone().matmul(log_hvp.clone());
-
-                let b0 = -ndarray_left_broadcast_cross(
-                    ndarray_cross(r0inv_dp.clone(), omega0.clone()),
-                    alphap.clone(),
-                );
-                let b1 = -ndarray_left_broadcast_cross(
-                    dr.clone().matmul(v1.unsqueeze_dim(2)).squeeze_dim(2) - v0,
-                    alphap.clone(),
-                );
-
-                let hvp_r0 = local_so3_hvp + b0 + b1;
-                let hvp_p0 = alphar.zeros_like();
-                let hvp_r1 = log_hvp;
-                let hvp_p1 = -ndarray_left_broadcast_cross(
-                    neg_dromega0_plus_omega1,
-                    dr.clone().matmul(alphap),
-                );
-
-                vec![
-                    Some(Tensor::cat(vec![hvp_r0, hvp_p0], 1)),
-                    Some(Tensor::cat(vec![hvp_r1, hvp_p1], 1)),
-                ]
-            }
-            ((Some(omega), Some(r0inv_dp), Some(dr), false), [Some(drp0), None]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-
-                let omega0 = drp0.clone().slice_dim(1, 0..3);
-                let v0 = drp0.clone().slice_dim(1, 3..6);
-
-                let vjp = ndarray::log_vjp(omega.clone(), alphar.clone());
-                let a0 =
-                    ndarray_left_broadcast_cross(omega0.clone(), dr.clone().matmul(vjp.clone()));
-                let neg_dromega0 = -dr
-                    .clone()
-                    .transpose()
-                    .matmul(omega0.clone().unsqueeze_dim(2))
-                    .squeeze_dim(2);
-                let log_hvp = ndarray::log_hvp(omega.clone(), neg_dromega0, alphar.clone());
-
-                let local_so3_hvp = a0 - dr.clone().matmul(log_hvp.clone());
-
-                let b0 = -ndarray_left_broadcast_cross(
-                    ndarray_cross(r0inv_dp.clone(), omega0.clone()),
-                    alphap.clone(),
-                );
-                let b1 = ndarray_left_broadcast_cross(v0, alphap.clone());
-
-                let hvp_r0 = local_so3_hvp + b0 + b1;
-                let hvp_p0 = alphar.zeros_like();
-
-                vec![Some(Tensor::cat(vec![hvp_r0, hvp_p0], 1)), None]
-            }
-            ((Some(omega), None, Some(dr), true), [None, Some(drp1)]) => {
-                let alphar = alpha.clone().slice_dim(1, 0..3);
-                let alphap = alpha.slice_dim(1, 3..6);
-
-                let omega1 = drp1.clone().slice_dim(1, 0..3);
-
-                let log_hvp = ndarray::log_hvp(omega.clone(), omega1.clone(), alphar.clone());
-
-                let hvp_r1 = log_hvp;
-                let hvp_p1 = -ndarray_left_broadcast_cross(omega1, dr.clone().matmul(alphap));
-
-                vec![None, Some(Tensor::cat(vec![hvp_r1, hvp_p1], 1))]
-            }
-            ((None, None, None, false), [None, None]) => {
-                vec![None, None]
-            }
-            _ => unreachable!(),
-        }
+                let rot = sum_opt_tensors([
+                    omega0
+                        .clone()
+                        .map(|omega0| ndarray_lbcross(omega0, dr.clone().matmul(vjp.clone()))),
+                    omega1
+                        .clone()
+                        .map(|omega1| -dr.clone().matmul(ndarray_lbcross(omega1, vjp.clone()))),
+                    log_hvp.clone().map(|log_hvp| -dr.clone().matmul(log_hvp)),
+                    omega0.clone().map(|omega0| {
+                        -ndarray_lbcross(ndarray_cross(r0inv_dp.clone(), omega0), alphap.clone())
+                    }),
+                    v0.clone().map(|v0| ndarray_lbcross(v0, alphap.clone())),
+                    v1.clone().map(|v1| {
+                        -ndarray_lbcross(
+                            dr.clone().matmul(v1.unsqueeze_dim(2)).squeeze_dim(2),
+                            alphap.clone(),
+                        )
+                    }),
+                ])
+                .unwrap_or_else(|| alphar.zeros_like());
+                Tensor::cat(vec![rot, alphap.zeros_like()], 1)
+            }),
+            rp1_state.as_ref().map(|(_, dr)| {
+                let rot = log_hvp.clone().unwrap_or_else(|| alphar.zeros_like());
+                let trans = h
+                    .as_ref()
+                    .map(|h| {
+                        -ndarray_lbcross(h.clone(), dr.clone().transpose().matmul(alphap.clone()))
+                    })
+                    .unwrap_or_else(|| alphap.zeros_like());
+                Tensor::cat(vec![rot, trans], 1)
+            }),
+        ]
     }
 }

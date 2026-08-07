@@ -32,18 +32,14 @@ impl<B: Backend> DiffOperation<B> for PointwiseLog {
                     DiffOperationForward::vjp(x.log(), None)
                 }
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                if let Some(dx) = dx {
-                    DiffOperationForward::hvp(
-                        x.clone().log(),
-                        Some(dx.clone() / x.clone()),
-                        Some(x),
-                        Some(dx),
-                    )
-                } else {
-                    DiffOperationForward::hvp(x.log(), None, None, None)
-                }
+                let tangent = dx.as_ref().map(|dx| dx.clone() / x.clone());
+                let vjp_state = diffs[0].then(|| x.clone());
+                DiffOperationForward::hvp(x.log(), tangent, vjp_state, dx)
             }
         }
     }

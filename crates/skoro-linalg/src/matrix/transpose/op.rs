@@ -43,9 +43,12 @@ impl<B: Backend> DiffOperation<B> for Transpose {
                 let [udiff] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(u.transpose().reshape(outshape), udiff)
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [du] = tvecs.try_into().unwrap();
-                let udiff = du.is_some();
+                let udiff = diffs[0];
                 DiffOperationForward::hvp(
                     u.transpose().reshape(outshape),
                     du.map(|du| du.reshape([b, m, n]).transpose().reshape(outshape)),

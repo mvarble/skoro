@@ -21,4 +21,5 @@ skoro-so3.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
-burn-wgpu = "0.21"
+burn-wgpu.workspace = true
+skoro-model = { workspace = true, features = ["testing"] }

@@ -18,7 +18,7 @@ where
     NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
 {
     type VjpState = [Option<Point<NdArrayBackend<F, I>>>; 2];
-    type HvpState = Option<[TangentVector<NdArrayBackend<F, I>>; 2]>;
+    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 2];
 
     fn forward(
         &self,
@@ -50,8 +50,12 @@ where
                     ],
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [du, dv] = tvecs.try_into().unwrap();
+                let [udiff, vdiff] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     cross_product(u.clone(), v.clone()),
                     sum_opt_tensors([
@@ -59,10 +63,10 @@ where
                         dv.as_ref().map(|dv| cross_product(u.clone(), dv.clone())),
                     ]),
                     [
-                        if du.is_some() { Some(v) } else { None },
-                        if dv.is_some() { Some(u) } else { None },
+                        if udiff { Some(v) } else { None },
+                        if vdiff { Some(u) } else { None },
                     ],
-                    du.zip(dv).map(|(du, dv)| [du, dv]),
+                    [du, dv],
                 )
             }
         }
@@ -86,18 +90,22 @@ where
 
     fn hvp(
         &self,
-        _: &Self::VjpState,
+        vjp_state: &Self::VjpState,
         hvp_state: &Self::HvpState,
         alpha: CotangentFrame<NdArrayBackend<F, I>>,
     ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
-        if let Some([du, dv]) = hvp_state {
-            vec![
-                Some(left_broadcast_cross_product(dv.clone(), alpha.clone())),
-                Some(-left_broadcast_cross_product(du.clone(), alpha)),
-            ]
-        } else {
-            vec![None, None]
-        }
+        let [udiff, vdiff] = vjp_state;
+        let [du, dv] = hvp_state;
+        vec![
+            udiff
+                .as_ref()
+                .and(dv.as_ref())
+                .map(|dv| left_broadcast_cross_product(dv.clone(), alpha.clone())),
+            vdiff
+                .as_ref()
+                .and(du.as_ref())
+                .map(|du| -left_broadcast_cross_product(du.clone(), alpha.clone())),
+        ]
     }
 }
 
@@ -125,9 +133,9 @@ where
 
     // unpack tensor data
     let device = u.device();
-    let u_data = u.into_data();
+    let u_data = u.into_data().convert::<B::FloatElem>();
     let u_slice = u_data.as_slice::<B::FloatElem>().unwrap();
-    let v_data = v.into_data();
+    let v_data = v.into_data().convert::<B::FloatElem>();
     let v_slice = v_data.as_slice::<B::FloatElem>().unwrap();
 
     // Allocate output memory

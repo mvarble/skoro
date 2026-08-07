@@ -9,12 +9,10 @@ version.workspace = true
 burn.workspace = true
 
 skoro-backend.workspace = true
-skoro-core.workspace = true
 skoro-operation.workspace = true
 skoro-graph.workspace = true
 skoro-model.workspace = true
 skoro-riemann.workspace = true
-skoro-linalg.workspace = true
 
 [dev-dependencies]
 approx.workspace = true

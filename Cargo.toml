@@ -15,6 +15,7 @@ burn-ndarray = "0.21"
 cubecl = "0.10"
 ndarray = "0.17.2"
 num-traits = "0.2"
+burn-wgpu = "0.21"
 
 skoro = { path = "./crates/skoro" }
 skoro-backend = { path = "./crates/skoro-backend" }

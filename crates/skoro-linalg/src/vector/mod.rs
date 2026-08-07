@@ -44,6 +44,3 @@ impl<B: Backend, M: LinalgVector<B>> LinalgVectorOps<B> for Q<B, M> {
         register_map1(Real, SumComponents, self)
     }
 }
-
-#[cfg(test)]
-mod tests;

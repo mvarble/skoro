@@ -17,6 +17,12 @@ use crate::ops::{SO3InverseRetraction, SO3Retraction};
 #[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct SO3Matrix<F: Element>(pub [F; 9]);
 
+impl<F: Element> SO3Matrix<F> {
+    pub fn new(elements: [F; 9]) -> Self {
+        Self(elements)
+    }
+}
+
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SO3;
 
@@ -28,13 +34,15 @@ impl NumComponents for SO3 {
 
 impl<F: Element> Packable<F, SO3Matrix<F>> for SO3 {
     fn pack(&self, data: &SO3Matrix<F>, offset: usize, dst: &mut [F]) {
-        dst[offset..].copy_from_slice(&data.0);
+        // Bound both ends: `copy_from_slice` panics unless the lengths match exactly, so an
+        // open-ended `dst[offset..]` only ever works when the matrix is the whole buffer.
+        dst[offset..(offset + 9)].copy_from_slice(&data.0);
     }
 
     fn unpack(&self, tensor: &[F], offset: usize) -> SO3Matrix<F> {
         assert!(tensor.len() >= offset + 9);
         let mut data: [F; 9] = [F::default(); 9];
-        data.copy_from_slice(&tensor[offset..]);
+        data.copy_from_slice(&tensor[offset..(offset + 9)]);
         SO3Matrix(data)
     }
 }

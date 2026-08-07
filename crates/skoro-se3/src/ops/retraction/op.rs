@@ -5,8 +5,10 @@ use skoro_backend::{
     NdArrayInt, NdArrayTensor, Point, SharedArray, TangentVector, Tensor,
 };
 use skoro_linalg::{
-    vector::cross_product::cube::left_broadcast_cross_product as cube_cross,
-    vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_cross,
+    vector::cross_product::cube::cross_product as cube_cross,
+    vector::cross_product::cube::left_broadcast_cross_product as cube_lbcross,
+    vector::cross_product::ndarray::cross_product as ndarray_cross,
+    vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_lbcross,
 };
 use skoro_operation::{
     Input,
@@ -17,15 +19,46 @@ use skoro_so3::ops::exp::{cube, ndarray};
 
 use super::SE3Retraction;
 
+// The retraction of `SE(3)` used here is
+// ```
+// R((r, p), (ω, v)) = (r Exp(ω), p + r v)
+// ```
+// which induces the body-frame chart `(a, b) ↦ (r Exp(a), p + r b)` on the tangent space at
+// `(r, p)`. Writing `E = Exp(ω)`, the output point is `y = (r E, p + r v)`, whose own chart is
+// `(c, d) ↦ (r E Exp(c), p + r v + r E d)`.
+//
+// **JVP.** Pushing the input tangent `(a, b)` and the parameter tangent `(dω, dv)` through gives
+// ```
+// c = Eᵀ a + J(ω) dω
+// d = Eᵀ (b + a × v + dv)
+// ```
+// The `a × v` coupling is what makes the translation block feel the rotational perturbation: moving
+// `r` along `a` swings the lever arm `r v`. Both translation blocks carry `Eᵀ`, not `E`, because
+// `d` is read off in the *output* frame `r E`.
+//
+// **VJP.** Transposing the above against a cotangent `α = (α_r, α_p)` yields
+// ```
+// ∂(r, p) = (E α_r + v × (E α_p),  E α_p)
+// ∂(ω, v) = (J(ω)ᵀ α_r,            E α_p)
+// ```
+//
+// **HVP.** Neither VJP block depends on `r` or `p` — only on `ω` and `v` — so the whole
+// sensitivity is driven by the parameter tangent `(dω, dv)`. With `g = J(ω) dω` (so that
+// `d/dt Exp(ω + t dω) = E [g]×`),
+// ```
+// ∇∂(r, p) = (E (g × α_r) + dv × (E α_p) + v × (E (g × α_p)),  E (g × α_p))
+// ∇∂(ω, v) = (∇_dω J(ω)ᵀ α_r,                                  E (g × α_p))
+// ```
 impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I>>
     for SE3Retraction
 {
+    /// `(E, v)` when `(r, p)` is differentiable, and `(E, ω)` when `(ω, v)` is differentiable.
     type VjpState = (
-        Option<Tensor<CubeBackend<R, F, I>, 3>>,
-        Option<Point<CubeBackend<R, F, I>>>,
-        bool,
+        Option<(Tensor<CubeBackend<R, F, I>, 3>, Point<CubeBackend<R, F, I>>)>,
+        Option<(Tensor<CubeBackend<R, F, I>, 3>, Point<CubeBackend<R, F, I>>)>,
     );
-    type HvpState = [Option<TangentVector<CubeBackend<R, F, I>>>; 2];
+    /// `g = J(ω) dω`, then `dω`, then `dv`.
+    type HvpState = [Option<TangentVector<CubeBackend<R, F, I>>>; 3];
 
     fn forward(
         &self,
@@ -40,103 +73,116 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
         let p = rp.slice_dim(1, 9..12);
         let omega = omegav.clone().slice_dim(1, 0..3);
         let v = omegav.slice_dim(1, 3..6);
-        let p_plus_rv = p + r
-            .clone()
-            .reshape([b, 3, 3])
-            .matmul(v.unsqueeze_dim(2))
-            .squeeze_dim(2);
         let rmat = r.reshape([b, 3, 3]);
+        let p_plus_rv = p + rmat
+            .clone()
+            .matmul(v.clone().unsqueeze_dim(2))
+            .squeeze_dim(2);
         let expomega = cube::exp(omega.clone()).reshape([b, 3, 3]);
+        let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
+        let output = Point::cat(vec![rexpomega, p_plus_rv], 1);
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                let rexpomega = rmat.matmul(expomega).reshape([b, 9]);
-                DiffOperationForward::forward_only(Point::cat(vec![rexpomega, p_plus_rv], 1))
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(output),
             DiffModeState::Jvp(tvecs) => {
                 let [drp, domegav] = tvecs.try_into().unwrap();
-                let dr = drp.as_ref().map(|drp| drp.clone().slice_dim(1, 0..3));
-                let dp = drp.map(|drp| drp.slice_dim(1, 3..6));
-                let domega = domegav
-                    .as_ref()
-                    .map(|domegav| domegav.clone().slice_dim(1, 0..3));
-                let dv = domegav.map(|domegav| domegav.slice_dim(1, 3..6));
-
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::jvp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     sum_opt_tensors([
-                        dr.map(|dr| expomega.clone().transpose().matmul(dr)),
-                        dp.map(|dp| expomega.clone().matmul(dp)),
-                        domega.map(|domega| cube::exp_jvp(omega, domega)),
-                        dv.map(|dv| expomega.matmul(dv)),
+                        drp.map(|drp| {
+                            let a = drp.clone().slice_dim(1, 0..3);
+                            let b = drp.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    expomega.clone().transpose().matmul(a.clone()),
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(b - cube_lbcross(v.clone(), a)),
+                                ],
+                                1,
+                            )
+                        }),
+                        domegav.map(|domegav| {
+                            let domega = domegav.clone().slice_dim(1, 0..3);
+                            let dv = domegav.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    cube::exp_jvp(omega.clone(), domega),
+                                    expomega.clone().transpose().matmul(dv),
+                                ],
+                                1,
+                            )
+                        }),
                     ]),
                 )
             }
             DiffModeState::Vjp(diffs) => {
                 let [rp_diff, omegav_diff] = diffs.try_into().unwrap();
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::vjp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     (
-                        if rp_diff || omegav_diff {
-                            Some(expomega)
-                        } else {
-                            None
-                        },
-                        if omegav_diff { Some(omega) } else { None },
-                        rp_diff,
+                        rp_diff.then(|| (expomega.clone(), v)),
+                        omegav_diff.then_some((expomega, omega)),
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [drp, domegav] = tvecs.try_into().unwrap();
-
-                let rp_diff = drp.is_some();
-                let omegav_diff = domegav.is_some();
-
-                let dr = drp.as_ref().map(|drp| drp.clone().slice_dim(1, 0..3));
-                let dp = drp.map(|drp| drp.slice_dim(1, 3..6));
+                let [rp_diff, omegav_diff] = diffs.try_into().unwrap();
                 let domega = domegav
                     .as_ref()
                     .map(|domegav| domegav.clone().slice_dim(1, 0..3));
                 let dv = domegav.map(|domegav| domegav.slice_dim(1, 3..6));
-
-                let expomega = cube::exp(omega.clone()).reshape([b, 3, 3]);
-                let dexp_domega = domega.as_ref().map(|domega| {
+                let g = domega.as_ref().map(|domega| {
                     cube::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
                 });
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::hvp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     sum_opt_tensors([
-                        dr.map(|dr| {
-                            expomega
-                                .clone()
-                                .transpose()
-                                .matmul(dr.unsqueeze_dim(2))
-                                .squeeze_dim(2)
+                        drp.map(|drp| {
+                            let a = drp.clone().slice_dim(1, 0..3);
+                            let b = drp.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(a.clone().unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul((b - cube_cross(v.clone(), a)).unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                ],
+                                1,
+                            )
                         }),
-                        dp.map(|dp| expomega.clone().matmul(dp.unsqueeze_dim(2)).squeeze_dim(2)),
-                        dexp_domega.clone(),
-                        dv.map(|dv| expomega.clone().matmul(dv.unsqueeze_dim(2)).squeeze_dim(2)),
+                        g.clone().zip(dv.clone()).map(|(g, dv)| {
+                            Tensor::cat(
+                                vec![
+                                    g,
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(dv.unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                ],
+                                1,
+                            )
+                        }),
                     ]),
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
                     (
-                        if rp_diff || omegav_diff {
-                            Some(expomega)
-                        } else {
-                            None
-                        },
-                        if omegav_diff { Some(omega) } else { None },
-                        rp_diff,
+                        rp_diff.then(|| (expomega.clone(), v)),
+                        omegav_diff.then_some((expomega, omega)),
                     ),
-                    [
-                        if rp_diff || omegav_diff {
-                            dexp_domega
-                        } else {
-                            None
-                        },
-                        if omegav_diff { domega } else { None },
-                    ],
+                    [g, domega, dv],
                 )
             }
         }
@@ -144,92 +190,79 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
 
     fn vjp(
         &self,
-        vjp_state: &Self::VjpState,
+        (rp_state, omegav_state): &Self::VjpState,
         alpharp: CotangentFrame<CubeBackend<R, F, I>>,
     ) -> Vec<Option<CotangentFrame<CubeBackend<R, F, I>>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
         let alphap = alpharp.slice_dim(1, 3..6);
-        match vjp_state {
-            (Some(expomega), Some(omega), true) => {
-                let expomega_alphar = expomega.clone().matmul(alphar.clone());
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                let expvjp_alphar = cube::exp_vjp(omega.clone(), alphar);
-                vec![
-                    Some(CotangentFrame::cat(
-                        vec![expomega_alphar, expomega_alphap.clone()],
-                        1,
-                    )),
-                    Some(CotangentFrame::cat(vec![expvjp_alphar, expomega_alphap], 1)),
-                ]
-            }
-            (Some(expomega), None, true) => {
-                let expomega_alphar = expomega.clone().matmul(alphar.clone());
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                vec![
-                    Some(CotangentFrame::cat(
-                        vec![expomega_alphar, expomega_alphap.clone()],
-                        1,
-                    )),
-                    None,
-                ]
-            }
-            (Some(expomega), Some(omega), false) => {
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                let expvjp_alphar = cube::exp_vjp(omega.clone(), alphar);
-                vec![
-                    None,
-                    Some(CotangentFrame::cat(vec![expvjp_alphar, expomega_alphap], 1)),
-                ]
-            }
-            (None, None, false) => vec![None, None],
-            _ => unreachable!(),
-        }
+        vec![
+            rp_state.as_ref().map(|(expomega, v)| {
+                let e_alphap = expomega.clone().matmul(alphap.clone());
+                let rot = expomega.clone().matmul(alphar.clone())
+                    + cube_lbcross(v.clone(), e_alphap.clone());
+                CotangentFrame::cat(vec![rot, e_alphap], 1)
+            }),
+            omegav_state.as_ref().map(|(expomega, omega)| {
+                CotangentFrame::cat(
+                    vec![
+                        cube::exp_vjp(omega.clone(), alphar.clone()),
+                        expomega.clone().matmul(alphap.clone()),
+                    ],
+                    1,
+                )
+            }),
+        ]
     }
 
     fn hvp(
         &self,
-        (expomega, omega, rpdiff): &Self::VjpState,
-        [dexp_domega, domega]: &Self::HvpState,
+        (rp_state, omegav_state): &Self::VjpState,
+        [g, domega, dv]: &Self::HvpState,
         alpharp: CotangentFrame<CubeBackend<R, F, I>>,
     ) -> Vec<Option<CotangentFrame<CubeBackend<R, F, I>>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
-        let alphap = alpharp.clone().slice_dim(1, 3..6);
-
-        match (
-            *rpdiff,
-            expomega.as_ref(),
-            omega.as_ref(),
-            dexp_domega.as_ref(),
-            domega.as_ref(),
-        ) {
-            (true, Some(expomega), Some(omega), Some(dexp_domega), Some(domega)) => {
-                let alphar0 = expomega
-                    .clone()
-                    .matmul(cube_cross(dexp_domega.clone(), alphar.clone()));
-                let alphar1 = cube::exp_hvp(omega.clone(), domega.clone(), alphar);
-                let alphap = expomega
-                    .clone()
-                    .matmul(cube_cross(dexp_domega.clone(), alphap.clone()));
-
-                vec![
-                    Some(CotangentFrame::cat(vec![alphar0, alphap.clone()], 1)),
-                    Some(CotangentFrame::cat(vec![alphar1, alphap], 1)),
-                ]
-            }
-            (true, Some(_), None, Some(_), None) => {
-                vec![Some(alpharp.zeros_like()), None]
-            }
-            (false, Some(expomega), Some(omega), Some(dexp_domega), Some(domega)) => {
-                let alphar1 = cube::exp_hvp(omega.clone(), domega.clone(), alphar);
-                let alphap = expomega
-                    .clone()
-                    .matmul(cube_cross(dexp_domega.clone(), alphap.clone()));
-
-                vec![None, Some(CotangentFrame::cat(vec![alphar1, alphap], 1))]
-            }
-            (false, None, None, None, None) => vec![None, None],
-            _ => unreachable!(),
-        }
+        let alphap = alpharp.slice_dim(1, 3..6);
+        vec![
+            rp_state.as_ref().map(|(expomega, v)| {
+                // `E (g × α_p)`, shared by the translation block and the lever-arm term.
+                let eg_alphap = g.as_ref().map(|g| {
+                    expomega
+                        .clone()
+                        .matmul(cube_lbcross(g.clone(), alphap.clone()))
+                });
+                let rot = sum_opt_tensors([
+                    g.as_ref().map(|g| {
+                        expomega
+                            .clone()
+                            .matmul(cube_lbcross(g.clone(), alphar.clone()))
+                    }),
+                    dv.as_ref().map(|dv| {
+                        cube_lbcross(dv.clone(), expomega.clone().matmul(alphap.clone()))
+                    }),
+                    eg_alphap
+                        .clone()
+                        .map(|eg_alphap| cube_lbcross(v.clone(), eg_alphap)),
+                ])
+                .unwrap_or_else(|| alphar.zeros_like());
+                let trans = eg_alphap.unwrap_or_else(|| alphap.zeros_like());
+                CotangentFrame::cat(vec![rot, trans], 1)
+            }),
+            omegav_state.as_ref().map(|(expomega, omega)| {
+                let rot = domega
+                    .as_ref()
+                    .map(|domega| cube::exp_hvp(omega.clone(), domega.clone(), alphar.clone()))
+                    .unwrap_or_else(|| alphar.zeros_like());
+                let trans = g
+                    .as_ref()
+                    .map(|g| {
+                        expomega
+                            .clone()
+                            .matmul(cube_lbcross(g.clone(), alphap.clone()))
+                    })
+                    .unwrap_or_else(|| alphap.zeros_like());
+                CotangentFrame::cat(vec![rot, trans], 1)
+            }),
+        ]
     }
 }
 
@@ -239,12 +272,13 @@ where
     I: NdArrayInt,
     NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
 {
+    /// `(E, v)` when `(r, p)` is differentiable, and `(E, ω)` when `(ω, v)` is differentiable.
     type VjpState = (
-        Option<Tensor<NdArrayBackend<F, I>, 3>>,
-        Option<Point<NdArrayBackend<F, I>>>,
-        bool,
+        Option<(Tensor<NdArrayBackend<F, I>, 3>, Point<NdArrayBackend<F, I>>)>,
+        Option<(Tensor<NdArrayBackend<F, I>, 3>, Point<NdArrayBackend<F, I>>)>,
     );
-    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 2];
+    /// `g = J(ω) dω`, then `dω`, then `dv`.
+    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 3];
 
     fn forward(
         &self,
@@ -259,103 +293,116 @@ where
         let p = rp.slice_dim(1, 9..12);
         let omega = omegav.clone().slice_dim(1, 0..3);
         let v = omegav.slice_dim(1, 3..6);
-        let p_plus_rv = p + r
-            .clone()
-            .reshape([b, 3, 3])
-            .matmul(v.unsqueeze_dim(2))
-            .squeeze_dim(2);
         let rmat = r.reshape([b, 3, 3]);
+        let p_plus_rv = p + rmat
+            .clone()
+            .matmul(v.clone().unsqueeze_dim(2))
+            .squeeze_dim(2);
         let expomega = ndarray::exp(omega.clone()).reshape([b, 3, 3]);
+        let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
+        let output = Point::cat(vec![rexpomega, p_plus_rv], 1);
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                let rexpomega = rmat.matmul(expomega).reshape([b, 9]);
-                DiffOperationForward::forward_only(Point::cat(vec![rexpomega, p_plus_rv], 1))
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(output),
             DiffModeState::Jvp(tvecs) => {
                 let [drp, domegav] = tvecs.try_into().unwrap();
-                let dr = drp.as_ref().map(|drp| drp.clone().slice_dim(1, 0..3));
-                let dp = drp.map(|drp| drp.slice_dim(1, 3..6));
-                let domega = domegav
-                    .as_ref()
-                    .map(|domegav| domegav.clone().slice_dim(1, 0..3));
-                let dv = domegav.map(|domegav| domegav.slice_dim(1, 3..6));
-
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::jvp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     sum_opt_tensors([
-                        dr.map(|dr| expomega.clone().transpose().matmul(dr)),
-                        dp.map(|dp| expomega.clone().matmul(dp)),
-                        domega.map(|domega| ndarray::exp_jvp(omega, domega)),
-                        dv.map(|dv| expomega.matmul(dv)),
+                        drp.map(|drp| {
+                            let a = drp.clone().slice_dim(1, 0..3);
+                            let b = drp.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    expomega.clone().transpose().matmul(a.clone()),
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(b - ndarray_lbcross(v.clone(), a)),
+                                ],
+                                1,
+                            )
+                        }),
+                        domegav.map(|domegav| {
+                            let domega = domegav.clone().slice_dim(1, 0..3);
+                            let dv = domegav.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    ndarray::exp_jvp(omega.clone(), domega),
+                                    expomega.clone().transpose().matmul(dv),
+                                ],
+                                1,
+                            )
+                        }),
                     ]),
                 )
             }
             DiffModeState::Vjp(diffs) => {
                 let [rp_diff, omegav_diff] = diffs.try_into().unwrap();
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::vjp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     (
-                        if rp_diff || omegav_diff {
-                            Some(expomega)
-                        } else {
-                            None
-                        },
-                        if omegav_diff { Some(omega) } else { None },
-                        rp_diff,
+                        rp_diff.then(|| (expomega.clone(), v)),
+                        omegav_diff.then_some((expomega, omega)),
                     ),
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [drp, domegav] = tvecs.try_into().unwrap();
-
-                let rp_diff = drp.is_some();
-                let omegav_diff = domegav.is_some();
-
-                let dr = drp.as_ref().map(|drp| drp.clone().slice_dim(1, 0..3));
-                let dp = drp.map(|drp| drp.slice_dim(1, 3..6));
+                let [rp_diff, omegav_diff] = diffs.try_into().unwrap();
                 let domega = domegav
                     .as_ref()
                     .map(|domegav| domegav.clone().slice_dim(1, 0..3));
                 let dv = domegav.map(|domegav| domegav.slice_dim(1, 3..6));
-
-                let expomega = ndarray::exp(omega.clone()).reshape([b, 3, 3]);
-                let dexp_domega = domega.as_ref().map(|domega| {
+                let g = domega.as_ref().map(|domega| {
                     ndarray::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
                 });
-                let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
                 DiffOperationForward::hvp(
-                    Point::cat(vec![rexpomega, p_plus_rv], 1),
+                    output,
                     sum_opt_tensors([
-                        dr.map(|dr| {
-                            expomega
-                                .clone()
-                                .transpose()
-                                .matmul(dr.unsqueeze_dim(2))
-                                .squeeze_dim(2)
+                        drp.map(|drp| {
+                            let a = drp.clone().slice_dim(1, 0..3);
+                            let b = drp.slice_dim(1, 3..6);
+                            Tensor::cat(
+                                vec![
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(a.clone().unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul((b - ndarray_cross(v.clone(), a)).unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                ],
+                                1,
+                            )
                         }),
-                        dp.map(|dp| expomega.clone().matmul(dp.unsqueeze_dim(2)).squeeze_dim(2)),
-                        dexp_domega.clone(),
-                        dv.map(|dv| expomega.clone().matmul(dv.unsqueeze_dim(2)).squeeze_dim(2)),
+                        g.clone().zip(dv.clone()).map(|(g, dv)| {
+                            Tensor::cat(
+                                vec![
+                                    g,
+                                    expomega
+                                        .clone()
+                                        .transpose()
+                                        .matmul(dv.unsqueeze_dim(2))
+                                        .squeeze_dim(2),
+                                ],
+                                1,
+                            )
+                        }),
                     ]),
+                    // `diffs` (not the tangents) says whether an input traces back to a free
+                    // variable, so it is what gates the state `vjp` short-circuits on. A
+                    // differentiable input may still arrive with no seeded tangent.
                     (
-                        if rp_diff || omegav_diff {
-                            Some(expomega)
-                        } else {
-                            None
-                        },
-                        if omegav_diff { Some(omega) } else { None },
-                        rp_diff,
+                        rp_diff.then(|| (expomega.clone(), v)),
+                        omegav_diff.then_some((expomega, omega)),
                     ),
-                    [
-                        if rp_diff || omegav_diff {
-                            dexp_domega
-                        } else {
-                            None
-                        },
-                        if omegav_diff { domega } else { None },
-                    ],
+                    [g, domega, dv],
                 )
             }
         }
@@ -363,91 +410,78 @@ where
 
     fn vjp(
         &self,
-        vjp_state: &Self::VjpState,
+        (rp_state, omegav_state): &Self::VjpState,
         alpharp: CotangentFrame<NdArrayBackend<F, I>>,
     ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
         let alphap = alpharp.slice_dim(1, 3..6);
-        match vjp_state {
-            (Some(expomega), Some(omega), true) => {
-                let expomega_alphar = expomega.clone().matmul(alphar.clone());
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                let expvjp_alphar = ndarray::exp_vjp(omega.clone(), alphar);
-                vec![
-                    Some(CotangentFrame::cat(
-                        vec![expomega_alphar, expomega_alphap.clone()],
-                        1,
-                    )),
-                    Some(CotangentFrame::cat(vec![expvjp_alphar, expomega_alphap], 1)),
-                ]
-            }
-            (Some(expomega), None, true) => {
-                let expomega_alphar = expomega.clone().matmul(alphar.clone());
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                vec![
-                    Some(CotangentFrame::cat(
-                        vec![expomega_alphar, expomega_alphap.clone()],
-                        1,
-                    )),
-                    None,
-                ]
-            }
-            (Some(expomega), Some(omega), false) => {
-                let expomega_alphap = expomega.clone().matmul(alphap);
-                let expvjp_alphar = ndarray::exp_vjp(omega.clone(), alphar);
-                vec![
-                    None,
-                    Some(CotangentFrame::cat(vec![expvjp_alphar, expomega_alphap], 1)),
-                ]
-            }
-            (None, None, false) => vec![None, None],
-            _ => unreachable!(),
-        }
+        vec![
+            rp_state.as_ref().map(|(expomega, v)| {
+                let e_alphap = expomega.clone().matmul(alphap.clone());
+                let rot = expomega.clone().matmul(alphar.clone())
+                    + ndarray_lbcross(v.clone(), e_alphap.clone());
+                CotangentFrame::cat(vec![rot, e_alphap], 1)
+            }),
+            omegav_state.as_ref().map(|(expomega, omega)| {
+                CotangentFrame::cat(
+                    vec![
+                        ndarray::exp_vjp(omega.clone(), alphar.clone()),
+                        expomega.clone().matmul(alphap.clone()),
+                    ],
+                    1,
+                )
+            }),
+        ]
     }
 
     fn hvp(
         &self,
-        (expomega, omega, rpdiff): &Self::VjpState,
-        [dexp_domega, domega]: &Self::HvpState,
+        (rp_state, omegav_state): &Self::VjpState,
+        [g, domega, dv]: &Self::HvpState,
         alpharp: CotangentFrame<NdArrayBackend<F, I>>,
     ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
-        let alphap = alpharp.clone().slice_dim(1, 3..6);
-
-        match (
-            *rpdiff,
-            expomega.as_ref(),
-            omega.as_ref(),
-            dexp_domega.as_ref(),
-            domega.as_ref(),
-        ) {
-            (true, Some(expomega), Some(omega), Some(dexp_domega), Some(domega)) => {
-                let alphar0 = expomega
-                    .clone()
-                    .matmul(ndarray_cross(dexp_domega.clone(), alphar.clone()));
-                let alphar1 = ndarray::exp_hvp(omega.clone(), domega.clone(), alphar);
-                let alphap = expomega
-                    .clone()
-                    .matmul(ndarray_cross(dexp_domega.clone(), alphap.clone()));
-
-                vec![
-                    Some(CotangentFrame::cat(vec![alphar0, alphap.clone()], 1)),
-                    Some(CotangentFrame::cat(vec![alphar1, alphap], 1)),
-                ]
-            }
-            (true, Some(_), None, Some(_), None) => {
-                vec![Some(alpharp.zeros_like()), None]
-            }
-            (false, Some(expomega), Some(omega), Some(dexp_domega), Some(domega)) => {
-                let alphar1 = ndarray::exp_hvp(omega.clone(), domega.clone(), alphar);
-                let alphap = expomega
-                    .clone()
-                    .matmul(ndarray_cross(dexp_domega.clone(), alphap.clone()));
-
-                vec![None, Some(CotangentFrame::cat(vec![alphar1, alphap], 1))]
-            }
-            (false, None, None, None, None) => vec![None, None],
-            _ => unreachable!(),
-        }
+        let alphap = alpharp.slice_dim(1, 3..6);
+        vec![
+            rp_state.as_ref().map(|(expomega, v)| {
+                // `E (g × α_p)`, shared by the translation block and the lever-arm term.
+                let eg_alphap = g.as_ref().map(|g| {
+                    expomega
+                        .clone()
+                        .matmul(ndarray_lbcross(g.clone(), alphap.clone()))
+                });
+                let rot = sum_opt_tensors([
+                    g.as_ref().map(|g| {
+                        expomega
+                            .clone()
+                            .matmul(ndarray_lbcross(g.clone(), alphar.clone()))
+                    }),
+                    dv.as_ref().map(|dv| {
+                        ndarray_lbcross(dv.clone(), expomega.clone().matmul(alphap.clone()))
+                    }),
+                    eg_alphap
+                        .clone()
+                        .map(|eg_alphap| ndarray_lbcross(v.clone(), eg_alphap)),
+                ])
+                .unwrap_or_else(|| alphar.zeros_like());
+                let trans = eg_alphap.unwrap_or_else(|| alphap.zeros_like());
+                CotangentFrame::cat(vec![rot, trans], 1)
+            }),
+            omegav_state.as_ref().map(|(expomega, omega)| {
+                let rot = domega
+                    .as_ref()
+                    .map(|domega| ndarray::exp_hvp(omega.clone(), domega.clone(), alphar.clone()))
+                    .unwrap_or_else(|| alphar.zeros_like());
+                let trans = g
+                    .as_ref()
+                    .map(|g| {
+                        expomega
+                            .clone()
+                            .matmul(ndarray_lbcross(g.clone(), alphap.clone()))
+                    })
+                    .unwrap_or_else(|| alphap.zeros_like());
+                CotangentFrame::cat(vec![rot, trans], 1)
+            }),
+        ]
     }
 }

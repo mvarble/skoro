@@ -26,8 +26,11 @@ impl<B: Backend> DiffOperation<B> for Addition {
             DiffModeState::Vjp(diffs) => {
                 DiffOperationForward::vjp(x + y, diffs.try_into().unwrap())
             }
-            DiffModeState::Hvp(tvecs) => {
-                let vjp_state = [tvecs[0].is_some(), tvecs[1].is_some()];
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
+                let vjp_state = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(x + y, sum_opt_tensors(tvecs), vjp_state, ())
             }
         }
@@ -86,9 +89,12 @@ impl<B: Backend> DiffOperation<B> for Subtraction {
             DiffModeState::Vjp(diffs) => {
                 DiffOperationForward::vjp(x - y, diffs.try_into().unwrap())
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx, dy] = tvecs.try_into().unwrap();
-                let vjp_state = [dx.is_some(), dy.is_some()];
+                let vjp_state = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x - y,
                     sum_opt_tensors([dx, dy.map(|dy| -dy)]),
@@ -165,8 +171,12 @@ impl<B: Backend> DiffOperation<B> for PointwiseMul {
                     ],
                 )
             }
-            DiffModeState::Hvp(cvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: cvecs,
+            } => {
                 let [dx, dy] = cvecs.try_into().unwrap();
+                let [xdiff, ydiff] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x.clone() * y.clone(),
                     sum_opt_tensors([
@@ -174,8 +184,8 @@ impl<B: Backend> DiffOperation<B> for PointwiseMul {
                         dy.as_ref().map(|dy| x.clone() * dy.clone()),
                     ]),
                     [
-                        if dx.is_some() { Some(y) } else { None },
-                        if dy.is_some() { Some(x) } else { None },
+                        if xdiff { Some(y) } else { None },
+                        if ydiff { Some(x) } else { None },
                     ],
                     [dy, dx],
                 )
@@ -240,10 +250,12 @@ impl<B: Backend> DiffOperation<B> for LiteralPointwiseAdd<B> {
                 DiffOperationForward::jvp(x + y, dx)
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(x + y, diffs[0]),
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                let diff = dx.is_some();
-                DiffOperationForward::hvp(x + y, dx, diff, ())
+                DiffOperationForward::hvp(x + y, dx, diffs[0], ())
             }
         }
     }
@@ -298,10 +310,12 @@ impl<B: Backend> DiffOperation<B> for LiteralPointwiseSub<B> {
                 DiffOperationForward::jvp(x - y, dx)
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(x - y, diffs[0]),
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                let diff = dx.is_some();
-                DiffOperationForward::hvp(x - y, dx, diff, ())
+                DiffOperationForward::hvp(x - y, dx, diffs[0], ())
             }
         }
     }
@@ -356,12 +370,15 @@ impl<B: Backend> DiffOperation<B> for LiteralPointwiseMul<B> {
                 DiffOperationForward::jvp(x * y, sum_opt_tensors([dx.map(|dx| dx * y)]))
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(x * y, diffs[0]),
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x * y,
                     sum_opt_tensors([dx.as_ref().map(|dx| dx.clone() * y)]),
-                    dx.is_some(),
+                    diffs[0],
                     (),
                 )
             }
@@ -434,15 +451,19 @@ impl<B: Backend> DiffOperation<B> for PointwiseDiv {
                     },
                 )
             }
-            DiffModeState::Hvp(cvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: cvecs,
+            } => {
                 let [dx, dy] = cvecs.try_into().unwrap();
+                let [xdiff, ydiff] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x.clone() / y.clone(),
                     sum_opt_tensors([
                         dx.as_ref().map(|dx| dx.clone() / y.clone()),
                         dy.as_ref().map(|dy| x.clone() / dy.clone().square()),
                     ]),
-                    match (dx.is_some(), dy.is_some()) {
+                    match (xdiff, ydiff) {
                         (false, false) => None,
                         (true, false) => Some((PointwiseDivVjpState::X, [x, y])),
                         (false, true) => Some((PointwiseDivVjpState::Y, [x, y])),
@@ -551,12 +572,15 @@ impl<B: Backend> DiffOperation<B> for LiteralPointwiseDiv<B> {
                 DiffOperationForward::jvp(x / self.0, dx.map(|dx| dx / self.0))
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(x / self.0, diffs[0]),
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x / self.0,
                     dx.as_ref().map(|dx| dx.clone() / self.0),
-                    dx.is_some(),
+                    diffs[0],
                     (),
                 )
             }

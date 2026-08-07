@@ -63,7 +63,7 @@ The `Q<B, M>` proxy mirrors this surface with `evaluate`, `evaluate_jvp` / `eval
 To build relationships between variables, Skoro maps user logic into the `Graph`:
 
 - **`Distribution<B, M>` Trait**: An interface for registering statistical distributions to the model. It supplies a `quantity_type`, a `sampler`, the relevant `parent_ids`, and a `log_density`, which under the hood generate the required `Stochastic` and `LogDensity` nodes in the `Graph`.
-- **Mapped Functions (`register_map1` … `register_map12`)**: A family of utilities that take generic user functions over one to twelve `Q` inputs and lower them into deterministic `Mapped` nodes in the `Graph`, ensuring they are backed by a valid `DiffKernel` (via `GraphOperation`) for autodiff. The arithmetic operator overloads on `Q` (`QAdd`, `QSub`, `QMul`, `QDiv`, and their scalar-literal variants) are implemented on top of these.
+- **Mapped Functions (`register_map1` … `register_map12`)**: A family of utilities that take generic user functions over one to twelve `Q` inputs and lower them into deterministic `Mapped` nodes in the `Graph`, ensuring they are backed by a valid `DiffOperation` (via `GraphOperation`) for autodiff. The arithmetic operator overloads on `Q` (`QAdd`, `QSub`, `QMul`, `QDiv`, and their scalar-literal variants) are implemented on top of these.
 
 ---
 
@@ -88,15 +88,15 @@ The sequence flattens the graph into a list of steps where HashMap IDs are repla
 
 ---
 
-### The `DiffKernel`
+### The `DiffOperation`
 
 Autodiff in Skoro is divided into stateless mathematical logic and stateful execution tracking.
 
-The **`DiffKernel`** (in `skoro-diff`) is the stateless mathematical representation of an operation.
+The **`DiffOperation`** (in `skoro-diff`) is the stateless mathematical representation of an operation.
 Operations must implement `forward`, `vjp`, and `hvp`.
 
 **The Forward Pass (`forward`)**
-The `forward` pass always calculates the forward operation _eagerly_, but its behavior branches depending on the active `DiffModeState` (and returns the matching variant of the `DiffKernelForward` result enum):
+The `forward` pass always calculates the forward operation _eagerly_, but its behavior branches depending on the active `DiffModeState` (and returns the matching variant of the `DiffOperationForward` result enum):
 
 - **`ForwardOnly`**: Computes only the eager forward operation without any derivative tracking.
 - **`Jvp` (Jacobian-Vector Product)**: Calculates the eager forward map and simultaneously computes the first-order forward map on a tangent _frame_ of vectors, represented as a tensor of shape `[batches, dimension, frames]`.
@@ -113,8 +113,8 @@ Crucially, both `vjp` and `hvp` operate on a _frame_ of cotangent vectors.
 These cotangent frames are represented as tensors of shape `[batches, dimension, frames]`, allowing the system to efficiently propagate multiple gradient signals (or sensitivities) simultaneously across batches.
 
 When the `Graph` is compiled, its operation nodes lower into `DynSequenceOperation`s.
-A `SequenceOperation` holds a `DiffKernel` alongside its execution indices.
+A `SequenceOperation` holds a `DiffOperation` alongside its execution indices.
 
 During an autodiff pass (like `log_density_ord1`), the program iterates sequentially through the `CompiledSequence`.
-Each operation calls `DiffKernel::forward` over its input array indices, writes the result to its output index, and records its memoized state as a backward step onto a **`Tape`** (Wengert list, generic over `VjpStep` / `HvpStep`).
-To backpropagate, the `Tape` is walked in reverse, calling `DiffKernel::vjp` (and `DiffKernel::hvp` for second order) to fan gradients back to the parameters.
+Each operation calls `DiffOperation::forward` over its input array indices, writes the result to its output index, and records its memoized state as a backward step onto a **`Tape`** (Wengert list, generic over `VjpStep` / `HvpStep`).
+To backpropagate, the `Tape` is walked in reverse, calling `DiffOperation::vjp` (and `DiffOperation::hvp` for second order) to fan gradients back to the parameters.

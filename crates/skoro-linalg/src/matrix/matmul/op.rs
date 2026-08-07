@@ -10,7 +10,7 @@ use crate::matrix::{left_broadcast_matmul, right_broadcast_matmul};
 
 impl<B: Backend> DiffOperation<B> for Matmul {
     type VjpState = [Option<Tensor<B, 3>>; 2];
-    type HvpState = Option<[Tensor<B, 3>; 2]>;
+    type HvpState = [Option<Tensor<B, 3>>; 2];
 
     fn forward(
         &self,
@@ -66,47 +66,26 @@ impl<B: Backend> DiffOperation<B> for Matmul {
                     }
                 }
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [du, dv] = tvecs.try_into().unwrap();
-                match (du, dv) {
-                    (Some(du), Some(dv)) => {
-                        let du = du.reshape([b, m, n]);
-                        let dv = dv.reshape([b, n, k]);
-                        DiffOperationForward::hvp(
-                            u.clone().matmul(v.clone()).reshape(outshape),
-                            Some(
-                                (du.clone().matmul(v.clone()) + u.clone().matmul(dv.clone()))
-                                    .reshape(outshape),
-                            ),
-                            [Some(v), Some(u)],
-                            Some([du, dv]),
-                        )
-                    }
-                    (Some(du), None) => {
-                        let du = du.reshape([b, m, n]);
-                        DiffOperationForward::hvp(
-                            u.matmul(v.clone()).reshape(outshape),
-                            Some(du.matmul(v.clone()).reshape(outshape)),
-                            [Some(v), None],
-                            None,
-                        )
-                    }
-                    (None, Some(dv)) => {
-                        let dv = dv.reshape([b, n, k]);
-                        DiffOperationForward::hvp(
-                            u.clone().matmul(v).reshape(outshape),
-                            Some(u.clone().matmul(dv).reshape(outshape)),
-                            [None, Some(u)],
-                            None,
-                        )
-                    }
-                    (None, None) => DiffOperationForward::hvp(
-                        u.matmul(v).reshape(outshape),
-                        None,
-                        [None, None],
-                        None,
-                    ),
-                }
+                let [udiff, vdiff] = diffs.try_into().unwrap();
+                let du = du.map(|du| du.reshape([b, m, n]));
+                let dv = dv.map(|dv| dv.reshape([b, n, k]));
+                let tangent = sum_opt_tensors([
+                    du.as_ref()
+                        .map(|du| du.clone().matmul(v.clone()).reshape(outshape)),
+                    dv.as_ref()
+                        .map(|dv| u.clone().matmul(dv.clone()).reshape(outshape)),
+                ]);
+                DiffOperationForward::hvp(
+                    u.clone().matmul(v.clone()).reshape(outshape),
+                    tangent,
+                    [udiff.then(|| v.clone()), vdiff.then(|| u.clone())],
+                    [du, dv],
+                )
             }
         }
     }
@@ -159,35 +138,20 @@ impl<B: Backend> DiffOperation<B> for Matmul {
     ) -> Vec<Option<CotangentFrame<B>>> {
         let [b, _, f] = omega.dims();
         let Matmul(m, n, k) = *self;
-        match (vjp_state, hvp_state) {
-            ([Some(_), Some(_)], Some([du, dv])) => {
-                let omega = omega.reshape([b, m, k, f]);
-                let lshape = [b, m * n, f];
-                let rshape = [b, n * k, f];
-                vec![
-                    Some(
-                        right_broadcast_matmul(omega.clone(), dv.clone().transpose())
-                            .reshape(lshape),
-                    ),
-                    Some(left_broadcast_matmul(du.clone().transpose(), omega).reshape(rshape)),
-                ]
-            }
-            ([Some(_), None], _) => {
-                vec![
-                    Some(Tensor::<B, 3>::zeros([b, m * n, f], &omega.device())),
-                    None,
-                ]
-            }
-            ([None, Some(_)], _) => {
-                vec![
-                    None,
-                    Some(Tensor::<B, 3>::zeros([b, n * k, f], &omega.device())),
-                ]
-            }
-            ([None, None], _) => {
-                vec![None, None]
-            }
-            _ => unreachable!(),
-        }
+        // `∂(uv)/∂u = ω vᵀ` moves with `dv`, and `∂/∂v = uᵀ ω` moves with `du`, so each output
+        // depends on the *other* input's tangent. Both are also gated on the corresponding
+        // `VjpState` slot: an input rooted only in constants has a zero second-order cotangent
+        // just as it has a zero first-order one.
+        let [udiff, vdiff] = vjp_state;
+        let [du, dv] = hvp_state;
+        let omega = omega.reshape([b, m, k, f]);
+        vec![
+            udiff.as_ref().and(dv.as_ref()).map(|dv| {
+                right_broadcast_matmul(omega.clone(), dv.clone().transpose()).reshape([b, m * n, f])
+            }),
+            vdiff.as_ref().and(du.as_ref()).map(|du| {
+                left_broadcast_matmul(du.clone().transpose(), omega.clone()).reshape([b, n * k, f])
+            }),
+        ]
     }
 }

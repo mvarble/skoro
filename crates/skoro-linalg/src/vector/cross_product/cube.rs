@@ -16,7 +16,8 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
     for CrossProduct
 {
     type VjpState = [Option<Point<CubeBackend<R, F, I>>>; 2];
-    type HvpState = Option<[TangentVector<CubeBackend<R, F, I>>; 2]>;
+    /// `du` then `dv`, each present only when that input was seeded with a tangent.
+    type HvpState = [Option<TangentVector<CubeBackend<R, F, I>>>; 2];
 
     fn forward(
         &self,
@@ -48,8 +49,12 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                     ],
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [du, dv] = tvecs.try_into().unwrap();
+                let [udiff, vdiff] = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     cross_product(u.clone(), v.clone()),
                     sum_opt_tensors([
@@ -57,10 +62,10 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                         dv.as_ref().map(|dv| cross_product(u.clone(), dv.clone())),
                     ]),
                     [
-                        if du.is_some() { Some(v) } else { None },
-                        if dv.is_some() { Some(u) } else { None },
+                        if udiff { Some(v) } else { None },
+                        if vdiff { Some(u) } else { None },
                     ],
-                    du.zip(dv).map(|(du, dv)| [du, dv]),
+                    [du, dv],
                 )
             }
         }
@@ -84,18 +89,22 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
 
     fn hvp(
         &self,
-        _: &Self::VjpState,
+        vjp_state: &Self::VjpState,
         hvp_state: &Self::HvpState,
         alpha: CotangentFrame<CubeBackend<R, F, I>>,
     ) -> Vec<Option<CotangentFrame<CubeBackend<R, F, I>>>> {
-        if let Some([du, dv]) = hvp_state {
-            vec![
-                Some(left_broadcast_cross_product(dv.clone(), alpha.clone())),
-                Some(-left_broadcast_cross_product(du.clone(), alpha)),
-            ]
-        } else {
-            vec![None, None]
-        }
+        let [udiff, vdiff] = vjp_state;
+        let [du, dv] = hvp_state;
+        vec![
+            udiff
+                .as_ref()
+                .and(dv.as_ref())
+                .map(|dv| left_broadcast_cross_product(dv.clone(), alpha.clone())),
+            vdiff
+                .as_ref()
+                .and(du.as_ref())
+                .map(|du| -left_broadcast_cross_product(du.clone(), alpha.clone())),
+        ]
     }
 }
 
@@ -168,11 +177,14 @@ pub mod kernel {
         let u_y = u[b * u_sb + u_sd];
         let u_z = u[b * u_sb + 2 * u_sd];
 
+        // `v` is a frame `[b, 3, f]`; this thread owns frame column `f`, so every read has to be
+        // offset by it. Dropping `f * v_sf` makes every column a copy of column 0.
         let v_sb = v.stride(0);
         let v_sd = v.stride(1);
-        let v_x = v[b * v_sb];
-        let v_y = v[b * v_sb + v_sd];
-        let v_z = v[b * v_sb + 2 * v_sd];
+        let v_sf = v.stride(2);
+        let v_x = v[b * v_sb + f * v_sf];
+        let v_y = v[b * v_sb + v_sd + f * v_sf];
+        let v_z = v[b * v_sb + 2 * v_sd + f * v_sf];
 
         // fill the output
         let (o_x, o_y, o_z) = cross_product_impl::<F>(u_x, u_y, u_z, v_x, v_y, v_z);

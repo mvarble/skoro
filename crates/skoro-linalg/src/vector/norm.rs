@@ -34,13 +34,16 @@ impl<B: Backend> DiffOperation<B> for Norm {
                 let [diff] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(f.clone(), if diff { Some([x, f]) } else { None })
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     f.clone(),
                     dx.as_ref()
                         .map(|dx| ((x.clone() / f.clone()) * dx.clone()).sum_dim(1)),
-                    if dx.is_some() { Some([x, f]) } else { None },
+                    if diffs[0] { Some([x, f]) } else { None },
                     dx,
                 )
             }

@@ -5,6 +5,10 @@ authors.workspace = true
 edition.workspace = true
 version.workspace = true
 
+[features]
+testing = ["approx", "ndarray"]
+default = []
+
 [dependencies]
 skoro-backend.workspace = true
 skoro-core.workspace = true
@@ -14,3 +18,8 @@ skoro-riemann.workspace = true
 lazy_static = "1.5.0"
 dashmap = "6.1.0"
 crossbeam-queue = "0.3.12"
+approx = { workspace = true, optional = true }
+ndarray = { workspace = true, optional = true, features = ["approx"] }
+
+[dev-dependencies]
+approx.workspace = true

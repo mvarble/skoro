@@ -38,21 +38,17 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
                     DiffOperationForward::vjp(x.abs(), None)
                 }
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                if let Some(dx) = dx {
-                    DiffOperationForward::hvp(
-                        x.clone().abs(),
-                        Some(
-                            dx.full_like(-1.0)
-                                .mask_fill(x.clone().greater_equal_elem(0.0), 1.0),
-                        ),
-                        Some(x),
-                        (),
-                    )
-                } else {
-                    DiffOperationForward::hvp(x.abs(), None, None, ())
-                }
+                let tangent = dx.map(|dx| {
+                    dx.full_like(-1.0)
+                        .mask_fill(x.clone().greater_equal_elem(0.0), 1.0)
+                });
+                let vjp_state = diffs[0].then(|| x.clone());
+                DiffOperationForward::hvp(x.abs(), tangent, vjp_state, ())
             }
         }
     }

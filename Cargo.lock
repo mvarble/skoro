@@ -3979,6 +3979,7 @@ version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
 dependencies = [
+ "approx",
  "matrixmultiply",
  "num-complex",
  "num-integer",
@@ -5682,7 +5683,9 @@ version = "0.0.0"
 dependencies = [
  "approx",
  "burn",
+ "burn-wgpu",
  "cubecl",
+ "ndarray 0.17.2",
  "num-traits",
  "skoro-backend",
  "skoro-core",
@@ -5696,9 +5699,11 @@ dependencies = [
 name = "skoro-model"
 version = "0.0.0"
 dependencies = [
+ "approx",
  "crossbeam-queue",
  "dashmap",
  "lazy_static",
+ "ndarray 0.17.2",
  "skoro-backend",
  "skoro-core",
  "skoro-graph",
@@ -5738,9 +5743,7 @@ dependencies = [
  "approx",
  "burn",
  "skoro-backend",
- "skoro-core",
  "skoro-graph",
- "skoro-linalg",
  "skoro-model",
  "skoro-operation",
  "skoro-riemann",
@@ -5783,6 +5786,7 @@ dependencies = [
  "burn",
  "burn-wgpu",
  "cubecl",
+ "ndarray 0.17.2",
  "num-traits",
  "skoro-backend",
  "skoro-core",

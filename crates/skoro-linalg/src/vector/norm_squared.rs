@@ -34,9 +34,12 @@ impl<B: Backend> DiffOperation<B> for NormSquared {
                 let [diff] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(f, if diff { Some(x) } else { None })
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dx] = tvecs.try_into().unwrap();
-                let vjp_state = if dx.is_some() { Some(x.clone()) } else { None };
+                let vjp_state = if diffs[0] { Some(x.clone()) } else { None };
                 DiffOperationForward::hvp(
                     f,
                     dx.as_ref().map(|dx| 2.0 * (x * dx.clone()).sum_dim(1)),

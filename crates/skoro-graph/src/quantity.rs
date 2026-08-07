@@ -1,66 +1,15 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use skoro_backend::{Backend, Int, Tensor, TensorData};
+use skoro_backend::{
+    Backend, DiscretePoint, Int, Point, Tensor, TensorData, UnbatchedDiscretePoint, UnbatchedPoint,
+};
 use skoro_core::{
     kind::{Continuous, Discrete, Kind, QuantityKind},
     pack::{Cardinality, NumComponents, Packable},
 };
 use skoro_operation::Input;
 use skoro_riemann::{DynManifold, Manifold};
-
-/// A quantity value, which is either a continuous (float) tensor or a discrete (integer) tensor.
-///
-/// This is the storage form (rank 1, unbatched) of a quantity's value when the quantity is
-/// constant. All functions map (via [`DiffOperation`](skoro_operation::diff::DiffOperation) or
-/// [`DiscreteOperation`](skoro_operation::discrete::DiscreteOperation)) over batches of quantity
-/// values (via [`Input`]).
-#[derive(Clone, Debug)]
-pub enum QValue<B: Backend> {
-    /// A continuous value packed into the backend float element type.
-    Float(Tensor<B, 1>),
-    /// A discrete value packed into the backend integer element type.
-    Int(Tensor<B, 1, Int>),
-}
-
-impl<B: Backend> QValue<B> {
-    /// Returns the contained float tensor, panicking if the value is discrete.
-    pub fn unwrap_float(self) -> Tensor<B, 1> {
-        match self {
-            QValue::Float(t) => t,
-            QValue::Int(_) => panic!("expected a continuous (float) value, found a discrete one"),
-        }
-    }
-
-    /// Returns the contained int tensor, panicking if the value is continuous.
-    pub fn unwrap_int(self) -> Tensor<B, 1, Int> {
-        match self {
-            QValue::Int(t) => t,
-            QValue::Float(_) => panic!("expected a discrete (int) value, found a continuous one"),
-        }
-    }
-
-    /// Whether this value is discrete (integer-valued).
-    pub fn is_discrete(&self) -> bool {
-        matches!(self, QValue::Int(_))
-    }
-
-    /// Batch this stored (rank-1) value into a rank-2 [`Input`].
-    pub fn expand(&self, batch_size: usize) -> Input<B> {
-        match self {
-            QValue::Float(t) => Input::Float(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size)),
-            QValue::Int(t) => Input::Int(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size)),
-        }
-    }
-
-    /// Reduce a batched (rank-2) [`Input`] to storage form.
-    pub fn unbatch(input: Input<B>) -> Self {
-        match input {
-            Input::Float(t) => QValue::Float(t.squeeze_dim::<1>(0)),
-            Input::Int(t) => QValue::Int(t.squeeze_dim::<1>(0)),
-        }
-    }
-}
 
 /// Trait specifying how a quantity of kind `K` is embedded into tensor storage.
 ///
@@ -82,14 +31,23 @@ pub trait QuantityType<B: Backend, K: Kind<B>>:
     + Sync
     + 'static
 {
-    /// Pack a concrete value into node storage form.
-    fn pack_value<D>(&self, data: &D) -> QValue<B>
+    /// Pack a concrete value into unbatched point.
+    fn pack_value<D>(&self, data: &D) -> K::UnbatchedPoint
+    where
+        D: 'static,
+        Self: Packable<K::Elem, D>;
+
+    /// Pack concrete values into a point.
+    fn pack_values<D>(&self, data: &[D]) -> K::Point
     where
         D: 'static,
         Self: Packable<K::Elem, D>;
 
     /// Erase this quantity type into its dyn-compatible form for node storage.
     fn into_dyn(self) -> Arc<dyn DynQuantityType<B>>;
+
+    /// Get inner tensor of input
+    fn get_inner_tensor(&self, input: Input<B>) -> K::Point;
 }
 
 /// Blanket implementation: every manifold is a continuous quantity.
@@ -105,7 +63,7 @@ where
         + Sync
         + 'static,
 {
-    fn pack_value<D>(&self, data: &D) -> QValue<B>
+    fn pack_value<D>(&self, data: &D) -> UnbatchedPoint<B>
     where
         D: 'static,
         Self: Packable<B::FloatElem, D>,
@@ -113,14 +71,32 @@ where
         let d = self.num_components();
         let mut vec = vec![B::FloatElem::default(); d];
         self.pack(data, 0, &mut vec);
-        QValue::Float(Tensor::from_data(
-            TensorData::new(vec, [d]),
-            &B::Device::default(),
-        ))
+        Tensor::from_data(TensorData::new(vec, [d]), &B::Device::default())
+    }
+
+    fn pack_values<D>(&self, data: &[D]) -> Point<B>
+    where
+        D: 'static,
+        Self: Packable<B::FloatElem, D>,
+    {
+        let batches = data.len();
+        let num_components = self.num_components();
+        let mut vec = vec![B::FloatElem::default(); batches * num_components];
+        for (i, d) in data.iter().enumerate() {
+            self.pack(d, i * num_components, &mut vec);
+        }
+        Tensor::<B, 2>::from_data(
+            TensorData::new(vec, [batches, num_components]),
+            &Default::default(),
+        )
     }
 
     fn into_dyn(self) -> Arc<dyn DynQuantityType<B>> {
         Arc::new(DynContinuous(self))
+    }
+
+    fn get_inner_tensor(&self, input: Input<B>) -> Tensor<B, 2> {
+        input.into_float()
     }
 }
 
@@ -137,7 +113,7 @@ where
         + Sync
         + 'static,
 {
-    fn pack_value<D>(&self, data: &D) -> QValue<B>
+    fn pack_value<D>(&self, data: &D) -> UnbatchedDiscretePoint<B>
     where
         D: 'static,
         Self: Packable<B::IntElem, D>,
@@ -145,14 +121,32 @@ where
         let d = self.num_components();
         let mut vec = vec![B::IntElem::default(); d];
         self.pack(data, 0, &mut vec);
-        QValue::Int(Tensor::from_data(
-            TensorData::new(vec, [d]),
-            &B::Device::default(),
-        ))
+        Tensor::from_data(TensorData::new(vec, [d]), &B::Device::default())
+    }
+
+    fn pack_values<D>(&self, data: &[D]) -> DiscretePoint<B>
+    where
+        D: 'static,
+        Self: Packable<B::IntElem, D>,
+    {
+        let batches = data.len();
+        let num_components = self.num_components();
+        let mut vec = vec![B::IntElem::default(); batches * num_components];
+        for (i, d) in data.iter().enumerate() {
+            self.pack(d, i * num_components, &mut vec);
+        }
+        Tensor::<B, 2, Int>::from_data(
+            TensorData::new(vec, [batches, num_components]),
+            &Default::default(),
+        )
     }
 
     fn into_dyn(self) -> Arc<dyn DynQuantityType<B>> {
         Arc::new(DynDiscrete(self))
+    }
+
+    fn get_inner_tensor(&self, input: Input<B>) -> Tensor<B, 2, Int> {
+        input.into_int()
     }
 }
 

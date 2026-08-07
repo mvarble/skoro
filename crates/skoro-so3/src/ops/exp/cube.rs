@@ -39,13 +39,16 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
                     if is_diff { Some(omega) } else { None },
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [v] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     exp(omega.clone()),
                     v.clone()
                         .map(|v| exp_jvp(omega.clone(), v.unsqueeze_dim(2)).squeeze_dim(2)),
-                    if v.is_some() { Some(omega) } else { None },
+                    if diffs[0] { Some(omega) } else { None },
                     v,
                 )
             }
@@ -293,27 +296,68 @@ pub fn exp_hvp<R: CubeRuntime, F: CubeFloat, I: CubeInt>(
 // c2_p = (θ sin θ - 2 (1 - cos θ)) / θ⁴
 // c3_p = (θ (1 - cos θ) - 3 (θ - sin θ)) / |θ|⁵
 // ```
-// For numerical stability with small θ (<1e-3), we use Taylor-series approximations.
-// ```
-// c1 = 1 - 1/6 θ² + O(θ⁴) ≈ 1
-// c2 = 1/2 - 1/24 θ² + O(θ⁴) ≈ 1/2
-// c3 = 1/6 - 1/120  θ² + O(θ⁴) ≈ 1/6
-// c2_p = -1/12 + O(θ2) ≈ -1/12
-// c2_p = -1/60 + O(θ2) ≈ -1/60
-// ```
+// ## Evaluating them without losing precision
 //
-// **Note:** The input is `θ²`, not `θ` for faster short-circuiting.
-#[cube]
-fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F, F, F, F) {
-    // Default to Taylor series expansions at theta = 0
-    let mut c1 = F::new(1.0);
-    let mut c2 = F::new(0.5);
-    let mut c3 = F::new(1.0 / 6.0);
-    let mut c2_p = F::new(-1.0 / 12.0);
-    let mut c3_p = F::new(-1.0 / 60.0);
+// The closed forms cancel catastrophically as θ → 0, so below a cutoff we use a truncated Taylor
+// series in θ² instead. See the extended note on the `ndarray` twin of this function
+// (`crates/skoro-so3/src/ops/exp/ndarray.rs`) for the derivation and the measured error table; the
+// series and the cutoff are identical.
+// ```
+// c1   =  1    - θ²/6    + θ⁴/120   - θ⁶/5040    + θ⁸/362880
+// c2   =  1/2  - θ²/24   + θ⁴/720   - θ⁶/40320   + θ⁸/3628800
+// c3   =  1/6  - θ²/120  + θ⁴/5040  - θ⁶/362880  + θ⁸/39916800
+// c2_p = -1/12 + θ²/180  - θ⁴/6720  + θ⁶/453600  - θ⁸/47900160
+// c3_p = -1/60 + θ²/1260 - θ⁴/60480 + θ⁶/4989600 - θ⁸/622702080
+// ```
+// This matters most on GPU: the device `sin`/`cos` are less accurate than libm's, which widens the
+// dead zone the closed forms leave around θ = 0.
+//
+// **Note:** the constants below go through `F::new`, which takes an `f32`, so on an `f64` runtime
+// they carry only `f32` precision. That is a limitation of the `Float` frontend, not of the series;
+// the `f32` path this kernel actually runs on is unaffected.
+//
+// This is a hand transcription of the `ndarray` function, so it can drift from it silently.
+// `coefficients::exp_hvp_tracks_the_f64_reference` pins it against the frozen `f64` table in
+// `crates/skoro-so3/tests/common/coefficients.rs`, across both cutoffs. It catches a wrong cutoff
+// (including an `F::EPSILON` that does not do what it is assumed to here) and a typo in any
+// leading-order constant, but not one in the last term or two of a series — those sit below `f32`
+// round-off, which is the reason the series stops where it does.
+// `#[cube]` has no `if` expression, so the coefficients have to be declared before the branch and
+// assigned inside it; the placeholder initializers are dead by construction.
+/// The scalar coefficients of `J(ω)` and of its sensitivity, all functions of `θ = |ω|` alone.
+///
+/// The `ndarray` twin of this type carries the same fields and the same meanings.
+#[derive(CubeType)]
+pub struct ExpJacobianCoeffs<F: Float> {
+    /// `sin θ / θ`
+    pub c1: F,
+    /// `(1 - cos θ) / θ²`
+    pub c2: F,
+    /// `(θ - sin θ) / θ³`
+    pub c3: F,
+    /// `c2'(θ) / θ`
+    pub c2_p: F,
+    /// `c3'(θ) / θ`
+    pub c3_p: F,
+}
 
-    // For non-small theta, evaluate actual trig functions.
-    if theta_sq > F::new(1e-6) {
+#[allow(unused_assignments)]
+#[cube]
+fn exp_jacobian_coeffs<F: Float>(theta_sq: F) -> ExpJacobianCoeffs<F> {
+    // `(11!·ε)^(1/5)`. Anything coarser than `f64` takes the wider Taylor region, which is the
+    // safe direction.
+    let mut cutoff_sq = F::new(0.024513);
+    if F::EPSILON > F::new(1e-10) {
+        cutoff_sq = F::new(1.3661);
+    }
+
+    let mut c1 = F::new(0.0);
+    let mut c2 = F::new(0.0);
+    let mut c3 = F::new(0.0);
+    let mut c2_p = F::new(0.0);
+    let mut c3_p = F::new(0.0);
+
+    if theta_sq > cutoff_sq {
         let theta = theta_sq.sqrt();
         let sin_th = theta.sin();
         let cos_th = theta.cos();
@@ -327,9 +371,44 @@ fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F, F, F, F) {
         c3 = (theta - sin_th) / th_cubed;
         c2_p = (theta * sin_th - F::new(2.0) * (F::new(1.0) - cos_th)) / th_quad;
         c3_p = (theta * (F::new(1.0) - cos_th) - F::new(3.0) * (theta - sin_th)) / th_fifth;
+    } else {
+        // Horner in θ², highest power first.
+        let t = theta_sq;
+        c1 = (((F::new(1.0 / 362880.0) * t - F::new(1.0 / 5040.0)) * t + F::new(1.0 / 120.0)) * t
+            - F::new(1.0 / 6.0))
+            * t
+            + F::new(1.0);
+        c2 = (((F::new(1.0 / 3628800.0) * t - F::new(1.0 / 40320.0)) * t + F::new(1.0 / 720.0))
+            * t
+            - F::new(1.0 / 24.0))
+            * t
+            + F::new(0.5);
+        c3 = (((F::new(1.0 / 39916800.0) * t - F::new(1.0 / 362880.0)) * t + F::new(1.0 / 5040.0))
+            * t
+            - F::new(1.0 / 120.0))
+            * t
+            + F::new(1.0 / 6.0);
+        c2_p = (((F::new(-1.0 / 47900160.0) * t + F::new(1.0 / 453600.0)) * t
+            - F::new(1.0 / 6720.0))
+            * t
+            + F::new(1.0 / 180.0))
+            * t
+            - F::new(1.0 / 12.0);
+        c3_p = (((F::new(-1.0 / 622702080.0) * t + F::new(1.0 / 4989600.0)) * t
+            - F::new(1.0 / 60480.0))
+            * t
+            + F::new(1.0 / 1260.0))
+            * t
+            - F::new(1.0 / 60.0);
     }
 
-    (c1, c2, c3, c2_p, c3_p)
+    ExpJacobianCoeffs::<F> {
+        c1,
+        c2,
+        c3,
+        c2_p,
+        c3_p,
+    }
 }
 
 // Calculate the SO3 exponential.
@@ -353,7 +432,9 @@ fn exp_kernel<F: Float>(omega: &Tensor<F>, out: &mut Tensor<F>) {
 
     // c1(|ω|), c2(|ω|)
     let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-    let (c1, c2, _, _, _) = get_so3_coeffs::<F>(th_sq);
+    let k = exp_jacobian_coeffs::<F>(th_sq);
+    let c1 = k.c1;
+    let c2 = k.c2;
 
     // pack the components
     let o_sb = out.stride(0);
@@ -406,7 +487,9 @@ fn exp_jvp_kernel<F: Float>(omega: &Tensor<F>, v: &Tensor<F>, out: &mut Tensor<F
 
     // c2(|ω|), c3(|ω|)
     let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-    let (_, c2, c3, _, _) = get_so3_coeffs::<F>(th_sq);
+    let k = exp_jacobian_coeffs::<F>(th_sq);
+    let c2 = k.c2;
+    let c3 = k.c3;
 
     // ω × v
     let (wxv_x, wxv_y, wxv_z) = cross_product::<F>(w_x, w_y, w_z, v_x, v_y, v_z);
@@ -459,7 +542,9 @@ fn exp_vjp_kernel<F: Float>(omega: &Tensor<F>, alpha: &Tensor<F>, out: &mut Tens
 
     // c2(|ω|), c3(|ω|)
     let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-    let (_, c2, c3, _, _) = get_so3_coeffs::<F>(th_sq);
+    let k = exp_jacobian_coeffs::<F>(th_sq);
+    let c2 = k.c2;
+    let c3 = k.c3;
 
     // ω × α
     let (wxa_x, wxa_y, wxa_z) = cross_product::<F>(w_x, w_y, w_z, a_x, a_y, a_z);
@@ -531,7 +616,11 @@ fn exp_hvp_kernel<F: Float>(
 
     // c2(|ω|), c3(|ω|), c2'(|ω|), c3'(|ω|)
     let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-    let (_, c2, c3, c2_p, c3_p) = get_so3_coeffs::<F>(th_sq);
+    let k = exp_jacobian_coeffs::<F>(th_sq);
+    let c2 = k.c2;
+    let c3 = k.c3;
+    let c2_p = k.c2_p;
+    let c3_p = k.c3_p;
 
     // ω × a
     let (wxa_x, wxa_y, wxa_z) = cross_product::<F>(w_x, w_y, w_z, a_x, a_y, a_z);

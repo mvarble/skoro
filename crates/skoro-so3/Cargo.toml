@@ -20,4 +20,6 @@ skoro-riemann.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
-burn-wgpu = "0.21"
+ndarray.workspace = true
+burn-wgpu.workspace = true
+skoro-model = { workspace = true, features = ["testing"] }

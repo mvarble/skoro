@@ -33,9 +33,26 @@ pub enum DiffModeState<B: Backend> {
     /// `dF_p(v)` on tangent vector `v = (v0, ..., vn)`, and memoize relevant states for cotangent
     /// maps `dF^*_p` and `∇_v dF^*_p`.
     ///
-    /// The state consists of _optional_ sub-blocks of tangent vectors `v0, ..., vn`, where `None`
-    /// means the respective component `pj` of the input point was constant.
-    Hvp(Vec<Option<TangentVector<B>>>),
+    /// The backward pass of an HVP invokes [`vjp`](DiffOperation::vjp) as well as
+    /// [`hvp`](DiffOperation::hvp), so this variant carries **both** signals, which mean different
+    /// things and must not be conflated:
+    ///
+    /// - `diffs`: booleans indicating whether the input at the respective index traces back to a
+    ///   free variable, exactly as in [`Vjp`](DiffModeState::Vjp). This is what gates the
+    ///   [`VjpState`](DiffOperation::VjpState), so that `vjp` still short-circuits inputs rooted
+    ///   only in constants.
+    /// - `tangents`: _optional_ sub-blocks of tangent vectors `v0, ..., vn`. `None` means no
+    ///   tangent was seeded at that input, which is a strictly weaker statement than the input
+    ///   being constant — a differentiable input with no seeded tangent is `None` here too.
+    ///
+    /// Gating the `VjpState` on `tangents[j].is_some()` is therefore a bug: it silently drops the
+    /// order-1 cotangent of any differentiable input that happened not to be seeded. Conversely,
+    /// state needed only by `hvp` belongs in [`HvpState`](DiffOperation::HvpState), which the
+    /// tangents already gate correctly (a constant input never receives a tangent).
+    Hvp {
+        diffs: Vec<bool>,
+        tangents: Vec<Option<TangentVector<B>>>,
+    },
 }
 
 /// State returned during forward operation of [`DiffOperation`]; the enum output should match the

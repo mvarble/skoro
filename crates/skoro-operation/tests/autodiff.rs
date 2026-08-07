@@ -36,10 +36,11 @@ impl DiffOperation<B> for Square {
                 let [diff] = diffs.try_into().unwrap();
                 DiffOperationForward::vjp(output, if diff { Some(x) } else { None })
             }
-            DiffModeState::Hvp(tvecs) => {
-                let [v] = tvecs.try_into().unwrap();
+            DiffModeState::Hvp { diffs, tangents } => {
+                let [diff] = diffs.try_into().unwrap();
+                let [v] = tangents.try_into().unwrap();
                 let t = v.as_ref().map(|v| v.clone() * (x.clone() * 2.0));
-                DiffOperationForward::hvp(output, t, Some(x), v.clone())
+                DiffOperationForward::hvp(output, t, diff.then_some(x), v.clone())
             }
         }
     }

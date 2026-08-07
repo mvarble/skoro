@@ -66,15 +66,15 @@ impl<B: Backend, Op: DiffOperation<B>> GraphOperation<B> for Op {
 /// The wrapped operation is non-differentiable: it lowers into a
 /// [`SequenceForwardOnlyOperation`] and reports
 /// [`is_differentiable`](GraphOperation::is_differentiable) as `false`.
-pub struct ForwardOnly<K>(pub K);
+pub struct ForwardOnly<Op>(pub Op);
 
-impl<K: Debug> Debug for ForwardOnly<K> {
+impl<Op: Debug> Debug for ForwardOnly<Op> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("ForwardOnly").field(&self.0).finish()
     }
 }
 
-impl<B: Backend, K: DiscreteOperation<B>> GraphOperation<B> for ForwardOnly<K> {
+impl<B: Backend, Op: DiscreteOperation<B>> GraphOperation<B> for ForwardOnly<Op> {
     fn lower(
         &self,
         input_indices: Vec<usize>,

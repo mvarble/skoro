@@ -6,6 +6,7 @@ use skoro_backend::{
     Backend, CotangentFrame, CotangentVector, Point, TangentFrame, TangentVector, Tensor,
 };
 use skoro_core::{
+    constant_value::ConstantValue,
     error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
     kind::{Continuous, Kind, QuantityKind},
@@ -24,7 +25,7 @@ use crate::node::{
     StochasticMultiNode, StochasticNode,
 };
 use crate::operation::GraphOperation;
-use crate::quantity::{DynContinuous, DynQuantityType, QValue, QuantityType};
+use crate::quantity::{DynContinuous, DynQuantityType, QuantityType};
 use crate::sampler::{GraphSampler, KindedSampler};
 
 /// A mutable probabilistic graphical model.
@@ -117,14 +118,14 @@ impl<B: Backend> Graph<B> {
         T: QuantityType<B, K> + Packable<K::Elem, D>,
         D: 'static,
     {
-        let value = quantity_type.pack_value(value);
+        let value = K::wrap_unbatched_point(quantity_type.pack_value(value));
         self.add_constant_impl(quantity_type.into_dyn(), value)
     }
 
     fn add_constant_impl(
         &mut self,
         quantity_type: Arc<dyn DynQuantityType<B>>,
-        value: QValue<B>,
+        value: ConstantValue<B>,
     ) -> Id {
         let id = self.id_generator.issue_id();
         self.nodes.insert(
@@ -389,7 +390,7 @@ impl<B: Backend> Graph<B> {
                         .as_any()
                         .downcast_ref::<T>()
                         .expect("internal: quantity type validated above");
-                    quantity_type_ref.pack_value(value)
+                    K::wrap_unbatched_point(quantity_type_ref.pack_value(value))
                 };
 
                 // update the stochastic node to now be observed
@@ -1278,7 +1279,11 @@ impl<B: Backend> Graph<B> {
         Ok(())
     }
 
-    fn check_cache(&self, parent_ids: &[Id], op: &Arc<dyn GraphOperation<B>>) -> Option<QValue<B>> {
+    fn check_cache(
+        &self,
+        parent_ids: &[Id],
+        op: &Arc<dyn GraphOperation<B>>,
+    ) -> Option<ConstantValue<B>> {
         let parents: Vec<&Node<B>> = parent_ids
             .iter()
             .map(|parent_id| {
@@ -1316,7 +1321,7 @@ impl<B: Backend> Graph<B> {
             points.push(None);
             op.lower((0..n).collect(), parent_diffs, n)
                 .forward(&mut points);
-            points[n].take().map(QValue::unbatch)
+            points[n].take().map(ConstantValue::unbatch)
         }
     }
 

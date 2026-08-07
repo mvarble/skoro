@@ -42,13 +42,16 @@ where
                     if is_diff { Some(omega) } else { None },
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [v] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     exp(omega.clone()),
                     v.clone()
                         .map(|v| exp_jvp(omega.clone(), v.unsqueeze_dim(2)).squeeze_dim(2)),
-                    if v.is_some() { Some(omega) } else { None },
+                    if diffs[0] { Some(omega) } else { None },
                     v,
                 )
             }
@@ -103,7 +106,7 @@ where
         let w_y = batch[1];
         let w_z = batch[2];
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-        let (c1, c2, _, _, _) = get_so3_coeffs(th_sq);
+        let ExpJacobianCoeffs { c1, c2, .. } = exp_jacobian_coeffs(th_sq);
         let o = <B::FloatElem as One>::one();
         out_vec.push(o - c2 * (w_y * w_y + w_z * w_z));
         out_vec.push(-c1 * w_z + c2 * w_x * w_y);
@@ -153,7 +156,7 @@ where
 
         // c2(|ω|), c3(|ω|)
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-        let (_, c2, c3, _, _) = get_so3_coeffs(th_sq);
+        let ExpJacobianCoeffs { c2, c3, .. } = exp_jacobian_coeffs(th_sq);
 
         // `v_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
         // correspond one batch, with `x` data of length `f`, then `y` of length `f`, then `z` of
@@ -220,7 +223,7 @@ where
 
         // c2(|ω|), c3(|ω|)
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-        let (_, c2, c3, _, _) = get_so3_coeffs(th_sq);
+        let ExpJacobianCoeffs { c2, c3, .. } = exp_jacobian_coeffs(th_sq);
 
         // `a_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
         // correspond one batch, with `x` data of length `f`, then `y` of length `f`, then `z` of
@@ -304,7 +307,9 @@ where
 
         // c2(|ω|), c3(|ω|), c2'(|ω|), c3'(|ω|)
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
-        let (_, c2, c3, c2_p, c3_p) = get_so3_coeffs(th_sq);
+        let ExpJacobianCoeffs {
+            c2, c3, c2_p, c3_p, ..
+        } = exp_jacobian_coeffs(th_sq);
 
         // `a_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
         // correspond one batch, with `x` data of length `f`, then `y` of length `f`, then `z` of
@@ -372,7 +377,7 @@ where
 //         ((|ω| sin |ω| - 2 (1 - cos |ω|)) / |ω|⁴) (ω × α)
 //         + ((|ω| (1 - cos |ω|) - 3 (|ω| - sin |ω|)) / |ω|⁵) (ω × (ω × α)))
 // ```
-// This function will compute the scalar coefficients showing up in each of these expressions,
+// `exp_jacobian_coeffs` computes the scalar coefficients showing up in each of these expressions,
 // dependent on θ=|ω|.
 // ```
 // c1 = sin θ / θ
@@ -381,27 +386,66 @@ where
 // c2_p = (θ sin θ - 2 (1 - cos θ)) / θ⁴
 // c3_p = (θ (1 - cos θ) - 3 (θ - sin θ)) / |θ|⁵
 // ```
-// For numerical stability with small θ (<1e-3), we use Taylor-series approximations.
-// ```
-// c1 = 1 - 1/6 θ² + O(θ⁴) ≈ 1
-// c2 = 1/2 - 1/24 θ² + O(θ⁴) ≈ 1/2
-// c3 = 1/6 - 1/120  θ² + O(θ⁴) ≈ 1/6
-// c2_p = -1/12 + O(θ2) ≈ -1/12
-// c2_p = -1/60 + O(θ2) ≈ -1/60
-// ```
+// ## Evaluating them without losing precision
 //
-// **Note:** The input is `θ²`, not `θ` for faster short-circuiting.
-#[inline(always)]
-pub fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F, F, F, F) {
-    // Default to Taylor series expansions at theta = 0
-    let mut c1 = F::from(1.0).unwrap();
-    let mut c2 = F::from(0.5).unwrap();
-    let mut c3 = F::from(1.0 / 6.0).unwrap();
-    let mut c2_p = F::from(-1.0 / 12.0).unwrap();
-    let mut c3_p = F::from(-1.0 / 60.0).unwrap();
+// The closed forms above cancel catastrophically as θ → 0. `θ - sin θ` loses about seven
+// significant digits at θ = 1e-3, and `c2_p` / `c3_p` cancel at fourth and fifth order. We
+// therefore evaluate a truncated Taylor series below a cutoff and the closed forms above it. Each
+// series is in θ², so the input is `θ²` rather than θ (which also makes the branch cheaper).
+// ```
+// c1   =  1    - θ²/6    + θ⁴/120   - θ⁶/5040    + θ⁸/362880
+// c2   =  1/2  - θ²/24   + θ⁴/720   - θ⁶/40320   + θ⁸/3628800
+// c3   =  1/6  - θ²/120  + θ⁴/5040  - θ⁶/362880  + θ⁸/39916800
+// c2_p = -1/12 + θ²/180  - θ⁴/6720  + θ⁶/453600  - θ⁸/47900160
+// c3_p = -1/60 + θ²/1260 - θ⁴/60480 + θ⁶/4989600 - θ⁸/622702080
+// ```
+// Truncation error is `O(θ¹⁰/11!)`, so the cutoff balancing truncation against round-off is
+// `θ² = (11!·ε)^(1/5)`, which is 1.366 for `f32` (θ ≈ 1.17) and 0.0245 for `f64` (θ ≈ 0.157).
+// Above those the closed forms have retained enough digits to be the better choice.
+//
+// A single cutoff cannot work for both widths: the previous `θ² > 1e-6` is right for `f64` and
+// leaves `f32` evaluating the closed forms exactly where they are numerically dead. Worst-case
+// relative error over θ ∈ (0, π], before and after:
+// ```
+//                c1        c2        c3       c2_p      c3_p
+//   f32 before   6.6e-5    5.7e-2    3.3e-1   6.7e+5    1.1e+7
+//   f32 after    6.6e-5    1.6e-7    2.0e-7   9.1e-7    4.6e-6
+//   f64 before   1.7e-7    8.3e-8    5.0e-8   1.0e-3    1.7e-2
+//   f64 after    3.0e-14   4.2e-15   1.9e-14  1.9e-12   2.6e-11
+// ```
+// `c1`'s `f32` figure is dominated by the accuracy of `sin θ` near θ = π and is unchanged.
+/// The scalar coefficients of `J(ω)` and of its sensitivity, all functions of `θ = |ω|` alone.
+///
+/// Returned as a struct rather than a tuple because callers want different subsets of it — `exp`
+/// needs `c1`/`c2`, the JVP and VJP need `c2`/`c3`, and only the HVP needs the primed pair. Field
+/// access keeps each call site self-documenting and makes a mix-up a compile error.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ExpJacobianCoeffs<F> {
+    /// `sin θ / θ`
+    pub c1: F,
+    /// `(1 - cos θ) / θ²`
+    pub c2: F,
+    /// `(θ - sin θ) / θ³`
+    pub c3: F,
+    /// `c2'(θ) / θ`
+    pub c2_p: F,
+    /// `c3'(θ) / θ`
+    pub c3_p: F,
+}
 
-    // For non-small theta, evaluate actual trig functions.
-    if theta_sq > F::from(1e-6).unwrap() {
+#[inline(always)]
+pub fn exp_jacobian_coeffs<F: Float>(theta_sq: F) -> ExpJacobianCoeffs<F> {
+    let k = |x: f64| F::from(x).unwrap();
+
+    // `(11!·ε)^(1/5)`, precomputed rather than raised to a fractional power on every call.
+    // Anything coarser than `f64` takes the wider Taylor region, which is the safe direction.
+    let cutoff_sq = if F::epsilon() > k(1e-10) {
+        k(1.3661)
+    } else {
+        k(0.024513)
+    };
+
+    if theta_sq > cutoff_sq {
         let theta = theta_sq.sqrt();
         let sin_th = theta.sin();
         let cos_th = theta.cos();
@@ -410,15 +454,118 @@ pub fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F, F, F, F) {
         let th_quad = th_sq * th_sq;
         let th_fifth = th_quad * theta;
 
-        c1 = sin_th / theta;
-        c2 = (F::from(1.0).unwrap() - cos_th) / th_sq;
-        c3 = (theta - sin_th) / th_cubed;
-        c2_p =
-            (theta * sin_th - F::from(2.0).unwrap() * (F::from(1.0).unwrap() - cos_th)) / th_quad;
-        c3_p = (theta * (F::from(1.0).unwrap() - cos_th)
-            - F::from(3.0).unwrap() * (theta - sin_th))
-            / th_fifth;
+        ExpJacobianCoeffs {
+            c1: sin_th / theta,
+            c2: (k(1.0) - cos_th) / th_sq,
+            c3: (theta - sin_th) / th_cubed,
+            c2_p: (theta * sin_th - k(2.0) * (k(1.0) - cos_th)) / th_quad,
+            c3_p: (theta * (k(1.0) - cos_th) - k(3.0) * (theta - sin_th)) / th_fifth,
+        }
+    } else {
+        // Horner in θ², highest power first.
+        let horner = |a: [f64; 5]| {
+            (((k(a[4]) * theta_sq + k(a[3])) * theta_sq + k(a[2])) * theta_sq + k(a[1])) * theta_sq
+                + k(a[0])
+        };
+        ExpJacobianCoeffs {
+            c1: horner([1.0, -1.0 / 6.0, 1.0 / 120.0, -1.0 / 5040.0, 1.0 / 362880.0]),
+            c2: horner([
+                0.5,
+                -1.0 / 24.0,
+                1.0 / 720.0,
+                -1.0 / 40320.0,
+                1.0 / 3628800.0,
+            ]),
+            c3: horner([
+                1.0 / 6.0,
+                -1.0 / 120.0,
+                1.0 / 5040.0,
+                -1.0 / 362880.0,
+                1.0 / 39916800.0,
+            ]),
+            c2_p: horner([
+                -1.0 / 12.0,
+                1.0 / 180.0,
+                -1.0 / 6720.0,
+                1.0 / 453600.0,
+                -1.0 / 47900160.0,
+            ]),
+            c3_p: horner([
+                -1.0 / 60.0,
+                1.0 / 1260.0,
+                -1.0 / 60480.0,
+                1.0 / 4989600.0,
+                -1.0 / 622702080.0,
+            ]),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ExpJacobianCoeffs, exp_jacobian_coeffs};
+
+    // The natural size of each coefficient (its value at θ = 0). Errors are measured against
+    // `|want| + scale` rather than `|want|`: `c1 = sin θ / θ` passes through zero at θ = π, where a
+    // purely relative error is unbounded and says nothing about the accuracy downstream.
+    const SCALES: [f64; 5] = [1.0, 0.5, 1.0 / 6.0, 1.0 / 12.0, 1.0 / 60.0];
+
+    fn as_array<F>(k: ExpJacobianCoeffs<F>) -> [F; 5] {
+        [k.c1, k.c2, k.c3, k.c2_p, k.c3_p]
     }
 
-    (c1, c2, c3, c2_p, c3_p)
+    // A sweep of θ over `(0, π]`: decades near the origin where the closed forms cancel, both
+    // branch cutoffs, and a uniform sweep over the rest.
+    fn thetas() -> Vec<f64> {
+        let mut out: Vec<f64> = (-9..=0)
+            .flat_map(|e| [1.0, 2.0, 5.0].map(|m| m * 10f64.powi(e)))
+            .collect();
+        for cutoff_sq in [0.024513f64, 1.3661f64] {
+            out.extend([1.0 - 1e-6, 1.0, 1.0 + 1e-6].map(|d| (cutoff_sq * d).sqrt()));
+        }
+        out.extend((1..=64).map(|i| i as f64 * std::f64::consts::PI / 64.0));
+        out
+    }
+
+    // `f64` is accurate to ~1e-11 everywhere (see the note above `exp_jacobian_coeffs`), so it serves as
+    // the reference for `f32`. What this guards against is a coefficient evaluated on the wrong
+    // side of its cutoff: the `f64` cutoff is `θ² = 0.0245` and the `f32` one is `θ² = 1.366`, and
+    // sharing one cutoff leaves `f32` on the closed forms where they are numerically dead — that
+    // was worth five orders of magnitude on `c2_p` and seven on `c3_p`.
+    #[test]
+    fn f32_coeffs_track_f64_across_the_branch_cutoff() {
+        for theta in thetas() {
+            let want = as_array(exp_jacobian_coeffs(theta * theta));
+            let got = as_array(exp_jacobian_coeffs((theta * theta) as f32));
+
+            for (i, (&want, &got)) in want.iter().zip(got.iter()).enumerate() {
+                let error = ((got as f64) - want).abs() / (want.abs() + SCALES[i]);
+                assert!(
+                    error < 1e-6,
+                    "θ={theta}: coefficient {i} is {got} (f32) vs {want} (f64), \
+                     scaled error {error:e} exceeds 1e-6",
+                );
+            }
+        }
+    }
+
+    // Truncation and round-off are balanced at the cutoff, so neither branch should be visibly
+    // better there. A jump means the cutoff has drifted out of the series' accurate range — which
+    // is the one failure mode the `f32` sweep above cannot see, having no finer reference to
+    // compare `f64` against.
+    #[test]
+    fn the_two_f64_branches_agree_at_the_cutoff() {
+        let cutoff_sq = 0.024513f64;
+        let below = as_array(exp_jacobian_coeffs(cutoff_sq * (1.0 - 1e-9)));
+        let above = as_array(exp_jacobian_coeffs(cutoff_sq * (1.0 + 1e-9)));
+
+        for (i, (&below, &above)) in below.iter().zip(above.iter()).enumerate() {
+            let error = (above - below).abs() / (below.abs() + SCALES[i]);
+            assert!(
+                error < 1e-10,
+                "θ²={cutoff_sq}: coefficient {i} jumps from {below} (Taylor) to {above} \
+                 (closed form), scaled error {error:e} exceeds 1e-10",
+            );
+        }
+    }
 }

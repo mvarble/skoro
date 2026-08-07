@@ -48,19 +48,14 @@ where
                     DiffOperationForward::vjp(omega, None)
                 }
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dr] = tvecs.try_into().unwrap();
-                if let Some(dr) = dr {
-                    let eta = log_jvp(omega.clone(), dr.unsqueeze_dim(2)).squeeze_dim(2);
-                    DiffOperationForward::hvp(
-                        omega.clone(),
-                        Some(eta.clone()),
-                        Some(omega),
-                        Some(eta),
-                    )
-                } else {
-                    DiffOperationForward::hvp(omega, None, None, None)
-                }
+                let eta = dr.map(|dr| log_jvp(omega.clone(), dr.unsqueeze_dim(2)).squeeze_dim(2));
+                let vjp_state = diffs[0].then(|| omega.clone());
+                DiffOperationForward::hvp(omega, eta.clone(), vjp_state, eta)
             }
         }
     }
@@ -231,7 +226,7 @@ where
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
 
         // c(|ω|)
-        let (c, _) = get_so3_coeffs(th_sq);
+        let LogJacobianCoeffs { c, .. } = log_jacobian_coeffs(th_sq);
 
         // `v_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
         // correspond one batch, with `x` data of length `f`, then `y` of length `f`, then `z` of
@@ -299,7 +294,7 @@ where
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
 
         // c(|ω|)
-        let (c, _) = get_so3_coeffs(th_sq);
+        let LogJacobianCoeffs { c, .. } = log_jacobian_coeffs(th_sq);
 
         // `a_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
         // correspond one batch, with `x` data of length `f`, then `y` of length `f`, then `z` of
@@ -383,8 +378,8 @@ where
         let e_y = e_batch[1];
         let e_z = e_batch[2];
 
-        // c(|ω|), d(|ω|)
-        let (c, d) = get_so3_coeffs(th_sq);
+        // c(|ω|), c'(|ω|)/|ω|
+        let LogJacobianCoeffs { c, c_p } = log_jacobian_coeffs(th_sq);
         let wdote = w_x * e_x + w_y * e_y + w_z * e_z;
 
         // `a_slice` indexes `[b, 3, f]` from the right, so each chunk of size `3 * f` will
@@ -403,7 +398,7 @@ where
             let exwxa_x = e_y * wxa_z - e_z * wxa_y;
             let wxexa_x = w_y * exa_z - w_z * exa_y;
 
-            -half * exa_x + c * (exwxa_x + wxexa_x) + d * wdote * wxwxa_x
+            -half * exa_x + c * (exwxa_x + wxexa_x) + c_p * wdote * wxwxa_x
         }));
 
         out_vec.extend(a_iter.clone().map(|((&a_x, &a_y), &a_z)| {
@@ -413,7 +408,7 @@ where
             let exwxa_y = e_z * wxa_x - e_x * wxa_z;
             let wxexa_y = w_z * exa_x - w_x * exa_z;
 
-            -half * exa_y + c * (exwxa_y + wxexa_y) + d * wdote * wxwxa_y
+            -half * exa_y + c * (exwxa_y + wxexa_y) + c_p * wdote * wxwxa_y
         }));
 
         out_vec.extend(a_iter.map(|((&a_x, &a_y), &a_z)| {
@@ -423,7 +418,7 @@ where
             let exwxa_z = e_x * wxa_y - e_y * wxa_x;
             let wxexa_z = w_x * exa_y - w_y * exa_x;
 
-            -half * exa_z + c * (exwxa_z + wxexa_z) + d * wdote * wxwxa_z
+            -half * exa_z + c * (exwxa_z + wxexa_z) + c_p * wdote * wxwxa_z
         }));
     }
 
@@ -441,34 +436,182 @@ where
 // ```
 // This function returns the coefficients
 // ```
-// c(|ω|)      = (1/|ω|²) (1 - (|ω|/2) cot(|ω|/2)))
-// c'(|ω|)/|ω| = (1/|ω|⁴) ((|ω|/2) cot(|ω|/2) + (|ω|/2)² csc²(|ω|/2) - 2)
+// c    = (1/θ²) (1 - (θ/2) cot(θ/2))
+// c_p  = c'(θ)/θ = (1/θ⁴) ((θ/2) cot(θ/2) + (θ/2)² csc²(θ/2) - 2)
 // ```
-// as well as a numerically stable approximation for small values.
+// ## Evaluating them without losing precision
+//
+// Both closed forms cancel as θ → 0. `c` cancels at second order, `c_p` at fourth: its numerator is
+// a difference of terms of size ~2 that lands at `c_p·θ⁴`, so it loses a factor of `2/(c_p θ⁴)` in
+// significance — about 1e5 at θ = 1e-2. Below a cutoff we therefore evaluate a truncated Taylor
+// series, in θ² so that the input is `θ²` rather than θ.
 // ```
-// c(|ω|) = 1/12 + 1/360 |ω| + O(|ω|³)
-// c'(|ω|)/|ω| = 1/360 + O(|ω|²)
+// c   = 1/12  + θ²/720  + θ⁴/30240  + θ⁶/1209600 + θ⁸/47900160
+//             + 691θ¹⁰/1307674368000 + θ¹²/74724249600 + 3617θ¹⁴/10670622842880000
+// c_p = 1/360 + θ²/7560 + θ⁴/201600  + θ⁶/5987520 + 691θ⁸/130767436800
+//             + θ¹⁰/6227020800 + 3617θ¹²/762187345920000 + 43867θ¹⁴/319318388573184000
 // ```
-#[inline(always)]
-pub fn get_so3_coeffs<F: Float>(theta_sq: F) -> (F, F) {
-    // Default to Taylor series expansions at theta = 0
-    let mut c = F::from(1.0 / 12.0).unwrap();
-    let mut d = F::from(1.0 / 360.0).unwrap();
+// The cutoff is where the two branches cross, measured rather than derived — these series converge
+// only as `(θ/2π)²` per term, so the balance point sits far higher than for `exp`'s. Worst-case
+// relative error over θ ∈ (0, π], sweeping the cutoff at eight terms:
+// ```
+//   f32   θ² > 1.3    c 5.4e-7   c_p 5.6e-5
+//         θ² > 5.0    c 1.6e-7   c_p 1.9e-6     <- chosen
+//         θ² > 9.9    c 1.0e-5   c_p 1.0e-4
+//   f64   θ² > 0.05   c 1.8e-14  c_p 6.0e-11
+//         θ² > 0.3    c 5.5e-15  c_p 9.5e-13    <- chosen
+// ```
+// A single cutoff cannot serve both widths, and the previous code used one (`θ² > 1e-6`, with a
+// zeroth-order Taylor branch) calibrated for neither. Before and after:
+// ```
+//                  c         c_p
+//   f32 before     9.5e-2    8.6e+3
+//   f32 after      1.6e-7    1.9e-6
+//   f64 before     1.7e-8    8.8e-3
+//   f64 after      5.5e-15   9.5e-13
+// ```
+// Note that `f64` was broken too: `c_p` was wrong by 8% just above the old cutoff. Both feed
+// `log_hvp`, and `c` also feeds `log_jvp`/`log_vjp`, so this reached every SO(3) and SE(3)
+// inverse-retraction derivative.
 
-    // For non-small theta, evaluate actual trig function.
-    if theta_sq > F::from(1e-6).unwrap() {
-        let one = F::from(1.0).unwrap();
-        let half = F::from(0.5).unwrap();
+/// The scalar coefficients of `J(ω)` for the logarithm, both functions of `θ = |ω|` alone.
+///
+/// Returned as a struct rather than a tuple because the JVP and VJP need only `c` while the HVP
+/// needs both. Field access keeps each call site self-documenting and makes a mix-up a compile
+/// error. Note this is a *different* Jacobian from [`super::super::exp::ndarray::ExpJacobianCoeffs`]
+/// — that one is `Exp`'s, this one is `Log`'s.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogJacobianCoeffs<F> {
+    /// `(1 - (θ/2) cot(θ/2)) / θ²`
+    pub c: F,
+    /// `c'(θ) / θ`
+    pub c_p: F,
+}
+
+#[inline(always)]
+pub fn log_jacobian_coeffs<F: Float>(theta_sq: F) -> LogJacobianCoeffs<F> {
+    let k = |x: f64| F::from(x).unwrap();
+
+    // Measured crossing points; anything coarser than `f64` takes the wider Taylor region, which is
+    // the safe direction.
+    let cutoff_sq = if F::epsilon() > k(1e-10) {
+        k(5.0)
+    } else {
+        k(0.3)
+    };
+
+    if theta_sq > cutoff_sq {
+        let one = k(1.0);
         let theta = theta_sq.sqrt();
         let theta_fourth = theta_sq * theta_sq;
-        let halftheta = half * theta;
+        let halftheta = k(0.5) * theta;
         let cot_halfth = one / halftheta.tan();
         let halfth_cot_halfth = halftheta * cot_halfth;
         let csc2 = one + cot_halfth * cot_halfth;
-        c = (one / theta_sq) * (one - halfth_cot_halfth);
-        d = (one / theta_fourth)
-            * (halfth_cot_halfth + halftheta * halftheta * csc2 - F::from(2.0).unwrap());
+
+        LogJacobianCoeffs {
+            c: (one / theta_sq) * (one - halfth_cot_halfth),
+            c_p: (one / theta_fourth) * (halfth_cot_halfth + halftheta * halftheta * csc2 - k(2.0)),
+        }
+    } else {
+        // Horner in θ², highest power first.
+        let horner = |a: [f64; 8]| {
+            a.iter()
+                .rev()
+                .fold(k(0.0), |acc, &coeff| acc * theta_sq + k(coeff))
+        };
+        LogJacobianCoeffs {
+            c: horner([
+                1.0 / 12.0,
+                1.0 / 720.0,
+                1.0 / 30240.0,
+                1.0 / 1209600.0,
+                1.0 / 47900160.0,
+                691.0 / 1307674368000.0,
+                1.0 / 74724249600.0,
+                3617.0 / 10670622842880000.0,
+            ]),
+            c_p: horner([
+                1.0 / 360.0,
+                1.0 / 7560.0,
+                1.0 / 201600.0,
+                1.0 / 5987520.0,
+                691.0 / 130767436800.0,
+                1.0 / 6227020800.0,
+                3617.0 / 762187345920000.0,
+                43867.0 / 319318388573184000.0,
+            ]),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LogJacobianCoeffs, log_jacobian_coeffs};
+
+    /// The natural size of each coefficient (its value at θ = 0). Errors are measured against
+    /// `|want| + scale` rather than `|want|` so a coefficient passing near zero cannot produce an
+    /// unbounded relative error.
+    const SCALES: [f64; 2] = [1.0 / 12.0, 1.0 / 360.0];
+
+    fn as_array<F>(k: LogJacobianCoeffs<F>) -> [F; 2] {
+        [k.c, k.c_p]
     }
 
-    (c, d)
+    /// Decades near the origin, both branch cutoffs (`θ² = 5.0` for `f32`, `0.3` for `f64`), and a
+    /// uniform sweep over the rest of `(0, π]`.
+    fn thetas() -> Vec<f64> {
+        let mut out: Vec<f64> = (-9..=0)
+            .flat_map(|e| [1.0, 2.0, 5.0].map(|m| m * 10f64.powi(e)))
+            .collect();
+        for cutoff_sq in [0.3f64, 5.0] {
+            out.extend([1.0 - 1e-6, 1.0, 1.0 + 1e-6].map(|d| (cutoff_sq * d).sqrt()));
+        }
+        out.extend((1..=64).map(|i| i as f64 * std::f64::consts::PI / 64.0));
+        out.retain(|&t| t <= std::f64::consts::PI);
+        out
+    }
+
+    /// `f64` is accurate to ~1e-12 everywhere (see the note above `log_jacobian_coeffs`), so it
+    /// serves as the reference for `f32`.
+    ///
+    /// This is the only test that sees the cutoff choice directly. The `log_hvp` reference table in
+    /// `tests/common/coefficients.rs` catches the historical bug — an `f64`-calibrated cutoff with
+    /// a zeroth-order Taylor branch — but not a swap of the two current cutoffs, because `c_p`
+    /// contributes only ~1% of `log_hvp` over the band where they differ.
+    #[test]
+    fn f32_coeffs_track_f64_across_the_branch_cutoff() {
+        for theta in thetas() {
+            let want = as_array(log_jacobian_coeffs(theta * theta));
+            let got = as_array(log_jacobian_coeffs((theta * theta) as f32));
+
+            for (i, (&want, &got)) in want.iter().zip(got.iter()).enumerate() {
+                let error = ((got as f64) - want).abs() / (want.abs() + SCALES[i]);
+                assert!(
+                    error < 1e-6,
+                    "θ={theta}: coefficient {i} is {got} (f32) vs {want} (f64), \
+                     scaled error {error:e} exceeds 1e-6",
+                );
+            }
+        }
+    }
+
+    /// Truncation and round-off are balanced at the cutoff, so neither branch should be visibly
+    /// better there. A jump means the cutoff has drifted out of the series' accurate range — the
+    /// one failure mode the `f32` sweep above cannot see, having no finer reference for `f64`.
+    #[test]
+    fn the_two_f64_branches_agree_at_the_cutoff() {
+        let cutoff_sq = 0.3f64;
+        let below = as_array(log_jacobian_coeffs(cutoff_sq * (1.0 - 1e-9)));
+        let above = as_array(log_jacobian_coeffs(cutoff_sq * (1.0 + 1e-9)));
+
+        for (i, (&below, &above)) in below.iter().zip(above.iter()).enumerate() {
+            let error = (above - below).abs() / (below.abs() + SCALES[i]);
+            assert!(
+                error < 1e-10,
+                "θ²={cutoff_sq}: coefficient {i} jumps from {below} (Taylor) to {above} \
+                 (closed form), scaled error {error:e} exceeds 1e-10",
+            );
+        }
+    }
 }

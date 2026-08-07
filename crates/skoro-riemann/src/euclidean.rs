@@ -206,9 +206,12 @@ impl<B: Backend> DiffOperation<B> for EuclideanInverseRetraction {
             DiffModeState::Vjp(diffs) => {
                 DiffOperationForward::vjp(x - y, diffs.try_into().unwrap())
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dy, dx] = tvecs.try_into().unwrap();
-                let vjp_state = [dy.is_some(), dx.is_some()];
+                let vjp_state = diffs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     x - y,
                     sum_opt_tensors([dy.map(|dy| -dy), dx]),

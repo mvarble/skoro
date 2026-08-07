@@ -1,4 +1,6 @@
-use skoro_backend::{Backend, CotangentFrame, Element, Point, Tensor, TensorData};
+use skoro_backend::{
+    Backend, CotangentFrame, Element, ElementConversion, Point, Tensor, TensorData,
+};
 use skoro_model::{map::register_map1, q::Q};
 use skoro_operation::{
     Input,
@@ -13,23 +15,35 @@ use crate::matrix::{conjugate, left_broadcast_matmul, right_broadcast_matmul};
 pub struct TrilInvert;
 
 #[inline]
-fn invert_packed_lower_triangular<F: Element>(packed_l: &[F], batches: usize) -> Vec<F> {
+fn invert_packed_lower_triangular<
+    F: Element
+        + ElementConversion
+        + std::ops::Div<F, Output = F>
+        + std::ops::Mul<F, Output = F>
+        + std::ops::Add<F, Output = F>
+        + std::ops::Sub<F, Output = F>
+        + std::ops::Neg<Output = F>
+        + std::ops::AddAssign<F>,
+>(
+    packed_l: &[F],
+    batches: usize,
+) -> Vec<F> {
     let len = packed_l.len();
     let k = len / batches;
     let n = k_to_n(k);
     assert_eq!(len, batches * n * (n + 1) / 2);
-    let mut inv: Vec<f64> = vec![0.0; packed_l.len()];
+    let mut inv: Vec<F> = vec![F::from_elem(0.0); packed_l.len()];
     for b in 0..batches {
         let mut offset_i = b * k;
         for i in 0..n {
             // 1. Diagonal element: X_{i,i} = 1.0 / L_{i,i}
-            let l_ii = packed_l[offset_i + i].to_f64();
-            let inv_l_ii = 1.0 / l_ii;
+            let l_ii = packed_l[offset_i + i];
+            let inv_l_ii = F::from_elem(1.0) / l_ii;
             inv[offset_i + i] = inv_l_ii;
 
             // 2. Off-diagonal elements in row i: X_{i,j} for j < i
             for j in 0..i {
-                let mut sum = 0.0;
+                let mut sum = F::from_elem(0.0);
 
                 // To compute the dot product, we need the offset for row k
                 // We start k at j, so the initial offset for row j is j*(j+1)/2
@@ -37,7 +51,7 @@ fn invert_packed_lower_triangular<F: Element>(packed_l: &[F], batches: usize) ->
 
                 for k in j..i {
                     // sum += L_{i,k} * X_{k,j}
-                    sum += packed_l[offset_i + k].to_f64() * inv[offset_k + j];
+                    sum += packed_l[offset_i + k] * inv[offset_k + j];
 
                     // Advance offset_k to the next row (k + 1)
                     offset_k += k + 1;
@@ -50,11 +64,18 @@ fn invert_packed_lower_triangular<F: Element>(packed_l: &[F], batches: usize) ->
             offset_i += i + 1;
         }
     }
-
-    inv.into_iter().map(F::from_elem).collect()
+    inv
 }
 
-impl<B: Backend> DiffOperation<B> for TrilInvert {
+impl<B: Backend> DiffOperation<B> for TrilInvert
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
+{
     type VjpState = Option<Tensor<B, 2>>; // A^{-1}
     type HvpState = Option<Tensor<B, 2>>; // ΔA
     fn forward(
@@ -64,13 +85,10 @@ impl<B: Backend> DiffOperation<B> for TrilInvert {
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
         let [mat_packed] = inputs.try_into().unwrap();
-        let mat_elems = mat_packed
-            .clone()
-            .into_data()
-            .to_vec::<B::FloatElem>()
-            .unwrap();
         let shape = mat_packed.shape();
-        let inv_mat_elems = invert_packed_lower_triangular(&mat_elems, shape[0]);
+        let mat_data = mat_packed.clone().into_data().convert::<B::FloatElem>();
+        let mat_elems = mat_data.as_slice::<B::FloatElem>().unwrap();
+        let inv_mat_elems = invert_packed_lower_triangular(mat_elems, shape[0]);
         let inv_mat_packed =
             Tensor::from_data(TensorData::new(inv_mat_elems, shape), &mat_packed.device());
         match diff_state {
@@ -91,7 +109,10 @@ impl<B: Backend> DiffOperation<B> for TrilInvert {
                     if is_diff { Some(inv_mat_packed) } else { None },
                 )
             }
-            DiffModeState::Hvp(tvecs) => {
+            DiffModeState::Hvp {
+                diffs,
+                tangents: tvecs,
+            } => {
                 let [dmat_packed] = tvecs.try_into().unwrap();
                 DiffOperationForward::hvp(
                     inv_mat_packed.clone(),
@@ -100,11 +121,7 @@ impl<B: Backend> DiffOperation<B> for TrilInvert {
                         let dmat: Tensor<B, 3> = unpack(dmat_packed.clone());
                         -pack(inv_mat.clone().matmul(dmat).matmul(inv_mat))
                     }),
-                    if dmat_packed.is_some() {
-                        Some(inv_mat_packed)
-                    } else {
-                        None
-                    },
+                    if diffs[0] { Some(inv_mat_packed) } else { None },
                     dmat_packed,
                 )
             }
@@ -151,7 +168,15 @@ impl<B: Backend> DiffOperation<B> for TrilInvert {
     }
 }
 
-pub fn invert<B: Backend>(tril: &Q<B, Tril>) -> Q<B, Tril> {
+pub fn invert<B: Backend>(tril: &Q<B, Tril>) -> Q<B, Tril>
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
+{
     let tril_type = tril.get_quantity_type();
     register_map1(tril_type, TrilInvert, tril)
 }

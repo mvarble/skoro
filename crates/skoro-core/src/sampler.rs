@@ -80,6 +80,6 @@ impl<B: Backend, K: Kind<B>, S: Sampler<B, K>> SequenceMutator for SequenceSampl
 impl<B: Backend, K: Kind<B>, S: Sampler<B, K>> DynSequenceSampler<B> for SequenceSampler<B, K, S> {
     fn sample(&self, batch_size: usize, points: &mut [Option<OperationInput<B>>]) {
         let out = self.sampler.sample(batch_size, self.get_inputs(points));
-        points[self.output_index] = Some(K::wrap(out));
+        points[self.output_index] = Some(K::wrap_point(out));
     }
 }
