@@ -9,7 +9,7 @@ use skoro_core::{
     constant_value::ConstantValue,
     error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
-    kind::{Continuous, Kind, QuantityKind},
+    kind::{Kind, QuantityKind},
     pack::Packable,
     sampler::Sampler,
 };
@@ -21,8 +21,7 @@ use crate::compiler::{
     HvpForwardOutput, JvpForwardInput, JvpForwardOutput, VjpForwardInput, VjpForwardOutput,
 };
 use crate::node::{
-    ConstantNode, LogDensityNode, MappedNode, Node, ObservedNode, ParameterNode,
-    StochasticMultiNode, StochasticNode,
+    ConstantNode, LogDensityNode, MappedNode, Node, ObservedNode, ParameterNode, StochasticNode,
 };
 use crate::operation::GraphOperation;
 use crate::quantity::{DynContinuous, DynQuantityType, QuantityType};
@@ -81,7 +80,6 @@ fn is_differentiable_parent<B: Backend>(node: &Node<B>) -> bool {
         | Node::Stochastic(StochasticNode { quantity_type, .. }) => {
             quantity_type.kind() == QuantityKind::Continuous
         }
-        Node::StochasticMulti(_) => true,
     }
 }
 
@@ -303,19 +301,11 @@ impl<B: Backend> Graph<B> {
                                 let _ = self.stochastic_to_log_density.insert(*stochastic_id, id);
                             }
                             Entry::Occupied(entry) => {
-                                let current_stochastic_id = *entry.get();
-                                if current_stochastic_id != *stochastic_id {
-                                    let conflict = !matches!(
-                                        self.nodes.get(stochastic_id),
-                                        Some(Node::StochasticMulti(multi))
-                                            if multi.ids.contains(&current_stochastic_id)
-                                    );
-                                    if conflict {
-                                        // re-insert the node we removed before erroring
-                                        let stochastic_id = *stochastic_id;
-                                        self.nodes.insert(id, Node::LogDensity(dens));
-                                        return Err(SkoroError::DuplicateDensity { stochastic_id });
-                                    }
+                                if *entry.get() != *stochastic_id {
+                                    // re-insert the node we removed before erroring
+                                    let stochastic_id = *stochastic_id;
+                                    self.nodes.insert(id, Node::LogDensity(dens));
+                                    return Err(SkoroError::DuplicateDensity { stochastic_id });
                                 }
                             }
                         };
@@ -467,8 +457,9 @@ impl<B: Backend> Graph<B> {
     /// Returns an error if the node does not exist or is not stochastic.
     pub fn unobserve(&mut self, id: Id) -> SkoroResult<()> {
         match self.nodes.get(&id) {
-            Some(Node::Stochastic(_)) => {}
-            Some(Node::Observed(_)) => {
+            Some(Node::Observed(_)) => {}
+            // Already unobserved; nothing to undo.
+            Some(Node::Stochastic(_)) => {
                 return Ok(());
             }
             Some(_) => return Err(SkoroError::NotStochastic { id }),
@@ -493,30 +484,44 @@ impl<B: Backend> Graph<B> {
                 quantity_type,
             }),
         );
-        if let Some(children) = self.children.get(&id) {
-            let mut visit: VecDeque<Id> = children.iter().copied().collect();
-            let mut visited = HashSet::new();
-            while let Some(cid) = visit.pop_front() {
-                visited.insert(cid);
-                match self.nodes.get_mut(&cid) {
-                    Some(Node::Mapped(MappedNode { value, .. }))
-                    | Some(Node::LogDensity(LogDensityNode { value, .. }))
-                        if value.is_some() =>
-                    {
-                        value.take();
-                        if let Some(children) = self.children.get(&cid) {
-                            for cid in children {
-                                if !visited.contains(cid) {
-                                    visit.push_back(*cid);
-                                }
+        self.clear_cached_descendants(id);
+        Ok(())
+    }
+
+    /// Drop the constant-folded values cached on every descendant of `id`.
+    ///
+    /// [`add_mapped`](Self::add_mapped) folds a subtree into
+    /// [`MappedNode::value`](crate::node::MappedNode::value) when all of its parents
+    /// are already concrete, and `is_differentiable_parent` treats such a node as
+    /// non-differentiable. Any mutation that makes a node's value non-constant —
+    /// [`unobserve`](Self::unobserve), [`demote_to_parameter`](Self::demote_to_parameter) —
+    /// must therefore invalidate those folds, or the descendants are silently dropped
+    /// from the tape and the derivatives come back wrong while the values stay right.
+    fn clear_cached_descendants(&mut self, id: Id) {
+        let Some(children) = self.children.get(&id) else {
+            return;
+        };
+        let mut visit: VecDeque<Id> = children.iter().copied().collect();
+        let mut visited = HashSet::new();
+        while let Some(cid) = visit.pop_front() {
+            visited.insert(cid);
+            match self.nodes.get_mut(&cid) {
+                Some(Node::Mapped(MappedNode { value, .. }))
+                | Some(Node::LogDensity(LogDensityNode { value, .. }))
+                    if value.is_some() =>
+                {
+                    value.take();
+                    if let Some(children) = self.children.get(&cid) {
+                        for cid in children {
+                            if !visited.contains(cid) {
+                                visit.push_back(*cid);
                             }
                         }
                     }
-                    _ => {}
                 }
+                _ => {}
             }
         }
-        Ok(())
     }
 
     /// Update a stochastic node's sampling and density mechanisms.
@@ -605,131 +610,96 @@ impl<B: Backend> Graph<B> {
                 self.children.remove(&id);
             }
 
-            // remove the old log-density
-            let log_density_id = self.stochastic_to_log_density.get(&id);
-            if let Some(log_density_id) = log_density_id {
-                self.log_density_to_stochastic.remove(log_density_id);
-                if let Some((i, _)) = self
-                    .log_likelihoods
-                    .iter()
-                    .enumerate()
-                    .find(|(_, id)| *id == log_density_id)
-                {
-                    self.log_likelihoods.remove(i);
-                }
-            }
-
             // update the node (kind validated above)
             stoch.sampler = new_sampler;
             stoch.parent_ids = new_parents;
         } else {
             unreachable!("node kind validated above");
         }
+        self.unregister_density(id);
         Ok(())
     }
 
-    /// Join multiple stochastic quantities into one, removing their log-densities.
+    /// Unregister the log-density owned by a stochastic quantity, dropping it from the
+    /// model's likelihood terms.
     ///
-    /// Returns an error if a parent is dangling, the join would introduce a
-    /// cycle, or one of the joined ids is not a stochastic node.
-    pub fn join_stochastic(
-        &mut self,
-        ids: Vec<Id>,
-        sampler: impl Sampler<B, Continuous>,
-        projection_ops: Vec<Arc<dyn GraphOperation<B>>>,
-        parent_ids: Vec<Id>,
-    ) -> SkoroResult<()> {
-        assert_eq!(ids.len(), projection_ops.len());
+    /// The [`LogDensity`](Node::LogDensity) node itself is left in the arena: it may
+    /// still be referenced as a child, and removing it is the caller's decision. A
+    /// caller replacing a distribution wholesale is expected to clean up the orphan.
+    fn unregister_density(&mut self, stochastic_id: Id) {
+        let Some(log_density_id) = self.stochastic_to_log_density.remove(&stochastic_id) else {
+            return;
+        };
+        self.log_density_to_stochastic.remove(&log_density_id);
+        if let Some((i, _)) = self
+            .log_likelihoods
+            .iter()
+            .enumerate()
+            .find(|(_, id)| **id == log_density_id)
+        {
+            self.log_likelihoods.remove(i);
+        }
+    }
 
-        // check that all the joined ids are stochastic before mutating
-        for &id in &ids {
-            match self.nodes.get(&id) {
-                Some(Node::Stochastic(_)) => {}
-                None => return Err(SkoroError::NodeNotFound { id }),
-                _ => return Err(SkoroError::NotStochastic { id }),
+    /// Demote a stochastic quantity to a free [`Parameter`](Node::Parameter), at the
+    /// same [`Id`].
+    ///
+    /// The node keeps its identity and its quantity type, and every edge from a child
+    /// into it is preserved, so a `Q` naming it stays valid and everything downstream
+    /// is untouched. What it loses is its sampler, its parent edges, and its own
+    /// log-density.
+    ///
+    /// This is how a quantity is re-rooted when its marginal does not factorize: the
+    /// joint is attached separately, as a likelihood factor over the demoted
+    /// quantities via [`mark_likelihood`](Self::mark_likelihood). Where the marginal
+    /// *does* factorize, prefer [`update_stochastic`](Self::update_stochastic), which
+    /// keeps the quantity stochastic and gives it a real distribution.
+    ///
+    /// Demoting a node that is already a parameter is a no-op.
+    ///
+    /// Returns [`SkoroError::NodeNotFound`] if the node does not exist, or
+    /// [`SkoroError::NotStochastic`] if it is neither stochastic nor already a
+    /// parameter.
+    pub fn demote_to_parameter(&mut self, id: Id) -> SkoroResult<()> {
+        match self.nodes.get(&id) {
+            Some(Node::Stochastic(_)) => {}
+            // Already a free variable; nothing to demote.
+            Some(Node::Parameter(_)) => return Ok(()),
+            Some(_) => return Err(SkoroError::NotStochastic { id }),
+            None => return Err(SkoroError::NodeNotFound { id }),
+        };
+        let Some(Node::Stochastic(StochasticNode {
+            id,
+            parent_ids,
+            quantity_type,
+            ..
+        })) = self.nodes.remove(&id)
+        else {
+            unreachable!("node kind validated above");
+        };
+
+        // Drop the edges from the old distribution's parameters into this node.
+        for parent_id in &parent_ids {
+            let mut bereaved = false;
+            if let Some(children) = self.children.get_mut(parent_id) {
+                children.remove(&id);
+                bereaved = children.is_empty();
+            }
+            if bereaved {
+                self.children.remove(parent_id);
             }
         }
 
-        // check that all the new parents are legal
-        for &parent_id in &parent_ids {
-            if !self.nodes.contains_key(&parent_id) {
-                return Err(SkoroError::DanglingParent { parent_id });
-            }
-        }
-
-        // check if this creates cycle; error if so.
-        let mut visit: VecDeque<Id> = parent_ids.iter().copied().collect();
-        let mut visited = HashSet::new();
-        while let Some(pid) = visit.pop_front() {
-            if ids.contains(&pid) {
-                return Err(SkoroError::Cycle { id: pid });
-            }
-            visited.insert(pid);
-            if let Some(node) = self.nodes.get(&pid) {
-                for &parent in node.parent_ids() {
-                    if !visited.contains(&parent) {
-                        visit.push_back(parent);
-                    }
-                }
-            }
-        }
-
-        // remove the nodes and update the children registry
-        let mut quantity_types = Vec::with_capacity(ids.len());
-        for id in ids.iter() {
-            if let Some(Node::Stochastic(stoch)) = self.nodes.remove(id) {
-                // remove this node from the children registry
-                let mut remove = Vec::new();
-                for (pid, children) in self.children.iter_mut() {
-                    children.remove(id);
-                    if children.is_empty() && !parent_ids.contains(pid) {
-                        remove.push(*pid);
-                    }
-                }
-
-                // add this node back into the children registry
-                for &pid in &parent_ids {
-                    match self.children.entry(pid) {
-                        Entry::Occupied(mut entry) => entry.get_mut().insert(*id),
-                        Entry::Vacant(entry) => entry.insert(HashSet::new()).insert(*id),
-                    };
-                }
-
-                // remove the children sets of bereaved parents
-                for id in remove {
-                    self.children.remove(&id);
-                }
-
-                // remove the old log-density
-                let log_density_id = self.stochastic_to_log_density.get(id);
-                if let Some(log_density_id) = log_density_id {
-                    self.log_density_to_stochastic.remove(log_density_id);
-                    if let Some((i, _)) = self
-                        .log_likelihoods
-                        .iter()
-                        .enumerate()
-                        .find(|(_, id)| *id == log_density_id)
-                    {
-                        self.log_likelihoods.remove(i);
-                    }
-                }
-
-                quantity_types.push(stoch.quantity_type);
-            } else {
-                unreachable!("node kind validated above");
-            }
-        }
-
-        let multi_node = Node::StochasticMulti(Arc::new(StochasticMultiNode {
-            ids: ids.clone(),
-            parent_ids: parent_ids.clone(),
-            projection_ops,
-            quantity_types,
-            sampler: Arc::new(KindedSampler::<B, Continuous, _>::new(sampler)),
-        }));
-        for id in &ids {
-            self.nodes.insert(*id, multi_node.clone());
-        }
+        self.nodes
+            .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
+        self.unregister_density(id);
+        // Defensive, and cheap: today `check_cache` folds nothing downstream of a
+        // stochastic node (it yields `None` for both `Stochastic` and `Parameter`
+        // parents), so this finds nothing to clear. It guards the invariant rather
+        // than a live failure — the node's value is no longer determined by its
+        // parents, and a fold rule that ever admitted stochastic parents would make
+        // every descendant stale.
+        self.clear_cached_descendants(id);
         Ok(())
     }
 
@@ -813,16 +783,6 @@ impl<B: Backend> Graph<B> {
             | Node::Mapped(MappedNode { quantity_type, .. })
             | Node::Stochastic(StochasticNode { quantity_type, .. })
             | Node::Observed(ObservedNode { quantity_type, .. }) => Ok(quantity_type.as_ref()),
-            Node::StochasticMulti(node) => {
-                let mut quantity_type = None;
-                for (i, &sid) in node.ids.iter().enumerate() {
-                    if sid == id {
-                        quantity_type = Some(node.quantity_types[i].as_ref());
-                        break;
-                    }
-                }
-                quantity_type.ok_or(SkoroError::NodeNotFound { id })
-            }
             Node::LogDensity(_) => Ok(&REAL_QUANTITY_TYPE),
         }
     }
@@ -1431,7 +1391,6 @@ impl<B: Backend> Graph<B> {
                         op: op.lower(input_indices, input_diffs, max_index),
                         value: value.clone(),
                         quantity_type: quantity_type.clone(),
-                        from_multi: false,
                     });
                     id_to_index.insert(id, max_index);
                     max_index += 1;
@@ -1464,7 +1423,6 @@ impl<B: Backend> Graph<B> {
                         op: op.lower(input_indices, input_diffs, max_index),
                         value: value.clone(),
                         quantity_type: Arc::new(DynContinuous(Real)),
-                        from_multi: false,
                     });
                     id_to_index.insert(id, max_index);
                     max_index += 1;
@@ -1488,40 +1446,6 @@ impl<B: Backend> Graph<B> {
                     });
                     id_to_index.insert(id, max_index);
                     max_index += 1;
-                }
-                Node::StochasticMulti(multi) => {
-                    let input_indices = multi
-                        .parent_ids
-                        .iter()
-                        .map(|id| *id_to_index.get(id).unwrap())
-                        .collect();
-
-                    steps.push(CompiledStep::MultiSampler {
-                        ids: multi.ids.clone(),
-                        quantity_types: multi.quantity_types.clone(),
-                        sampler: multi.sampler.lower(input_indices, max_index),
-                    });
-                    let multi_index = max_index;
-                    max_index += 1;
-
-                    for ((id, op), quantity_type) in multi
-                        .ids
-                        .iter()
-                        .zip(&multi.projection_ops)
-                        .zip(&multi.quantity_types)
-                    {
-                        steps.push(CompiledStep::Operation {
-                            id: *id,
-                            constant_inputs: true,
-                            forward_only: false,
-                            op: op.lower(vec![multi_index], vec![], max_index),
-                            value: None,
-                            quantity_type: quantity_type.clone(),
-                            from_multi: true,
-                        });
-                        id_to_index.insert(id, max_index);
-                        max_index += 1;
-                    }
                 }
             };
         }

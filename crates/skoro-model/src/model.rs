@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, Weak};
 
 use skoro_backend::{Backend, CotangentFrame, Point, TangentFrame, TangentVector};
-use skoro_core::kind::{Continuous, Kind};
+use skoro_core::kind::Kind;
 use skoro_core::{
     error::SkoroResult,
     id::{Id, IdGenerator},
@@ -173,20 +173,18 @@ impl<B: Backend> ModelServer<B> {
             .update_stochastic(tag.id, new_sampler, new_parents)
     }
 
-    /// Join multiple stochastic quantities into one, removing their log-densities.
+    /// Demote a stochastic quantity to a free parameter, keeping its identity.
     ///
-    /// Returns an error if a parent is dangling, the join would introduce a
-    /// cycle, or one of the joined ids is not a stochastic node.
+    /// The quantity loses its sampler, its parents, and its own log-density; its
+    /// [`Id`], quantity type, and every dependent quantity are untouched. Use this
+    /// when a quantity's distribution is superseded by a joint likelihood factor
+    /// over several quantities — a marginalization whose result does not factorize.
+    ///
+    /// Returns an error if the quantity does not exist or is neither stochastic nor
+    /// already a parameter.
     #[inline(always)]
-    pub fn join_stochastic(
-        &mut self,
-        ids: Vec<Id>,
-        sampler: impl Sampler<B, Continuous>,
-        projection_ops: Vec<Arc<dyn GraphOperation<B>>>,
-        parent_ids: Vec<Id>,
-    ) -> SkoroResult<()> {
-        self.graph
-            .join_stochastic(ids, sampler, projection_ops, parent_ids)
+    pub fn demote_to_parameter<T>(&mut self, tag: &Q<B, T>) -> SkoroResult<()> {
+        self.graph.demote_to_parameter(tag.id)
     }
 
     /// Removes quantities, verifying they have no children which would be kept in the graph.
@@ -639,19 +637,12 @@ impl<B: Backend> ModelClient<B> {
         Ok(())
     }
 
-    /// Join multiple stochastic quantities into one, removing their log-densities.
+    /// Demote a stochastic quantity to a free parameter, keeping its identity.
     ///
-    /// Returns an error if a parent is dangling, the join would introduce a
-    /// cycle, or one of the joined ids is not a stochastic node.
-    pub fn join_stochastic(
-        &self,
-        ids: Vec<Id>,
-        sampler: impl Sampler<B, Continuous>,
-        projection_ops: Vec<Arc<dyn GraphOperation<B>>>,
-        parent_ids: Vec<Id>,
-    ) -> SkoroResult<()> {
+    /// See [`ModelServer::demote_to_parameter`].
+    pub fn demote_to_parameter<T>(&self, tag: &Q<B, T>) -> SkoroResult<()> {
         let mut server = self.server.write().unwrap();
-        server.join_stochastic(ids, sampler, projection_ops, parent_ids)?;
+        server.demote_to_parameter(tag)?;
         server.cleanup();
         Ok(())
     }

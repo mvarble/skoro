@@ -195,8 +195,8 @@ where
 
 // `GaussianModelClient` exposes the distribution-agnostic surface by delegating
 // to its inner `ModelClient`. It deliberately does NOT expose `add_quantity`,
-// `update_quantity`, `join_stochastic`, or `get_server`, so the only way to add
-// a stochastic node is via `add_gaussian_quantity`.
+// `update_quantity`, or `get_server`, so the only way to add a stochastic node
+// is via `add_gaussian_quantity`.
 impl<B: Backend> ModelClientOps<B> for GaussianModelClient<B> {
     fn add_constant<K, T, D>(&self, quantity_type: T, value: &D) -> Q<B, T>
     where
@@ -226,6 +226,10 @@ impl<B: Backend> ModelClientOps<B> for GaussianModelClient<B> {
 
     fn unobserve<M>(&self, q: &Q<B, M>) -> SkoroResult<()> {
         self.client.unobserve(q)
+    }
+
+    fn demote_to_parameter<M>(&self, q: &Q<B, M>) -> SkoroResult<()> {
+        self.client.demote_to_parameter(q)
     }
 
     fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {

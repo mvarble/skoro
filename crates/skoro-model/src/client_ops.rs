@@ -70,6 +70,16 @@ pub trait ModelClientOps<B: Backend> {
 
     /// Undo the effect of [`observe`](Self::observe).
     fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
+
+    /// Demote a stochastic quantity to a free parameter, keeping its identity.
+    ///
+    /// The quantity loses its sampler, its parents, and its own log-density, but
+    /// keeps its `Id` and quantity type, so every quantity depending on it stays
+    /// valid. This is how a quantity is re-rooted when its marginal does not
+    /// factorize and the joint is supplied instead as a likelihood factor over
+    /// several quantities.
+    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
+
     /// Remove quantities (which must have no retained children).
     fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>>;
 
@@ -230,6 +240,10 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
 
     fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
         ModelClient::unobserve(self, q)
+    }
+
+    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
+        ModelClient::demote_to_parameter(self, q)
     }
 
     fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {

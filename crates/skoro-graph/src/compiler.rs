@@ -28,17 +28,11 @@ pub enum CompiledStep<B: Backend> {
         sampler: Box<dyn DynSequenceSampler<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
     },
-    MultiSampler {
-        ids: Vec<Id>,
-        sampler: Box<dyn DynSequenceSampler<B>>,
-        quantity_types: Vec<Arc<dyn DynQuantityType<B>>>,
-    },
     Operation {
         id: Id,
         op: Box<dyn DynSequenceOperation<B>>,
         value: Option<ConstantValue<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
-        from_multi: bool,
         /// If true, the operation is non-differentiable (e.g. a discrete
         /// kernel): it is evaluated forward-only in every pass, and its inputs
         /// receive no tangents/cotangents.
@@ -167,7 +161,6 @@ impl<B: Backend> CompiledSequence<B> {
     pub fn forward(&self, input: ForwardInput<'_, B>) -> SkoroResult<ForwardOutput<B>> {
         let mut point_seq: Vec<Option<Input<B>>> = vec![None; self.steps.len()];
         let mut out = ForwardOutput::default();
-        let mut skip = 0;
         for (index, step) in self.steps.iter().enumerate() {
             match step {
                 CompiledStep::Operation {
@@ -177,10 +170,6 @@ impl<B: Backend> CompiledSequence<B> {
                     quantity_type,
                     ..
                 } => {
-                    if skip > 0 {
-                        skip -= 1;
-                        continue;
-                    }
                     forward_only_op(
                         *id,
                         op,
@@ -200,7 +189,6 @@ impl<B: Backend> CompiledSequence<B> {
                         &input.options,
                         &mut point_seq,
                         &mut out,
-                        &mut skip,
                         None,
                         None,
                         None,
@@ -217,7 +205,6 @@ impl<B: Backend> CompiledSequence<B> {
         let mut point_seq: Vec<Option<Input<B>>> = vec![None; steps_len];
         let mut tangent_seq: Vec<Option<TangentFrame<B>>> = vec![None; steps_len];
         let mut out = JvpForwardOutput::default();
-        let mut skip = 0;
         let mut frame_count: Option<usize> = None;
         for (index, step) in self.steps.iter().enumerate() {
             match step {
@@ -226,15 +213,10 @@ impl<B: Backend> CompiledSequence<B> {
                     op,
                     value,
                     quantity_type,
-                    from_multi,
                     forward_only,
                     ..
                 } => {
-                    if skip > 0 {
-                        skip -= 1;
-                        continue;
-                    }
-                    if *from_multi || *forward_only {
+                    if *forward_only {
                         forward_only_op(
                             *id,
                             op,
@@ -245,9 +227,6 @@ impl<B: Backend> CompiledSequence<B> {
                             &mut point_seq,
                             &mut out.primal,
                         );
-                        if *from_multi && let Some(vector) = input.tangents.get(id) {
-                            tangent_seq[index] = Some(vector.clone());
-                        }
                     } else {
                         op.jvp_forward(&mut point_seq, &mut tangent_seq);
                         out.primal.evaluations.insert(
@@ -269,7 +248,6 @@ impl<B: Backend> CompiledSequence<B> {
                         &input.options,
                         &mut point_seq,
                         &mut out.primal,
-                        &mut skip,
                         None,
                         None,
                         Some(input.tangents),
@@ -286,7 +264,6 @@ impl<B: Backend> CompiledSequence<B> {
         let mut point_seq: Vec<Option<Input<B>>> = vec![None; steps_len];
         let mut cotangent_seq: Vec<Option<CotangentFrame<B>>> = vec![None; steps_len];
         let mut out = VjpForwardOutput::default();
-        let mut skip = 0;
         let mut frame_count: Option<usize> = None;
         let mut tape = Tape::new();
         for (index, step) in self.steps.iter().enumerate() {
@@ -296,15 +273,10 @@ impl<B: Backend> CompiledSequence<B> {
                     op,
                     value,
                     quantity_type,
-                    from_multi,
                     constant_inputs,
                     ..
                 } => {
-                    if skip > 0 {
-                        skip -= 1;
-                        continue;
-                    }
-                    if *from_multi || *constant_inputs {
+                    if *constant_inputs {
                         forward_only_op(
                             *id,
                             op,
@@ -339,7 +311,6 @@ impl<B: Backend> CompiledSequence<B> {
                         &input.options,
                         &mut point_seq,
                         &mut out.primal,
-                        &mut skip,
                         None,
                         None,
                         None,
@@ -377,7 +348,6 @@ impl<B: Backend> CompiledSequence<B> {
         let mut ord1_cotangent_seq: Vec<Option<CotangentFrame<B>>> = vec![None; steps_len];
         let mut ord2_cotangent_seq: Vec<Option<CotangentFrame<B>>> = vec![None; steps_len];
         let mut out = HvpForwardOutput::default();
-        let mut skip = 0;
         let mut frame_count: Option<usize> = None;
         let mut tape = Tape::new();
         for (index, step) in self.steps.iter().enumerate() {
@@ -387,15 +357,10 @@ impl<B: Backend> CompiledSequence<B> {
                     op,
                     value,
                     quantity_type,
-                    from_multi,
                     constant_inputs,
                     ..
                 } => {
-                    if skip > 0 {
-                        skip -= 1;
-                        continue;
-                    }
-                    if *from_multi || *constant_inputs {
+                    if *constant_inputs {
                         forward_only_op(
                             *id,
                             op,
@@ -452,7 +417,6 @@ impl<B: Backend> CompiledSequence<B> {
                         &input.options,
                         &mut point_seq,
                         &mut out.primal,
-                        &mut skip,
                         Some(input.tangents),
                         Some(&mut tangent_seq),
                         None,
@@ -505,7 +469,6 @@ fn non_op_forward<B: Backend>(
     options: &ForwardOptions,
     point_seq: &mut [Option<Input<B>>],
     out: &mut ForwardOutput<B>,
-    skip: &mut usize,
     vectors: Option<&HashMap<Id, Tensor<B, 2>>>,
     vector_seq: Option<&mut [Option<Tensor<B, 2>>]>,
     tensors: Option<&HashMap<Id, Tensor<B, 3>>>,
@@ -574,35 +537,6 @@ fn non_op_forward<B: Backend>(
                 && let Some(tensor) = tensors.get(id)
             {
                 tensor_seq[index] = Some(tensor.clone());
-            }
-        }
-        CompiledStep::MultiSampler {
-            ids,
-            sampler,
-            quantity_types,
-        } => {
-            let mut samples = vec![None; ids.len()];
-            let mut all_present = true;
-            for (i, id) in ids.iter().enumerate() {
-                if let Some(point) = points.get(id) {
-                    samples[i] = Some(ensure_batch_size(*id, point, options.batch_size)?);
-                } else {
-                    all_present = false;
-                    break;
-                }
-            }
-
-            if all_present {
-                for (((i, sample), id), quantity_type) in
-                    samples.into_iter().enumerate().zip(ids).zip(quantity_types)
-                {
-                    let sample = sample.unwrap();
-                    point_seq[index + i] = Some(sample.clone());
-                    out.variables.insert(*id, sample, quantity_type.clone());
-                }
-                *skip = ids.len();
-            } else {
-                sampler.sample(options.batch_size, point_seq);
             }
         }
         CompiledStep::Operation { .. } => unreachable!(),

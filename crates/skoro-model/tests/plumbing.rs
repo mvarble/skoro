@@ -129,6 +129,31 @@ fn q_observe_transitions_node_to_observed() {
 }
 
 #[test]
+fn q_unobserve_returns_node_to_stochastic() {
+    let client = ModelClient::<B>::new(Default::default());
+    let q = client.add_quantity(DummyDistribution).unwrap();
+    q.observe(&5.0).unwrap();
+    assert_observed(&client, q.id, 5.0);
+
+    q.unobserve().unwrap();
+    client.server_call(|server| {
+        assert!(
+            matches!(server.graph.nodes.get(&q.id), Some(Node::Stochastic(_))),
+            "unobserve must return the node to Stochastic"
+        );
+    });
+
+    // Unobserving an already-stochastic quantity is a no-op, not a panic.
+    q.unobserve().unwrap();
+    client.server_call(|server| {
+        assert!(matches!(
+            server.graph.nodes.get(&q.id),
+            Some(Node::Stochastic(_))
+        ));
+    });
+}
+
+#[test]
 fn discrete_quantities_coexist_with_continuous() {
     let client = ModelClient::<B>::new(Default::default());
 
