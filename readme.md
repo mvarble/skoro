@@ -76,7 +76,6 @@ The graph is composed of **`Node`** variants:
 
 - **`Constant` / `Parameter`**: Leaf nodes with fixed or optimizable data.
 - **`Stochastic`**: A conditional random variable associated with a specific probability distribution.
-- **`StochasticMulti`**: A joint random variable produced by a single sampler over several quantities (cannot be observed).
 - **`Mapped`**: A deterministic functional transformation of other nodes.
 - **`LogDensity`**: A mapped node representing evaluated probabilities.
 - **`Observed`**: A stochastic node bound to a concrete value (conditioning the model for posterior inference).

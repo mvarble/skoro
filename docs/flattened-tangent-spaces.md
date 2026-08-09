@@ -308,14 +308,10 @@ Both paths therefore agree:
 For an EKF this is natural — `x_k` is a leaf, `f(x_k)` and `h(x_k)` are mapped — but a state
 chain built entirely from mapped nodes cannot be differentiated block-to-block.
 
-Quantities produced by `join_stochastic` fall outside the rule in both directions. Their
-compiled form is a `MultiSampler` step plus per-id `Operation` steps with `from_multi: true`,
-and those take the `forward_only_op` path in both passes (`compiler.rs:307`, `compiler.rs:237`),
-so they write no tape entry; the VJP collection loop matches only `Parameter` / `Sampler`, never
-`MultiSampler`. JVP *does* pick up a seeded tangent for them (`compiler.rs:248`) but never emits
-one (`out.tangents.insert` is in the else branch). Net: **a joined stochastic quantity can be a
-JVP column, but never a VJP column and never a row of either.** Use `jacobian_jvp`, or do not
-join state variables you intend to filter over.
+The rule admits no exceptions. A correlated joint over several quantities is represented as a
+likelihood factor over `Parameter` leaves (`graph-marginalization.md` §5), and those are ordinary
+columns — so `jacobian_vjp` is available for jointly-distributed quantities exactly as it is for any
+other leaf.
 
 Two further caveats:
 
