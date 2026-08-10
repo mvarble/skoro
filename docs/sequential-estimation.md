@@ -56,7 +56,9 @@ estimator wants to marginalize, does it mutate the model?*
 
 `P` is an object on the tangent space *at the current point*, shape `[batch, N, N]`, keyed by a
 `TangentLayout` (`flattened-tangent-spaces.md:60-68`). It has no node, no `Id`, and no place in
-`Graph.nodes`. Estimators are therefore emphatically **not** stateless, and that is the point: it is
+`Graph.nodes`. For `lag = 0` it is not a tensor either: at batch 1 it is a host `f64` matrix, since
+this same ownership line is the host/device and precision boundary
+(`estimator-linear-algebra.md` §1). Estimators are therefore emphatically **not** stateless, and that is the point: it is
 precisely because no estimator owns structure that two of them can read the same model at once.
 
 Section 6 qualifies this. Retirement requires numerics only an estimator can supply, so an estimator
@@ -113,7 +115,8 @@ carried entirely in `P`, which is to say: a Kalman filter's covariance *is* the 
 its state, and propagating it *is* the marginalization. There is nothing left in the graph to
 retire because nothing was ever added.
 
-This also sidesteps the structural constraint from `flattened-tangent-spaces.md:294-303` for free —
+This also sidesteps the structural constraint from `flattened-tangent-spaces.md` §5 ("columns are
+leaves, rows are mapped nodes") for free —
 Jacobian columns must be `Parameter`/`Stochastic` leaves and rows must be `Mapped` nodes, which is
 exactly the shape of a one-tick template.
 
@@ -166,7 +169,8 @@ precisely `P`. The degenerate case of the general mechanism is the recycle loop.
 
 ### State advance replaces values
 
-`flattened-tangent-spaces.md:229-244` already identifies the missing operation and this document
+`flattened-tangent-spaces.md` §4 ("Retraction is not state advance") already identifies the missing
+operation and this document
 gives it a name. The obstruction is a keying mismatch:
 
 - `ForwardOutput.evaluations` is a `PointMap<B>` keyed by **mapped** ids (`compiler.rs:98`);
@@ -463,12 +467,19 @@ authority over structure.
 The corollary from §2 restated, because it is the thing most likely to be got wrong: **`P` lives in
 the estimator, keyed by a layout, and never in the graph.**
 
+That line does double duty. `estimator-linear-algebra.md` §1 takes it as the host/device boundary as
+well: everything the estimator owns numerically is host `f64` at batch 1, and the only tensors
+crossing are `J` inward and `δ` outward. Nothing about the estimator boundary above changes — the
+`TangentLayout` grounding is exactly what makes the conversion a two-call affair.
+
 ## 11. Phasing
 
 Ordered so each phase is independently useful and each is testable before the next begins.
 
 1. **`lag = 0` EKF.** Needs `TangentLayout`, Jacobian assembly, the dense SPD solve (all from
-   `flattened-tangent-spaces.md`), plus `advance` from §3. Needs **no** temporal layer, **no**
+   `flattened-tangent-spaces.md`), plus `advance` from §3. The solve is a dependency on the
+   `skoro-dense` crate rather than on new backend kernels — see `estimator-linear-algebra.md`,
+   which is worth reading before this phase starts, since it is what unblocks it. Needs **no** temporal layer, **no**
    marginalization, **no** temporal bookkeeping, **no** graph surgery of any kind. This is a working
    filter, and it is reachable without touching any of the graph defects.
 2. **The temporal layer.** `TimeSequence`, `Chain`, `Chains`, `Transition`, `TickCtx`. Pure
@@ -491,6 +502,10 @@ Follow the existing layout — per-backend entry points over a shared `common/` 
 Heed the workspace's own doctrine (`.claude/skills/skoro-diff-operation/references/testing.md`):
 hand-computed constants generated from the implementation lock in whatever the implementation
 already did.
+
+The linear-algebra layer beneath these has its own tests in `estimator-linear-algebra.md` §9 — the
+conversion round-trips and the batch-1 guard in particular, since those are the new code the checks
+below run on top of.
 
 1. **Exactness at `lag = 0`.** On a linear-Gaussian model the recycling loop must reproduce the
    closed-form Kalman filter, not merely converge to it.

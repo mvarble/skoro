@@ -147,7 +147,9 @@ Prefer these over panics throughout the layout surface.
 
 ## 4. Flatten and unflatten
 
-Methods on `TangentLayout`, over the existing aliases in `skoro-backend/src/lib.rs:90-105`:
+Methods on `TangentLayout`, over the existing aliases in `skoro-backend/src/lib.rs:90-105`. These
+signatures are unchanged by `estimator-linear-algebra.md` — they are the graph's boundary and stay
+on the backend.
 
 ```rust
 // rank-2: [batch, d_i] blocks  <->  [batch, N]
@@ -246,7 +248,9 @@ Nothing in the workspace does the second today. `ForwardOutput.evaluations`
 ## 5. Jacobian assembly
 
 Given an **input layout** `In` (columns, `D_in = In.total()`) and an **output layout** `Out`
-(rows, `D_out = Out.total()`), produce `J ∈ [batch, D_out, D_in]`.
+(rows, `D_out = Out.total()`), produce `J ∈ [batch, D_out, D_in]`. These signatures are unchanged
+by `estimator-linear-algebra.md`; for the deterministic estimators they are the *last* tensor-typed
+step before the host boundary.
 
 ```rust
 pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
@@ -332,6 +336,13 @@ the Jacobian API whenever a layout column reaches the targets only through a `fo
 
 ## 6. The dense linear algebra gap
 
+> **Superseded for the deterministic estimators.** This section identifies the gap correctly, but
+> the resolution below — hand-written `Tensor<B, 3>` kernels — was reconsidered in
+> `estimator-linear-algebra.md`. For `skoro-ekf` and `skoro-gauss-newton`, this solve runs on the
+> **host, in `f64`, at batch 1**, in a `skoro-dense` crate backed by `faer`. Read that document
+> before implementing anything here. The survey of what exists and what `burn` provides is still
+> accurate and is what the decision rests on.
+
 Both consuming algorithms need a symmetric-positive-definite solve, and **the workspace does not
 have one.**
 
@@ -351,11 +362,20 @@ What `burn` 0.21 provides (verified in `burn-tensor-0.21.0/src/tensor/linalg/`):
   (`linalg/lu.rs:71`). Its own docs flag it as "not fully optimized".
 - `det`, `diag`, `trace`, `matvec`, `outer`, and the `vector_norm` family; `Tensor::tril` /
   `triu` masks.
-- **No Cholesky. No triangular solve. No general solve.** (`solve_for_u_blocks`, `lu.rs:498`, is
-  private.)
+- **No Cholesky. No triangular solve. No general solve. No QR.** (`solve_for_u_blocks`,
+  `lu.rs:498`, is private.)
+
+The absent QR is load-bearing rather than incidental: `spd_solve(JᵀJ + λI, ..)` below squares the
+condition number, and a QR least-squares solve avoids it. See `estimator-linear-algebra.md` §3 —
+that is the argument that decided the question.
 
 Proposed: a `crates/skoro-linalg/src/dense/` module over dense `[batch, n, n]` tensors —
 distinct from the packed `Tril` manifold, and eager, since these are not graph operations.
+
+> **Housed elsewhere.** These live in a leaf crate `skoro-dense`, not in `skoro-linalg`, which
+> depends on `skoro-graph` and `skoro-model` and is pulled in by every `Normal` / `Tril` user —
+> taxing the whole workspace with a dependency two estimator crates use
+> (`estimator-linear-algebra.md` §7).
 
 ```rust
 pub fn cholesky<B: Backend>(spd: Tensor<B, 3>) -> Tensor<B, 3>;   // lower factor
@@ -378,6 +398,11 @@ Sequencing:
 3. `linalg::lu` is a usable interim for a general solve, but it does not exploit symmetry and
    leaves no factor to reuse. Prefer Cholesky once step 2 lands.
 
+> **Step 2 is deferred, not cancelled** (`estimator-linear-algebra.md` §8). It earns its keep when a
+> *batched* estimator needs a batched dense solve — ensemble filters, batched-chain MCMC — and no
+> such consumer exists yet. `skoro-dense` keeps these exact function names so a device-side
+> implementation can land behind the same seam.
+
 ## 7. Worked consumers
 
 Sketches, not specifications — enough to show the API is sufficient. Each becomes its own crate
@@ -388,6 +413,11 @@ Scope note: **these algorithms consume eager tensors and are not differentiable 
 operations.** Use burn's batched `Tensor::matmul` on rank-3 directly, not the graph `Matmul`
 op (`skoro-linalg/src/matmul/mod.rs:7`), which expects `[b, m*n]` flattened matrices and builds
 tape entries.
+
+> That rule stands. What changed is *which* tensors survive into these sketches: for the two
+> deterministic estimators, `jacobian_*` is the last tensor-typed step and everything between `J`
+> and `δ` is host `f64` (`estimator-linear-algebra.md` §1). The MCMC crates named above stay on
+> tensors throughout, since batching over chains is their workload (§5 there).
 
 ### EKF
 
@@ -412,8 +442,11 @@ update:   H = jacobian_vjp(client, points, &state, &meas)         // [b, M, N], 
           P = (I − K H) P (I − K H)ᵀ + K R Kᵀ                     // Joseph form
 ```
 
-Two things this shows:
+Three things this shows:
 
+- `P`, `S`, `K` and the Joseph form never appear in the graph, so they are host `f64` — the two
+  `jacobian_*` calls and the `retract_flat` are the only tensor-typed lines
+  (`estimator-linear-algebra.md` §1).
 - The frame-count asymmetry decides the pass. `F` is square (`D_in = D_out = N`), so either
   works; `H` has `M ≪ N`, so VJP is the cheaper one.
 - Predict is the concrete case of "state advance replaces values" from §4 — the leaf-slot write
@@ -450,6 +483,11 @@ points = points.retract_flat(&free, δ)
 
 `λ = 0` is Gauss-Newton; `λ > 0` is Levenberg-Marquardt, which the same code supports for free.
 
+> **Prefer the QR path for the `δ` line.** Forming `JᵀJ` squares the condition number;
+> `lstsq(J, −r)` by column-pivoted QR does not, and it is available on the host where the normal
+> equations are not the only option (`estimator-linear-algebra.md` §3). Keep `spd_solve` as the
+> `λ > 0` route, where the damping regularizes the product anyway.
+
 ## 8. Verification
 
 1. **Round-trip.** `unflatten(flatten(map)) == map` for a mixed layout containing `Real`,
@@ -461,7 +499,9 @@ points = points.retract_flat(&free, δ)
    retraction* (`retract_flat` with `±ε eᵢ`), on an `SE3` model so the 6-vs-12 split is
    exercised.
 4. **Dense linalg.** `spd_solve(A, A) ≈ I`; `cholesky(L Lᵀ) ≈ L`; agreement with `TrilInvert` on
-   a packed lower-triangular input converted to dense.
+   a packed lower-triangular input converted to dense. Extended in
+   `estimator-linear-algebra.md` §9, which adds the conversion round-trips, the batch-1 guard, and
+   the ill-conditioned case that makes the QR argument checkable.
 5. **EKF end-to-end.** A linear-Gaussian model, where the EKF must reproduce the exact Kalman
    filter, checked against the closed-form posterior.
 6. **Gauss-Newton end-to-end.** A linear-Gaussian least-squares problem, which must converge in

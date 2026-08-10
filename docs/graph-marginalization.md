@@ -357,7 +357,10 @@ In order, and the order is forced:
    any mutation, with an error naming the entangling intermediate.
 3. **The marginal.** The designated `prior_source` estimator computes the joint marginal over the
    blanket at the current linearization point and materializes it as graph nodes.
-   *This step cannot be done by the graph* — see `sequential-estimation.md` §6.
+   *This step cannot be done by the graph* — see `sequential-estimation.md` §6. The projector's
+   numerics are host `f64` like the rest of the estimator's state
+   (`estimator-linear-algebra.md` §1); only the materialized `Tril` factor crosses back into the
+   graph as a tensor.
 4. **Install it.** If the blanket has one element and its marginal factorizes, `update_stochastic`
    re-roots it in place (§2). Otherwise `demote_to_parameter` each blanket element and attach the
    joint marginal with `mark_likelihood` (§5). Either path clears downstream constant folds via the
@@ -371,7 +374,7 @@ existing API. Step 3 lives outside `skoro-graph` entirely.
 
 ## 8. Defects to fix along the way
 
-Following the precedent of `flattened-tangent-spaces.md:329-335`. Each is independently reachable
+Following the precedent of `flattened-tangent-spaces.md` §5, "A defect to fix along the way". Each is independently reachable
 from a public path and none should ship as-is.
 
 One was found and fixed while implementing §5:
@@ -399,7 +402,7 @@ What remains:
    from a retired parent, same treatment as 3.
 5. **`Graph::remove`'s unresolved `// TODO: check if I need to remove children`** (`graph.rs:760`) —
    retirement exercises this path hard and it should not be uncertain.
-6. Carried from `flattened-tangent-spaces.md:329-335`: `compiler.rs:363` panics
+6. Carried from `flattened-tangent-spaces.md` §5, "A defect to fix along the way": `compiler.rs:363` panics
    `"Point should have a cotangent vector."` when a continuous leaf in the compiled subgraph
    receives no tape write. Default to zeros or return an error.
 
