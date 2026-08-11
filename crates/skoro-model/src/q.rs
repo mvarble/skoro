@@ -7,7 +7,6 @@ use skoro_graph::{
     quantity::{ContinuousQuantity, QuantityType},
 };
 use skoro_operation::ValueMap;
-use skoro_riemann::real::Real;
 
 use crate::model::{ModelClient, NodeDropGuard};
 
@@ -20,9 +19,15 @@ use crate::model::{ModelClient, NodeDropGuard};
 /// `impl` blocks.
 pub struct Q<B: Backend, T> {
     /// The unique identifier of the node in the ModelServer's Graph.
-    pub id: Id,
+    ///
+    /// Private so that `Q` can change representation later without a breaking
+    /// release; read it with [`Q::id`].
+    pub(crate) id: Id,
     /// The client reference to perform operations against the model server.
-    pub client: ModelClient<B>,
+    ///
+    /// Private, and load-bearing: a public field here would hand every holder of a
+    /// quantity the unrestricted model surface, defeating any facade that returned it.
+    pub(crate) client: ModelClient<B>,
     pub(crate) guard: Arc<NodeDropGuard>,
     _phantom: PhantomData<T>,
 }
@@ -69,6 +74,12 @@ impl<B: Backend, T> Q<B, T> {
             guard,
             _phantom: PhantomData,
         }
+    }
+
+    /// The identifier of the node this quantity names.
+    #[inline(always)]
+    pub fn id(&self) -> Id {
+        self.id
     }
 
     /// Render the quantity unobserved.
@@ -172,10 +183,7 @@ impl<B: Backend, M: ContinuousQuantity<B>> Q<B, M> {
     }
 }
 
-impl<B: Backend> Q<B, Real> {
-    /// Mark the quantity a likelihood.
-    #[inline(always)]
-    pub fn mark_likelihood(&self) -> SkoroResult<()> {
-        self.client.mark_likelihood(self)
-    }
-}
+// `mark_likelihood` deliberately does not live here. Attaching an arbitrary factor to
+// any real-valued quantity would let a holder of a `Q` handed out by a restricted model
+// widen that model behind its back. It is on `ModelBuilderOps` instead, which a
+// restricting facade can decline to implement.

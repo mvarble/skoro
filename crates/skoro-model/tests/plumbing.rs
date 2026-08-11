@@ -1,3 +1,5 @@
+use skoro_core::error::SkoroResult;
+use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
 use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TensorData};
@@ -70,7 +72,7 @@ impl Distribution<B, Continuous> for DummyDistribution {
     fn sampler(&self) -> Self::Sampler {
         self.clone()
     }
-    fn log_density(&self, x: &Q<B, Real>) -> Q<B, Real> {
+    fn log_density(&self, x: &Q<B, Real>) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, DummyOperation, x)
     }
 }
@@ -97,13 +99,11 @@ fn add_constant_and_parameter_round_trip() {
     let c: Q<B, Real> = client.add_constant(Real, &1.0);
     let p: Q<B, Real> = client.add_parameter(Real);
 
-    assert_ne!(c.id, p.id);
+    assert_ne!(c.id(), p.id());
 }
 
 fn assert_observed(client: &ModelClient<B>, id: Id, expected: f32) {
-    let server = client.get_server();
-    let server = server.read().unwrap();
-    match server.graph.nodes.get(&id).unwrap() {
+    client.server_call(|server| match server.graph().node(id).unwrap() {
         Node::Observed(ObservedNode { value, .. }) => {
             let d = value
                 .clone()
@@ -114,7 +114,7 @@ fn assert_observed(client: &ModelClient<B>, id: Id, expected: f32) {
             assert_eq!(d, vec![expected]);
         }
         _ => panic!("expected Observed node after observe()"),
-    }
+    })
 }
 
 #[test]
@@ -123,9 +123,9 @@ fn q_observe_transitions_node_to_observed() {
     let q = client.add_quantity(DummyDistribution).unwrap();
     // `Q::observe` — compiler infers `M` from `self: &Q<B, M>`.
     q.observe(&5.0).unwrap();
-    assert_observed(&client, q.id, 5.0);
+    assert_observed(&client, q.id(), 5.0);
     q.observe(&10.0).unwrap();
-    assert_observed(&client, q.id, 10.0);
+    assert_observed(&client, q.id(), 10.0);
 }
 
 #[test]
@@ -133,12 +133,12 @@ fn q_unobserve_returns_node_to_stochastic() {
     let client = ModelClient::<B>::new(Default::default());
     let q = client.add_quantity(DummyDistribution).unwrap();
     q.observe(&5.0).unwrap();
-    assert_observed(&client, q.id, 5.0);
+    assert_observed(&client, q.id(), 5.0);
 
     q.unobserve().unwrap();
     client.server_call(|server| {
         assert!(
-            matches!(server.graph.nodes.get(&q.id), Some(Node::Stochastic(_))),
+            matches!(server.graph().node(q.id()), Some(Node::Stochastic(_))),
             "unobserve must return the node to Stochastic"
         );
     });
@@ -147,7 +147,7 @@ fn q_unobserve_returns_node_to_stochastic() {
     q.unobserve().unwrap();
     client.server_call(|server| {
         assert!(matches!(
-            server.graph.nodes.get(&q.id),
+            server.graph().node(q.id()),
             Some(Node::Stochastic(_))
         ));
     });
@@ -164,14 +164,14 @@ fn discrete_quantities_coexist_with_continuous() {
 
     // A continuous mapped quantity over the continuous parameter (y = 2 * theta),
     // built through the operator sugar (which has a real VJP).
-    let y = theta.clone() * 2.0f32;
+    let y = (theta.clone() * 2.0f32).unwrap();
 
     // First-order evaluation of the continuous sub-graph must still work and
     // produce a gradient for the continuous parameter, undisturbed by the
     // presence of discrete nodes in the model.
     let mut points = HashMap::new();
     points.insert(
-        theta.id,
+        theta.id(),
         Input::float(Point::<B>::from_data(
             TensorData::new(vec![4.0f32], [1, 1]),
             &Default::default(),
@@ -182,7 +182,7 @@ fn discrete_quantities_coexist_with_continuous() {
     let value = eval.value.into_data().to_vec::<f32>().unwrap();
     assert_eq!(value, vec![8.0]); // 2 * 4
 
-    let grad = eval.cotangents[&theta.id]
+    let grad = eval.cotangents[&theta.id()]
         .clone()
         .into_data()
         .to_vec::<f32>()

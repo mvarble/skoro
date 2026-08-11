@@ -62,7 +62,7 @@ pub fn test_jvp_numerically<B, InQty, OutQty>(
     let ident = identity_matrix(indim).repeat_dim(0, batches);
 
     // evaluate JVP where the relevant input quantity has [b, n, n] identity tangent frame
-    let ts = tangent_frames().with_tensor(inqty.id, ident.clone());
+    let ts = tangent_frames().with_quantity(inqty, ident.clone());
     let mut eval = outqty
         .evaluate_jvp(&point, &ts)
         .expect("test_jvp_numerically should be able to evaluate output quantity");
@@ -122,7 +122,7 @@ pub fn test_vjp_numerically<B, InQty, OutQty>(
 
     // evaluate VJP where the output quantity has [b, m, m] identity cotangent frame
     let cots =
-        cotangent_frames().with_tensor(outqty.id, identity_matrix(outdim).repeat_dim(0, batches));
+        cotangent_frames().with_quantity(outqty, identity_matrix(outdim).repeat_dim(0, batches));
     let mut eval = outqty
         .evaluate_vjp(&point, &cots)
         .expect("test_vjp_numerically should be able to evaluate output quantity");
@@ -223,7 +223,7 @@ pub fn test_hvp_cross_numerically<B, SeedQty, ReadQty, OutQty>(
     let v = identity_matrix(indim)
         .repeat_dim(0, batches)
         .mul_scalar(delta);
-    let cots1 = cotangent_frames().with_tensor(outqty.id, ident.clone());
+    let cots1 = cotangent_frames().with_quantity(outqty, ident.clone());
     let cots2 = cotangent_frames().with_tensor(
         outqty.id,
         Tensor::zeros([batches, outdim, outdim], &B::Device::default()),
@@ -234,7 +234,7 @@ pub fn test_hvp_cross_numerically<B, SeedQty, ReadQty, OutQty>(
         t[i] = B::FloatElem::from_elem(1.0);
         let t = Tensor::from_data(TensorData::new(t, [1, indim]), &B::Device::default())
             .repeat_dim(0, batches);
-        let ts = tangents().with_tensor(inqty.id, t.clone());
+        let ts = tangents().with_quantity(inqty, t.clone());
         let mut eval = outqty
             .evaluate_hvp(&point, &ts, &cots1, &cots2)
             .expect("test_hvp_numerically should be able to evaluate output quantity");

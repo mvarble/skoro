@@ -1,3 +1,4 @@
+use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
 use skoro_backend::{NdArrayBackend, Point, TangentVector, Tensor, TensorData};
@@ -96,7 +97,7 @@ fn log_density() {
     let points = {
         let mut out = HashMap::new();
         out.insert(
-            x.id,
+            x.id(),
             Input::float(Point::from_data(
                 TensorData::new(vec![11.0, 19.0, 30.5], [1, 3]),
                 &Default::default(),
@@ -107,7 +108,7 @@ fn log_density() {
     let tangents = {
         let mut out = HashMap::new();
         out.insert(
-            x.id,
+            x.id(),
             TangentVector::from_data(
                 TensorData::new(vec![162.0, 0.0, 0.0], [1, 3]),
                 &Default::default(),
@@ -123,13 +124,13 @@ fn log_density() {
         .unwrap()
         .try_into()
         .unwrap();
-    let [dldx, dldy, dldz] = eval.ord1_cotangents[&x.id]
+    let [dldx, dldy, dldz] = eval.ord1_cotangents[&x.id()]
         .to_data()
         .to_vec::<f32>()
         .unwrap()
         .try_into()
         .unwrap();
-    let [hlxx, hlxy, hlxz] = eval.ord2_cotangents[&x.id]
+    let [hlxx, hlxy, hlxz] = eval.ord2_cotangents[&x.id()]
         .to_data()
         .to_vec::<f32>()
         .unwrap()

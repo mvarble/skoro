@@ -85,12 +85,15 @@ pub struct ForwardInput<'a, B: Backend> {
     pub options: ForwardOptions,
 }
 
+/// The values produced by a forward pass over a [`CompiledSequence`].
+///
+/// Observed quantities lower to [`CompiledStep::Constant`], so their values arrive in
+/// `constants` alongside genuine constants — there is no separate observation map.
 #[derive(Debug, Clone, Default)]
 pub struct ForwardOutput<B: Backend> {
     pub variables: PointMap<B>,
     pub constants: PointMap<B>,
     pub evaluations: PointMap<B>,
-    pub observations: PointMap<B>,
 }
 
 /// Input data for performing a JVP forward operation on a [`CompiledSequence`].
@@ -331,7 +334,20 @@ impl<B: Backend> CompiledSequence<B> {
                         if let Some(cotangent) = cotangent_seq[index].take() {
                             out.cotangents.insert(*id, cotangent);
                         } else {
-                            panic!("Point should have a cotangent vector.");
+                            // A leaf that never reaches the targets has zero derivative
+                            // with respect to them. That is an answer, not a failure, and
+                            // it is reachable from any Jacobian whose column set is wider
+                            // than the subgraph feeding its rows.
+                            let point = point_seq[index]
+                                .as_ref()
+                                .ok_or(SkoroError::MissingPoint { id: *id })?;
+                            let dimension = quantity_type
+                                .as_manifold()
+                                .ok_or(SkoroError::NotContinuous { id: *id })?
+                                .dimension();
+                            let shape = [point.dims()[0], dimension, frame_count.unwrap_or(1)];
+                            out.cotangents
+                                .insert(*id, Tensor::zeros(shape, &point.device()));
                         }
                     }
                 }

@@ -39,7 +39,7 @@ fn gaussian_client_add_gaussian_quantity_density() {
     // Evaluate the model log-density at the mean: should be the Gaussian peak.
     let mut points = HashMap::new();
     points.insert(
-        x.id,
+        x.id(),
         Input::float(Point::<B>::from_data(
             TensorData::new(vec![10.0, 20.0, 30.0], [1, 3]),
             &Default::default(),

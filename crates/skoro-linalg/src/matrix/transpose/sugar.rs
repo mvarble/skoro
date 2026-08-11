@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_riemann::matrix::{EuclideanMatrix, EuclideanMatrixD};
@@ -6,7 +7,7 @@ use skoro_riemann::matrix::{EuclideanMatrix, EuclideanMatrixD};
 use super::Transpose;
 
 #[inline(always)]
-pub fn transpose<B, M>(matrix: &Q<B, M>) -> Q<B, <M as TransposeType<B>>::OutputType>
+pub fn transpose<B, M>(matrix: &Q<B, M>) -> SkoroResult<Q<B, <M as TransposeType<B>>::OutputType>>
 where
     B: Backend,
     M: TransposeType<B>,
@@ -16,12 +17,12 @@ where
 
 pub trait TransposeOps<B: Backend> {
     type InnerType: ContinuousQuantity<B>;
-    fn transpose(&self) -> Q<B, Self::InnerType>;
+    fn transpose(&self) -> SkoroResult<Q<B, Self::InnerType>>;
 }
 
 impl<B: Backend, M: TransposeType<B>> TransposeOps<B> for Q<B, M> {
     type InnerType = <M as TransposeType<B>>::OutputType;
-    fn transpose(&self) -> Q<B, Self::InnerType> {
+    fn transpose(&self) -> SkoroResult<Q<B, Self::InnerType>> {
         let (out_type, transpose) = self.get_quantity_type().build_transpose();
         register_map1(out_type, transpose, self)
     }

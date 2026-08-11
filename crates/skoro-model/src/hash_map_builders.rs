@@ -54,6 +54,13 @@ impl<B: Backend, const D: usize> TensorMapBuilder<B, D> {
         self.insert(id, tensor);
         self
     }
+
+    /// Insert by quantity rather than by raw id, matching
+    /// [`InputMapBuilder::insert_data`].
+    pub fn with_quantity<T>(mut self, q: &Q<B, T>, tensor: Tensor<B, D>) -> Self {
+        self.insert(q.id(), tensor);
+        self
+    }
 }
 
 pub type TangentVectorMapBuilder<B> = TensorMapBuilder<B, 2>;
@@ -108,6 +115,12 @@ impl<B: Backend> InputMapBuilder<B> {
 
     pub fn with_tensor(mut self, id: Id, point: impl Into<Input<B>>) -> Self {
         self.insert_tensor(id, point);
+        self
+    }
+
+    /// Insert by quantity rather than by raw id, matching [`Self::insert_data`].
+    pub fn with_quantity<T>(mut self, q: &Q<B, T>, point: impl Into<Input<B>>) -> Self {
+        self.insert_tensor(q.id(), point);
         self
     }
 

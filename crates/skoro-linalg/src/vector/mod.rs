@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_riemann::{
@@ -25,22 +26,22 @@ impl<B: Backend> LinalgVector<B> for EuclideanD {}
 impl<B: Backend, const D: usize> LinalgVector<B> for Euclidean<D> {}
 
 pub trait LinalgVectorOps<B: Backend> {
-    fn norm_squared(&self) -> Q<B, Real>;
-    fn norm(&self) -> Q<B, Real>;
-    fn sum(&self) -> Q<B, Real>;
+    fn norm_squared(&self) -> SkoroResult<Q<B, Real>>;
+    fn norm(&self) -> SkoroResult<Q<B, Real>>;
+    fn sum(&self) -> SkoroResult<Q<B, Real>>;
 }
 
 impl<B: Backend, M: LinalgVector<B>> LinalgVectorOps<B> for Q<B, M> {
     #[inline(always)]
-    fn norm_squared(&self) -> Q<B, Real> {
+    fn norm_squared(&self) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, NormSquared, self)
     }
     #[inline(always)]
-    fn norm(&self) -> Q<B, Real> {
+    fn norm(&self) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, Norm, self)
     }
     #[inline(always)]
-    fn sum(&self) -> Q<B, Real> {
+    fn sum(&self) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, SumComponents, self)
     }
 }

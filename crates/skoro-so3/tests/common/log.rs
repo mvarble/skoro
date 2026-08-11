@@ -164,10 +164,10 @@ where
 {
     let model = ModelClient::<B>::default();
     let r = model.add_parameter(SO3);
-    let omega = r.log();
+    let omega = r.log().unwrap();
     let point = points()
         .with_tensor(
-            r.id,
+            r.id(),
             tensor::<B, 3>(EXP_OMEGAS, &Default::default()).reshape([9, 9]),
         )
         .build();

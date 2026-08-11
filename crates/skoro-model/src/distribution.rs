@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_core::id::Id;
 use skoro_core::kind::Kind;
 use skoro_graph::quantity::QuantityType;
@@ -24,5 +25,10 @@ pub trait Distribution<B: Backend, K: Kind<B>> {
     fn quantity_type(&self) -> Self::Qty;
     fn sampler(&self) -> Self::Sampler;
     fn parent_ids(&self) -> &[Id];
-    fn log_density(&self, x: &Q<B, Self::Qty>) -> Q<B, Real>;
+    /// Build the log-density node scoring `x` under this distribution.
+    ///
+    /// Fallible because a distribution's parameters and its quantity can disagree
+    /// dimensionally — a covariance factor sized for a different manifold, say — which
+    /// is ordinary user error rather than an internal fault.
+    fn log_density(&self, x: &Q<B, Self::Qty>) -> SkoroResult<Q<B, Real>>;
 }

@@ -129,8 +129,8 @@ where
         Tensor::<B, 2>::from_data(TensorData::new(bval, [batches, 6 * 2]), &Default::default());
 
     let p = points()
-        .with_tensor(a.id, Input::<B>::Float(aval.clone()))
-        .with_tensor(b.id, Input::<B>::Float(bval.clone()))
+        .with_quantity(&a, Input::<B>::Float(aval.clone()))
+        .with_quantity(&b, Input::<B>::Float(bval.clone()))
         .build();
 
     // Because this works, we expect the error is occurring in the derivative calculations or the

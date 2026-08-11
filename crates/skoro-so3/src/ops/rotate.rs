@@ -59,14 +59,14 @@ where
     {
         let otype = other.get_quantity_type();
         let matmul = otype.build_matmul()?;
-        Ok(register_map2(otype, matmul, (self, other)))
+        register_map2(otype, matmul, (self, other))
     }
 
     fn unrotate<T>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, T>>
     where
         T: RotationVector<B>,
     {
-        self.transpose().rotate(other)
+        self.transpose()?.rotate(other)
     }
 }
 

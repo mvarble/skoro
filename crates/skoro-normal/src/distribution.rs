@@ -1,4 +1,6 @@
 use burn::tensor::Distribution as BurnDistribution;
+use skoro_core::error::SkoroResult;
+use skoro_riemann::euclidean::EuclideanD;
 use std::marker::PhantomData;
 
 use skoro_backend::{Backend, ElementConversion, Point, Tensor};
@@ -119,7 +121,7 @@ where
     pub fn new(mean: Q<B, M>, std_dev: Q<B, Tril>) -> Self {
         let quantity_type = mean.get_quantity_type();
         Self {
-            ids: [mean.id, std_dev.id],
+            ids: [mean.id(), std_dev.id()],
             mean,
             std_dev,
             constant: -0.5 * quantity_type.dimension() as f64 * std::f64::consts::TAU.ln(),
@@ -138,6 +140,28 @@ where
 
     pub fn constant(&self) -> B::FloatElem {
         B::FloatElem::from_elem(self.constant)
+    }
+}
+
+impl<B: Backend, M: ContinuousQuantity<B>> Normal<B, M>
+where
+    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
+        + std::ops::Neg<Output = B::FloatElem>
+        + std::ops::AddAssign<B::FloatElem>,
+{
+    /// The whitened residual `r(x) = L⁻¹ (x ⊖ μ)`.
+    ///
+    /// The negative log-density is `½‖r(x)‖² + n(θ)`, where the normalizer `n` collects
+    /// the constant and the `log |L⁻¹|` term. A least-squares consumer minimizes the
+    /// first term alone, which is only the same problem when `n` does not vary with the
+    /// quantities being optimized — a condition on the covariance factor, not on this
+    /// node.
+    pub fn whitened_residual(&self, x: &Q<B, M>) -> SkoroResult<Q<B, EuclideanD>> {
+        let colored_tangent = self.mean.inverse_retract(x)?;
+        self.std_dev.invert()?.vector_product(&colored_tangent)
     }
 }
 
@@ -165,15 +189,10 @@ where
         &self.ids
     }
 
-    fn log_density(&self, x: &Q<B, M>) -> Q<B, Real> {
-        let colored_tangent = self.mean.inverse_retract(x);
-        let std_dev_inv = self.std_dev.invert();
-        // The covariance factor and the tangent share a dimension by
-        // construction of `Normal`, so this product cannot fail.
-        let white_tangent = std_dev_inv
-            .vector_product(&colored_tangent)
-            .expect("internal: Normal covariance factor and tangent dimensions should match");
-        let log_det = std_dev_inv.diag().abs().log().sum();
-        self.constant + -0.5 * white_tangent.norm_squared() + log_det
+    fn log_density(&self, x: &Q<B, M>) -> SkoroResult<Q<B, Real>> {
+        let white_tangent = self.whitened_residual(x)?;
+        let log_det = self.std_dev.invert()?.diag()?.abs()?.log()?.sum()?;
+        let quadratic = (white_tangent.norm_squared()? * -0.5)?;
+        (quadratic + self.constant)? + log_det
     }
 }

@@ -69,6 +69,14 @@ pose, and the only manifold-aware operation is the retraction at the end of the 
 
 ## 3. `TangentLayout`
 
+> ✅ **Implemented** as `crates/skoro-graph/src/tangent_layout.rs`, with `PointMap::retract_flat{,_mut}`
+> alongside. The interface below is as-built, with one addition: `flatten_vectors` and
+> `flatten_frames` validate each supplied block's shape and report the offending id, rather than
+> letting a wrong-shaped block fail anonymously inside `Tensor::cat`.
+>
+> One supporting change: `Graph::get_manifold` became `pub`. It already resolved `Node::LogDensity`
+> to `Real`, which is what lets a layout name density nodes — required for a Jacobian's *row* layout.
+
 New file `crates/skoro-graph/src/tangent_layout.rs`, alongside `point_map.rs` — it needs
 `DynQuantityType::as_manifold()` (`skoro-graph/src/quantity.rs:184`) and `Graph` for lookups.
 Re-exported from `skoro-model` alongside `hash_map_builders`.
@@ -127,8 +135,8 @@ matrix. `from_ids_sorted` covers the case where the caller does not care.
 
 Notes:
 
-- `Id` (`skoro-core/src/id.rs:4`) derives only `PartialEq, Eq, Hash`. Add `PartialOrd, Ord` for
-  `from_ids_sorted`. This is non-breaking, and `Id` already derefs to `u64`.
+- `Id` (`skoro-core/src/id.rs:4`) derived only `PartialEq, Eq, Hash`; it now also derives
+  `PartialOrd, Ord` for `from_ids_sorted`. ✅ Done, and non-breaking.
 - A layout is built once and reused across every iteration of a filter or optimizer loop. It
   holds no tensors and carries no backend parameter, so it is cheap to clone and store.
 - A layout is **not** revalidated against a graph after construction. Reusing one after
@@ -326,13 +334,16 @@ Two further caveats:
   quantities. Identity seeding satisfies this by construction; noted so future seeding schemes do
   not break it.
 
-### A defect to fix along the way
+### A defect fixed along the way
 
-`compiler.rs:363` panics with `"Point should have a cotangent vector."` when a continuous
-`Parameter` / `Sampler` in the compiled subgraph receives no tape write. That is reachable from
-the Jacobian API whenever a layout column reaches the targets only through a `forward_only` or
-`constant_inputs` path. Fix it by defaulting to zeros — consistent with the missing-id rule in
-§4 — or by returning a `SkoroError`. It should not stay a panic on a public path.
+`vjp_forward` used to panic with `"Point should have a cotangent vector."` when a continuous
+`Parameter` / `Sampler` in the compiled subgraph received no tape write — reachable from the Jacobian
+API whenever a layout column reaches the targets only through a `forward_only` or `constant_inputs`
+path, which is an ordinary occurrence rather than a corner case.
+
+> ✅ **Fixed.** It now yields a zero cotangent of shape `[batch, dimension, frames]`, consistent with
+> the missing-id rule in §4. The two agree deliberately: a leaf that does not reach the targets has
+> zero derivative with respect to them, and that is an answer, not a failure.
 
 ## 6. The dense linear algebra gap
 
@@ -455,20 +466,26 @@ Three things this shows:
 ### Levenberg-Marquardt
 
 The objective is `½ Σ ‖rᵢ‖²`, where `rᵢ` is the whitened residual of factor `i`.
-`Normal::log_density` (`skoro-normal/src/distribution.rs:168-178`) **already builds that node**:
+`Normal::log_density` already built that node and threw it away — only the scalar log-density was
+returned. Exposing it was the largest reuse available here:
 
-```rust
-let colored_tangent = self.mean.inverse_retract(x);
-let white_tangent   = self.std_dev.invert().vector_product(&colored_tangent)?;
-```
+- ✅ **`Normal::whitened_residual(&self, x: &Q<B, M>) -> SkoroResult<Q<B, EuclideanD>>` exists**, and
+  `log_density` calls it, so there is one code path:
 
-`white_tangent: Q<B, EuclideanD>` is exactly `r`, but it is discarded — only the scalar
-log-density is returned. Exposing it is the largest reuse available here:
+  ```rust
+  let white_tangent = self.whitened_residual(x)?;
+  let log_det = self.std_dev.invert()?.diag()?.abs()?.log()?.sum()?;
+  let quadratic = (white_tangent.norm_squared()? * -0.5)?;
+  (quadratic + self.constant)? + log_det
+  ```
 
-- Add `Normal::whitened_residual(&self, x: &Q<B, M>) -> SkoroResult<Q<B, EuclideanD>>` returning
-  that node, and have `log_density` call it, so there is one code path.
-- Introduce a `WhitenedResidual<B>` trait in `skoro-model/src/distribution.rs` so
-  `skoro-levenberg-marquardt` is distribution-generic rather than `Normal`-specific.
+  `Distribution::log_density` became fallible in the same change, which removed the `.expect()` that
+  used to sit on this path.
+- The `WhitenedResidual<B>` trait generalizing it past `Normal` is specified in
+  `model-structure-bounds.md` §4, which also supplies the precondition this objective needs: **the
+  sum of squares is the negative log-density only when the normalizer does not vary with the
+  variables being optimized.** The `log_det` term above is exactly that normalizer, and a free `Tril`
+  covariance makes it non-constant.
 
 The iteration is then:
 

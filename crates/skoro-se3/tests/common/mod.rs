@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_backend::Tensor;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{
     hash_map_builders::points,
@@ -9,7 +10,9 @@ use skoro_model::{
         test_vjp_numerically,
     },
 };
+use skoro_operation::Input;
 use skoro_riemann::euclidean::Euclidean;
+use skoro_riemann::real::Real;
 
 use skoro_se3::quantity::SE3;
 
@@ -243,11 +246,11 @@ where
     let model = ModelClient::<B>::default();
     let pose = model.add_parameter(SE3);
     let tangent = model.add_parameter(Euclidean::<6>);
-    let out = pose.retract(&tangent);
+    let out = pose.retract(&tangent).unwrap();
     let point = points()
-        .with_tensor(pose.id, tensor::<B, 2>(RETRACT_POSES, &Default::default()))
+        .with_quantity(&pose, tensor::<B, 2>(RETRACT_POSES, &Default::default()))
         .with_tensor(
-            tangent.id,
+            tangent.id(),
             tensor::<B, 2>(RETRACT_TANGENTS, &Default::default()),
         )
         .build();
@@ -274,11 +277,11 @@ where
     let model = ModelClient::<B>::default();
     let pose = model.add_parameter(SE3);
     let other_pose = model.add_parameter(SE3);
-    let out = pose.inverse_retract::<Euclidean<6>>(&other_pose);
+    let out = pose.inverse_retract::<Euclidean<6>>(&other_pose).unwrap();
     let point = points()
-        .with_tensor(pose.id, tensor::<B, 2>(INVERSE_POSES, &Default::default()))
+        .with_quantity(&pose, tensor::<B, 2>(INVERSE_POSES, &Default::default()))
         .with_tensor(
-            other_pose.id,
+            other_pose.id(),
             tensor::<B, 2>(INVERSE_OTHER_POSES, &Default::default()),
         )
         .build();
@@ -292,6 +295,101 @@ where
     test_hvp_cross_numerically(&other_pose, &pose, &out, point.clone(), delta, epsilon);
 }
 
+/// A layout is sized by **manifold dimension**, never by storage size.
+///
+/// This is the invariant every downstream shape depends on, and `SE3`/`SO3` are the only
+/// place in the workspace where the two diverge: `SE3` stores 12 components for 6 degrees
+/// of freedom, `SO3` stores 9 for 3. A layout that used `num_components` would produce a
+/// 21-wide vector here instead of 10, and every Jacobian built on it would be wrong in a
+/// way no dimension check would catch.
+pub fn layout_is_sized_by_dimension_impl<B: Backend>()
+where
+    SE3: ContinuousQuantity<B>,
+    skoro_so3::quantity::SO3: ContinuousQuantity<B>,
+{
+    use skoro_graph::tangent_layout::TangentLayout;
+    use skoro_so3::quantity::SO3;
+
+    let model = ModelClient::<B>::default();
+    let pose = model.add_parameter(SE3);
+    let rot = model.add_parameter(SO3);
+    let scalar = model.add_parameter(Real);
+
+    let layout = model.server_call(|server| {
+        TangentLayout::from_ids(server.graph(), &[pose.id(), rot.id(), scalar.id()]).unwrap()
+    });
+
+    // 6 + 3 + 1, not 12 + 9 + 1.
+    assert_eq!(layout.total(), 10);
+    let blocks = layout.blocks();
+    assert_eq!((blocks[0].offset, blocks[0].dimension), (0, 6));
+    assert_eq!((blocks[1].offset, blocks[1].dimension), (6, 3));
+    assert_eq!((blocks[2].offset, blocks[2].dimension), (9, 1));
+
+    // The identity seeding agrees: every frame is `[batch, d_i, 10]`.
+    let frames = layout.identity_frames::<B>(1, &Default::default());
+    assert_eq!(frames[&pose.id()].dims(), [1, 6, 10]);
+    assert_eq!(frames[&rot.id()].dims(), [1, 3, 10]);
+}
+
+/// `retract_flat` steps only the layout's quantities, through their own retractions.
+///
+/// The contrast with `retract_mut` is the point: that one demands a tangent for every
+/// point in the map, which an optimizer cannot supply because its `PointMap` also holds
+/// constants and quantities it is not stepping.
+pub fn retract_flat_is_partial_impl<B: Backend>(delta: f64, _epsilon: f64)
+where
+    SE3: ContinuousQuantity<B>,
+    B::FloatElem: PartialEq,
+{
+    use skoro_core::kind::Continuous;
+    use skoro_graph::{point_map::PointMap, quantity::QuantityType, tangent_layout::TangentLayout};
+    use skoro_riemann::real::Real;
+
+    let model = ModelClient::<B>::default();
+    let pose = model.add_parameter(SE3);
+    let untouched = model.add_parameter(Real);
+
+    let layout =
+        model.server_call(|server| TangentLayout::from_ids(server.graph(), &[pose.id()]).unwrap());
+
+    let mut points = PointMap::<B>::default();
+    points.insert(
+        pose.id(),
+        Input::Float(tensor::<B, 2>([RETRACT_POSES[0]], &Default::default())),
+        <SE3 as QuantityType<B, Continuous>>::into_dyn(SE3),
+    );
+    points.insert(
+        untouched.id(),
+        Input::Float(tensor::<B, 2>([[1.0]], &Default::default())),
+        <Real as QuantityType<B, Continuous>>::into_dyn(Real),
+    );
+
+    let step = Tensor::<B, 2>::ones([1, 6], &Default::default()).mul_scalar(delta);
+    let stepped = points.retract_flat(&layout, step).unwrap();
+
+    let before = points.get(&pose.id()).unwrap().0.clone().into_float();
+    let after = stepped.get(&pose.id()).unwrap().0.clone().into_float();
+    assert!(
+        before
+            .into_data()
+            .to_vec::<B::FloatElem>()
+            .unwrap()
+            .iter()
+            .zip(after.into_data().to_vec::<B::FloatElem>().unwrap())
+            .any(|(a, b)| *a != b),
+        "the pose named by the layout should have moved"
+    );
+
+    let quiet_before = points.get(&untouched.id()).unwrap().0.clone().into_float();
+    let quiet_after = stepped.get(&untouched.id()).unwrap().0.clone().into_float();
+    assert_eq!(
+        quiet_before.into_data().to_vec::<B::FloatElem>().unwrap(),
+        quiet_after.into_data().to_vec::<B::FloatElem>().unwrap(),
+        "a quantity outside the layout must not move"
+    );
+}
+
 #[macro_export]
 macro_rules! tests {
     ($B:ty, $delta:literal, $epsilon:literal) => {
@@ -302,6 +400,14 @@ macro_rules! tests {
         #[test]
         fn inverse_retract() {
             common::inverse_retract_impl::<$B>($delta, $epsilon);
+        }
+        #[test]
+        fn layout_is_sized_by_dimension() {
+            common::layout_is_sized_by_dimension_impl::<$B>();
+        }
+        #[test]
+        fn retract_flat_is_partial() {
+            common::retract_flat_is_partial_impl::<$B>($delta, $epsilon);
         }
     };
 }

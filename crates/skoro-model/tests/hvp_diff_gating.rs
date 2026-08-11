@@ -83,13 +83,13 @@ fn hvp_mode_reports_per_input_differentiability() {
     let model = ModelClient::<B>::default();
     let param = model.add_parameter(Real);
     let konst = model.add_constant(Real, &3.0f64);
-    let out = register_map2(Real, DiffSpy(seen.clone()), (&param, &konst));
+    let out = register_map2(Real, DiffSpy(seen.clone()), (&param, &konst)).unwrap();
 
-    let point = points().with_tensor(param.id, scalar(2.0)).build();
-    let ts = tangents().with_tensor(param.id, scalar(1.0));
-    let cots1 = cotangent_frames().with_tensor(out.id, unit_frame());
+    let point = points().with_quantity(&param, scalar(2.0)).build();
+    let ts = tangents().with_quantity(&param, scalar(1.0));
+    let cots1 = cotangent_frames().with_quantity(&out, unit_frame());
     let cots2 =
-        cotangent_frames().with_tensor(out.id, Tensor::zeros([1, 1, 1], &Default::default()));
+        cotangent_frames().with_quantity(&out, Tensor::zeros([1, 1, 1], &Default::default()));
     out.evaluate_hvp(&point, &ts, &cots1, &cots2).unwrap();
 
     assert_eq!(
@@ -107,21 +107,21 @@ fn unseeded_differentiable_input_still_gets_cotangents() {
     let model = ModelClient::<B>::default();
     let seeded = model.add_parameter(Real);
     let unseeded = model.add_parameter(Real);
-    let out = seeded.clone() * unseeded.clone();
+    let out = (seeded.clone() * unseeded.clone()).unwrap();
 
     let point = points()
-        .with_tensor(seeded.id, scalar(2.0))
-        .with_tensor(unseeded.id, scalar(5.0))
+        .with_quantity(&seeded, scalar(2.0))
+        .with_quantity(&unseeded, scalar(5.0))
         .build();
     // Only `seeded` gets a tangent; `unseeded` arrives at the operation as `None`.
-    let ts = tangents().with_tensor(seeded.id, scalar(1.0));
-    let cots1 = cotangent_frames().with_tensor(out.id, unit_frame());
+    let ts = tangents().with_quantity(&seeded, scalar(1.0));
+    let cots1 = cotangent_frames().with_quantity(&out, unit_frame());
     let cots2 =
-        cotangent_frames().with_tensor(out.id, Tensor::zeros([1, 1, 1], &Default::default()));
+        cotangent_frames().with_quantity(&out, Tensor::zeros([1, 1, 1], &Default::default()));
 
     let eval = out.evaluate_hvp(&point, &ts, &cots1, &cots2).unwrap();
 
-    for id in [seeded.id, unseeded.id] {
+    for id in [seeded.id(), unseeded.id()] {
         assert!(
             eval.ord1_cotangents.contains_key(&id),
             "every differentiable input needs an order-1 cotangent, seeded or not"
@@ -131,7 +131,7 @@ fn unseeded_differentiable_input_still_gets_cotangents() {
     // a genuinely non-zero second-order cotangent, which a tangent-gated `VjpState` would drop.
     let hvp = eval
         .ord2_cotangents
-        .get(&unseeded.id)
+        .get(&unseeded.id())
         .expect("the unseeded operand must receive an order-2 cotangent");
     let hvp: Vec<f64> = hvp.clone().into_data().to_vec().unwrap();
     assert_eq!(hvp, vec![1.0]);

@@ -79,6 +79,21 @@ pub enum SkoroError {
     InvalidRotationFrame { rows: usize },
     /// Data of the wrong shape/length was supplied to a constructor.
     ShapeMismatch { expected: usize, found: usize },
+    /// An id appeared twice while building a tangent layout.
+    DuplicateLayoutId { id: Id },
+    /// A tangent layout was asked about an id it does not contain.
+    IdNotInLayout { id: Id },
+    /// A flattened tangent's dimension disagrees with the layout interpreting it.
+    LayoutDimensionMismatch { expected: usize, found: usize },
+    /// A Cholesky factorization was attempted on a matrix that is not positive definite.
+    NotPositiveDefinite { rows: usize },
+    /// A host dense operation received a batch dimension other than 1.
+    BatchNotSingleton { found: usize },
+    /// A factor's normalizer depends on a quantity being optimized, so a sum-of-squares
+    /// objective is not the model's negative log-density.
+    NormalizerNotConstant { density: Id, parent: Id },
+    /// References to quantities from different models were supplied to an MappedNode builder.
+    ModelMismatch { lhs: Id, rhs: Id },
 }
 
 impl fmt::Display for SkoroError {
@@ -185,6 +200,40 @@ impl fmt::Display for SkoroError {
                 write!(
                     f,
                     "data of the wrong shape was supplied; expected {expected} elements, found {found}"
+                )
+            }
+            SkoroError::DuplicateLayoutId { id } => {
+                write!(f, "id {id:?} appears more than once in the tangent layout")
+            }
+            SkoroError::IdNotInLayout { id } => {
+                write!(f, "id {id:?} is not present in the tangent layout")
+            }
+            SkoroError::LayoutDimensionMismatch { expected, found } => {
+                write!(
+                    f,
+                    "flattened tangent has the wrong dimension; expected {expected}, found {found}"
+                )
+            }
+            SkoroError::NotPositiveDefinite { rows } => {
+                write!(f, "a {rows}x{rows} matrix is not positive definite")
+            }
+            SkoroError::BatchNotSingleton { found } => {
+                write!(
+                    f,
+                    "host dense linear algebra requires batch size 1, found {found}"
+                )
+            }
+            SkoroError::NormalizerNotConstant { density, parent } => {
+                write!(
+                    f,
+                    "log-density {density:?} has a normalizer depending on {parent:?}, which is \
+                     being optimized; the objective is not a sum of squares"
+                )
+            }
+            SkoroError::ModelMismatch { lhs, rhs } => {
+                write!(
+                    f,
+                    "An operation can only be applied to quantity references from the same model; model-client {lhs:?} does not match {rhs:?}."
                 )
             }
         }

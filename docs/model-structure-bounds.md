@@ -79,13 +79,40 @@ for the unrestricted `ModelClient<B>`** at `:89`. So `C: GaussianModelClientOps<
 Gaussians*, never *only ever did*. `skoro-normal/tests/facade.rs:23` exists specifically to show it
 accepts both clients — the openness is deliberate and correct for what the trait is.
 
-**A sealed trait, implemented only by builders that enforced the bound, is exactly right.** It
-carries the accumulated structure onward and gives variance between builders without any algorithm
-re-deriving anything. The workspace already seals three traits this way — `Kind<B>`
-(`skoro-core/src/kind.rs:25-27`), `Backend` (`skoro-backend/src/lib.rs:17-37`), `DynManifold`
-(`skoro-riemann/src/base.rs:32-49`) — so the idiom is established.
+**The repair is to guard the data, not the trait.** The obvious move is to *seal* the structure
+trait, so only builders that enforced the bound can implement it — the workspace seals three traits
+already (`Kind<B>`, `skoro-core/src/kind.rs:25-27`; `Backend`, `skoro-backend/src/lib.rs:17-37`;
+`DynManifold`, `skoro-riemann/src/base.rs:32-49`). It does not work here, and the reason is
+structural rather than incidental:
 
-Trait refinement then states the implication directly:
+> **Sealing and cross-crate variance are mutually exclusive.** A sealed trait can only be
+> implemented in the crate that defines it. `NlsStructure` must live in `skoro-model`, since it
+> bounds `Distribution` and `ModelClientOps`; `GaussianModelClient` lives in `skoro-normal`. Sealing
+> would forbid exactly the implementation the trait exists to admit.
+
+So the trait stays open, and the guarantee moves into the **value it returns**:
+
+```rust
+pub struct ResidualCertificate { /* private */ }
+
+impl ResidualCertificate {
+    /// The `D` bound is the whole guarantee.
+    pub fn record<B, D>(&mut self, distr: &D, density: Id, residual: &Q<B, EuclideanD>)
+        -> SkoroResult<()>
+    where B: Backend, D: WhitenedResidual<B>;
+}
+```
+
+A hand-rolled implementor of `NlsStructure` must produce a `ResidualCertificate`, and the only
+certificate it can produce is either **empty** or one populated through `record` — which demands a
+`WhitenedResidual` distribution. There is no constructor that accepts a fabricated list of ids. The
+trait is forgeable; the evidence is not, and the evidence is what the algorithm consumes.
+
+This is the better design independent of the crate-boundary problem, because it puts the guarantee on
+the object that crosses the boundary rather than on a marker sitting beside it — the same move as
+"the certificate and the algorithm's input are the same object".
+
+Trait refinement still states the implication directly:
 
 ```rust
 pub trait GaussianStructure<B: Backend>: NlsStructure<B> { /* … */ }
@@ -98,9 +125,9 @@ with no algorithm changes.
 To summarize the two negatives and the two positives, since they are easy to conflate:
 
 > Bounds on the **`Distribution`** establish factor-local structure, at the one moment it is
-> knowable. **Sealed** bounds on the **builder** carry that structure onward and give variance. What
-> does not work is an *open* bound on a client. What cannot work at all is a predicate over the built
-> graph.
+> knowable. Bounds on a **certificate's constructor** carry that structure onward, and the open trait
+> over it gives variance. What does not work is an *open* bound on a client used as if it were a
+> guarantee. What cannot work at all is a predicate over the built graph.
 
 ## 3. Naming: capability versus structure
 
@@ -116,18 +143,24 @@ already does, and giving the counterpart a suffix of its own.
 |---|---|---|
 | answers | "can this client **add** X?" | "is **every** factor in this model X?" |
 | suffix | **`…Ops`** | **`…Structure`** |
-| sealed | no — open by design | **yes, by definition** |
-| implemented by | anything that can perform the action | only builders that enforced the invariant |
-| methods | verbs — `add_gaussian_quantity` | nouns — `residual_layout`, `blocks` |
+| guarantee lives in | nothing — it is a capability | the **returned certificate's constructor** |
+| implemented by | anything that can perform the action | any builder — the evidence is what is guarded |
+| methods | verbs — `add_gaussian_quantity` | nouns returning evidence — `certificate`, `blocks` |
 | used during | **building** | **inference** |
 | example | `GaussianModelClientOps` | `GaussianStructure` |
 
-The rule that makes it mechanical:
+Both trait kinds are open. That is not a weakness in the `Structure` side — §2 shows sealing is
+unavailable across a crate boundary anyway — so the rule cannot be "one is sealed". It has to be
+about what the trait hands back:
 
-> **`Ops` traits are open by design; `Structure` traits are sealed by definition.** If a trait can be
-> implemented outside the crate that owns its invariant, it is an `Ops` trait no matter what it is
-> called. Sealing is not an implementation detail of a `Structure` trait — it is what the suffix
-> *means*.
+> **An `Ops` trait returns whatever the action produced. A `Structure` trait returns a value whose
+> constructor is bounded.** If a trait's methods return something anyone can build — a `bool`, a
+> `Vec<Id>`, a count — it proves nothing and is an `Ops` trait no matter what it is called. The
+> suffix is a claim about the *return type*, not about the trait.
+
+That is mechanically checkable, which is the point: `ResidualCertificate` qualifies because `record`
+demands `D: WhitenedResidual<B>` and no other constructor populates it; a `bool` does not qualify,
+and neither would a `Vec<Id>` assembled by the implementor.
 
 Two corollaries worth stating, because each names a mistake that is easy to make and invisible
 afterwards:
@@ -136,9 +169,11 @@ afterwards:
   (§8.1): `facade.rs:11-15` and `:196-199` describe `GaussianModelClient` as "the structural
   guarantee that every conditional in this model is Gaussian, used by inference algorithms". That is
   a `Structure` claim written next to an `Ops` trait. The trait is fine; the prose is the defect.
-- **A `Structure` trait returns the cached artifact, not a verdict.** A method
-  `fn is_gaussian(&self) -> bool` would be a `Structure` trait pretending to be reflection. The
-  methods return the ids the algorithm needs, and the type is what makes them trustworthy.
+- **A `Structure` trait returns the cached artifact, not a verdict.** This is now the mechanical test
+  above rather than a matter of taste: `fn is_gaussian(&self) -> bool` returns a value any
+  implementor can fabricate, so it guards nothing and the trait carrying it is an `Ops` trait
+  mislabelled. The methods must return the evidence itself, and the evidence's constructor is what
+  makes it trustworthy.
 
 So the three names around one concept, each with a distinct job:
 
@@ -286,10 +321,14 @@ pub struct GaussianModelClient<B: Backend> {
 `NlsModelClient<B>` is the weaker sibling, bounded on `WhitenedResidual` rather than
 `GaussianFactor`, recording `{ density, residual, normalizer_parents }` only.
 
-The sealed traits of §2 sit over them:
+The traits of §2 sit over them. Both are **open** — the guarantee is in `ResidualCertificate`, which
+`certificate()` hands back and which nothing outside `record` can populate:
 
 ```rust
-pub trait NlsStructure<B: Backend>: sealed::Sealed {
+pub trait NlsStructure<B: Backend>: ModelClientOps<B> {
+    /// The evidence. Bounded constructor; see §2.
+    fn certificate(&self) -> &ResidualCertificate;
+
     /// The rows of `J` — `flattened-tangent-spaces.md` §7's `residuals` layout.
     fn residual_layout(&self) -> SkoroResult<TangentLayout>;
     fn normalizer_parents(&self) -> impl Iterator<Item = Id> + '_;
@@ -308,37 +347,28 @@ the EKF, and a Gaussian model is accepted by both without a cast, a check, or a 
 > a caller who takes it can add factors the cache will never see. It should either be removed or
 > documented as exactly that — an exit from the guarantee, not a view onto it.
 
-### Making it unforgeable
+### Making it unforgeable — ✅ **done**
 
-The certificate is only as good as the facade's exclusivity, and today the facade leaks four ways:
+The certificate is only as good as the facade's exclusivity, and the facade used to leak four ways.
+Three are now closed; the fourth is deliberate.
 
-1. `into_client()` (`facade.rs:162`) — explicit and documented.
-2. **`Q.client` is a `pub` field** (`q.rs:25`), so `gaussian.add_parameter(..).client.add_quantity(..)`
-   reaches the unrestricted surface through any quantity the facade returned.
-3. `ModelClient::get_server` (`model.rs:481`) returns the `Arc<RwLock<ModelServer>>`, whose `graph`
-   field is `pub` (`model.rs:45`).
-4. `Q<B, Real>::mark_likelihood` (`q.rs:178`) attaches an arbitrary factor to any real-valued node.
+| leak | status |
+|---|---|
+| `Q<B, Real>::mark_likelihood` attaching a factor to any real-valued node | **removed**; the method is on `ModelBuilderOps`, which a facade may decline to implement |
+| `Q.client` a `pub` field, reaching the unrestricted surface from any quantity | **private**; `Q.id` too |
+| `ModelClient::get_server` handing out `Arc<RwLock<ModelServer>>` over a `pub graph` | **removed**; `Graph`'s five fields and `ModelServer.graph` are private behind read accessors, so `server_call` is now read-only in effect |
+| `into_client()` (`facade.rs:162`) | **kept**, and documented as dissolving the certificate — an explicit exit, not a hole |
 
-Closing them is three changes across four crates, in increasing cost. They are independent; stopping
-early leaves a weaker but coherent guarantee.
-
-- **Tier 1 — move `mark_likelihood` off `Q`.** Delete `Q<B, Real>::mark_likelihood`
-  (`q.rs:175-181`, **zero call sites in the workspace**) and move `ModelClient::mark_likelihood` onto
-  the `ModelBuilderOps` trait that `sequential-estimation.md` §5 proposes, so a restricted facade can
-  withhold it. One test line migrates (`skoro-normal/tests/demote.rs:208`). Nearly free.
-- **Tier 2 — privatize `Q.client`.** This is where unforgeability actually lives. Replace the `pub`
-  field with a narrow accessor exposing `add_mapped` only, and migrate the cross-crate users:
-  `skoro-model/src/map.rs:16,32,35,73,78`, `skoro-so3/src/ops/{exp,log}/cube.rs` (eight sites),
-  `skoro-linalg/src/vector/cross_product/cube.rs:215,259`, and `skoro-normal/src/facade.rs`. Closes
-  `server_id` → `ModelClient::from_id` recovery as a side effect, without changing `Q`'s type
-  signature.
-- **Tier 3 — gate `get_server` / `from_id`.** The remaining independent routes to the raw `Graph`.
+What made the difference was not the `Q` work but the **graph encapsulation**. Privatizing `Q.client`
+closes the route from a *quantity*; making `Graph`'s fields and `ModelServer.graph` private closes the
+route from a *client*, and without that second one a `&mut Graph` could append to `log_likelihoods`
+directly and every certificate would be provisional.
 
 > **Do not put a family tag on `Q`.** A naive reading of the `Kind<B>` precedent suggests
 > `Q<B, T, Fam>`, so that quantities from a Gaussian builder cannot be re-widened. It does not work:
 > means are built by ops — `μ(θ)` is a mapped node — so every operator would have to return an
 > untagged quantity, and the tag would be gone exactly where it was needed. What needs restricting is
-> the **capability**, not the quantity. Tier 2 is the correct and cheaper form of that intent.
+> the **capability**, not the quantity, which is what the closures above did.
 
 ### Lifecycle
 
@@ -409,14 +439,20 @@ Items 2 and 6 are the gates — they are the ones that fail silently otherwise. 
 3. **LM over the certificate.** `solve` against `residual_layout()` reaches the analytic solution on
    a linear-Gaussian least-squares problem — in one iteration at `λ = 0`, and to the same point when
    damped. Shared with `flattened-tangent-spaces.md` §8 item 6.
-4. **A forged factor is caught.** Add a factor past the facade and assert the failure: a certificate
-   mismatch at Tier 1, or a compile error at Tiers 2–3 (a `trybuild`-style test).
+4. **A forged certificate is empty.** Construct a `ResidualCertificate` by hand and assert it holds
+   no factors; then assert `record` cannot be reached without a `WhitenedResidual` distribution — a
+   `trybuild` compile-fail case. This is §2's guarantee made executable, and it is the gate on the
+   whole design: if `record` ever grows an unbounded sibling, every claim in this document lapses.
 5. **The certificate survives retirement.** After a tick retires and installs a joint marginal, the
-   recorded factor set still equals `graph.log_likelihoods` (§6, Lifecycle).
-6. **The convention holds mechanically.** A `trybuild` test asserting `GaussianStructure` **cannot**
-   be implemented outside its defining crate, alongside the existing `skoro-normal/tests/facade.rs:23`
-   which demonstrates the opposite for `GaussianModelClientOps` — an open capability trait accepting
-   both clients. The two together are §3 made executable, and each fails if the other's trait is
-   given the wrong shape.
+   recorded factor set still equals `graph.log_likelihoods()` (§6, Lifecycle).
+6. **The convention holds mechanically.** `GaussianStructure` **is** implementable downstream — that
+   is the cross-crate variance §2 exists to admit, and `skoro-normal` implementing it is the proof.
+   Pair that with the existing `skoro-normal/tests/facade.rs:23`, which shows `GaussianModelClientOps`
+   accepting both a restricted and an unrestricted client. Together they pin §3: openness is not the
+   distinguishing property, since both traits have it — the guarded return type is.
+
+> Do **not** write a test asserting `GaussianStructure` cannot be implemented externally. An earlier
+> draft of this document specified exactly that, and §2 now explains why it would be asserting the
+> opposite of what the design needs.
 
 Run with `cargo test --workspace`. The wgpu suites additionally exercise the device path.

@@ -13,6 +13,7 @@
 pub mod bridge;
 pub mod ops;
 
+use skoro_core::error::SkoroResult;
 use std::ops::{BitAnd, BitOr, Not};
 
 use skoro_backend::Backend;
@@ -36,7 +37,7 @@ impl<B: Backend> QAdd<B, Integer> for Integer {
     fn op_type(&self, _: &Integer) -> ForwardOnly<IntAdd> {
         ForwardOnly(IntAdd)
     }
-    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> Q<B, Integer> {
+    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> SkoroResult<Q<B, Integer>> {
         register_map2(Integer, ForwardOnly(IntAdd), (lhs, rhs))
     }
 }
@@ -50,7 +51,7 @@ impl<B: Backend> QSub<B, Integer> for Integer {
     fn op_type(&self, _: &Integer) -> ForwardOnly<IntSub> {
         ForwardOnly(IntSub)
     }
-    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> Q<B, Integer> {
+    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> SkoroResult<Q<B, Integer>> {
         register_map2(Integer, ForwardOnly(IntSub), (lhs, rhs))
     }
 }
@@ -64,7 +65,7 @@ impl<B: Backend> QMul<B, Integer> for Integer {
     fn op_type(&self, _: &Integer) -> ForwardOnly<IntMul> {
         ForwardOnly(IntMul)
     }
-    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> Q<B, Integer> {
+    fn register(lhs: &Q<B, Integer>, rhs: &Q<B, Integer>) -> SkoroResult<Q<B, Integer>> {
         register_map2(Integer, ForwardOnly(IntMul), (lhs, rhs))
     }
 }
@@ -73,51 +74,51 @@ impl<B: Backend> QMul<B, Integer> for Integer {
 
 /// Comparison operators on integer quantities, producing booleans.
 pub trait DiscreteCompare<B: Backend> {
-    fn eq(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
-    fn ne(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
-    fn lt(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
-    fn le(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
-    fn gt(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
-    fn ge(&self, other: &Q<B, Integer>) -> Q<B, Boolean>;
+    fn eq(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
+    fn ne(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
+    fn lt(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
+    fn le(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
+    fn gt(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
+    fn ge(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>>;
 }
 
 impl<B: Backend> DiscreteCompare<B> for Q<B, Integer> {
-    fn eq(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn eq(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Eq)),
             (self, other),
         )
     }
-    fn ne(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn ne(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Ne)),
             (self, other),
         )
     }
-    fn lt(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn lt(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Lt)),
             (self, other),
         )
     }
-    fn le(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn le(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Le)),
             (self, other),
         )
     }
-    fn gt(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn gt(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Gt)),
             (self, other),
         )
     }
-    fn ge(&self, other: &Q<B, Integer>) -> Q<B, Boolean> {
+    fn ge(&self, other: &Q<B, Integer>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(
             Boolean,
             ForwardOnly(IntCompare(Comparison::Ge)),
@@ -129,22 +130,22 @@ impl<B: Backend> DiscreteCompare<B> for Q<B, Integer> {
 // ----- Logical: operators on `Q<B, Boolean>` -----
 
 impl<B: Backend> BitAnd for Q<B, Boolean> {
-    type Output = Q<B, Boolean>;
-    fn bitand(self, rhs: Q<B, Boolean>) -> Q<B, Boolean> {
+    type Output = SkoroResult<Q<B, Boolean>>;
+    fn bitand(self, rhs: Q<B, Boolean>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(Boolean, ForwardOnly(BoolLogic(Logic::And)), (&self, &rhs))
     }
 }
 
 impl<B: Backend> BitOr for Q<B, Boolean> {
-    type Output = Q<B, Boolean>;
-    fn bitor(self, rhs: Q<B, Boolean>) -> Q<B, Boolean> {
+    type Output = SkoroResult<Q<B, Boolean>>;
+    fn bitor(self, rhs: Q<B, Boolean>) -> SkoroResult<Q<B, Boolean>> {
         register_map2(Boolean, ForwardOnly(BoolLogic(Logic::Or)), (&self, &rhs))
     }
 }
 
 impl<B: Backend> Not for Q<B, Boolean> {
-    type Output = Q<B, Boolean>;
-    fn not(self) -> Q<B, Boolean> {
+    type Output = SkoroResult<Q<B, Boolean>>;
+    fn not(self) -> SkoroResult<Q<B, Boolean>> {
         register_map1(Boolean, ForwardOnly(BoolNot), &self)
     }
 }

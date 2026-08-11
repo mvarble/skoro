@@ -31,17 +31,22 @@ use crate::sampler::{GraphSampler, KindedSampler};
 ///
 /// It stores variables, transformations, and their statistical properties.
 #[derive(Clone)]
+/// The five collections below carry an invariant between them: every id in
+/// `log_likelihoods` names a [`Node::LogDensity`] in `nodes`, and the two density maps
+/// are inverses of one another over the subset of densities that belong to a stochastic
+/// quantity. Only the mutating methods on this type maintain that invariant, so the
+/// fields are private and reachable through the read accessors below.
 pub struct Graph<B: Backend> {
     /// Arena of all nodes.
-    pub nodes: HashMap<Id, Node<B>>,
+    nodes: HashMap<Id, Node<B>>,
     /// Children edge data (parent edge data is local)
-    pub children: HashMap<Id, HashSet<Id>>,
+    children: HashMap<Id, HashSet<Id>>,
     /// Log-likelihood terms
-    pub log_likelihoods: Vec<Id>,
+    log_likelihoods: Vec<Id>,
     /// A map from Ids of log-densities to their stochastic quantities.
-    pub log_density_to_stochastic: HashMap<Id, Id>,
+    log_density_to_stochastic: HashMap<Id, Id>,
     /// A map from Ids of stochastic quantities to their log-densities.
-    pub stochastic_to_log_density: HashMap<Id, Id>,
+    stochastic_to_log_density: HashMap<Id, Id>,
     /// Generates unique IDs for nodes.
     id_generator: IdGenerator,
 }
@@ -107,6 +112,47 @@ impl<B: Backend> Graph<B> {
             stochastic_to_log_density: HashMap::new(),
             log_density_to_stochastic: HashMap::new(),
         }
+    }
+
+    /// The node stored at `id`, if it exists.
+    pub fn node(&self, id: Id) -> Option<&Node<B>> {
+        self.nodes.get(&id)
+    }
+
+    /// Whether a node with this id is present.
+    pub fn contains(&self, id: Id) -> bool {
+        self.nodes.contains_key(&id)
+    }
+
+    /// Every node in the arena, in arbitrary order.
+    pub fn nodes(&self) -> impl Iterator<Item = (&Id, &Node<B>)> {
+        self.nodes.iter()
+    }
+
+    /// The number of nodes in the arena. The bound a retention policy watches.
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// The ids of every node that consumes `id` as a parent.
+    pub fn children_of(&self, id: Id) -> Option<&HashSet<Id>> {
+        self.children.get(&id)
+    }
+
+    /// The log-density terms that together score the model.
+    pub fn log_likelihoods(&self) -> &[Id] {
+        &self.log_likelihoods
+    }
+
+    /// The log-density scoring `stochastic`, if it has one.
+    pub fn density_of(&self, stochastic: Id) -> Option<Id> {
+        self.stochastic_to_log_density.get(&stochastic).copied()
+    }
+
+    /// The stochastic quantity that `density` scores, if it belongs to one. A
+    /// free-standing likelihood factor belongs to none and yields `None`.
+    pub fn stochastic_of(&self, density: Id) -> Option<Id> {
+        self.log_density_to_stochastic.get(&density).copied()
     }
 
     /// Add a fixed, immutable quantity, continuous or discrete.
@@ -202,12 +248,13 @@ impl<B: Backend> Graph<B> {
     /// Differentiable operations ([`DiffKernel`](skoro_diff::diff::DiffKernel))
     /// and forward-only discrete operations ([`ForwardOnly`](crate::operation::ForwardOnly))
     /// are both accepted through the unified [`GraphOperation`] trait.
+    /// Errors with [`SkoroError::DanglingParent`] if any parent is not in the graph.
     pub fn add_mapped<K, T>(
         &mut self,
         quantity_type: T,
         op: impl GraphOperation<B>,
         parent_ids: Vec<Id>,
-    ) -> Id
+    ) -> SkoroResult<Id>
     where
         K: Kind<B>,
         T: QuantityType<B, K>,
@@ -220,13 +267,9 @@ impl<B: Backend> Graph<B> {
         quantity_type: Arc<dyn DynQuantityType<B>>,
         op: Arc<dyn GraphOperation<B>>,
         parent_ids: Vec<Id>,
-    ) -> Id {
+    ) -> SkoroResult<Id> {
         let id = self.id_generator.issue_id();
-        // Mapped nodes are only ever added internally (e.g. by `register_mapN`)
-        // with parents that are guaranteed to be live `Q` proxies, so a dangling
-        // parent here indicates an internal bug rather than user error.
-        self.register_children(id, &parent_ids)
-            .expect("internal: mapped node added with dangling parent");
+        self.register_children(id, &parent_ids)?;
         let value = self.check_cache(&parent_ids, &op);
         self.nodes.insert(
             id,
@@ -238,7 +281,7 @@ impl<B: Backend> Graph<B> {
                 value,
             }),
         );
-        id
+        Ok(id)
     }
 
     /// Mark a mapped quantity as a density for the stochastic quantity.
@@ -786,7 +829,10 @@ impl<B: Backend> Graph<B> {
     }
 
     /// The manifold structure of a continuous node, for tangent-space sizing.
-    fn get_manifold(&self, id: Id) -> SkoroResult<&dyn skoro_riemann::DynManifold<B>> {
+    ///
+    /// [`Node::LogDensity`] has no stored quantity type but is always real-valued, so it
+    /// reports dimension 1 — which is what lets a layout name density nodes as rows.
+    pub fn get_manifold(&self, id: Id) -> SkoroResult<&dyn skoro_riemann::DynManifold<B>> {
         self.get_quantity_type_impl(id)?
             .as_manifold()
             .ok_or(SkoroError::NotContinuous { id })

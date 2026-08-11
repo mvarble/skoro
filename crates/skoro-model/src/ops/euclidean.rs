@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_operation::ops::{
     Addition, LiteralPointwiseAdd, LiteralPointwiseDiv, LiteralPointwiseMul, LiteralPointwiseSub,
     PointwiseDiv, PointwiseMul, Subtraction,
@@ -22,7 +23,7 @@ impl<B: Backend> QAdd<B, EuclideanD> for EuclideanD {
     fn op_type(&self, _: &EuclideanD) -> Self::OpType {
         Addition
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, EuclideanD>>::quantity_type(&t0, &t1);
@@ -40,7 +41,7 @@ impl<B: Backend> QSub<B, EuclideanD> for EuclideanD {
     fn op_type(&self, _: &EuclideanD) -> Self::OpType {
         Subtraction
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, EuclideanD>>::quantity_type(&t0, &t1);
@@ -58,7 +59,7 @@ impl<B: Backend> QMul<B, Real> for EuclideanD {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseMul
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
@@ -76,7 +77,7 @@ impl<B: Backend> QMul<B, EuclideanD> for Real {
     fn op_type(&self, _: &EuclideanD) -> Self::OpType {
         PointwiseMul
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, EuclideanD>>::quantity_type(&t0, &t1);
@@ -94,7 +95,7 @@ impl<B: Backend> QDiv<B, Real> for EuclideanD {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseDiv
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
@@ -112,7 +113,7 @@ impl<B: Backend> QDiv<B, EuclideanD> for Real {
     fn op_type(&self, _: &EuclideanD) -> Self::OpType {
         PointwiseDiv
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, EuclideanD>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, EuclideanD>>::quantity_type(&t0, &t1);
@@ -174,7 +175,7 @@ impl<B: Backend, const D: usize> QAdd<B, Euclidean<D>> for Euclidean<D> {
     fn op_type(&self, _: &Euclidean<D>) -> Self::OpType {
         Addition
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, Euclidean<D>>>::quantity_type(&t0, &t1);
@@ -192,7 +193,7 @@ impl<B: Backend, const D: usize> QSub<B, Euclidean<D>> for Euclidean<D> {
     fn op_type(&self, _: &Euclidean<D>) -> Self::OpType {
         Subtraction
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, Euclidean<D>>>::quantity_type(&t0, &t1);
@@ -210,7 +211,7 @@ impl<B: Backend, const D: usize> QMul<B, Real> for Euclidean<D> {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseMul
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
@@ -228,7 +229,7 @@ impl<B: Backend, const D: usize> QMul<B, Euclidean<D>> for Real {
     fn op_type(&self, _: &Euclidean<D>) -> Self::OpType {
         PointwiseMul
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Euclidean<D>>>::quantity_type(&t0, &t1);
@@ -246,7 +247,7 @@ impl<B: Backend, const D: usize> QDiv<B, Real> for Euclidean<D> {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseDiv
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
@@ -264,7 +265,7 @@ impl<B: Backend, const D: usize> QDiv<B, Euclidean<D>> for Real {
     fn op_type(&self, _: &Euclidean<D>) -> Self::OpType {
         PointwiseDiv
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Euclidean<D>>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Euclidean<D>>>::quantity_type(&t0, &t1);

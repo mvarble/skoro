@@ -19,7 +19,7 @@ pub mod ops;
 pub mod point_map_access;
 pub mod q;
 
-pub use client_ops::ModelClientOps;
+pub use client_ops::{ModelBuilderOps, ModelClientOps};
 
 /// The recoverable error type for interfacing with a model, re-exported from
 /// `skoro-core`.

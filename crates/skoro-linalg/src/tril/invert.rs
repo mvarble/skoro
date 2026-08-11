@@ -1,6 +1,7 @@
 use skoro_backend::{
     Backend, CotangentFrame, Element, ElementConversion, Point, Tensor, TensorData,
 };
+use skoro_core::error::SkoroResult;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_operation::{
     Input,
@@ -168,7 +169,7 @@ where
     }
 }
 
-pub fn invert<B: Backend>(tril: &Q<B, Tril>) -> Q<B, Tril>
+pub fn invert<B: Backend>(tril: &Q<B, Tril>) -> SkoroResult<Q<B, Tril>>
 where
     B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
         + std::ops::Mul<B::FloatElem, Output = B::FloatElem>

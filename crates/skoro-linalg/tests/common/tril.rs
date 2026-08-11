@@ -25,11 +25,11 @@ where
     // ForwardOnly
     let points = points()
         .with_tensor(
-            l.id,
+            l.id(),
             Input::<B>::Float(tensor([[1.0, 2.0, 3.0]], &Default::default())),
         )
         .with_tensor(
-            v.id,
+            v.id(),
             Input::<B>::Float(tensor([[4.0, 5.0]], &Default::default())),
         );
 
@@ -43,11 +43,11 @@ where
     // JVP
     let tangents = tangent_frames()
         .with_tensor(
-            l.id,
+            l.id(),
             tensor::<B, 1>([0.1, 0.2, 0.3], &Default::default()).reshape([1, 3, 1]),
         )
         .with_tensor(
-            v.id,
+            v.id(),
             tensor::<B, 1>([0.4, 0.5], &Default::default()).reshape([1, 2, 1]),
         );
 
@@ -58,7 +58,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(jvp.tangents.get(&lv.id).unwrap().clone()).as_slice(),
+        into_vec(jvp.tangents.get(&lv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.8, 4.6], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -71,12 +71,12 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(vjp.cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 4.0, 5.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(vjp.cotangents.get(&v.id).unwrap().clone()).as_slice(),
+        into_vec(vjp.cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([3.0, 3.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -94,17 +94,17 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.tangents.get(&lv.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.tangents.get(&lv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.8, 4.6], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord1_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 4.0, 5.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord1_cotangents.get(&v.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord1_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([3.0, 3.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -112,13 +112,13 @@ where
     // hd_L = pack(omega * dv^T) = pack([[1.0, 1.0]]^T * [[0.4, 0.5]]) = pack([[0.4, 0.5], [0.4, 0.5]])
     // L11=0.4, L21=0.4, L22=0.5 => [0.4, 0.4, 0.5]
     assert_abs_diff_eq!(
-        into_vec(hvp.ord2_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.4, 0.4, 0.5], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     // hd_v = dL^T * omega = [[0.1, 0.2], [0.0, 0.3]] * [1.0, 1.0]^T = [0.3, 0.3]
     assert_abs_diff_eq!(
-        into_vec(hvp.ord2_cotangents.get(&v.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord2_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.3, 0.3], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -132,11 +132,11 @@ where
     let model = ModelClient::<B>::default();
 
     let l = model.add_parameter(Tril(2));
-    let linv = l.invert();
+    let linv = l.invert().unwrap();
 
     // ForwardOnly
     let points = points().with_tensor(
-        l.id,
+        l.id(),
         Input::<B>::Float(tensor([[1.0, 2.0, 3.0]], &Default::default())),
     );
     let eval = linv.evaluate(&points).unwrap();
@@ -152,7 +152,7 @@ where
 
     // JVP
     let tangents = tangent_frames().with_tensor(
-        l.id,
+        l.id(),
         tensor::<B, 1>([0.2, 0.1, 0.4], &Default::default()).reshape([1, 3, 1]),
     );
     let jvp = linv.evaluate_jvp(&points, &tangents).unwrap();
@@ -166,7 +166,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(jvp.tangents.get(&linv.id).unwrap().clone()).as_slice(),
+        into_vec(jvp.tangents.get(&linv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
             [-0.2, 17.0 / 90.0, -2.0 / 45.0],
             &Default::default()
@@ -187,7 +187,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(vjp.cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
             [-1.0, 5.0 / 9.0, -1.0 / 9.0],
             &Default::default()
@@ -213,7 +213,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.tangents.get(&linv.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.tangents.get(&linv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
             [-0.2, 17.0 / 90.0, -2.0 / 45.0],
             &Default::default()
@@ -222,7 +222,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord1_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
             [-1.0, 5.0 / 9.0, -1.0 / 9.0],
             &Default::default()
@@ -231,7 +231,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord2_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
             [-0.4, 41.0 / 135.0, -4.0 / 135.0],
             &Default::default()
@@ -249,11 +249,11 @@ where
     let model = ModelClient::<B>::default();
 
     let l = model.add_parameter(Tril(2));
-    let d = l.diag();
+    let d = l.diag().unwrap();
 
     // ForwardOnly
     let points = points().with_tensor(
-        l.id,
+        l.id(),
         Input::<B>::Float(tensor([[1.0, 2.0, 3.0]], &Default::default())),
     );
     let eval = d.evaluate(&points).unwrap();
@@ -265,7 +265,7 @@ where
 
     // Jvp
     let tangents = tangent_frames().with_tensor(
-        l.id,
+        l.id(),
         tensor::<B, 1>([0.2, 0.1, 0.4], &Default::default()).reshape([1, 3, 1]),
     );
     let jvp = d.evaluate_jvp(&points, &tangents).unwrap();
@@ -275,7 +275,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(jvp.tangents.get(&d.id).unwrap().clone()).as_slice(),
+        into_vec(jvp.tangents.get(&d.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.2, 0.4], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -288,7 +288,7 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(vjp.cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 0.0, 1.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
@@ -306,17 +306,17 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.tangents.get(&d.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.tangents.get(&d.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.2, 0.4], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord1_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 0.0, 1.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
-        into_vec(hvp.ord2_cotangents.get(&l.id).unwrap().clone()).as_slice(),
+        into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.0, 0.0, 0.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );

@@ -1,11 +1,17 @@
 use skoro_backend::Backend;
-use skoro_core::kind::Kind;
+use skoro_core::{error::SkoroError, kind::Kind};
 use skoro_graph::{operation::GraphOperation, quantity::QuantityType};
+
+use skoro_core::error::SkoroResult;
 
 use crate::q::Q;
 
 /// Register a unary mapped quantity, continuous or discrete.
-pub fn register_map1<B, I0, O, K, Op>(quantity_type: O, op: Op, x0: &Q<B, I0>) -> Q<B, O>
+pub fn register_map1<B, I0, O, K, Op>(
+    quantity_type: O,
+    op: Op,
+    x0: &Q<B, I0>,
+) -> SkoroResult<Q<B, O>>
 where
     B: Backend,
     O: QuantityType<B, K>,
@@ -21,7 +27,7 @@ pub fn register_map2<B, I0, I1, O, K, Op>(
     quantity_type: O,
     op: Op,
     inputs: (&Q<B, I0>, &Q<B, I1>),
-) -> Q<B, O>
+) -> SkoroResult<Q<B, O>>
 where
     B: Backend,
     O: QuantityType<B, K>,
@@ -29,7 +35,12 @@ where
     Op: GraphOperation<B>,
 {
     let (x0, x1) = inputs;
-    assert_eq!(x0.client, x1.client);
+    if x0.client != x1.client {
+        return Err(SkoroError::ModelMismatch {
+            lhs: x0.client.server_id,
+            rhs: x1.client.server_id,
+        });
+    }
     x0.guard.set_mapped_leaf(false);
     x1.guard.set_mapped_leaf(false);
     x0.client.add_mapped(quantity_type, op, vec![x0.id, x1.id])
@@ -58,7 +69,7 @@ macro_rules! impl_register_map {
             quantity_type: O,
             op: Op,
             inputs: $tuple_name<B, $first_type $(, $rest_type)*>,
-        ) -> Q<B, O>
+        ) -> SkoroResult<Q<B, O>>
         where
             B: Backend,
             O: QuantityType<B, K>,
@@ -70,7 +81,12 @@ macro_rules! impl_register_map {
 
             // Assert clients match the first argument's client
             $(
-                assert_eq!($first_arg.client, $rest_arg.client);
+                if $first_arg.client != $rest_arg.client {
+                    return Err(SkoroError::ModelMismatch {
+                        lhs: $first_arg.client.server_id,
+                        rhs: $rest_arg.client.server_id,
+                    });
+                }
             )*
 
             $first_arg.guard.set_mapped_leaf(false);

@@ -50,12 +50,13 @@
 //! impl as continuous quantities.
 
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 
 use crate::{map::register_map2, q::Q};
 
 impl<B: Backend, T: ContinuousQuantity<B>> Q<B, T> {
-    pub fn retract<V>(&self, tangent: &Q<B, V>) -> Q<B, T>
+    pub fn retract<V>(&self, tangent: &Q<B, V>) -> SkoroResult<Q<B, T>>
     where
         T: AssociatedTangentVector<V, B>,
         V: ContinuousQuantity<B>,
@@ -65,7 +66,7 @@ impl<B: Backend, T: ContinuousQuantity<B>> Q<B, T> {
         register_map2(quantity_type, retraction, (self, tangent))
     }
 
-    pub fn inverse_retract<V>(&self, other: &Q<B, T>) -> Q<B, V>
+    pub fn inverse_retract<V>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, V>>
     where
         T: AssociatedTangentVectorBuilder<V, B>,
         V: ContinuousQuantity<B>,

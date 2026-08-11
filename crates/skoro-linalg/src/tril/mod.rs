@@ -17,8 +17,8 @@ use skoro_riemann::euclidean::EuclideanD;
 
 pub trait TrilOps<B: Backend> {
     fn vector_product<T: TrilVector<B>>(&self, vector: &Q<B, T>) -> SkoroResult<Q<B, T>>;
-    fn invert(&self) -> Q<B, Tril>;
-    fn diag(&self) -> Q<B, EuclideanD>;
+    fn invert(&self) -> SkoroResult<Q<B, Tril>>;
+    fn diag(&self) -> SkoroResult<Q<B, EuclideanD>>;
 }
 
 impl<B: Backend> TrilOps<B> for Q<B, Tril>
@@ -35,11 +35,11 @@ where
         vector_product(self, vector)
     }
     #[inline(always)]
-    fn invert(&self) -> Q<B, Tril> {
+    fn invert(&self) -> SkoroResult<Q<B, Tril>> {
         invert(self)
     }
     #[inline(always)]
-    fn diag(&self) -> Q<B, EuclideanD> {
+    fn diag(&self) -> SkoroResult<Q<B, EuclideanD>> {
         diag(self)
     }
 }

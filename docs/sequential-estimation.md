@@ -70,7 +70,7 @@ own step.
 
 `P` is an object on the tangent space *at the current point*, shape `[batch, N, N]`, keyed by a
 `TangentLayout` (`flattened-tangent-spaces.md:60-68`). It has no node, no `Id`, and no place in
-`Graph.nodes`. Under retention-1 (§3) it is not a tensor either: at batch 1 it is a host `f64` matrix, since
+`Graph`'s node arena. Under retention-1 (§3) it is not a tensor either: at batch 1 it is a host `f64` matrix, since
 this same ownership line is the host/device and precision boundary
 (`estimator-linear-algebra.md` §1). Estimators are therefore emphatically **not** stateless, and that is the point: it is
 precisely because no estimator owns structure that two of them can read the same model at once.
@@ -304,10 +304,10 @@ Two are confusable and reaching for the wrong one is silent.
 > distinct: `extend` adds structure, `advance` moves numbers, and a tick calls `extend` then
 > `advance` in that order.
 
-While here: `ForwardOutput.observations`
-(`compiler.rs:99`) is never written anywhere in the workspace — observed nodes lower to
-`CompiledStep::Constant` and land in `constants`. Anyone reading it gets an empty map. It should be
-deleted rather than documented.
+While here: `ForwardOutput.observations` was never written anywhere in the workspace — observed
+nodes lower to `CompiledStep::Constant` and land in `constants`, so anyone reading it got an empty
+map. ✅ **Deleted rather than documented**, since the name promised exactly what an innovation
+computation wants.
 
 ## 4. Time: `TimeSequence`, `Chain`, `Chains`
 
@@ -342,12 +342,17 @@ bias and its measurement together, and the borrow checker objecting — **does n
 
 ```rust
 pub struct Q<B: Backend, T> {
-    pub id: Id,
-    pub client: ModelClient<B>,       // owned; an Arc clone
+    pub(crate) id: Id,                // read through `Q::id()`
+    pub(crate) client: ModelClient<B>,// owned; an Arc clone. Private — see below.
     pub(crate) guard: Arc<NodeDropGuard>,
     _phantom: PhantomData<T>,
 }
 ```
+
+Both data fields were `pub` when this was first written and are now private, because a public
+`client` handed every holder of a quantity the unrestricted model surface and so defeated any facade
+that returned one (`model-structure-bounds.md` §6). That changes nothing for the argument here:
+ownership, not visibility, is what makes chains cheap.
 
 It is `Clone`, `Hash` and `PartialEq` (`q.rs:39, 50, 56`), keeps the server alive through the `Arc`
 strong count, and can be stored in any collection — which is exactly how `Normal<B, M>` already
@@ -826,15 +831,16 @@ below run on top of.
    This is the test that justifies the whole retirement mechanism.
 4. **Tag survival.** `Q<B, S_j>` evaluates identically before and after its tick's predecessor
    retires. The user's requirement that tags keep naming quantities, made checkable.
-5. **Bounded growth, at every policy.** `graph.nodes.len()` is bounded across many ticks — including
+5. **Bounded growth, at every policy.** `graph.node_count()` is bounded across many ticks — including
    at **retention-1**, where the bound is about two ticks (§3) and not one. Also assert
-   `log_likelihoods.len()` bounded, and that no `Node::LogDensity` sits in `graph.nodes` while absent
+   `log_likelihoods().len()` bounded, and that no `Node::LogDensity` sits in the arena while absent
    from `log_likelihoods` — the orphan that pins its parent cone against removal
    (`graph-marginalization.md` §8.1). `Chain::len()` tracks the retention policy. Catches capture
    leaks (§7).
-6. **Retired handles fail loudly.** A `Q` held across its tick's retirement returns `QuantityRetired`
-   from the fallible APIs and panics informatively from operator sugar, and its epitaph is pruned once
-   the last handle drops. The graveyard's growth must be bounded by *live retired handles*, not by
+6. **Retired handles fail loudly.** A `Q` held across its tick's retirement returns
+   `QuantityRetired` — from operator sugar as well as from the explicitly fallible APIs, since the
+   whole node-building surface is now `SkoroResult` (`graph-marginalization.md` §6) — and its epitaph
+   is pruned once the last handle drops. The graveyard's growth must be bounded by *live retired handles*, not by
    history — ids are never reclaimed (§7), so an unpruned graveyard is the leak that replaces the one
    retirement was meant to fix.
 7. **Registration is not observed half-done.** A reader holding the read lock while the driver

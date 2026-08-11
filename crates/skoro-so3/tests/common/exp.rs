@@ -274,9 +274,9 @@ where
 {
     let model = ModelClient::<B>::default();
     let omega = model.add_parameter(Euclidean::<3>);
-    let expomega = omega.exp();
+    let expomega = omega.exp().unwrap();
     let point = points()
-        .with_tensor(omega.id, tensor::<B, 2>(OMEGAS, &Default::default()))
+        .with_quantity(&omega, tensor::<B, 2>(OMEGAS, &Default::default()))
         .build();
 
     test_vjp_numerically(&omega, &expomega, point.clone(), delta, epsilon);

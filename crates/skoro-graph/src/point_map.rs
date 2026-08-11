@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
-use skoro_backend::{Backend, Point, TangentVector};
+use skoro_backend::{Backend, Point, TangentVector, Tensor};
 use skoro_core::{
     error::{SkoroError, SkoroResult},
     id::Id,
 };
 use skoro_operation::Input;
 
-use crate::quantity::DynQuantityType;
+use crate::{quantity::DynQuantityType, tangent_layout::TangentLayout};
 
 pub type PointQuantityRefPair<'a, B> = (&'a Input<B>, &'a Arc<dyn DynQuantityType<B>>);
 pub type IdPointQuantityRefTuple<'a, B> = (&'a Id, &'a Input<B>, &'a Arc<dyn DynQuantityType<B>>);
@@ -166,9 +166,44 @@ impl<B: Backend> PointMap<B> {
         Ok(out)
     }
 
+    /// Retract only the quantities named by `layout`, leaving every other point untouched.
+    ///
+    /// Deliberately unlike [`Self::retract_mut`], which requires a tangent for *every*
+    /// point in the map and errors [`SkoroError::MissingPoint`] otherwise. An optimizer's
+    /// `PointMap` also holds constants and nuisance quantities that are not being stepped,
+    /// so partial retraction is the operation it actually needs.
+    ///
+    /// `delta` is `[batch, layout.total()]`; each block is unflattened and applied through
+    /// its own manifold's retraction. Errors [`SkoroError::LayoutDimensionMismatch`] if
+    /// the widths disagree, [`SkoroError::MissingPoint`] for a layout id absent here.
+    pub fn retract_flat_mut(
+        &mut self,
+        layout: &TangentLayout,
+        delta: Tensor<B, 2>,
+    ) -> SkoroResult<()> {
+        let tangents = layout.unflatten_vector(delta)?;
+        for block in layout.blocks() {
+            let tangent = tangents
+                .get(&block.id)
+                .expect("internal: unflatten yields every block in the layout");
+            let (point, manifold) = self.manifold_point(&block.id)?;
+            let new_point = manifold.retract(point.clone(), tangent.clone());
+            self.points.insert(block.id, Input::Float(new_point));
+        }
+        Ok(())
+    }
+
+    /// [`Self::retract_flat_mut`] on a clone.
+    pub fn retract_flat(&self, layout: &TangentLayout, delta: Tensor<B, 2>) -> SkoroResult<Self> {
+        let mut out = self.clone();
+        out.retract_flat_mut(layout, delta)?;
+        Ok(out)
+    }
+
+    /// Borrows `others`; it is only read. Symmetric with [`Self::retract`].
     pub fn inverse_retract(
         &self,
-        others: PointMap<B>,
+        others: &PointMap<B>,
     ) -> SkoroResult<HashMap<Id, TangentVector<B>>> {
         // raise an error if there is a mismatch of points
         if self.points.len() < others.len() {

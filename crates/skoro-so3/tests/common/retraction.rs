@@ -35,11 +35,11 @@ where
     let model = ModelClient::<B>::default();
     let attitude = model.add_parameter(SO3);
     let tangent = model.add_parameter(Euclidean::<3>);
-    let out = attitude.retract(&tangent);
+    let out = attitude.retract(&tangent).unwrap();
     let point = points()
-        .with_tensor(attitude.id, tensor::<B, 2>([R0], &Default::default()))
+        .with_quantity(&attitude, tensor::<B, 2>([R0], &Default::default()))
         .with_tensor(
-            tangent.id,
+            tangent.id(),
             tensor::<B, 2>([[0.4, -0.3, 0.6]], &Default::default()),
         )
         .build();

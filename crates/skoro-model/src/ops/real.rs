@@ -1,4 +1,5 @@
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_operation::ops::{
     Addition, LiteralPointwiseAdd, LiteralPointwiseDiv, LiteralPointwiseMul, LiteralPointwiseSub,
     PointwiseDiv, PointwiseMul, Subtraction,
@@ -19,7 +20,7 @@ impl<B: Backend> QAdd<B, Real> for Real {
     fn op_type(&self, _: &Real) -> Self::OpType {
         Addition
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, Real>>::quantity_type(&t0, &t1);
@@ -37,7 +38,7 @@ impl<B: Backend> QSub<B, Real> for Real {
     fn op_type(&self, _: &Real) -> Self::OpType {
         Subtraction
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, Real>>::quantity_type(&t0, &t1);
@@ -55,7 +56,7 @@ impl<B: Backend> QMul<B, Real> for Real {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseMul
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
@@ -73,7 +74,7 @@ impl<B: Backend> QDiv<B, Real> for Real {
     fn op_type(&self, _: &Real) -> Self::OpType {
         PointwiseDiv
     }
-    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> Q<B, Self::OutputType> {
+    fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);

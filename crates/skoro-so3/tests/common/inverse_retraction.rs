@@ -38,10 +38,12 @@ where
     let model = ModelClient::<B>::default();
     let attitude = model.add_parameter(SO3);
     let other_attitude = model.add_parameter(SO3);
-    let out = attitude.inverse_retract::<Euclidean<3>>(&other_attitude);
+    let out = attitude
+        .inverse_retract::<Euclidean<3>>(&other_attitude)
+        .unwrap();
     let point = points()
-        .with_tensor(attitude.id, tensor::<B, 2>([R0], &Default::default()))
-        .with_tensor(other_attitude.id, tensor::<B, 2>([R1], &Default::default()))
+        .with_quantity(&attitude, tensor::<B, 2>([R0], &Default::default()))
+        .with_quantity(&other_attitude, tensor::<B, 2>([R1], &Default::default()))
         .build();
     test_jvp_numerically(&attitude, &out, point.clone(), delta, epsilon);
     test_vjp_numerically(&attitude, &out, point.clone(), delta, epsilon);

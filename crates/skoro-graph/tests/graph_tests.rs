@@ -54,10 +54,10 @@ fn graph_topology() {
         .unwrap();
 
     // Verify it added both nodes
-    assert!(graph.nodes.contains_key(&stoch_id));
+    assert!(graph.contains(stoch_id));
 
     // Verify the log density has the stochastic variable as a parent
-    if let Node::Stochastic(stoch) = graph.nodes.get(&stoch_id).unwrap() {
+    if let Node::Stochastic(stoch) = graph.node(stoch_id).unwrap() {
         assert!(stoch.parent_ids.contains(&c1));
         assert!(stoch.parent_ids.contains(&c2));
     } else {
@@ -65,8 +65,10 @@ fn graph_topology() {
     }
 
     // Add a mapped node depending on the stochastic output
-    let m1 = graph.add_mapped(Real, DummyOperation, vec![stoch_id]);
-    assert!(graph.nodes.contains_key(&m1));
+    let m1 = graph
+        .add_mapped(Real, DummyOperation, vec![stoch_id])
+        .unwrap();
+    assert!(graph.contains(m1));
 }
 
 #[test]
@@ -89,7 +91,7 @@ fn remove_with_children_errors() {
 
     let mut graph = Graph::<B>::new();
     let p1 = graph.add_parameter(Real);
-    let _m1 = graph.add_mapped(Real, DummyOperation, vec![p1]);
+    let _m1 = graph.add_mapped(Real, DummyOperation, vec![p1]).unwrap();
 
     // This should error because m1 depends on p1
     assert!(matches!(
@@ -103,14 +105,11 @@ fn observe() {
     let mut graph = Graph::<B>::new();
     let stoch_id = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
-    assert!(matches!(
-        graph.nodes.get(&stoch_id).unwrap(),
-        Node::Stochastic(_)
-    ));
+    assert!(matches!(graph.node(stoch_id).unwrap(), Node::Stochastic(_)));
 
     graph.observe::<_, Real, _>(stoch_id, &5.0).unwrap();
 
-    match graph.nodes.get(&stoch_id).unwrap() {
+    match graph.node(stoch_id).unwrap() {
         Node::Observed(ObservedNode { value, .. }) => {
             let d = value
                 .clone()

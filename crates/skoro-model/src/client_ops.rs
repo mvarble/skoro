@@ -34,6 +34,9 @@ use skoro_graph::{
 };
 use skoro_operation::ValueMap;
 
+use skoro_riemann::real::Real;
+
+use crate::distribution::Distribution;
 use crate::model::ModelClient;
 use crate::q::Q;
 
@@ -209,6 +212,35 @@ pub trait ModelClientOps<B: Backend> {
         ord2_cotangents: &HashMap<Id, CotangentFrame<B>>,
         ids: &[Id],
     ) -> SkoroResult<HvpForwardOutput<B>>;
+}
+
+/// Capability: this client can grow the model with stochastic quantities and
+/// free-standing likelihood factors.
+///
+/// Deliberately separate from [`ModelClientOps`] rather than folded into it. A
+/// restricting facade such as `GaussianModelClient` implements that trait *precisely
+/// in order to withhold this surface* — if the two were one trait, "a client that can
+/// evaluate a model" and "a client that can add anything to a model" would be the same
+/// bound, and no facade could offer the first without the second.
+///
+/// Note what this trait is not: implementing it says nothing about what a model
+/// *contains*. That is a structural claim, and it belongs on the builder that
+/// accumulated the model, not on a capability trait anyone may implement.
+pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
+    /// Add a stochastic quantity with the given conditional distribution.
+    fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>;
+
+    /// Replace the conditional distribution of an existing stochastic quantity.
+    fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>;
+
+    /// Attach a free-standing likelihood factor to a real-valued quantity.
+    fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()>;
 }
 
 impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
@@ -402,5 +434,27 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
             ord2_cotangents,
             ids,
         )
+    }
+}
+
+impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
+    fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        ModelClient::add_quantity(self, distr)
+    }
+
+    fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        ModelClient::update_quantity(self, tag, distr)
+    }
+
+    fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
+        ModelClient::mark_likelihood(self, likelihood)
     }
 }

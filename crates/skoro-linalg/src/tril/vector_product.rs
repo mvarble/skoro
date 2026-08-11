@@ -155,7 +155,7 @@ pub fn vector_product<B: Backend, T: TrilVector<B>>(
     let ttype = tril.get_quantity_type();
     let vtype = vector.get_quantity_type();
     if vtype.check_compatibility(&ttype) {
-        Ok(register_map2(vtype, TrilVectorProduct, (tril, vector)))
+        register_map2(vtype, TrilVectorProduct, (tril, vector))
     } else {
         Err(SkoroError::UnsupportedVectorProduct {
             tril: format!("{ttype:?}"),

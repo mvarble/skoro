@@ -42,7 +42,7 @@ lazy_static! {
 /// The stateful engine wrapping the probabilistic DAG.
 #[derive(Default)]
 pub struct ModelServer<B: Backend> {
-    pub graph: Graph<B>,
+    graph: Graph<B>,
     pub device: B::Device,
     cleanup_queue: Arc<SegQueue<Id>>,
 }
@@ -64,6 +64,15 @@ impl<B: Backend> ModelServer<B> {
             device,
             cleanup_queue: Arc::new(SegQueue::new()),
         }
+    }
+
+    /// Read-only access to the graph.
+    ///
+    /// Structural mutation goes through the methods on this type, which maintain the
+    /// graph's cross-collection invariants; handing out `&mut Graph` would not.
+    #[inline(always)]
+    pub fn graph(&self) -> &Graph<B> {
+        &self.graph
     }
 
     /// Add a fixed, immutable quantity to the graph of the model server,
@@ -111,7 +120,7 @@ impl<B: Backend> ModelServer<B> {
         quantity_type: T,
         op: impl GraphOperation<B>,
         parent_ids: Vec<Id>,
-    ) -> Id
+    ) -> SkoroResult<Id>
     where
         K: Kind<B>,
         T: QuantityType<B, K>,
@@ -477,10 +486,10 @@ impl<B: Backend> ModelClient<B> {
         function(&mut server)
     }
 
-    /// Returns the strong reference to the underlying server.
-    pub fn get_server(&self) -> Arc<RwLock<ModelServer<B>>> {
-        self.server.clone()
-    }
+    // `get_server` deliberately does not exist. Handing out the `Arc<RwLock<..>>` gave
+    // every caller a `&mut ModelServer`, and so a route around any facade that had been
+    // careful about what it exposed. `server_call` / `server_call_mut` cover the same
+    // ground while keeping the lock scope visible at the call site.
 
     /// Add a fixed, immutable quantity to the graph of the model server,
     /// continuous or discrete.
@@ -530,7 +539,7 @@ impl<B: Backend> ModelClient<B> {
     ///
     /// Returns an error if the distribution references a parent that does not
     /// exist in the model.
-    pub fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    pub(crate) fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
         D: Distribution<B, K>,
@@ -551,16 +560,12 @@ impl<B: Backend> ModelClient<B> {
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
         // to add the log-density term (or else deadlock will occur).
         drop(server);
-        let density = distr.log_density(&x);
+        let density = distr.log_density(&x)?;
 
         // again, slow... but now we mark the mapped quantity as a density.
         let mut server = self.server.write().unwrap();
         server.cleanup();
-        // The density is a freshly-created real-valued mapped node, so marking
-        // it can only fail through an internal bug.
-        server
-            .mark_density(&density, &x)
-            .expect("internal: failed to mark freshly-created density");
+        server.mark_density(&density, &x)?;
         Ok(x)
     }
 
@@ -569,15 +574,15 @@ impl<B: Backend> ModelClient<B> {
         quantity_type: T,
         op: impl GraphOperation<B>,
         parent_ids: Vec<Id>,
-    ) -> Q<B, T>
+    ) -> SkoroResult<Q<B, T>>
     where
         K: Kind<B>,
         T: QuantityType<B, K>,
     {
         let mut server = self.server.write().unwrap();
         server.cleanup();
-        let id = server.add_mapped(quantity_type, op, parent_ids);
-        Q::new(
+        let id = server.add_mapped(quantity_type, op, parent_ids)?;
+        Ok(Q::new(
             id,
             self.clone(),
             Arc::new(NodeDropGuard {
@@ -585,11 +590,11 @@ impl<B: Backend> ModelClient<B> {
                 is_mapped_leaf: AtomicBool::new(true),
                 cleanup_queue: server.cleanup_queue.clone(),
             }),
-        )
+        ))
     }
 
     /// Mark the mapped quantity as a likelihood.
-    pub fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
+    pub(crate) fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         self.server.write().unwrap().mark_likelihood(likelihood)
     }
 
@@ -612,7 +617,7 @@ impl<B: Backend> ModelClient<B> {
     ///
     /// Returns an error if the node is not stochastic, a parent is dangling, or
     /// the update would introduce a cycle.
-    pub fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
+    pub(crate) fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
     where
         K: Kind<B>,
         D: Distribution<B, K>,
@@ -624,16 +629,12 @@ impl<B: Backend> ModelClient<B> {
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
         // to add the log-density term (or else deadlock will occur).
         drop(server);
-        let density = distr.log_density(tag);
+        let density = distr.log_density(tag)?;
 
         // again, slow... but now we mark the mapped quantity as a density.
         let mut server = self.server.write().unwrap();
         server.cleanup();
-        // The density is a freshly-created real-valued mapped node, so marking
-        // it can only fail through an internal bug.
-        server
-            .mark_density(&density, tag)
-            .expect("internal: failed to mark freshly-created density");
+        server.mark_density(&density, tag)?;
         Ok(())
     }
 

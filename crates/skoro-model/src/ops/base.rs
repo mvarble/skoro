@@ -1,6 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 use skoro_backend::{Backend, ElementConversion, ToElement};
+use skoro_core::error::SkoroResult;
 use skoro_graph::{operation::GraphOperation, quantity::ContinuousQuantity};
 use skoro_riemann::euclidean::{Euclidean, EuclideanD};
 
@@ -48,7 +49,7 @@ macro_rules! impl_q_binop {
             /// Build the resulting node from the two operand proxies. Continuous
             /// implementors use [`continuous_binop`]; discrete implementors use
             /// [`register_map2`] with a forward-only kernel.
-            fn register(lhs: &Q<B, Self>, rhs: &Q<B, T>) -> Q<B, Self::OutputType>
+            fn register(lhs: &Q<B, Self>, rhs: &Q<B, T>) -> SkoroResult<Q<B, Self::OutputType>>
             where
                 Self: Sized;
         }
@@ -58,9 +59,30 @@ macro_rules! impl_q_binop {
             B: Backend,
             T0: $trait<B, T1>,
         {
-            type Output = Q<B, <T0 as $trait<B, T1>>::OutputType>;
+            type Output = SkoroResult<Q<B, <T0 as $trait<B, T1>>::OutputType>>;
             fn $method(self, rhs: Q<B, T1>) -> Self::Output {
                 <T0 as $trait<B, T1>>::register(&self, &rhs)
+            }
+        }
+
+        // `Result op Q` is what keeps left-associative chains readable: `a + b + c`
+        // parses as `(a + b) + c`, so without it every chain step would need its own
+        // `?`.
+        //
+        // The reverse (`Q op Result`, as in `a + b * c`) is deliberately absent. It
+        // would overlap the generic literal impl `Add<E: ToElement> for Q`, since
+        // nothing tells the compiler a `SkoroResult` is not an element — and giving up
+        // the generic literal impl would mean every bare float in model code needed an
+        // `f32`/`f64` suffix. Right-nested products take an explicit `?` instead:
+        // `a + (b * c)?`.
+        impl<B, T0, T1> $std_trait<Q<B, T1>> for SkoroResult<Q<B, T0>>
+        where
+            B: Backend,
+            T0: $trait<B, T1>,
+        {
+            type Output = SkoroResult<Q<B, <T0 as $trait<B, T1>>::OutputType>>;
+            fn $method(self, rhs: Q<B, T1>) -> Self::Output {
+                <T0 as $trait<B, T1>>::register(&self?, &rhs)
             }
         }
     };
@@ -79,7 +101,7 @@ pub fn continuous_binop<B, T0, T1, O, K>(
     rhs: &Q<B, T1>,
     out_type: O,
     op: K,
-) -> Q<B, O>
+) -> SkoroResult<Q<B, O>>
 where
     B: Backend,
     O: ContinuousQuantity<B>,
@@ -88,214 +110,76 @@ where
     register_map2(out_type, op, (lhs, rhs))
 }
 
-pub trait QLiteralAdd<B: Backend>: ContinuousQuantity<B> {
-    type OutputType: ContinuousQuantity<B>;
-    type OpType: GraphOperation<B>;
-    fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType;
+/// Generate a literal operator trait and its `std::ops` impls.
+///
+/// Four impls per operator: `Q op lit` and `lit op Q`, for `f32` and `f64`.
+///
+/// The `SkoroResult` forms are *not* expressible: `impl Add<f32> for SkoroResult<Q>`
+/// has no local type before its uncovered parameters, so the orphan rule rejects it.
+/// A literal combined with a chained result therefore needs a `?`:
+/// `(a * b)? + 1.0`.
+///
+/// The literal side is written out per float type rather than generically over
+/// `ToElement`: a blanket `impl<E: ToElement> Add<E> for Q` would overlap
+/// `Add<SkoroResult<Q>> for Q`, since nothing tells the compiler a `SkoroResult`
+/// is not an element.
+macro_rules! impl_q_literal_binop {
+    ($trait:ident, $std_trait:ident, $method:ident, $helper:ident) => {
+        pub trait $trait<B: Backend>: ContinuousQuantity<B> {
+            type OutputType: ContinuousQuantity<B>;
+            type OpType: GraphOperation<B>;
+            fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
+            fn op_type(&self, float: B::FloatElem) -> Self::OpType;
+        }
+
+        #[inline(always)]
+        fn $helper<B, T, E>(
+            q: &Q<B, T>,
+            float: E,
+        ) -> SkoroResult<Q<B, <T as $trait<B>>::OutputType>>
+        where
+            B: Backend,
+            T: ContinuousQuantity<B> + $trait<B>,
+            E: ToElement,
+        {
+            let elem = B::FloatElem::from_elem(float);
+            let t0 = q.get_quantity_type();
+            let t = t0.quantity_type(elem);
+            let op = t0.op_type(elem);
+            register_map1(t, op, q)
+        }
+
+        impl<B, T, E> $std_trait<E> for Q<B, T>
+        where
+            B: Backend,
+            T: ContinuousQuantity<B> + $trait<B>,
+            E: ToElement,
+        {
+            type Output = SkoroResult<Q<B, <T as $trait<B>>::OutputType>>;
+            fn $method(self, float: E) -> Self::Output {
+                $helper(&self, float)
+            }
+        }
+
+        impl_q_literal_binop!(@lit $trait, $std_trait, $method, $helper, f32);
+        impl_q_literal_binop!(@lit $trait, $std_trait, $method, $helper, f64);
+    };
+
+    (@lit $trait:ident, $std_trait:ident, $method:ident, $helper:ident, $float:ty) => {
+        impl<B, T> $std_trait<Q<B, T>> for $float
+        where
+            B: Backend,
+            T: ContinuousQuantity<B> + $trait<B>,
+        {
+            type Output = SkoroResult<Q<B, <T as $trait<B>>::OutputType>>;
+            fn $method(self, rhs: Q<B, T>) -> Self::Output {
+                $helper(&rhs, self)
+            }
+        }
+    };
 }
 
-impl<B, T, E> Add<E> for Q<B, T>
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralAdd<B>,
-    E: ToElement,
-{
-    type Output = Q<B, <T as QLiteralAdd<B>>::OutputType>;
-    fn add(self, float: E) -> Self::Output {
-        let elem = B::FloatElem::from_elem(float);
-        let t0 = self.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &self)
-    }
-}
-
-impl<B, T> Add<Q<B, T>> for f32
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralAdd<B>,
-{
-    type Output = Q<B, <T as QLiteralAdd<B>>::OutputType>;
-    fn add(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-impl<B, T> Add<Q<B, T>> for f64
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralAdd<B>,
-{
-    type Output = Q<B, <T as QLiteralAdd<B>>::OutputType>;
-    fn add(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-pub trait QLiteralSub<B: Backend>: ContinuousQuantity<B> {
-    type OutputType: ContinuousQuantity<B>;
-    type OpType: GraphOperation<B>;
-    fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType;
-}
-
-impl<B, T, E> Sub<E> for Q<B, T>
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralSub<B>,
-    E: ToElement,
-{
-    type Output = Q<B, <T as QLiteralSub<B>>::OutputType>;
-    fn sub(self, float: E) -> Self::Output {
-        let elem = B::FloatElem::from_elem(float);
-        let t0 = self.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &self)
-    }
-}
-
-impl<B, T> Sub<Q<B, T>> for f32
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralSub<B>,
-{
-    type Output = Q<B, <T as QLiteralSub<B>>::OutputType>;
-    fn sub(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-impl<B, T> Sub<Q<B, T>> for f64
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralSub<B>,
-{
-    type Output = Q<B, <T as QLiteralSub<B>>::OutputType>;
-    fn sub(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-pub trait QLiteralMul<B: Backend>: ContinuousQuantity<B> {
-    type OutputType: ContinuousQuantity<B>;
-    type OpType: GraphOperation<B>;
-    fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType;
-}
-
-impl<B, T, E> Mul<E> for Q<B, T>
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralMul<B>,
-    E: ToElement,
-{
-    type Output = Q<B, <T as QLiteralMul<B>>::OutputType>;
-    fn mul(self, float: E) -> Self::Output {
-        let elem = B::FloatElem::from_elem(float);
-        let t0 = self.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &self)
-    }
-}
-
-impl<B, T> Mul<Q<B, T>> for f32
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralMul<B>,
-{
-    type Output = Q<B, <T as QLiteralMul<B>>::OutputType>;
-    fn mul(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-impl<B, T> Mul<Q<B, T>> for f64
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralMul<B>,
-{
-    type Output = Q<B, <T as QLiteralMul<B>>::OutputType>;
-    fn mul(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-pub trait QLiteralDiv<B: Backend>: ContinuousQuantity<B> {
-    type OutputType: ContinuousQuantity<B>;
-    type OpType: GraphOperation<B>;
-    fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType;
-}
-
-impl<B, T, E> Div<E> for Q<B, T>
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralDiv<B>,
-    E: ToElement,
-{
-    type Output = Q<B, <T as QLiteralDiv<B>>::OutputType>;
-    fn div(self, float: E) -> Self::Output {
-        let elem = B::FloatElem::from_elem(float);
-        let t0 = self.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &self)
-    }
-}
-
-impl<B, T> Div<Q<B, T>> for f32
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralDiv<B>,
-{
-    type Output = Q<B, <T as QLiteralDiv<B>>::OutputType>;
-    fn div(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
-
-impl<B, T> Div<Q<B, T>> for f64
-where
-    B: Backend,
-    T: ContinuousQuantity<B> + QLiteralDiv<B>,
-{
-    type Output = Q<B, <T as QLiteralDiv<B>>::OutputType>;
-    fn div(self, rhs: Q<B, T>) -> Self::Output {
-        let elem = B::FloatElem::from_elem(self);
-        let t0 = rhs.get_quantity_type();
-        let t = t0.quantity_type(elem);
-        let op = t0.op_type(elem);
-        register_map1(t, op, &rhs)
-    }
-}
+impl_q_literal_binop!(QLiteralAdd, Add, add, lit_add);
+impl_q_literal_binop!(QLiteralSub, Sub, sub, lit_sub);
+impl_q_literal_binop!(QLiteralMul, Mul, mul, lit_mul);
+impl_q_literal_binop!(QLiteralDiv, Div, div, lit_div);

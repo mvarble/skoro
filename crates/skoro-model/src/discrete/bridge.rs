@@ -8,6 +8,7 @@
 
 use skoro_backend::{Backend, CotangentFrame, DiscretePoint, Point};
 use skoro_core::discrete::{Boolean, Integer};
+use skoro_core::error::SkoroResult;
 use skoro_graph::operation::ForwardOnly;
 use skoro_operation::{
     Input,
@@ -60,17 +61,17 @@ impl<B: Backend> DiffOperation<B> for IntToReal {
 /// Embedding bridges from discrete quantities into continuous space.
 pub trait DiscreteEmbed<B: Backend> {
     /// Cast this discrete quantity to a continuous real value.
-    fn to_real(&self) -> Q<B, Real>;
+    fn to_real(&self) -> SkoroResult<Q<B, Real>>;
 }
 
 impl<B: Backend> DiscreteEmbed<B> for Q<B, Integer> {
-    fn to_real(&self) -> Q<B, Real> {
+    fn to_real(&self) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, IntToReal, self)
     }
 }
 
 impl<B: Backend> DiscreteEmbed<B> for Q<B, Boolean> {
-    fn to_real(&self) -> Q<B, Real> {
+    fn to_real(&self) -> SkoroResult<Q<B, Real>> {
         register_map1(Real, IntToReal, self)
     }
 }
@@ -91,11 +92,11 @@ impl<B: Backend> DiscreteOperation<B> for Threshold {
 /// Discretization bridges from continuous quantities into discrete space.
 pub trait Discretize<B: Backend> {
     /// Produce a boolean for whether the (real) value is non-negative.
-    fn is_non_negative(&self) -> Q<B, Boolean>;
+    fn is_non_negative(&self) -> SkoroResult<Q<B, Boolean>>;
 }
 
 impl<B: Backend> Discretize<B> for Q<B, Real> {
-    fn is_non_negative(&self) -> Q<B, Boolean> {
+    fn is_non_negative(&self) -> SkoroResult<Q<B, Boolean>> {
         register_map1(Boolean, ForwardOnly(Threshold), self)
     }
 }

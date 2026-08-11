@@ -10,6 +10,7 @@ pub use abs::*;
 pub use log::*;
 
 use skoro_backend::Backend;
+use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_riemann::{
@@ -27,18 +28,18 @@ impl<B: Backend> PointwiseQuantity<B> for EuclideanD {}
 impl<B: Backend, const D: usize> PointwiseQuantity<B> for Euclidean<D> {}
 
 pub trait PointwiseOps<B: Backend, M: ContinuousQuantity<B>> {
-    fn log(&self) -> Q<B, M>;
-    fn abs(&self) -> Q<B, M>;
+    fn log(&self) -> SkoroResult<Q<B, M>>;
+    fn abs(&self) -> SkoroResult<Q<B, M>>;
 }
 
 impl<B: Backend, M: PointwiseQuantity<B>> PointwiseOps<B, M> for Q<B, M> {
     #[inline(always)]
-    fn log(&self) -> Q<B, M> {
+    fn log(&self) -> SkoroResult<Q<B, M>> {
         register_map1(self.get_quantity_type(), PointwiseLog, self)
     }
 
     #[inline(always)]
-    fn abs(&self) -> Q<B, M> {
+    fn abs(&self) -> SkoroResult<Q<B, M>> {
         register_map1(self.get_quantity_type(), PointwiseAbs, self)
     }
 }

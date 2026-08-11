@@ -30,6 +30,7 @@ use skoro_graph::{
     quantity::{ContinuousQuantity, QuantityType},
 };
 use skoro_linalg::tril::Tril;
+use skoro_model::ModelBuilderOps;
 use skoro_model::{
     ModelClientOps,
     model::{ModelClient, ModelServer},

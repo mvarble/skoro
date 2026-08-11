@@ -29,550 +29,96 @@ Deliberately excluded, and why:
 | marginalization, the graveyard | nothing retires |
 | `skoro-ekf` | needs all of the above |
 
-The parts below are in dependency order. Part A must land first: everything in Part B compiles
-against it.
+## Status: the groundwork is done
 
-> **One item in Part A is a true blocker rather than a nicety.** `vjp_forward` panics when a
-> continuous leaf receives no tape write, and `jacobian_vjp` reaches that case routinely. See A.3.
+**Part A — the changes to structures that already existed — has been applied and removed from this
+document.** The workspace builds and all tests pass (121 then; 140 after B.1). What landed:
+
+| | | |
+|---|---|---|
+| `skoro-core/error.rs` | 6 new `SkoroError` variants + `Display` arms | 🟢 |
+| `skoro-core/id.rs` | `Id: PartialOrd + Ord` | 🟢 |
+| `skoro-graph/compiler.rs` | VJP cotangent panic → zeros; dead `ForwardOutput.observations` removed | 🔴 |
+| `skoro-graph/point_map.rs` | `inverse_retract` takes `&PointMap<B>` | 🔴 |
+| `skoro-graph/graph.rs` | 5 `pub` fields → read accessors; `add_mapped -> SkoroResult<Id>` | 🔴 |
+| `skoro-model/hash_map_builders.rs` | `with_quantity` on both builders | 🟢 |
+| `skoro-model/q.rs` | `client`/`id` private; `Q::mark_likelihood` and `get_server` gone | 🔴 |
+| `skoro-model/client_ops.rs` | `ModelBuilderOps`; growth methods moved off `ModelClient` | 🔴 |
+| `skoro-model` + `skoro-normal` | `Distribution::log_density -> SkoroResult`; `Normal::whitened_residual` | 🔴 |
+| workspace-wide | **the whole node-building surface is fallible** — see below | 🔴 |
+
+### Node building is fallible end to end
+
+Beyond the original Part A: `register_map1..11`, `ModelClient::add_mapped`, every `std::ops`
+operator on `Q`, and all 43 `*Ops` extension methods now return `SkoroResult<Q<..>>`. **No panic
+remains anywhere on the path that builds a graph node.** The single surviving `expect` in
+`skoro-model` is in `cleanup()` (`model.rs:215`), which removes only ids the model itself queued —
+a genuine internal invariant rather than a user-reachable one.
+
+Chaining is preserved by implementing the operators for `SkoroResult<Q>` on the left as well, so a
+left-associative chain costs one `?` at the end rather than one per step:
+
+```rust
+let z = (a + b + c)?;            // (a + b) is a Result; `Result + Q` is implemented
+let d = (x.norm_squared()? * -0.5)?;
+```
+
+Two shapes are **not** expressible, both blocked by the orphan rule — neither operand names a local
+type:
+
+| shape | example | write instead |
+|---|---|---|
+| `Result op Result` | `a * b + c * d` | `(a * b)? + (c * d)?` |
+| `Result op literal` | `a * b + 1.0` | `(a * b)? + 1.0` |
+
+`Q op Result` (`a + b * c`) is also absent, and that one is a deliberate trade rather than a hard
+limit: it would overlap the blanket literal impl `Add<E: ToElement> for Q`, since nothing tells the
+compiler a `SkoroResult` is not an element. Keeping the blanket impl means bare float literals still
+infer; dropping it would have forced an `f32`/`f64` suffix on every literal in every model. Write
+`a + (b * c)?`.
+
+**One Part A item was not applied and moves to Part B**, because it turned out to depend on work this
+document schedules later:
+
+> **`PointMap::retract_flat` / `retract_flat_mut` need `TangentLayout`**, which is B.1. The
+> signature is `retract_flat(&self, layout: &TangentLayout, delta: Tensor<B, 2>)`, so it cannot be
+> written before the layout type exists. It belongs with B.1 and is listed there. This was an
+> ordering mistake in the original Part A, not a change of plan.
+
+The remaining parts are in dependency order.
 
 ## On breaking changes
 
 The library has no external users, so a breaking change costs a migration and nothing else. That is
-the cheapest this will ever be, and several interfaces are worse than they need to be only because
-fixing them would move a signature.
+the cheapest this will ever be, and several interfaces were worse than they needed to be only
+because fixing them would move a signature.
 
-**Every item below is labelled — 🟢 additive, 🔴 breaking — with the migration cost stated.** Where an
-interface would be meaningfully better if it were allowed to break, that is called out even when the
-change is not taken, so the choice is visible rather than silent.
+**New interfaces below are labelled — 🟢 additive, 🔴 breaking — with the migration cost stated.**
+Where an interface would be meaningfully better if it were allowed to break, that is called out even
+when the change is not taken, so the choice is visible rather than silent.
 
 The bar applied: a breaking change is taken when it removes a panic from a public path, closes a
 capability leak, or fixes an asymmetry that will otherwise be copied. It is *not* taken merely for
 tidiness, because each one still costs review.
 
-Six of the nine Part A sections carry breaking changes. Most are zero- or one-call-site; two — the
-`Graph` field encapsulation (A.5) and `Q.client` (A.7) — are real work, and they are the two the
-design actually rests on. A short list of breaking changes **not** taken, with reasons, closes the
-document.
-
----
-
-# Part A — Changes to structures that already exist
-
-Bottom-up by crate. Each entry says what changes, which document asks for it, and whether it is
-additive or breaking.
-
-## A.1 `skoro-core/src/error.rs` — 🟢 additive
-
-Six new variants. The enum is `#[non_exhaustive]` (`error.rs:24`), so this is additive.
-
-Three constraints govern what may be written here, all discovered by reading the file rather than
-assumed:
-
-- It does **not** use `thiserror`. `Display` is a hand-written match at `error.rs:84`, and **every new
-  variant needs its own arm there** or the build fails.
-- The enum derives `Debug, Clone, PartialEq, Eq`. **No variant may carry an `f32` or `f64`** — they
-  are not `Eq`. This is why `NotPositiveDefinite` below carries no pivot value and
-  `NormalizerNotConstant` carries no magnitude.
-- House style: lowercase message, no trailing period, ids rendered `{id:?}`.
-
-*From `flattened-tangent-spaces.md` §3, `estimator-linear-algebra.md` §7, `model-structure-bounds.md` §5.*
-
-```rust
-// crates/skoro-core/src/error.rs — added to `pub enum SkoroError`
-
-    /// An id appeared twice while building a `TangentLayout`.
-    DuplicateLayoutId { id: Id },
-
-    /// A layout was asked about an id it does not contain.
-    IdNotInLayout { id: Id },
-
-    /// A flattened tensor's dimension disagrees with the layout that must interpret it.
-    LayoutDimensionMismatch { expected: usize, found: usize },
-
-    /// A Cholesky factorization was attempted on a matrix that is not positive definite.
-    NotPositiveDefinite { rows: usize },
-
-    /// A host dense operation received a batch dimension other than 1.
-    BatchNotSingleton { found: usize },
-
-    /// A factor's normalizer depends on a quantity being optimized, so a
-    /// sum-of-squares objective is not the model's negative log-density.
-    NormalizerNotConstant { density: Id, parent: Id },
-```
-
-```rust
-// the matching arms in `impl fmt::Display for SkoroError` (error.rs:84)
-
-Self::DuplicateLayoutId { id } =>
-    write!(f, "id {id:?} appears more than once in the tangent layout"),
-Self::IdNotInLayout { id } =>
-    write!(f, "id {id:?} is not present in the tangent layout"),
-Self::LayoutDimensionMismatch { expected, found } =>
-    write!(f, "flattened tangent has the wrong dimension; expected {expected}, found {found}"),
-Self::NotPositiveDefinite { rows } =>
-    write!(f, "a {rows}x{rows} matrix is not positive definite"),
-Self::BatchNotSingleton { found } =>
-    write!(f, "host dense linear algebra requires batch size 1, found {found}"),
-Self::NormalizerNotConstant { density, parent } =>
-    write!(f, "log-density {density:?} has a normalizer depending on {parent:?}, which is being \
-               optimized; the objective is not a sum of squares"),
-```
-
-### Why `LayoutDimensionMismatch` is a third variant and not a reuse
-
-Two near-neighbours already exist and neither fits:
-
-- `ShapeMismatch { expected, found }` (`error.rs:81`) counts **elements of supplied data** — it is
-  raised when a user packs a host value of the wrong length.
-- `InconsistentFrameCount { expected, found }` (`error.rs:65`) counts **frames** across quantities in
-  one differentiation pass.
-
-`LayoutDimensionMismatch` counts **summed manifold dimensions** and is raised when a flat tensor and
-a layout disagree. Collapsing it into `ShapeMismatch` would make the three indistinguishable in a
-`match`, which is the thing an estimator most needs to tell apart when a layout is wrong.
-
-## A.2 `skoro-core/src/id.rs` — 🟢 additive
-
-`Id` derives `Debug, Clone, Copy, PartialEq, Eq, Hash` (`id.rs:4-5`) and **has no ordering**.
-`TangentLayout::from_ids_sorted` needs one.
-
-*From `flattened-tangent-spaces.md` §3.*
-
-```rust
-// crates/skoro-core/src/id.rs:4
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Id(u64);
-```
-
-Sorting by `*id` through the existing `Deref<Target = u64>` (`id.rs:49-54`) would also work and needs
-no change at all. The derive is preferred because `from_ids_sorted` is a public convenience and
-`ids.sort()` reads better than `ids.sort_by_key(|i| **i)` at every call site.
-
-## A.3 `skoro-graph/src/compiler.rs` — 🔴 breaking (0 call sites)
-
-**The blocker.** Two changes, one of which will otherwise crash phase 1 on contact.
-
-*From `flattened-tangent-spaces.md` §5, "A defect to fix along the way".*
-
-`vjp_forward` harvests cotangents from `Parameter` and `Sampler` steps and panics if a continuous leaf
-in the compiled subgraph received no tape write:
-
-```rust
-// compiler.rs:334 — today
-panic!("Point should have a cotangent vector.")
-```
-
-`jacobian_vjp` reaches this whenever a layout column touches the targets only through a
-`forward_only` or `constant_inputs` path — an ordinary occurrence, not a corner case: any free
-parameter that happens not to influence the particular residuals being differentiated. The fix is to
-default to zeros, which is the same rule `TangentLayout::flatten_*` already uses for ids missing from
-a map (§4 there), so the two agree:
-
-```rust
-// compiler.rs — replacing the panic
-//
-// A leaf that does not reach the targets has zero derivative with respect to them.
-// Returning zeros rather than panicking makes that an answer instead of a crash.
-let cotangent = tape_cotangent
-    .unwrap_or_else(|| Tensor::zeros([batch_size, dimension, frames], device));
-```
-
-*From `sequential-estimation.md` §3.*
-
-The second change is a deletion. `ForwardOutput.observations` is declared at `compiler.rs:93`, is
-**never written and never read** anywhere in the workspace, and is actively misleading: observed
-nodes lower to `CompiledStep::Constant` (`graph.rs:1342-1352`), so their values arrive in
-`constants`. Anyone reaching for `observations` to find an innovation input gets an empty map.
-
-```rust
-// crates/skoro-graph/src/compiler.rs:89
-#[derive(Debug, Clone, Default)]
-pub struct ForwardOutput<B: Backend> {
-    pub variables: PointMap<B>,
-    pub constants: PointMap<B>,
-    pub evaluations: PointMap<B>,
-    // `observations` removed — observed nodes land in `constants`.
-}
-```
-
-> **Breaking, and worth it at zero cost.** Removing a `pub` field from a `pub` struct is a breaking
-> change in principle; in practice the field has no readers anywhere, so nothing migrates. Left in
-> place it is a trap that costs someone an afternoon: the name promises exactly what an innovation
-> computation wants, and it silently yields an empty map. Deleting it now is free; deleting it once
-> two estimator crates have grown around the confusion is not.
-
-## A.4 `skoro-graph/src/point_map.rs` — 🟢 additive, plus 🔴 one asymmetry fix (1 call site)
-
-`PointMap<B>` (`point_map.rs:21`) is a struct holding parallel `points` and `quantity_types` maps.
-Its existing `retract_mut` (`:142`) requires a tangent for **every** point in the map and returns
-`MissingPoint` otherwise. An optimizer needs the opposite: retract the layout's ids and leave
-constants and nuisance quantities alone.
-
-*From `flattened-tangent-spaces.md` §4.*
-
-```rust
-// crates/skoro-graph/src/point_map.rs — new methods on `impl<B: Backend> PointMap<B>`
-
-impl<B: Backend> PointMap<B> {
-    /// Retract only the quantities named by `layout`, leaving every other point untouched.
-    ///
-    /// `delta` is `[batch, layout.total()]`; each block is unflattened and applied through
-    /// its own manifold's retraction. Errors `LayoutDimensionMismatch` if the widths
-    /// disagree, `IdNotInLayout` never — an id in the layout but absent from the map is
-    /// `MissingPoint`, matching `retract_mut`.
-    pub fn retract_flat(
-        &self,
-        layout: &TangentLayout,
-        delta: Tensor<B, 2>,
-    ) -> SkoroResult<Self> { todo!() }
-
-    pub fn retract_flat_mut(
-        &mut self,
-        layout: &TangentLayout,
-        delta: Tensor<B, 2>,
-    ) -> SkoroResult<()> { todo!() }
-}
-```
-
-The manifold for each block is reached exactly as the existing private helper does
-(`manifold_point`, `point_map.rs:126`), via `quantity_type.as_manifold()` to a
-`&dyn DynManifold<B>`. `DynManifold` is sealed with a blanket impl
-(`skoro-riemann/src/base.rs:36-51`), so it is consumed, never implemented.
-
-### Take the asymmetry fix while here
-
-```rust
-// crates/skoro-graph/src/point_map.rs:169 — was `others: PointMap<B>`
-pub fn inverse_retract(&self, others: &PointMap<B>) -> SkoroResult<HashMap<Id, TangentVector<B>>>
-```
-
-> **Breaking, one call site, and the kind of thing that spreads.** `retract` takes `&self` and
-> borrows; `inverse_retract` consumes `others` by value for no reason — it only reads. Callers must
-> clone a whole `PointMap` (two `HashMap`s plus an `Arc` bump per entry) to keep their own copy. An
-> optimizer computing residuals against a reference point does exactly that, every iteration. Fixing
-> it now costs one signature; leaving it means every future estimator either clones or restructures
-> around the borrow.
-
-## A.5 `skoro-graph/src/graph.rs` — 🔴 breaking, and the one that makes the rest mean anything
-
-Two changes. Neither is required to make phase 1 *compile*; both are required for its guarantees to
-be worth stating.
-
-### Every field of `Graph` is `pub`, and so is `ModelServer.graph`
-
-```rust
-// crates/skoro-graph/src/graph.rs:34 — today
-pub struct Graph<B: Backend> {
-    pub nodes: HashMap<Id, Node<B>>,
-    pub children: HashMap<Id, HashSet<Id>>,
-    pub log_likelihoods: Vec<Id>,
-    pub log_density_to_stochastic: HashMap<Id, Id>,
-    pub stochastic_to_log_density: HashMap<Id, Id>,
-    id_generator: IdGenerator,
-}
-```
-
-Four mutable indices with a hand-maintained invariant between them — `mark_likelihood_impl`
-(`:254-335`) writes all four in concert — exposed for arbitrary outside mutation. Anyone holding a
-`&mut Graph` can push onto `log_likelihoods` without a corresponding `LogDensity` node, or remove a
-node while leaving its id in two maps.
-
-This is the leak that makes every other guarantee provisional. `ModelServer.graph` is `pub`
-(`model.rs:45`) and `ModelClient::get_server` (`model.rs:481`) hands out the `Arc<RwLock<..>>`, so the
-route from *any* client to arbitrary graph mutation is two field accesses. A certificate asserting
-"every factor is least-squares shaped" is only as good as the impossibility of appending a fifth
-factor behind its back.
-
-```rust
-// crates/skoro-graph/src/graph.rs
-pub struct Graph<B: Backend> {
-    nodes: HashMap<Id, Node<B>>,
-    children: HashMap<Id, HashSet<Id>>,
-    log_likelihoods: Vec<Id>,
-    log_density_to_stochastic: HashMap<Id, Id>,
-    stochastic_to_log_density: HashMap<Id, Id>,
-    id_generator: IdGenerator,
-}
-
-impl<B: Backend> Graph<B> {
-    // Read-only accessors replacing the public fields.
-    pub fn node(&self, id: Id) -> Option<&Node<B>> { todo!() }
-    pub fn nodes(&self) -> impl Iterator<Item = (&Id, &Node<B>)> { todo!() }
-    pub fn node_count(&self) -> usize { todo!() }
-    pub fn children_of(&self, id: Id) -> Option<&HashSet<Id>> { todo!() }
-    pub fn log_likelihoods(&self) -> &[Id] { todo!() }
-    pub fn density_of(&self, stochastic: Id) -> Option<Id> { todo!() }
-    pub fn stochastic_of(&self, density: Id) -> Option<Id> { todo!() }
-}
-```
-
-> **This is the largest migration in phase 1 and the one most worth doing now.** Mutation already
-> goes through methods — `add_*`, `observe`, `mark_*`, `update_stochastic`, `demote_to_parameter`,
-> `remove` — so the fields are read directly far more than they are written. `ModelServer.graph`
-> becomes private with `graph(&self) -> &Graph<B>`, and `get_server` keeps working for readers while
-> ceasing to be a mutation vector. Every later document depends on this: the certificate (B.3), the
-> facade's invariant (B.5), and the bounded-growth assertions in `sequential-estimation.md` §12 all
-> assume the four indices agree, and today nothing enforces that.
-
-### `Graph::add_mapped` returns a bare `Id` and panics
-
-```rust
-// crates/skoro-graph/src/graph.rs:205-231 — today
-pub fn add_mapped<K, T>(&mut self, ..) -> Id {
-    // ...
-    self.register_children(id, &parent_ids)
-        .expect("internal: mapped node added with dangling parent");
-}
-```
-
-Every sibling constructor returns `SkoroResult`. This one panics, under a comment asserting that a
-dangling parent "indicates an internal bug rather than user error".
-
-```rust
-pub fn add_mapped<K, T>(&mut self, ..) -> SkoroResult<Id> { todo!() }
-```
-
-> **Breaking, and it removes a panic from a public path** — the bar this document set for taking one.
-> The comment's premise is already shaky and becomes false once anything removes nodes: a `Q` held
-> across a removal makes a dangling parent ordinary user error. Phase 1 does not remove nodes, so
-> this is pre-emptive; it is included because the migration is mechanical now (`add_mapped` is
-> reached through `map.rs`'s `register_mapN` helpers, which already return `SkoroResult`) and
-> becomes a rewrite of every operator's plumbing later.
-
-*Both changes relate to `graph-marginalization.md` §8, items 3 and 5.*
-
-## A.6 `skoro-model/src/hash_map_builders.rs` — 🟢 additive
-
-The tangent builders take a raw `Id` (`TensorMapBuilder::with_tensor`, `hash_map_builders.rs:53`)
-while `InputMapBuilder::insert_data` takes a `&Q<B, T>`. The inconsistency shows up immediately when
-seeding a Jacobian pass.
-
-*From `flattened-tangent-spaces.md` §4.*
-
-```rust
-// crates/skoro-model/src/hash_map_builders.rs
-
-impl<B: Backend, T> TensorMapBuilder<B, T> {
-    /// Insert by quantity rather than by raw id, matching `InputMapBuilder::insert_data`.
-    pub fn with_quantity<Qty>(self, q: &Q<B, Qty>, tensor: T) -> Self { todo!() }
-}
-```
-
-## A.7 `skoro-model/src/q.rs` — 🔴 breaking (13 sites)
-
-All three tiers of the unforgeability work. Every builder interface in Part B is shaped by whether
-this holds.
-
-*From `model-structure-bounds.md` §6.*
-
-**Tier 1.** Delete `Q<B, Real>::mark_likelihood` (`q.rs:175-181`). It has **zero call sites** in the
-workspace, so nothing migrates. It is deleted rather than deprecated because its existence lets any
-holder of a real-valued quantity attach an arbitrary factor to a restricted model.
-
-```rust
-// crates/skoro-model/src/q.rs:175-181 — deleted entirely
-//
-// impl<B: Backend> Q<B, Real> {
-//     pub fn mark_likelihood(&self) -> SkoroResult<()> { ... }
-// }
-```
-
-**Tier 2.** The `client` field becomes private, replaced by a narrow accessor. This is where the
-guarantee actually lives: today `gaussian.add_parameter(..).client.add_quantity(..)` reaches the
-unrestricted surface through any quantity a facade returned, and `client.server_id` reaches
-`ModelClient::from_id`.
-
-```rust
-// crates/skoro-model/src/q.rs:21
-pub struct Q<B: Backend, T> {
-    id: Id,                          // was `pub`
-    client: ModelClient<B>,          // was `pub`
-    pub(crate) guard: Arc<NodeDropGuard>,
-    _phantom: PhantomData<T>,
-}
-
-impl<B: Backend, T> Q<B, T> {
-    pub fn id(&self) -> Id { todo!() }
-}
-
-impl<B: Backend, T> Q<B, T> {
-    /// The mapping surface, and nothing else.
-    ///
-    /// Operator sugar and the `*Ops` extension traits build mapped nodes through this.
-    /// It deliberately does not expose `add_quantity`, `mark_likelihood`, `get_server`
-    /// or `server_id`, so a quantity handed out by a restricted facade cannot be used
-    /// to widen that facade.
-    pub fn mapping(&self) -> &impl MappingOps<B> { todo!() }
-}
-
-/// The subset of the client needed to build mapped nodes.
-pub trait MappingOps<B: Backend> {
-    fn add_mapped<K, T>(
-        &self,
-        quantity_type: T,
-        op: Arc<dyn GraphOperation<B>>,
-        parent_ids: Vec<Id>,
-    ) -> SkoroResult<Q<B, T>>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K>;
-}
-```
-
-**Migration.** Thirteen call sites across four crates, all of them internal operator plumbing:
-
-| file | sites |
-|---|---|
-| `skoro-model/src/map.rs` | `:16`, `:32`, `:35`, `:73`, `:78` |
-| `skoro-so3/src/ops/exp/cube.rs` | `:93`, `:136`, `:182`, `:236` |
-| `skoro-so3/src/ops/log/cube.rs` | `:98`, `:141`, `:187`, `:241` |
-| `skoro-linalg/src/vector/cross_product/cube.rs` | `:215`, `:259` |
-| `skoro-normal/src/facade.rs` | the delegating body |
-
-`Q`'s `Debug`, `PartialEq` and `Hash` impls (`q.rs:34`, `:52`, `:59`) read `client.server_id` and
-move inside the same module, so they are unaffected.
-
-`Q.id` goes private in the same pass. It is read widely, but only ever to pass into a graph call, so
-the migration is `q.id` → `q.id()` and nothing more. Making it private now is what lets `Q` change
-representation later — a tick-scoped generation counter for the graveyard, say — without another
-breaking release.
-
-**Tier 3, now taken.** `ModelClient::get_server` (`model.rs:481`) is narrowed and `from_id`
-(`model.rs:457`) kept:
-
-```rust
-impl<B: Backend> ModelClient<B> {
-    /// Read-only access. `ModelServer::graph()` returns `&Graph<B>` (A.5), so this is no
-    /// longer a mutation vector.
-    pub fn server_call<O, F: Fn(&ModelServer<B>) -> O>(&self, f: F) -> O { todo!() }
-
-    // `get_server(&self) -> Arc<RwLock<ModelServer<B>>>` — removed.
-}
-```
-
-> **Deferring Tier 3 was the wrong call, and A.5 is why.** I had planned to keep `get_server` on the
-> grounds that a private `Q.client` removes the route *from a quantity*. But `ModelClient` is
-> constructible directly, and with `ModelServer.graph` public the pair is a complete bypass of every
-> facade. Once A.5 makes `graph` private, `get_server` is merely redundant with `server_call` — so
-> removing it costs nothing and closes the last hole. `from_id` stays: it recovers a client by
-> server id, which after A.5 confers only what `ModelClientOps` already allows, and
-> `skoro-model/tests/plumbing.rs:81-90` exercises it deliberately.
-
-## A.8 `skoro-model/src/client_ops.rs` — 🔴 breaking (2 call sites)
-
-`ModelClientOps` (`client_ops.rs:46`) has 22 methods and deliberately omits the stochastic growth
-path, which is what makes a restricting facade possible at all. That omission now needs a home, so a
-builder can be generic over "can grow this model".
-
-*From `sequential-estimation.md` §5, `model-structure-bounds.md` §6.*
-
-```rust
-// crates/skoro-model/src/client_ops.rs
-
-/// Capability: this client can add stochastic quantities and free-standing factors.
-///
-/// Separate from `ModelClientOps` rather than folded into it, because
-/// `GaussianModelClient` implements that trait precisely in order to *withhold*
-/// this surface (`skoro-normal/src/facade.rs:196-199`).
-pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
-    fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>;
-
-    fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>;
-
-    fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()>;
-}
-```
-
-Implemented by `ModelClient<B>` only. The methods are generic over `D: Distribution`, so the trait is
-not dyn-compatible — which is fine, since builders are monomorphized.
-
-> **Take the inherent methods away, don't leave both paths.** `add_quantity` (`model.rs:533`),
-> `update_quantity` (`:615`) and `mark_likelihood` (`:592`) are inherent methods on `ModelClient`
-> today. If they stay inherent *and* appear on the trait, inherent-method resolution wins at every
-> call site and the trait is decoration — a reader cannot tell which surface a builder was written
-> against. Moving them costs two call sites (`skoro-normal/src/facade.rs:103` and
-> `skoro-normal/tests/demote.rs:208`) plus a `use skoro_model::ModelBuilderOps` where they are
-> called. Doing this is what makes "a facade withholds growth" a checkable statement instead of a
-> convention.
-
-## A.9 `skoro-normal/src/distribution.rs` and `skoro-model/src/distribution.rs` — 🔴 breaking (3 impls)
-
-Expose the residual that `log_density` already builds and throws away — and, now that breaking is
-permitted, remove the panic that sits beside it.
-
-*From `flattened-tangent-spaces.md` §7, `model-structure-bounds.md` §4.*
-
-Today (`distribution.rs:168-178`) `white_tangent` is a local binding, consumed immediately by
-`.norm_squared()`, its `Id` never returned to any caller. The change is to name it:
-
-```rust
-// crates/skoro-normal/src/distribution.rs
-
-impl<B: Backend, M: ContinuousQuantity<B>> Normal<B, M> {
-    /// The whitened residual `r(x) = L⁻¹ (x ⊖ μ)`.
-    ///
-    /// `−log p(x) = ½‖r(x)‖² + n(θ)`, where the normalizer `n` is the `log_det` term
-    /// and the constant. Least-squares consumers minimize the first term only, which is
-    /// valid exactly when `n` does not vary with the optimization variables — see the
-    /// precondition in Part B, `skoro-levenberg-marquardt`.
-    pub fn whitened_residual(&self, x: &Q<B, M>) -> SkoroResult<Q<B, EuclideanD>> { todo!() }
-}
-```
-
-The return type is `Q<B, EuclideanD>` and needs **no bound on `M` beyond the one `Normal` already
-carries**: for a generic `M`, `inverse_retract` resolves only through the blanket
-`AssociatedTangentVectorBuilder<EuclideanD, B>` impl (`skoro-model/src/ops/base.rs:18`), so the
-tangent type is forced rather than chosen.
-
-### Make `Distribution::log_density` fallible
-
-The reason `whitened_residual` returning `SkoroResult` looked awkward is that its only caller cannot
-propagate: `log_density` returns a bare `Q<B, Real>` and therefore ends in
-
-```rust
-.expect("internal: Normal covariance factor and tangent dimensions should match")
-```
-
-(`distribution.rs:173-175`). That is a panic on a public path, reachable whenever a covariance
-factor's dimension disagrees with its mean's tangent dimension — a modelling error, not an internal
-one.
-
-```rust
-// crates/skoro-model/src/distribution.rs:18
-pub trait Distribution<B: Backend, K: Kind<B>> {
-    type Qty: QuantityType<B, K>;
-    type Sampler: Sampler<B, K>;
-
-    fn quantity_type(&self) -> Self::Qty;
-    fn sampler(&self) -> Self::Sampler;
-    fn parent_ids(&self) -> &[Id];
-    fn log_density(&self, x: &Q<B, Self::Qty>) -> SkoroResult<Q<B, Real>>;   // was `Q<B, Real>`
-}
-```
-
-> **Three impls and two callers.** The impls are `Normal` (`skoro-normal/src/distribution.rs:144`)
-> and two test doubles (`skoro-model/tests/plumbing.rs:61`,
-> `skoro-model/tests/discrete_ops.rs:230`). The callers are `ModelClient::add_quantity`
-> (`model.rs:553`) and `update_quantity` (`:627`), both of which already return `SkoroResult` and
-> currently discard the possibility of failure. This is the whole blast radius, and it converts a
-> panic into a `?`. Left alone, every future distribution inherits the same forced `expect`, and the
-> asymmetry — a fallible `whitened_residual` next to an infallible `log_density` computing the same
-> thing — is exactly the kind of thing that gets copied.
-
-With this taken, `log_density` becomes `Ok(self.constant + -0.5 * self.whitened_residual(x)?.norm_squared() + log_det)`
-and there is one code path rather than two.
-
 ---
 
 # Part B — New code, by crate
 
-## B.1 `skoro-graph` — new module `tangent_layout.rs`
+## B.1 `skoro-graph` — new module `tangent_layout.rs` — ✅ **implemented**
+
+> **Done.** `crates/skoro-graph/src/tangent_layout.rs` plus `PointMap::retract_flat{,_mut}`, with
+> 13 tests in `skoro-graph/tests/tangent_layout_tests.rs` and 2 backend-generic tests in
+> `skoro-se3/tests/common/mod.rs`. Workspace: 140 tests passing, clippy clean.
+>
+> One supporting change: `Graph::get_manifold` was private and is now `pub`, which is what lets
+> `from_ids` size a block. It already resolved [`Node::LogDensity`] to `Real`, so a layout can name
+> density nodes as rows — exactly what a Jacobian's row layout needs.
+>
+> The interface below is as-built; the only deviation is that `flatten_vectors`/`flatten_frames`
+> validate supplied block shapes (`BatchSizeMismatch` / `InconsistentFrameCount`) rather than
+> trusting them, since a wrong-shaped block would otherwise fail inside `Tensor::cat` with no id
+> to name.
 
 **Existing crate.** The layout lives here, below every algorithm crate, because an EKF, a
 least-squares optimizer, HMC and MALA all need the same object. It needs only
@@ -684,6 +230,45 @@ impl TangentLayout {
 Flattening is a **single** `Tensor::cat` over the ordered block list along dim 1, not a pairwise fold.
 Unflattening is `narrow(1, offset, dimension)` per block. Every entry point validates
 `flat.dims()[1] == self.total()` and returns `LayoutDimensionMismatch` otherwise.
+
+### `PointMap::retract_flat` lands with this module
+
+Carried over from the original Part A, where it was scheduled too early: it takes a `&TangentLayout`
+and so cannot exist before the type above.
+
+*From `flattened-tangent-spaces.md` §4.* 🟢 additive.
+
+```rust
+// crates/skoro-graph/src/point_map.rs — new methods on `impl<B: Backend> PointMap<B>`
+
+impl<B: Backend> PointMap<B> {
+    /// Retract only the quantities named by `layout`, leaving every other point untouched.
+    ///
+    /// This is deliberately unlike the existing `retract_mut`, which requires a tangent
+    /// for *every* point in the map and errors `MissingPoint` otherwise. An optimizer's
+    /// `PointMap` also holds constants and nuisance quantities that are not being
+    /// stepped, so partial retraction is the operation it actually needs.
+    ///
+    /// `delta` is `[batch, layout.total()]`; each block is unflattened and applied
+    /// through its own manifold's retraction. Errors `LayoutDimensionMismatch` if the
+    /// widths disagree, `MissingPoint` for a layout id absent from the map.
+    pub fn retract_flat(
+        &self,
+        layout: &TangentLayout,
+        delta: Tensor<B, 2>,
+    ) -> SkoroResult<Self> { todo!() }
+
+    pub fn retract_flat_mut(
+        &mut self,
+        layout: &TangentLayout,
+        delta: Tensor<B, 2>,
+    ) -> SkoroResult<()> { todo!() }
+}
+```
+
+The manifold for each block is reached as the existing private helper does (`manifold_point`,
+`point_map.rs:126`), via `quantity_type.as_manifold()` to a `&dyn DynManifold<B>`. `DynManifold` is
+sealed with a blanket impl (`skoro-riemann/src/base.rs:36-51`), so it is consumed, never implemented.
 
 ## B.2 `skoro-model` — new module `jacobian.rs`
 
@@ -1168,48 +753,34 @@ with `√λ I`, `lstsq` for `δ`.
 The exercise earned its keep here. One design in `model-structure-bounds.md` does not survive contact
 with the crate graph.
 
-### The sealed-trait design cannot work across crates
+### The sealed-trait design cannot work across crates — ✅ **folded into the docs**
 
-`model-structure-bounds.md` §2 and §6 specify `NlsStructure` as a **sealed** trait, on the argument
-that a trait anyone can implement cannot carry an invariant. The argument is right and the mechanism
-is not: sealing works by a private `Sealed` supertrait, so **only the defining crate can implement
-the sealed trait**. But `NlsStructure` must live in `skoro-model` (it bounds `Distribution` and
-`ModelClientOps`), while `GaussianModelClient` lives in `skoro-normal` — which could then never
-implement it. The very variance the trait exists to provide is what sealing forbids.
+`model-structure-bounds.md` used to specify `NlsStructure` as a **sealed** trait, on the argument
+that a trait anyone can implement cannot carry an invariant. The argument was right and the mechanism
+was not: sealing works by a private `Sealed` supertrait, so only the defining crate can implement the
+trait — and `NlsStructure` must live in `skoro-model` while `GaussianModelClient` lives in
+`skoro-normal`. Sealing would have forbidden exactly the implementation the trait exists to admit.
 
-**The fix moves the guarantee from the trait to the certificate's constructor.** `NlsStructure`
-becomes an ordinary trait. `ResidualCertificate` is what cannot be forged, because entries enter it
-only through
+The fix moves the guarantee from the trait to `ResidualCertificate`'s constructor: `record` demands
+`D: WhitenedResidual<B>`, so a hand-rolled implementor can only produce an empty or honest
+certificate. The trait is forgeable; the evidence is not.
 
-```rust
-pub fn record<B, K, D>(&mut self, distr: &D, density: Id, residual: &Q<B, EuclideanD>)
-    -> SkoroResult<()>
-where D: WhitenedResidual<B>;
-```
-
-A hand-rolled implementor of `NlsStructure` must produce a `ResidualCertificate`, and the only
-certificate it can produce is either empty or populated through the bounded `record`. The invariant
-holds, and downstream crates can still implement the trait.
-
-This is arguably the better design regardless: it puts the guarantee on the **data** the algorithm
-consumes rather than on a marker beside it, which is the same move as "the certificate and the
-algorithm's input are the same object".
-
-**`docs/model-structure-bounds.md` §2 and §6 need a follow-up amendment** recording this. It is not
-made in phase 1 — this document is the record until then.
+> **This is now recorded in `model-structure-bounds.md` §2**, with the naming convention in §3 and the
+> verification in §9 rebuilt around it. That document is the durable record; this section is a
+> pointer, kept only because the finding originated here.
 
 ### Two smaller notes
 
 - **`GaussianStructure` ships without a consumer.** Phase 1 has no use for `blocks()`; only the EKF
   does. It is declared now because the refinement `GaussianStructure: NlsStructure` is the thing
   being validated, and declaring it later would mean revisiting the facade a second time.
-- **Encapsulating `Graph` (A.5) turned out to be the load-bearing change, not `Q.client`.** The
-  interfaces in B.3 and B.5 assert that a certificate cannot be bypassed. Writing them made clear
-  that `Graph`'s five `pub` fields plus a `pub` `ModelServer.graph` make every such assertion
-  provisional — a `&mut Graph` reached through `get_server` can append to `log_likelihoods`
-  directly. `Q.client` closes the route from a *quantity*; A.5 closes the route from a *client*, and
-  without it the rest is a convention. This only became visible once the certificate had a written
-  signature to defend.
+- **Encapsulating `Graph` turned out to be the load-bearing change, not `Q.client`.** The interfaces
+  in B.3 and B.5 assert that a certificate cannot be bypassed. Writing them made clear that `Graph`'s
+  five `pub` fields plus a `pub` `ModelServer.graph` made every such assertion provisional — a
+  `&mut Graph` reached through `get_server` could append to `log_likelihoods` directly. Privatizing
+  `Q.client` closes the route from a *quantity*; encapsulating `Graph` closes the route from a
+  *client*, and without it the rest is a convention. This only became visible once the certificate
+  had a written signature to defend. Both are now applied.
 
 ---
 
@@ -1241,7 +812,7 @@ Items 2 and 5 are the gates — the two that fail silently otherwise. Write them
 | 6 | **Certificate honesty.** A `ResidualCertificate` built by hand is empty, and `record` cannot be called without a `WhitenedResidual` distribution — a `trybuild` compile-fail test. | Part C |
 | 7 | **Residual and density agree.** `‖whitened_residual(x)‖²` reconstructs `Normal::log_density(x)` up to `constant + log_det`, on `Real`, `EuclideanD` and `SE3` means. | `model-structure-bounds.md` §9.1 |
 | 8 | **LM end-to-end.** A linear-Gaussian least-squares problem. At `λ = 0` the analytic solution is reached in **one** iteration — the undamped step is exact on a linear problem, so anything else is a bug in `J` or in the solve. With `λ > 0` it converges to the **same** point in several, which checks that damping rescales the step without moving the optimum. | `flattened-tangent-spaces.md` §8.6 |
-| 9 | **Cotangent defaulting.** A model with a free parameter that does not reach the residuals produces a zero column in `J` rather than panicking — the regression for [A.3](#a3-skoro-graphsrccompilerrs). | `flattened-tangent-spaces.md` §5 |
+| 9 | **Cotangent defaulting.** A model with a free parameter that does not reach the residuals produces a zero column in `J` rather than panicking — the regression for the `vjp_forward` zero-defaulting already applied in `compiler.rs`. | `flattened-tangent-spaces.md` §5 |
 
 Run with `cargo test --workspace`. The wgpu suites additionally exercise the device path, and will
 surface the `TrilInvert` host round-trip as a sync point.
@@ -1250,18 +821,12 @@ surface the `TrilInvert` host round-trip as a sync point.
 
 ## Summary of files touched
 
+Part A is applied; only the remaining work is listed.
+
 | | file | change | |
 |---|---|---|---|
-| A.1 | `crates/skoro-core/src/error.rs` | 6 variants + 6 `Display` arms | 🟢 |
-| A.2 | `crates/skoro-core/src/id.rs` | derive `PartialOrd, Ord` | 🟢 |
-| A.3 | `crates/skoro-graph/src/compiler.rs` | zero-default the VJP panic; drop `observations` | 🔴 0 sites — **blocker** |
-| A.4 | `crates/skoro-graph/src/point_map.rs` | `retract_flat*`; `inverse_retract` by reference | 🟢 + 🔴 1 site |
-| A.5 | `crates/skoro-graph/src/graph.rs` | privatize the 5 fields + `ModelServer.graph`; `add_mapped -> SkoroResult` | 🔴 **largest** |
-| A.6 | `crates/skoro-model/src/hash_map_builders.rs` | `with_quantity` | 🟢 |
-| A.7 | `crates/skoro-model/src/q.rs` | drop `mark_likelihood`; privatize `client` and `id`; drop `get_server` | 🔴 13 sites |
-| A.8 | `crates/skoro-model/src/client_ops.rs` | `ModelBuilderOps`; move the 3 inherent methods onto it | 🔴 2 sites |
-| A.9 | `skoro-model/src/distribution.rs`, `skoro-normal/src/distribution.rs` | `whitened_residual`; `log_density -> SkoroResult` | 🔴 3 impls |
 | B.1 | `crates/skoro-graph/src/tangent_layout.rs` | new module | |
+| B.1 | `crates/skoro-graph/src/point_map.rs` | `retract_flat`, `retract_flat_mut` (carried from Part A) | 🟢 |
 | B.2 | `crates/skoro-model/src/jacobian.rs` | new module | |
 | B.3 | `crates/skoro-model/src/structure.rs` | new module | |
 | B.4 | `crates/skoro-dense/` | **new crate** | |

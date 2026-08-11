@@ -307,7 +307,7 @@ chosen accordingly. The consequences:
    avoid it — nothing can, at fixed accuracy. What it means for the caller is that **elimination
    order is part of the decision**, not an implementation detail: a retention policy should prefer
    eliminations with small blankets, and `RetentionPolicy::select` returns an ordered list for this
-   reason. The bound to watch is `log_likelihoods.len()` and the arity of the largest factor, not
+   reason. The bound to watch is `log_likelihoods().len()` and the arity of the largest factor, not
    `nodes.len()` alone.
 
 ### Why there is no `FactorGraph`
@@ -391,23 +391,26 @@ constructor funnels through — `add_stochastic_impl` at `graph.rs:189` and `add
 `graph.rs:230`. Check the graveyard there and return `SkoroError::QuantityRetired { id, reason }`
 instead of `DanglingParent`, which cannot distinguish "never existed" from "marginalized away".
 
-**Fallible APIs error; operator sugar must panic.** This split is forced, not chosen:
-`std::ops::Add for Q` returns `Q`, not `Result`, so `a + b` over a retired quantity has nowhere to
-put an error. What the graveyard buys there is accuracy. Today `add_mapped_impl` panics with
+**Everything errors; nothing panics.** An earlier draft of this section argued that a split was
+*forced* — that fallible APIs would error while operator sugar had to panic, because
+`std::ops::Add for Q` returned `Q` rather than `Result` and `a + b` over a retired quantity had
+nowhere to put an error.
 
-```rust
-self.register_children(id, &parent_ids)
-    .expect("internal: mapped node added with dangling parent");
-```
+> **Amendment.** That premise no longer holds. The whole node-building surface is fallible:
+> `std::ops` on `Q`, the `*Ops` extension methods, `register_map1..11` and `ModelClient::add_mapped`
+> all return `SkoroResult<Q<..>>`, and `Graph::add_mapped` returns `SkoroResult<Id>`. A retired
+> quantity therefore surfaces as `Err(QuantityRetired)` through `a + b` like anywhere else.
 
-under a comment asserting that a dangling parent here "indicates an internal bug rather than user
-error" (`graph.rs:227-231`). After marginalization that comment is false: it is ordinary user error,
-and the panic should name the id, the reason and the epoch. Meanwhile `add_quantity`, `observe`,
-`update_quantity` and the `evaluate*` family all return `SkoroResult` already and should surface
-`QuantityRetired`. Add `Q::is_retired()` for a non-panicking pre-check.
+This is simpler than the design it replaces, and strictly better: the graveyard no longer needs a
+second, lossier reporting channel for the sugar path, and there is no place where an id is known but
+cannot be reported. `add_quantity`, `observe`, `update_quantity` and the `evaluate*` family were
+already `SkoroResult` and should surface `QuantityRetired` the same way. `Q::is_retired()` remains
+worth adding as a non-panicking pre-check, now purely for ergonomics rather than to dodge a panic.
 
-`check_cache`'s `.expect("Parent node should be in graph.")` (`graph.rs:1284`) is reachable the same
-way and needs the same treatment.
+Two related items are settled and one is not. `Graph::add_mapped` no longer returns a bare `Id` and
+no longer panics on a dangling parent (§8.3, fixed). `check_cache`'s
+`.expect("Parent node should be in graph.")` (`graph.rs:1296`) is still reachable from a retired
+parent and still needs the same treatment (§8.4, open).
 
 **Bounding growth.** Ids are never reclaimed — `IdGenerator` is a monotonic `AtomicU64`
 (`skoro-core/src/id.rs:24`) and `remove` does not return them — so an unbounded graveyard is a leak.
@@ -483,7 +486,7 @@ What remains:
    above it*. Nor can it be reclaimed automatically — `mark_density` cleared its `is_mapped_leaf`
    flag (`model.rs:129`) so `cleanup()` never sees it, and `update_quantity` dropped the only
    `Q<B, Real>` naming it (`model.rs:627-636`), so no caller has an `Id` to pass to `remove`. The
-   only escape today is walking `graph.nodes` for `LogDensity` nodes absent from `log_likelihoods`.
+   only escape today is walking `graph.nodes()` for `LogDensity` nodes absent from `log_likelihoods()`.
 
    It is *not* a phase-1 blocker: `unregister_density` runs only from `update_stochastic` and
    `demote_to_parameter`, and a retention-1 filter calls neither. It becomes one the moment a window
@@ -495,18 +498,20 @@ What remains:
    `stochastic_blanket` rather than in each caller. **Phase-1 blocker.**
 2. **`observe`'s descendant walk lacks a `visited` set** (`graph.rs:415-461`), unlike
    `clear_cached_descendants`. Quadratic on a diamond DAG. Fold it into that helper.
-3. **`Graph::add_mapped` returns a bare `Id` and panics on a dangling parent**
-   (`graph.rs:207, 230-231`), where every sibling constructor returns `SkoroResult`. This is the
-   graveyard's motivating case (§6): the panic's comment claims user error is impossible here, and
-   marginalization makes it routine.
-4. **`check_cache`'s `.expect("Parent node should be in graph.")`** (`graph.rs:1284`) — reachable
-   from a retired parent, same treatment as 3.
-5. **`Graph::remove`'s unresolved `// TODO: check if I need to remove children`** (`graph.rs:760`) —
+3. ~~**`Graph::add_mapped` returns a bare `Id` and panics on a dangling parent.**~~ ✅ **Fixed.** It
+   returns `SkoroResult<Id>`, and the whole building surface above it is fallible too (§6), so a
+   dangling parent is now reported rather than asserted away.
+4. **`check_cache`'s `.expect("Parent node should be in graph.")`** (`graph.rs:1296`) — reachable
+   from a retired parent, and the last remaining panic of this family. **Open.**
+5. **`Graph::remove`'s unresolved `// TODO: check if I need to remove children`** (`graph.rs:771`) —
    retirement exercises this path hard and it should not be uncertain. **Phase-1 blocker**: per-tick
    teardown runs this path once per tick from the very first phase, and nothing tests it today.
-6. Carried from `flattened-tangent-spaces.md` §5, "A defect to fix along the way": `compiler.rs:363` panics
-   `"Point should have a cotangent vector."` when a continuous leaf in the compiled subgraph
-   receives no tape write. Default to zeros or return an error.
+   **Open.**
+6. ~~Carried from `flattened-tangent-spaces.md` §5: `compiler.rs` panics
+   `"Point should have a cotangent vector."`~~ ✅ **Fixed.** A continuous leaf that receives no tape
+   write now yields a zero cotangent of the right shape, matching the missing-id rule that
+   `TangentLayout::flatten_*` uses. That leaf is not an error: it is a quantity with zero derivative
+   with respect to the targets.
 
 ## 9. Verification
 
@@ -556,14 +561,15 @@ cache walk is a defensive guard, not a repair — see §5.
 5a. **Per-tick teardown.** Ahead of everything else on this list in time, because
    `sequential-estimation.md` §11 phase 1 depends on it: a tick's captured node set is removed in one
    `Graph::remove` call, the call succeeds (nothing outside the batch still references it), and
-   afterwards no `Node::LogDensity` sits in `graph.nodes` while absent from `log_likelihoods`. This
+   afterwards no `Node::LogDensity` sits in the arena while absent from `log_likelihoods()`. This
    is the gate on defects 1a and 5 of §8, and the only one on this list a retention-1 filter needs.
 6. **Factor replacement.** Retiring one member of a joint drops the old factor — verify it leaves via
    the dead set rather than by explicit bookkeeping — and installs a smaller one over the survivors.
-   A rolling window over many ticks must keep both `graph.nodes.len()` and `log_likelihoods.len()`
+   A rolling window over many ticks must keep both `graph.node_count()` and `log_likelihoods().len()`
    bounded.
-7. **Graveyard.** Building from a retired `Q` returns `QuantityRetired` on fallible paths and panics
-   informatively on operator sugar; epitaphs are pruned when the last `Q` drops.
+7. **Graveyard.** Building from a retired `Q` returns `QuantityRetired` — from operator sugar too,
+   not only from the explicitly fallible paths, since §6's forced split no longer exists. Epitaphs
+   are pruned when the last `Q` drops.
 
 ### End-to-end
 

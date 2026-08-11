@@ -13,16 +13,16 @@ fn add_discrete_constant_and_parameter() {
     // A free boolean parameter.
     let p = graph.add_parameter(Boolean);
 
-    assert!(graph.nodes.contains_key(&c));
-    assert!(graph.nodes.contains_key(&p));
+    assert!(graph.contains(c));
+    assert!(graph.contains(p));
 
     // Both nodes report as discrete.
-    assert!(graph.nodes.get(&c).unwrap().is_discrete());
-    assert!(graph.nodes.get(&p).unwrap().is_discrete());
+    assert!(graph.node(c).unwrap().is_discrete());
+    assert!(graph.node(p).unwrap().is_discrete());
 
     // The stored variants are the unified constant/parameter ones.
-    assert!(matches!(graph.nodes.get(&c).unwrap(), Node::Constant(_)));
-    assert!(matches!(graph.nodes.get(&p).unwrap(), Node::Parameter(_)));
+    assert!(matches!(graph.node(c).unwrap(), Node::Constant(_)));
+    assert!(matches!(graph.node(p).unwrap(), Node::Parameter(_)));
 }
 
 #[test]

@@ -55,7 +55,7 @@ where
         let (out_type, matmul) = self
             .get_quantity_type()
             .build_matmul(&rhs.get_quantity_type())?;
-        Ok(register_map2(out_type, matmul, (self, rhs)))
+        register_map2(out_type, matmul, (self, rhs))
     }
 }
 

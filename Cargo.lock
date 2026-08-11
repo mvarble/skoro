@@ -5743,6 +5743,7 @@ dependencies = [
  "approx",
  "burn",
  "skoro-backend",
+ "skoro-core",
  "skoro-graph",
  "skoro-model",
  "skoro-operation",

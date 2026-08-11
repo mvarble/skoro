@@ -1,4 +1,5 @@
 use skoro_backend::{Backend, CotangentFrame, ElementConversion, Int, Point, Tensor, TensorData};
+use skoro_core::error::SkoroResult;
 use skoro_core::pack::NumComponents;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_operation::{
@@ -127,7 +128,7 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
     }
 }
 
-pub fn diag<B: Backend>(tril: &Q<B, Tril>) -> Q<B, EuclideanD> {
+pub fn diag<B: Backend>(tril: &Q<B, Tril>) -> SkoroResult<Q<B, EuclideanD>> {
     let k = tril.get_quantity_type().num_components();
     let n = k_to_n(k);
     register_map1(EuclideanD(n), TrilDiag, tril)
