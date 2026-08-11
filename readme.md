@@ -13,13 +13,13 @@ It breaks this domain down into a few distinct crates:
   Skoro explicitly ignores `burn`'s automatic differentiation engine, using it strictly for high-performance tensor execution (CPU via `ndarray` and GPU via `cubecl`).
   It provides geometric type aliases like `Point<B>`, `TangentVector<B>`, and `TangentFrame<B>` representing batched elements via shape conventions over `burn`'s `Tensor`.
 - **`skoro-diff`**: The custom automatic differentiation engine.
-  Since probabilistic inference algorithms (like Hamiltonian Monte Carlo, Extended Kalman Filters, or Gauss-Newton optimization) often require both first-order (Jacobian, Vector-Jacobian Product) and second-order (Hessian, Hessian-Vector Product) derivatives natively aware of non-linear manifolds, Skoro has a bespoke differentiation system.
+  Since probabilistic inference algorithms (like Hamiltonian Monte Carlo, Extended Kalman Filters, or Levenberg-Marquardt optimization) often require both first-order (Jacobian, Vector-Jacobian Product) and second-order (Hessian, Hessian-Vector Product) derivatives natively aware of non-linear manifolds, Skoro has a bespoke differentiation system.
 - **`skoro-riemann`**: A differential geometry framework providing the `Manifold` / `DynManifold` traits along with flat manifold representations (`Real`, `Euclidean<D>` / `EuclideanD`, and `EuclideanMatrix`).
 - **`skoro-graph`**: The probabilistic DAG (Directed Acyclic Graph).
   This represents the logical structure of a user's model before it gets flattened and executed.
 - **`skoro-model`**: The high-level facade mapping user API concepts (like `ModelClient` and `Q` quantity proxies) down into the backend `Graph` execution logic.
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
-  These are *differentiable graph operations*; the dense factorizations an EKF or Gauss-Newton iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/estimator-linear-algebra.md` explains why they run on the host rather than on the backend.
+  These are *differentiable graph operations*; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/estimator-linear-algebra.md` explains why they run on the host rather than on the backend.
 - **`skoro-so3`**: The SO(3) rotation group (`SO3`, `SO3Matrix`) with differentiable `exp` (Rodrigues' formula), `log`, retraction, compose, rotate/unrotate, and invert operations.
 - **`skoro-se3`**: The SE(3) rigid-body transform group (`SE3`, `SE3Pose`), composing SO(3) rotation operations with translation.
 - **`skoro-pointwise`**: Differentiable elementwise operations (`log`, `abs`).

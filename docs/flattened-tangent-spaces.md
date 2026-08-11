@@ -16,7 +16,7 @@ returns `HashMap<Id, Tensor<..>>`:
 
 This is the right representation for a *graph*, and the wrong representation for the *linear
 algebra*. An Extended Kalman Filter does not want per-quantity gradients; it wants a covariance
-`P ∈ ℝ^{N×N}`, a measurement Jacobian `H ∈ ℝ^{M×N}`, and a correction `δ ∈ ℝ^N`. Gauss-Newton
+`P ∈ ℝ^{N×N}`, a measurement Jacobian `H ∈ ℝ^{M×N}`, and a correction `δ ∈ ℝ^N`. Levenberg-Marquardt
 wants a residual Jacobian and a normal-equation solve. Both need a stable assignment of each
 quantity's tangent space to a contiguous range of indices.
 
@@ -28,11 +28,11 @@ This document proposes a `TangentLayout` that pins down such an ordering once, t
 unflatten operations built on it, a Jacobian-assembly API, and the dense linear algebra the
 consuming algorithms will need.
 
-### Why Gauss-Newton rather than Newton
+### Why Levenberg-Marquardt rather than Newton
 
 `hvp_forward` (`skoro-graph/src/compiler.rs:373`) takes a **rank-2** `TangentVector` per id, so
 one pass yields exactly one Hessian-vector product. A dense Hessian therefore costs `N` passes.
-A Gauss-Newton `JᵀJ` costs one Jacobian extraction (§4). That asymmetry is a large part of why
+A Levenberg-Marquardt `JᵀJ` costs one Jacobian extraction (§4). That asymmetry is a large part of why
 the flattened Jacobian API is worth building.
 
 ## 2. The invariant: dimension, not storage
@@ -73,7 +73,7 @@ New file `crates/skoro-graph/src/tangent_layout.rs`, alongside `point_map.rs` �
 `DynQuantityType::as_manifold()` (`skoro-graph/src/quantity.rs:184`) and `Graph` for lookups.
 Re-exported from `skoro-model` alongside `hash_map_builders`.
 
-It lives in `skoro-graph`, below every algorithm crate, because EKF, Gauss-Newton, HMC, and MALA
+It lives in `skoro-graph`, below every algorithm crate, because EKF, Levenberg-Marquardt, HMC, and MALA
 all need the same object — HMC and MALA for their momentum and drift vectors, the other two for
 Jacobians and covariances.
 
@@ -233,7 +233,7 @@ needs, since the `PointMap` also holds constants and nuisance quantities.
 
 Easy to conflate, and the distinction decides which operation an algorithm reaches for:
 
-> **Retraction applies a correction** to a point — an EKF update, a Gauss-Newton step. The new
+> **Retraction applies a correction** to a point — an EKF update, a Levenberg-Marquardt step. The new
 > value is `retract(x, δ)` for a tangent `δ` in the same layout.
 >
 > **State advance replaces values** — `x_{k+1} = f(x_k)` is an evaluation of a *mapped* node
@@ -338,7 +338,7 @@ the Jacobian API whenever a layout column reaches the targets only through a `fo
 
 > **Superseded for the deterministic estimators.** This section identifies the gap correctly, but
 > the resolution below — hand-written `Tensor<B, 3>` kernels — was reconsidered in
-> `estimator-linear-algebra.md`. For `skoro-ekf` and `skoro-gauss-newton`, this solve runs on the
+> `estimator-linear-algebra.md`. For `skoro-ekf` and `skoro-levenberg-marquardt`, this solve runs on the
 > **host, in `f64`, at batch 1**, in a `skoro-dense` crate backed by `faer`. Read that document
 > before implementing anything here. The survey of what exists and what `burn` provides is still
 > accurate and is what the decision rests on.
@@ -406,7 +406,7 @@ Sequencing:
 ## 7. Worked consumers
 
 Sketches, not specifications — enough to show the API is sufficient. Each becomes its own crate
-(`skoro-ekf`, `skoro-gauss-newton`, and later `skoro-hmc`, `skoro-mala`,
+(`skoro-ekf`, `skoro-levenberg-marquardt`, and later `skoro-hmc`, `skoro-mala`,
 `skoro-metropolis-hastings`), all depending on `skoro-model` and `skoro-linalg`.
 
 Scope note: **these algorithms consume eager tensors and are not differentiable model
@@ -452,7 +452,7 @@ Three things this shows:
 - Predict is the concrete case of "state advance replaces values" from §4 — the leaf-slot write
   has no helper today and is done by hand.
 
-### Gauss-Newton
+### Levenberg-Marquardt
 
 The objective is `½ Σ ‖rᵢ‖²`, where `rᵢ` is the whitened residual of factor `i`.
 `Normal::log_density` (`skoro-normal/src/distribution.rs:168-178`) **already builds that node**:
@@ -468,7 +468,7 @@ log-density is returned. Exposing it is the largest reuse available here:
 - Add `Normal::whitened_residual(&self, x: &Q<B, M>) -> SkoroResult<Q<B, EuclideanD>>` returning
   that node, and have `log_density` call it, so there is one code path.
 - Introduce a `WhitenedResidual<B>` trait in `skoro-model/src/distribution.rs` so
-  `skoro-gauss-newton` is distribution-generic rather than `Normal`-specific.
+  `skoro-levenberg-marquardt` is distribution-generic rather than `Normal`-specific.
 
 The iteration is then:
 
@@ -481,12 +481,18 @@ J  = jacobian_vjp(client, points, &free, &residuals)           // [b, M, N]
 points = points.retract_flat(&free, δ)
 ```
 
-`λ = 0` is Gauss-Newton; `λ > 0` is Levenberg-Marquardt, which the same code supports for free.
+`λ > 0` is the Levenberg-Marquardt step; `λ = 0` degenerates to the undamped step, which the same
+code gives for free and which is exact on a linear problem (§8, item 6).
 
 > **Prefer the QR path for the `δ` line.** Forming `JᵀJ` squares the condition number;
 > `lstsq(J, −r)` by column-pivoted QR does not, and it is available on the host where the normal
-> equations are not the only option (`estimator-linear-algebra.md` §3). Keep `spd_solve` as the
-> `λ > 0` route, where the damping regularizes the product anyway.
+> equations are not the only option (`estimator-linear-algebra.md` §3).
+>
+> This holds at `λ > 0` too, which is the case that matters for Levenberg-Marquardt: the damped step
+> is the least-squares solution of the row-augmented system `[J; √λ I] δ = [−r; 0]`, so `lstsq`
+> serves the whole algorithm and not only its undamped limit — see `estimator-linear-algebra.md` §7.
+> `spd_solve` remains the cheaper route when `λ` is large enough that conditioning is not the
+> binding constraint.
 
 ## 8. Verification
 
@@ -504,8 +510,11 @@ points = points.retract_flat(&free, δ)
    the ill-conditioned case that makes the QR argument checkable.
 5. **EKF end-to-end.** A linear-Gaussian model, where the EKF must reproduce the exact Kalman
    filter, checked against the closed-form posterior.
-6. **Gauss-Newton end-to-end.** A linear-Gaussian least-squares problem, which must converge in
-   one iteration to the analytic solution.
+6. **Levenberg-Marquardt end-to-end.** A linear-Gaussian least-squares problem. At `λ = 0` it must
+   reach the analytic solution in **one** iteration — the undamped limit is exact on a linear
+   problem, so anything else is a bug in `J` or in the solve. With `λ > 0` it must converge to the
+   *same* solution in several, which is the check that the damping only rescales the step and does
+   not move the optimum.
 
 Follow the existing test layout — per-backend entry points over a shared `common/` module, as in
 `skoro-linalg/tests/{ndarray_f32,ndarray_f64,wgpu_f32}.rs` and `skoro-so3/tests/common/`. Run

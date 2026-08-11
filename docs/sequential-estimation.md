@@ -4,7 +4,7 @@ A design for how time enters a Skoro model, who owns which piece of mutable stat
 that grows with a data stream stays bounded.
 
 Companion to `flattened-tangent-spaces.md`. That document specifies the *algebra* an EKF and a
-Gauss-Newton iteration both consume — a stable ordering of tangent spaces, Jacobian assembly, a
+Levenberg-Marquardt iteration both consume — a stable ordering of tangent spaces, Jacobian assembly, a
 dense SPD solve. This one specifies the *architecture around it*: what a "time step" is, what an
 estimator is allowed to touch, and what must happen for a filter to run forever without the graph
 growing forever. The graph-surgery primitives that the bounded-growth story rests on are specified
@@ -12,8 +12,9 @@ separately in `graph-marginalization.md`.
 
 ## 1. Motivation
 
-Gauss-Newton can be stateless. Hand it a model, a point, and a layout, and it hands back a step;
-run it again tomorrow on a bigger model and nothing carries over. An Extended Kalman Filter cannot.
+Levenberg-Marquardt is very nearly stateless — it carries a scalar damping parameter and nothing
+else. Hand it a model, a point, and a layout, and it hands back a step; run it again tomorrow on a
+bigger model and nothing of consequence carries over. An Extended Kalman Filter cannot.
 It has a strict notion of causality — a prior, a prediction, an innovation, in that order — and it
 carries a covariance from one step to the next.
 
@@ -246,7 +247,7 @@ set.
 
 ### Batch
 
-Nothing retires; the graph is the whole history. This is what Gauss-Newton over a fixed dataset
+Nothing retires; the graph is the whole history. This is what Levenberg-Marquardt over a fixed dataset
 already does today, and it needs nothing from this document — except the cost note in §8, since a
 graph that never shrinks makes per-tick *compilation* grow without bound.
 
@@ -292,7 +293,7 @@ still positional, checked by `TangentLayout::same_shape`
 (`flattened-tangent-spaces.md:118-121`), and both layouts are now per-tick objects (§10). Note the
 distinction this preserves:
 
-> **Retraction applies a correction** — `retract_flat(x, δ)` for an EKF update or a Gauss-Newton
+> **Retraction applies a correction** — `retract_flat(x, δ)` for an EKF update or a Levenberg-Marquardt
 > step. **Advance replaces values** — `x_{k+1} = f(x_k, dataₖ)`.
 
 Two are confusable and reaching for the wrong one is silent.
@@ -788,7 +789,7 @@ Ordered so each phase is independently useful and each is testable before the ne
 3. **The tick layer.** `TimeSequence`, `Chain` (with interior removal), `Chains`, `TickCtx`,
    `Transition<B, Data>`, `ModelBuilderOps`, the associated-data bag and the measurement visitor.
    Mostly bookkeeping and verifiable without any estimator; it is what makes varying `M` and `M = 0`
-   real, and it makes batch sliding-window Gauss-Newton expressible.
+   real, and it makes batch sliding-window Levenberg-Marquardt expressible.
 4. **Retirement.** The graph work of `graph-marginalization.md`, yielding fixed-lag. Smaller than it
    looks, and partly done: `demote_to_parameter` is implemented on the graph, server, client and
    `ModelClientOps`, a single-node blanket is `update_stochastic`, and a joint marginal is

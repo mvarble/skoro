@@ -310,6 +310,60 @@ chosen accordingly. The consequences:
    reason. The bound to watch is `log_likelihoods.len()` and the arity of the largest factor, not
    `nodes.len()` alone.
 
+### Why there is no `FactorGraph`
+
+Costs 3 and 4 are both adjacency questions — *which factors touch this quantity*, *which quantities
+would this elimination couple* — so it is fair to ask why a bipartite variable↔factor structure is
+not stored alongside `Graph`. It is the structure iSAM and its relatives are built on, and the
+absence is deliberate rather than an oversight.
+
+**No documented estimator queries adjacency.** All of them are layout-driven: `jacobian_jvp` and
+`jacobian_vjp` (`flattened-tangent-spaces.md` §5) take caller-supplied row and column layouts, and
+whatever built the nodes already knows their ids. An EKF's `F` and `H`, a Levenberg-Marquardt `J`
+over free leaves and whitened residuals — none of them ever asks the graph what is connected to what.
+The one algorithm that structurally *is* an adjacency query, `stochastic_blanket` (§3), is answered
+by construction for `Transition`-built models.
+
+> **That agreement carries an expiry condition, and it is a scope decision rather than a fact about
+> estimators.** What makes adjacency unnecessary is `estimator-linear-algebra.md` §5's commitment to
+> dense, host `f64`, batch 1, `N` in the tens. A factor graph earns its keep by exploiting sparsity —
+> block-sparse `J`, sparse Cholesky, an elimination ordering — and none of that is reachable at those
+> sizes. A batch smooth over hundreds of poses would revoke the argument.
+
+**The cost of adding one is larger than it looks.** `Graph` is a *generative DAG*, not a factor
+graph: a factor is a `LogDensity` node sitting atop an arbitrary computation subgraph, since
+`Normal::log_density` builds `inverse_retract` → `vector_product` → … beneath it. A `FactorGraph`
+would therefore be a **derived projection**, not a second source of truth, and it would need
+invalidating on `observe`, `unobserve`, `update_stochastic`, `demote_to_parameter`, `remove` — and on
+**every node constructor**, because `add_mapped` can make a new leaf an ancestor of an existing
+`LogDensity` and so change that factor's variable set. The invalidation surface is the whole
+mutation API, not five entry points.
+
+That would be a fourth index over the same arena, joining `log_likelihoods`,
+`log_density_to_stochastic` and `stochastic_to_log_density` — three that §8.1 already documents
+falling out of sync with `nodes`, in a workspace with no working invalidation mechanism anywhere:
+stale constant folds are repaired by a manual `clear_cached_descendants` walk, and compiled sequences
+have no invalidation at all (`sequential-estimation.md` §8). Fix the three that leak before adding a
+fourth with a harder contract.
+
+**The one real cost here needs locality, not adjacency.** §3's dead-set computation takes `live` as
+the ancestor closure of the *surviving* `log_likelihoods` via `topological_sort` (`graph.rs:1332`) —
+O(live model) per retirement, which under keyframe retention runs on most ticks. Bipartite adjacency
+would not fix it; the ancestor walk is still the ancestor walk. The fix is a **locality bound**: a
+retired tick's dead set is confined to its captured node set plus the factors severed at step 4 of
+§7, which the `TickCtx` capture of `sequential-estimation.md` §7 already supplies. A known cost with
+a known fix, and no new structure in it.
+
+**Where the need genuinely appears, it is already conceded — at a fraction of the scope.**
+`sequential-estimation.md` §5's `incident: HashMap<TickRef, HashSet<Id>>` tracks the joint factors
+installed by retirement. It is strictly smaller than variable↔factor adjacency — tick-keyed, and
+blind to process and measurement factors — but it appears in exactly the place theory predicts: a
+keyframe policy choosing *which* tick to eliminate must compare candidate blankets before committing
+to one, and that is the query pattern a walk-per-query serves worst. Note it is a **policy** cost,
+not a mechanism cost. Any single retirement is fine with a walk; choosing among retirements is what
+wants an index. If a `FactorGraph` is ever built here, that is the pressure that will justify it, and
+`incident` is the thing it should grow out of.
+
 ## 6. The graveyard
 
 Retirement destroys nodes that user code still holds `Q<B, T>` handles to. Those handles must fail

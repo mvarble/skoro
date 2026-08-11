@@ -1,6 +1,6 @@
 # Estimator Linear Algebra
 
-Where the dense linear algebra of an EKF or a Gauss-Newton iteration actually runs: on `burn`
+Where the dense linear algebra of an EKF or a Levenberg-Marquardt iteration actually runs: on `burn`
 tensors through the backend, or on the host in a dedicated library. A decision document, and a
 correction to a premise the other designs lean on.
 
@@ -10,7 +10,7 @@ proposes filling it with hand-written `Tensor<B, 3>` kernels. `sequential-estima
 that solve a precondition of its filter phase — phase 2, behind only the graph teardown work — so no
 estimator in the roadmap starts until this is settled.
 
-**Conclusion, up front.** For the deterministic estimators — `skoro-ekf` and `skoro-gauss-newton` —
+**Conclusion, up front.** For the deterministic estimators — `skoro-ekf` and `skoro-levenberg-marquardt` —
 the dense linear algebra runs on the **host, in `f64`, at batch 1**, in a new leaf crate
 `skoro-dense` backed by `faer`. Everything else in the workspace stays on `burn` tensors, including
 every graph operation, the Jacobian assembly that feeds the estimator, and the MCMC family, whose
@@ -96,7 +96,7 @@ a target — §8 fences it explicitly.
 
 The strongest reason, and it is about correctness rather than speed.
 
-Gauss-Newton as sketched in `flattened-tangent-spaces.md` §7 solves the normal equations:
+Levenberg-Marquardt as sketched in `flattened-tangent-spaces.md` §7 solves the normal equations:
 
 ```
 δ = spd_solve(JᵀJ + λI, −Jᵀr)
@@ -125,7 +125,7 @@ The same argument extends past QR, to cases the estimators will actually meet:
   `LltRegularization` parameter for the near-singular case. A filter that learns "the innovation
   covariance stopped being positive definite at tick 41,203" can reset or inflate; one that gets
   `NaN` learns it several thousand ticks later.
-- **Rank-deficient Gauss-Newton.** Column-pivoted QR gives a usable answer and a numerical rank on a
+- **Rank-deficient Levenberg-Marquardt.** Column-pivoted QR gives a usable answer and a numerical rank on a
   problem with an unobservable direction. Normal equations plus a fixed `λ` hides it.
 
 ## 4. Precision, argued from this repository
@@ -209,7 +209,7 @@ filters, and the batched-chain MCMC family — `skoro-hmc`, `skoro-mala`,
 running `batch = 4096`, and a host batch-1 solve is simply the wrong tool.
 
 > **This is why the recommendation is scoped to the deterministic estimators.** `skoro-ekf` and
-> `skoro-gauss-newton` take the host `f64` path. The MCMC family stays on `burn` tensors, where the
+> `skoro-levenberg-marquardt` take the host `f64` path. The MCMC family stays on `burn` tensors, where the
 > batch axis is the point. Two answers, because there are two workloads.
 
 **Synchronization.** On a cube backend, reading `J` to the host fences a queue that would otherwise
@@ -335,10 +335,18 @@ pub fn solve_upper(u: &Dense, b: &Dense) -> SkoroResult<Dense>;
 pub fn spd_solve(a: &Dense, b: &Dense) -> SkoroResult<Dense>;
 
 /// Least squares by column-pivoted QR: solves `min ‖J δ − r‖` without forming `JᵀJ`.
-/// This is the Gauss-Newton entry point, per §3. **No §6 counterpart, and no device
+/// This is the Levenberg-Marquardt entry point, per §3. **No §6 counterpart, and no device
 /// counterpart even in principle** — burn 0.21 has no QR.
 pub fn lstsq(j: &Dense, r: &Dense) -> SkoroResult<Dense>;
 ```
+
+> **`lstsq` gives the *undamped* step; damping is supplied by the caller, not by a second function.**
+> Levenberg-Marquardt's `(JᵀJ + λI) δ = −Jᵀr` is exactly the least-squares problem
+> `min ‖[J; √λ I] δ − [−r; 0]‖`, so an LM iteration calls `lstsq` on the row-augmented matrix and
+> gets its damped step at condition `κ` instead of `κ²`. This is worth stating because it removes the
+> one apparent reason to prefer `spd_solve` for `λ > 0`: the QR path is available at *every* damping
+> value, and §3's argument therefore covers the whole algorithm rather than only its undamped limit.
+> The augmentation costs `N` extra rows, which is nothing next to squaring the condition number.
 
 > **`lstsq` is why the seam is not a full abstraction.** Four of these five could be reimplemented
 > on `Tensor<B, 3>` behind the same names if a batched consumer ever appears (§8). The fifth is the
@@ -417,10 +425,11 @@ The conversions are the new code, so they are tested first.
 5. **Indefinite input is an error, not a `NaN`.** `cholesky` on a symmetric matrix with a negative
    eigenvalue returns `NotPositiveDefinite`. Assert on the error variant, not on `is_nan` — and not
    on its payload, which §7 leaves to whatever `LltError` turns out to carry.
-6. **End-to-end, unchanged.** The EKF and Gauss-Newton checks already specified in
+6. **End-to-end, unchanged.** The EKF and Levenberg-Marquardt checks already specified in
    `flattened-tangent-spaces.md` §8 items 5 and 6 — exact reproduction of the closed-form Kalman
-   filter on a linear-Gaussian model, and one-iteration convergence of Gauss-Newton on a linear
-   least-squares problem. This document does not change what they assert; passing them is the
+   filter on a linear-Gaussian model, and convergence of Levenberg-Marquardt on a linear
+   least-squares problem (in one iteration undamped, to the same point when damped). This document
+   does not change what they assert; passing them is the
    evidence that the boundary conversions corrupted nothing.
 
 Run with `cargo test --workspace`. Note that `skoro-dense` has no cube-backend-specific path of its
