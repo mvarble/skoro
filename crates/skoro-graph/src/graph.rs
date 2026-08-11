@@ -623,9 +623,9 @@ impl<B: Backend> Graph<B> {
     /// Unregister the log-density owned by a stochastic quantity, dropping it from the
     /// model's likelihood terms.
     ///
-    /// The [`LogDensity`](Node::LogDensity) node itself is left in the arena: it may
-    /// still be referenced as a child, and removing it is the caller's decision. A
-    /// caller replacing a distribution wholesale is expected to clean up the orphan.
+    /// The [`LogDensity`](Node::LogDensity) node itself is left in the arena: it may still be
+    /// referenced as a child, and removing it is the caller's decision. A caller replacing a
+    /// distribution wholesale is expected to clean up the orphan.
     fn unregister_density(&mut self, stochastic_id: Id) {
         let Some(log_density_id) = self.stochastic_to_log_density.remove(&stochastic_id) else {
             return;
@@ -644,22 +644,20 @@ impl<B: Backend> Graph<B> {
     /// Demote a stochastic quantity to a free [`Parameter`](Node::Parameter), at the
     /// same [`Id`].
     ///
-    /// The node keeps its identity and its quantity type, and every edge from a child
-    /// into it is preserved, so a `Q` naming it stays valid and everything downstream
-    /// is untouched. What it loses is its sampler, its parent edges, and its own
-    /// log-density.
+    /// The node keeps its identity and its quantity type, and every edge from a child into it is
+    /// preserved, so a referencing tag `Q` stays valid and everything downstream is untouched.
+    /// What it loses is its sampler, its parent edges, and its own log-density.
     ///
-    /// This is how a quantity is re-rooted when its marginal does not factorize: the
-    /// joint is attached separately, as a likelihood factor over the demoted
-    /// quantities via [`mark_likelihood`](Self::mark_likelihood). Where the marginal
-    /// *does* factorize, prefer [`update_stochastic`](Self::update_stochastic), which
-    /// keeps the quantity stochastic and gives it a real distribution.
+    /// This is how a quantity is re-rooted when its marginal does not factorize: the joint is
+    /// attached separately, as a likelihood factor over the demoted quantities via
+    /// [`mark_likelihood`](Self::mark_likelihood). Where the marginal *does* factorize, prefer
+    /// [`update_stochastic`](Self::update_stochastic), which keeps the quantity stochastic and
+    /// gives it a real distribution.
     ///
     /// Demoting a node that is already a parameter is a no-op.
     ///
     /// Returns [`SkoroError::NodeNotFound`] if the node does not exist, or
-    /// [`SkoroError::NotStochastic`] if it is neither stochastic nor already a
-    /// parameter.
+    /// [`SkoroError::NotStochastic`] if it is neither stochastic nor already a parameter.
     pub fn demote_to_parameter(&mut self, id: Id) -> SkoroResult<()> {
         match self.nodes.get(&id) {
             Some(Node::Stochastic(_)) => {}

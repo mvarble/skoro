@@ -7,7 +7,8 @@ correction to a premise the other designs lean on.
 Companion to `flattened-tangent-spaces.md`, whose §6 opens this question by naming a gap — both
 consuming algorithms need a symmetric-positive-definite solve and the workspace has none — and
 proposes filling it with hand-written `Tensor<B, 3>` kernels. `sequential-estimation.md` §11 makes
-that solve a precondition of phase 1, so nothing in the roadmap starts until this is settled.
+that solve a precondition of its filter phase — phase 2, behind only the graph teardown work — so no
+estimator in the roadmap starts until this is settled.
 
 **Conclusion, up front.** For the deterministic estimators — `skoro-ekf` and `skoro-gauss-newton` —
 the dense linear algebra runs on the **host, in `f64`, at batch 1**, in a new leaf crate
@@ -178,11 +179,12 @@ That is not a footnote; it is the recommended default configuration for filterin
 cost argument of §5 nearly vacuous for the case the design actually targets.
 
 To state the agreement with `sequential-estimation.md` §8 explicitly, since the two documents would
-otherwise imply different defaults for the same phase-1 filter: **nothing in that actor shape
+otherwise imply different defaults for the same first filter: **nothing in that actor shape
 requires a cube backend.** Ingest, driver, and readers are a threading arrangement, not a device
-one, and a `lag = 0` filter holding one tick of structure is not a workload the `ndarray` backend
-struggles with. The performance point in §8 there is hoisting the compiled sequence out of the
-per-tick recompile, which is a backend-independent win.
+one, and a retention-1 filter holding a tick or two of structure is not a workload the `ndarray`
+backend struggles with. The performance point in §8 there is reusing one compiled sequence across a
+tick's several evaluation passes — cross-tick hoisting is not available, since the graph is rebuilt
+every tick — which is a backend-independent win either way.
 
 ## 5. What batch 1 costs
 
@@ -194,8 +196,9 @@ makes a host library viable. It is not free, and the costs are specific.
 good at. Whether that matters depends entirely on what else is in the axis:
 
 **Where it costs nothing.** A filter over a handful of `SE3` poses and biases has `N` in the tens.
-`sequential-estimation.md` §3 is emphatic that a `lag = 0` filter keeps *one tick* of structure in
-the graph. A `[1, 20, 20]` Cholesky dispatched to a GPU is launch overhead wearing a matrix
+`sequential-estimation.md` §3 is emphatic that a retention-1 filter keeps *one tick* of structure in
+the graph — two transiently, while the previous tick is still being linearized. A `[1, 20, 20]`
+Cholesky dispatched to a GPU is launch overhead wearing a matrix
 decomposition as a hat. The frame axis of the Jacobian pass is where the parallelism is, and that
 pass stays on the backend.
 

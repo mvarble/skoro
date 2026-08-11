@@ -4,8 +4,9 @@ The graph surgery that lets a model forget: giving a stochastic node a new distr
 correlated joint with a likelihood factor, and removing what no longer means anything.
 
 Companion to `sequential-estimation.md`, which specifies *who* may marginalize and *when*. This
-document specifies *how*, in terms of `skoro-graph`. It is phase 3 of that document's ordering — a
-`lag = 0` filter needs none of it.
+document specifies *how*, in terms of `skoro-graph`. It is phase 4 of that document's ordering — a
+retention-1 filter needs the *removal* half of this document (§8's defects, in particular) but none
+of the marginalization half, because its covariance already is the marginal.
 
 ## 1. What the graph means, and what marginalization does to it
 
@@ -53,8 +54,15 @@ Two requirements shape the rest:
 
 ## 2. Re-rooting a stochastic node already exists
 
-For a single-node blanket — the Markov-chain case, and the common one — marginalization needs **no
-new graph primitive at all.**
+For a single-node blanket, marginalization needs **no new graph primitive at all.**
+
+> **Amendment.** An earlier formulation called this "the Markov-chain case, and the common one". The
+> first half stands; the second does not. A single-node blanket arises when the *oldest* retained
+> tick is retired — the fixed-lag case. Under the keyframe retention of `sequential-estimation.md`
+> §3, *interior* ticks are retired routinely, and an interior tick's blanket is its neighbours on
+> both sides. So §5's demote-and-factor path is the norm for a dynamic smoother, and the path below
+> is the special case. Neither is optional; the mechanism is picked by blanket cardinality, never by
+> the policy.
 
 `Graph::update_stochastic` (`graph.rs:527`) does exactly the required job:
 
@@ -73,10 +81,10 @@ Once that rewire has happened, the retired cone is childless and `Graph::remove`
 clears it unchanged. There is no obstruction and no new kind-changing operation.
 
 This path applies when the marginal **factorizes** — a single-node blanket whose marginal is a
-distribution in its own right, which is the Markov-chain case. When the blanket has more than one
-element the marginal is correlated and does not factorize, and §5 takes over: the blanket is demoted
-to `Parameter`s and the marginal becomes a likelihood factor. The two paths share the same
-bookkeeping; they differ in where the density ends up.
+distribution in its own right, which is what retiring the head of a chain gives you. When the blanket
+has more than one element the marginal is correlated and does not factorize, and §5 takes over: the
+blanket is demoted to `Parameter`s and the marginal becomes a likelihood factor. The two paths share
+the same bookkeeping; they differ in where the density ends up.
 
 ### The cycle check runs upward, not downward
 
@@ -138,10 +146,19 @@ density depends on the retired set, that likelihood is *absorbed* into the new m
 density node and `y` itself join the dead set. `y` leaves the conditioning set, exactly as §1
 describes.
 
-Most models never call this. As `sequential-estimation.md` §5 argues, a model built through a
+The kind-agnostic stopping rule is also what makes *repeated* elimination work. After one interior
+retirement the surviving neighbours are `Parameter`s carrying a joint factor (§5); the next
+elimination has to reach them, and a walk written to look for `Stochastic` would run straight past
+into the factor. Under keyframe retention that is not a corner case — it is most retirements after
+the first.
+
+Many models never call this. As `sequential-estimation.md` §5 argues, a model built through a
 per-tick `Transition` has the Markov property by construction, so tick `k`'s blanket is exactly tick
-`k+1`'s state — a field lookup rather than a graph walk. `stochastic_blanket` is the escape hatch for
-models not built that way, and the reference implementation to test a `Transition`-built model's
+`k+1`'s state — a field lookup rather than a graph walk. But that holds for the *append* direction
+only: once interior retirements start installing joint factors, a tick's blanket is the union of
+retained ticks reachable through the factors incident on it, and the temporal layer must track
+incidence to keep it a lookup (`sequential-estimation.md` §5). `stochastic_blanket` is the escape
+hatch for models not built through `Transition`, and the reference implementation to test either
 answer against.
 
 ### The dead set
@@ -282,6 +299,16 @@ chosen accordingly. The consequences:
    and so appears in neither direction of the density bookkeeping; answering "which factors touch
    this quantity" means walking `children`. The dead-set computation of §3 already performs exactly
    that reachability, so no new mechanism is needed.
+4. **Interior elimination causes fill-in.** Retiring a quantity installs a factor directly between
+   its blanket members, so the survivors acquire edges they did not have. Under the keyframe
+   retention of `sequential-estimation.md` §3 this compounds: eliminate enough interior ticks and a
+   sparse chain becomes a dense clique over the keyframes, and every subsequent blanket is larger
+   than the last. This is ordinary variable-elimination fill-in and the representation above does not
+   avoid it — nothing can, at fixed accuracy. What it means for the caller is that **elimination
+   order is part of the decision**, not an implementation detail: a retention policy should prefer
+   eliminations with small blankets, and `RetentionPolicy::select` returns an ordered list for this
+   reason. The bound to watch is `log_likelihoods.len()` and the arity of the largest factor, not
+   `nodes.len()` alone.
 
 ## 6. The graveyard
 
@@ -386,12 +413,32 @@ One was found and fixed while implementing §5:
 > workspace. Fixed, with a regression test in `skoro-model/tests/plumbing.rs` that fails against the
 > old arms.
 
+Two of them are now **phase blockers** rather than cleanup, because `sequential-estimation.md` §3 has
+every retention policy — including retention-1 — building and deleting nodes on every tick. Removal
+is on the hot path of the first phase, and it is the least-tested path in `skoro-graph`.
+
 What remains:
 
-1. **Orphaned densities.** `update_stochastic_impl` drops a density from all three bookkeeping maps
-   (now via the extracted `unregister_density`) but leaves the `LogDensity` node in `self.nodes` with
-   live `children` edges; `demote_to_parameter` inherits the same behaviour. The marginalization path
+1. **Orphaned densities — a phase-4 blocker.** `update_stochastic_impl` drops a density from all
+   three bookkeeping maps (now via the extracted `unregister_density`) but leaves the `LogDensity`
+   node in `self.nodes`; `demote_to_parameter` inherits the same behaviour. The marginalization path
    sweeps these up via the dead set (§3), but a standalone call still strands one.
+
+   Sharper than first stated, because it is not merely a leak: the orphan **keeps its `parent_ids`**,
+   so its parents' `children` sets stay non-empty and it blocks `Graph::remove` on the *entire cone
+   above it*. Nor can it be reclaimed automatically — `mark_density` cleared its `is_mapped_leaf`
+   flag (`model.rs:129`) so `cleanup()` never sees it, and `update_quantity` dropped the only
+   `Q<B, Real>` naming it (`model.rs:627-636`), so no caller has an `Id` to pass to `remove`. The
+   only escape today is walking `graph.nodes` for `LogDensity` nodes absent from `log_likelihoods`.
+
+   It is *not* a phase-1 blocker: `unregister_density` runs only from `update_stochastic` and
+   `demote_to_parameter`, and a retention-1 filter calls neither. It becomes one the moment a window
+   is retained.
+1a. **`Graph::remove` has no transitive teardown helper.** It is leaf-only and all-or-nothing —
+   `NodeStillReferenced` if any target has a child outside the batch (`graph.rs:714`) — so every
+   caller must compute the downward closure itself and pass a closed batch. Retiring a tick needs
+   exactly that closure, at every retention policy, so the helper belongs in `skoro-graph` next to
+   `stochastic_blanket` rather than in each caller. **Phase-1 blocker.**
 2. **`observe`'s descendant walk lacks a `visited` set** (`graph.rs:415-461`), unlike
    `clear_cached_descendants`. Quadratic on a diamond DAG. Fold it into that helper.
 3. **`Graph::add_mapped` returns a bare `Id` and panics on a dangling parent**
@@ -401,7 +448,8 @@ What remains:
 4. **`check_cache`'s `.expect("Parent node should be in graph.")`** (`graph.rs:1284`) — reachable
    from a retired parent, same treatment as 3.
 5. **`Graph::remove`'s unresolved `// TODO: check if I need to remove children`** (`graph.rs:760`) —
-   retirement exercises this path hard and it should not be uncertain.
+   retirement exercises this path hard and it should not be uncertain. **Phase-1 blocker**: per-tick
+   teardown runs this path once per tick from the very first phase, and nothing tests it today.
 6. Carried from `flattened-tangent-spaces.md` §5, "A defect to fix along the way": `compiler.rs:363` panics
    `"Point should have a cotangent vector."` when a continuous leaf in the compiled subgraph
    receives no tape write. Default to zeros or return an error.
@@ -451,6 +499,11 @@ cache walk is a defensive guard, not a repair — see §5.
 
 ### Rolling behaviour
 
+5a. **Per-tick teardown.** Ahead of everything else on this list in time, because
+   `sequential-estimation.md` §11 phase 1 depends on it: a tick's captured node set is removed in one
+   `Graph::remove` call, the call succeeds (nothing outside the batch still references it), and
+   afterwards no `Node::LogDensity` sits in `graph.nodes` while absent from `log_likelihoods`. This
+   is the gate on defects 1a and 5 of §8, and the only one on this list a retention-1 filter needs.
 6. **Factor replacement.** Retiring one member of a joint drops the old factor — verify it leaves via
    the dead set rather than by explicit bookkeeping — and installs a smaller one over the survivors.
    A rolling window over many ticks must keep both `graph.nodes.len()` and `log_likelihoods.len()`
