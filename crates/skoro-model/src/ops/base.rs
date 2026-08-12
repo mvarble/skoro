@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use skoro_backend::{Backend, ElementConversion, ToElement};
 use skoro_core::error::SkoroResult;
@@ -26,6 +26,28 @@ impl<B: Backend, const D: usize> AssociatedTangentVector<Euclidean<D>, B> for Eu
 impl<B: Backend, const D: usize> AssociatedTangentVectorBuilder<Euclidean<D>, B> for Euclidean<D> {
     fn build_tangent(&self) -> Euclidean<D> {
         *self
+    }
+}
+
+/// Negation operator trait for `Q`.
+pub trait QNeg<B: Backend> {
+    type OutputType;
+    type OpType: GraphOperation<B>;
+    fn quantity_type(&self) -> Self::OutputType;
+    fn op_type(&self) -> Self::OpType;
+    fn register(node: &Q<B, Self>) -> Q<B, Self::OutputType>
+    where
+        Self: Sized;
+}
+
+impl<B, T> Neg for Q<B, T>
+where
+    B: Backend,
+    T: QNeg<B>,
+{
+    type Output = Q<B, <T as QNeg<B>>::OutputType>;
+    fn neg(self) -> Self::Output {
+        <T as QNeg<B>>::register(&self)
     }
 }
 
@@ -124,14 +146,18 @@ where
 /// `Add<SkoroResult<Q>> for Q`, since nothing tells the compiler a `SkoroResult`
 /// is not an element.
 macro_rules! impl_q_literal_binop {
-    ($trait:ident, $std_trait:ident, $method:ident, $helper:ident) => {
+    // Declaration of the trait
+    (declare_trait: @lit $trait:ident) => {
         pub trait $trait<B: Backend>: ContinuousQuantity<B> {
             type OutputType: ContinuousQuantity<B>;
             type OpType: GraphOperation<B>;
             fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
             fn op_type(&self, float: B::FloatElem) -> Self::OpType;
         }
+    };
 
+    // Implementation of helper
+    (impl_helper: $helper:ident, @lit $trait:ident) => {
         #[inline(always)]
         fn $helper<B, T, E>(
             q: &Q<B, T>,
@@ -149,6 +175,10 @@ macro_rules! impl_q_literal_binop {
             register_map1(t, op, q)
         }
 
+    };
+
+    // Implementation of the trait on the quantity type.
+    (impl_quantity: $helper:ident, @lit $trait:ident, $std_trait:ident, $method:ident) => {
         impl<B, T, E> $std_trait<E> for Q<B, T>
         where
             B: Backend,
@@ -160,12 +190,10 @@ macro_rules! impl_q_literal_binop {
                 $helper(&self, float)
             }
         }
-
-        impl_q_literal_binop!(@lit $trait, $std_trait, $method, $helper, f32);
-        impl_q_literal_binop!(@lit $trait, $std_trait, $method, $helper, f64);
     };
 
-    (@lit $trait:ident, $std_trait:ident, $method:ident, $helper:ident, $float:ty) => {
+    // Implementation of the operation on the float type.
+    (impl_float: @lit $trait:ident, $std_trait:ident, $method:ident, $helper:ident, $float:ty) => {
         impl<B, T> $std_trait<Q<B, T>> for $float
         where
             B: Backend,
@@ -177,9 +205,29 @@ macro_rules! impl_q_literal_binop {
             }
         }
     };
+
+    // Macro when the trait is a symmetric operation (addition, multiplication)
+    (symmetric: $trait:ident, $std_trait:ident, $method:ident, $helper:ident) => {
+        impl_q_literal_binop!(declare_trait: @lit $trait);
+        impl_q_literal_binop!(impl_helper: $helper, @lit $trait);
+        impl_q_literal_binop!(impl_quantity: $helper, @lit $trait, $std_trait, $method);
+        impl_q_literal_binop!(impl_float: @lit $trait, $std_trait, $method, $helper, f32);
+        impl_q_literal_binop!(impl_float: @lit $trait, $std_trait, $method, $helper, f64);
+    };
+
+    // Macro when the trait is an asymmetric operation (subtraction, division)
+    (asymmetric: $left_trait:ident, $right_trait:ident, $std_trait:ident, $method:ident, $left_helper:ident, $right_helper:ident) => {
+        impl_q_literal_binop!(declare_trait: @lit $left_trait);
+        impl_q_literal_binop!(declare_trait: @lit $right_trait);
+        impl_q_literal_binop!(impl_helper: $left_helper, @lit $left_trait);
+        impl_q_literal_binop!(impl_helper: $right_helper, @lit $right_trait);
+        impl_q_literal_binop!(impl_quantity: $right_helper, @lit $right_trait, $std_trait, $method);
+        impl_q_literal_binop!(impl_float: @lit $left_trait, $std_trait, $method, $left_helper, f32);
+        impl_q_literal_binop!(impl_float: @lit $left_trait, $std_trait, $method, $left_helper, f64);
+    };
 }
 
-impl_q_literal_binop!(QLiteralAdd, Add, add, lit_add);
-impl_q_literal_binop!(QLiteralSub, Sub, sub, lit_sub);
-impl_q_literal_binop!(QLiteralMul, Mul, mul, lit_mul);
-impl_q_literal_binop!(QLiteralDiv, Div, div, lit_div);
+impl_q_literal_binop!(symmetric: QLiteralAdd, Add, add, lit_add);
+impl_q_literal_binop!(symmetric: QLiteralMul, Mul, mul, lit_mul);
+impl_q_literal_binop!(asymmetric: QLiteralSubLeft, QLiteralSubRight, Sub, sub, lit_sub_left, lit_sub_right);
+impl_q_literal_binop!(asymmetric: QLiteralDivLeft, QLiteralDivRight, Div, div, lit_div_left, lit_div_right);

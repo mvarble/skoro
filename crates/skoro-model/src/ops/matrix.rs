@@ -1,21 +1,21 @@
 use skoro_backend::Backend;
 use skoro_core::error::SkoroResult;
 use skoro_operation::ops::{
-    Addition, LiteralPointwiseAdd, LiteralPointwiseDiv, LiteralPointwiseMul, LiteralPointwiseSub,
-    PointwiseDiv, PointwiseMul, Subtraction,
+    Addition, LiteralScalarDivisionRight, LiteralScalarMultiplication, Negation, ScalarDivision,
+    ScalarMultiplication, Subtraction,
 };
 use skoro_riemann::{
     matrix::{EuclideanMatrix, EuclideanMatrixD},
     real::Real,
 };
 
+use crate::map::register_map1;
 use crate::ops::{
-    AssociatedTangentVector, AssociatedTangentVectorBuilder, QLiteralAdd, QLiteralDiv, QLiteralMul,
-    QLiteralSub,
+    AssociatedTangentVector, AssociatedTangentVectorBuilder, QLiteralDivRight, QLiteralMul,
 };
 use crate::q::Q;
 
-use super::{QAdd, QDiv, QMul, QSub};
+use super::{QAdd, QDiv, QMul, QNeg, QSub};
 
 impl<B: Backend> AssociatedTangentVector<EuclideanMatrixD, B> for EuclideanMatrixD {}
 impl<B: Backend> AssociatedTangentVectorBuilder<EuclideanMatrixD, B> for EuclideanMatrixD {
@@ -33,6 +33,23 @@ impl<B: Backend, const M: usize, const N: usize>
 {
     fn build_tangent(&self) -> EuclideanMatrix<M, N> {
         *self
+    }
+}
+
+impl<B: Backend> QNeg<B> for EuclideanMatrixD {
+    type OutputType = EuclideanMatrixD;
+    type OpType = Negation;
+    fn quantity_type(&self) -> Self::OutputType {
+        *self
+    }
+    fn op_type(&self) -> Self::OpType {
+        Negation
+    }
+    fn register(node: &Q<B, Self>) -> Q<B, Self::OutputType> {
+        let typin = node.get_quantity_type();
+        let typout = <Self as QNeg<B>>::quantity_type(&typin);
+        let op = <Self as QNeg<B>>::op_type(&typin);
+        register_map1(typout, op, node).expect("Negation of a matrix should never error.")
     }
 }
 
@@ -80,30 +97,30 @@ impl<B: Backend> QSub<B, EuclideanMatrixD> for EuclideanMatrixD {
 
 impl<B: Backend> QMul<B, Real> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = PointwiseMul;
+    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseMul
+        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
         let op = <Self as QMul<B, Real>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
+        crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend> QMul<B, EuclideanMatrixD> for Real {
     type OutputType = EuclideanMatrixD;
-    type OpType = PointwiseMul;
+    type OpType = ScalarMultiplication;
     fn quantity_type(&self, other: &EuclideanMatrixD) -> Self::OutputType {
         *other
     }
     fn op_type(&self, _: &EuclideanMatrixD) -> Self::OpType {
-        PointwiseMul
+        ScalarMultiplication
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -119,84 +136,58 @@ impl<B: Backend> QMul<B, EuclideanMatrixD> for Real {
 
 impl<B: Backend> QDiv<B, Real> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = PointwiseDiv;
+    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseDiv
+        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
         let op = <Self as QDiv<B, Real>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
-    }
-}
-
-impl<B: Backend> QDiv<B, EuclideanMatrixD> for Real {
-    type OutputType = EuclideanMatrixD;
-    type OpType = PointwiseDiv;
-    fn quantity_type(&self, other: &EuclideanMatrixD) -> Self::OutputType {
-        *other
-    }
-    fn op_type(&self, _: &EuclideanMatrixD) -> Self::OpType {
-        PointwiseDiv
-    }
-    fn register(
-        lhs: &Q<B, Self>,
-        rhs: &Q<B, EuclideanMatrixD>,
-    ) -> SkoroResult<Q<B, Self::OutputType>> {
-        let t0 = lhs.get_quantity_type();
-        let t1 = rhs.get_quantity_type();
-        let t = <Self as QDiv<B, EuclideanMatrixD>>::quantity_type(&t0, &t1);
-        let op = <Self as QDiv<B, EuclideanMatrixD>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
-    }
-}
-
-impl<B: Backend> QLiteralAdd<B> for EuclideanMatrixD {
-    type OutputType = EuclideanMatrixD;
-    type OpType = LiteralPointwiseAdd<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
-        *self
-    }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseAdd::new(float)
-    }
-}
-
-impl<B: Backend> QLiteralSub<B> for EuclideanMatrixD {
-    type OutputType = EuclideanMatrixD;
-    type OpType = LiteralPointwiseSub<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
-        *self
-    }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseSub::new(float)
+        crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend> QLiteralMul<B> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = LiteralPointwiseMul<B>;
+    type OpType = LiteralScalarMultiplication<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         *self
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseMul::new(float)
+        LiteralScalarMultiplication::new(float)
     }
 }
 
-impl<B: Backend> QLiteralDiv<B> for EuclideanMatrixD {
+impl<B: Backend> QLiteralDivRight<B> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = LiteralPointwiseDiv<B>;
+    type OpType = LiteralScalarDivisionRight<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         *self
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseDiv::new(float)
+        LiteralScalarDivisionRight::new(float)
+    }
+}
+
+impl<B: Backend, const M: usize, const N: usize> QNeg<B> for EuclideanMatrix<M, N> {
+    type OutputType = EuclideanMatrix<M, N>;
+    type OpType = Negation;
+    fn quantity_type(&self) -> Self::OutputType {
+        *self
+    }
+    fn op_type(&self) -> Self::OpType {
+        Negation
+    }
+    fn register(node: &Q<B, Self>) -> Q<B, Self::OutputType> {
+        let typin = node.get_quantity_type();
+        let typout = <Self as QNeg<B>>::quantity_type(&typin);
+        let op = <Self as QNeg<B>>::op_type(&typin);
+        register_map1(typout, op, node).expect("Negation of a matrix should never error.")
     }
 }
 
@@ -248,30 +239,30 @@ impl<B: Backend, const M: usize, const N: usize> QSub<B, EuclideanMatrix<M, N>>
 
 impl<B: Backend, const M: usize, const N: usize> QMul<B, Real> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = PointwiseMul;
+    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseMul
+        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
         let op = <Self as QMul<B, Real>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
+        crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend, const M: usize, const N: usize> QMul<B, EuclideanMatrix<M, N>> for Real {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = PointwiseMul;
+    type OpType = ScalarMultiplication;
     fn quantity_type(&self, other: &EuclideanMatrix<M, N>) -> Self::OutputType {
         *other
     }
     fn op_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OpType {
-        PointwiseMul
+        ScalarMultiplication
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -287,61 +278,40 @@ impl<B: Backend, const M: usize, const N: usize> QMul<B, EuclideanMatrix<M, N>> 
 
 impl<B: Backend, const M: usize, const N: usize> QDiv<B, Real> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = PointwiseDiv;
+    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseDiv
+        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
         let op = <Self as QDiv<B, Real>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
-    }
-}
-
-impl<B: Backend, const M: usize, const N: usize> QDiv<B, EuclideanMatrix<M, N>> for Real {
-    type OutputType = EuclideanMatrix<M, N>;
-    type OpType = PointwiseDiv;
-    fn quantity_type(&self, other: &EuclideanMatrix<M, N>) -> Self::OutputType {
-        *other
-    }
-    fn op_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OpType {
-        PointwiseDiv
-    }
-    fn register(
-        lhs: &Q<B, Self>,
-        rhs: &Q<B, EuclideanMatrix<M, N>>,
-    ) -> SkoroResult<Q<B, Self::OutputType>> {
-        let t0 = lhs.get_quantity_type();
-        let t1 = rhs.get_quantity_type();
-        let t = <Self as QDiv<B, EuclideanMatrix<M, N>>>::quantity_type(&t0, &t1);
-        let op = <Self as QDiv<B, EuclideanMatrix<M, N>>>::op_type(&t0, &t1);
-        crate::ops::base::continuous_binop(lhs, rhs, t, op)
+        crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend, const M: usize, const N: usize> QLiteralMul<B> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = LiteralPointwiseMul<B>;
+    type OpType = LiteralScalarMultiplication<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         *self
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseMul::new(float)
+        LiteralScalarMultiplication::new(float)
     }
 }
 
-impl<B: Backend, const M: usize, const N: usize> QLiteralDiv<B> for EuclideanMatrix<M, N> {
+impl<B: Backend, const M: usize, const N: usize> QLiteralDivRight<B> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = LiteralPointwiseDiv<B>;
+    type OpType = LiteralScalarDivisionRight<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         *self
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseDiv::new(float)
+        LiteralScalarDivisionRight::new(float)
     }
 }

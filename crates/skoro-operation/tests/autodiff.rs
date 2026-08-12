@@ -3,7 +3,7 @@ use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TangentFrame, Tangent
 use skoro_operation::{
     DynSequenceOperation, Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward, SequencedDiffOperation},
-    ops::{Addition, PointwiseMul},
+    ops::{Addition, ScalarMultiplication},
     step::{BoxDynHvpStep, BoxDynVjpStep},
     tape::Tape,
 };
@@ -166,7 +166,7 @@ fn unary_chain() {
             vec![c_index, x_index],
             vec![false, true],
             mid_index,
-            PointwiseMul,
+            ScalarMultiplication,
         )),
         Box::new(SequencedDiffOperation::new(
             vec![mid_index],
@@ -217,13 +217,13 @@ fn unary_chain() {
             vec![c_index, x_index],
             vec![false, true],
             mid_index,
-            PointwiseMul,
+            ScalarMultiplication,
         )),
         Box::new(SequencedDiffOperation::new(
             vec![mid_index, mid_index],
             vec![true, true],
             out_index,
-            PointwiseMul,
+            ScalarMultiplication,
         )),
     ];
 

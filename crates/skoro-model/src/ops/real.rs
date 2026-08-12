@@ -1,15 +1,36 @@
 use skoro_backend::Backend;
 use skoro_core::error::SkoroResult;
 use skoro_operation::ops::{
-    Addition, LiteralPointwiseAdd, LiteralPointwiseDiv, LiteralPointwiseMul, LiteralPointwiseSub,
-    PointwiseDiv, PointwiseMul, Subtraction,
+    Addition, LiteralAddition, LiteralScalarDivisionLeft, LiteralScalarDivisionRight,
+    LiteralScalarMultiplication, LiteralSubtractionLeft, LiteralSubtractionRight, Negation,
+    ScalarDivision, ScalarMultiplication, Subtraction,
 };
 use skoro_riemann::real::Real;
 
-use crate::ops::{QLiteralAdd, QLiteralDiv, QLiteralMul, QLiteralSub};
+use crate::map::register_map1;
+use crate::ops::{
+    QLiteralAdd, QLiteralDivLeft, QLiteralDivRight, QLiteralMul, QLiteralSubLeft, QLiteralSubRight,
+};
 use crate::q::Q;
 
-use super::{QAdd, QDiv, QMul, QSub};
+use super::{QAdd, QDiv, QMul, QNeg, QSub};
+
+impl<B: Backend> QNeg<B> for Real {
+    type OutputType = Real;
+    type OpType = Negation;
+    fn quantity_type(&self) -> Self::OutputType {
+        *self
+    }
+    fn op_type(&self) -> Self::OpType {
+        Negation
+    }
+    fn register(node: &Q<B, Self>) -> Q<B, Self::OutputType> {
+        let typin = node.get_quantity_type();
+        let typout = <Self as QNeg<B>>::quantity_type(&typin);
+        let op = <Self as QNeg<B>>::op_type(&typin);
+        register_map1(typout, op, node).expect("Negation of a scalar should never error.")
+    }
+}
 
 impl<B: Backend> QAdd<B, Real> for Real {
     type OutputType = Real;
@@ -49,12 +70,12 @@ impl<B: Backend> QSub<B, Real> for Real {
 
 impl<B: Backend> QMul<B, Real> for Real {
     type OutputType = Real;
-    type OpType = PointwiseMul;
+    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         Real
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseMul
+        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
@@ -67,12 +88,12 @@ impl<B: Backend> QMul<B, Real> for Real {
 
 impl<B: Backend> QDiv<B, Real> for Real {
     type OutputType = Real;
-    type OpType = PointwiseDiv;
+    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         Real
     }
     fn op_type(&self, _: &Real) -> Self::OpType {
-        PointwiseDiv
+        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
@@ -85,44 +106,66 @@ impl<B: Backend> QDiv<B, Real> for Real {
 
 impl<B: Backend> QLiteralAdd<B> for Real {
     type OutputType = Real;
-    type OpType = LiteralPointwiseAdd<B>;
+    type OpType = LiteralAddition<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         Real
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseAdd::new(float)
+        LiteralAddition::new(float)
     }
 }
 
-impl<B: Backend> QLiteralSub<B> for Real {
+impl<B: Backend> QLiteralSubLeft<B> for Real {
     type OutputType = Real;
-    type OpType = LiteralPointwiseSub<B>;
+    type OpType = LiteralSubtractionLeft<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         Real
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseSub::new(float)
+        LiteralSubtractionLeft::new(float)
+    }
+}
+
+impl<B: Backend> QLiteralSubRight<B> for Real {
+    type OutputType = Real;
+    type OpType = LiteralSubtractionRight<B>;
+    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+        Real
+    }
+    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+        LiteralSubtractionRight::new(float)
     }
 }
 
 impl<B: Backend> QLiteralMul<B> for Real {
     type OutputType = Real;
-    type OpType = LiteralPointwiseMul<B>;
+    type OpType = LiteralScalarMultiplication<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         Real
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseMul::new(float)
+        LiteralScalarMultiplication::new(float)
     }
 }
 
-impl<B: Backend> QLiteralDiv<B> for Real {
+impl<B: Backend> QLiteralDivLeft<B> for Real {
     type OutputType = Real;
-    type OpType = LiteralPointwiseDiv<B>;
+    type OpType = LiteralScalarDivisionLeft<B>;
     fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
         Real
     }
     fn op_type(&self, float: B::FloatElem) -> Self::OpType {
-        LiteralPointwiseDiv::new(float)
+        LiteralScalarDivisionLeft::new(float)
+    }
+}
+
+impl<B: Backend> QLiteralDivRight<B> for Real {
+    type OutputType = Real;
+    type OpType = LiteralScalarDivisionRight<B>;
+    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+        Real
+    }
+    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+        LiteralScalarDivisionRight::new(float)
     }
 }

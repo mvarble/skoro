@@ -37,7 +37,7 @@ fn layout(model: &ModelClient<B>, ids: &[Id]) -> TangentLayout {
 }
 
 /// Scalars `x, y, z, w` and plane vectors `p, q`, mapped to `u = x·y`, `v = y·z`,
-/// `m = p − q`.
+/// `m = p − x·q`.
 ///
 /// `w` is free but reaches no row. Column order is `[x, p, y, q, z, w]` and row order is
 /// `[u, m, v]`, so in both layouts a two-dimensional block sits in the middle and the
@@ -67,7 +67,7 @@ impl Model {
         let q = client.add_parameter(Euclidean::<2>);
         let u = (x.clone() * y.clone()).unwrap();
         let v = (y.clone() * z.clone()).unwrap();
-        let m = (p.clone() - q.clone()).unwrap();
+        let m = (p.clone() - (x.clone() * q.clone()).unwrap()).unwrap();
         Self {
             client,
             x,
@@ -117,19 +117,19 @@ impl Model {
 /// `J` at the points above, batch-major.
 ///
 /// Columns are `[x, p₀, p₁, y, q₀, q₁, z, w]` and rows are `[u, m₀, m₁, v]`, so
-/// `∂u/∂x = y`, `∂u/∂y = x`, `∂mᵢ/∂pᵢ = 1`, `∂mᵢ/∂qᵢ = −1`, `∂v/∂y = z`, `∂v/∂z = y`.
+/// `∂u/∂x = y`, `∂u/∂y = x`, `∂mᵢ/∂x = -qᵢ`, `∂mᵢ/∂pᵢ = 1`, `∂mᵢ/∂qᵢ = −x`, `∂v/∂y = z`, `∂v/∂z = y`.
 #[rustfmt::skip]
 const EXPECTED: [f64; BATCH * D_OUT * D_IN] = [
     // batch 0: x = 2, y = 3, z = 5
-     3.0, 0.0, 0.0, 2.0,  0.0,  0.0, 0.0, 0.0,
-     0.0, 1.0, 0.0, 0.0, -1.0,  0.0, 0.0, 0.0,
-     0.0, 0.0, 1.0, 0.0,  0.0, -1.0, 0.0, 0.0,
-     0.0, 0.0, 0.0, 5.0,  0.0,  0.0, 3.0, 0.0,
+      3.0, 0.0, 0.0, 2.0,  0.0,  0.0, 0.0, 0.0,
+     -0.5, 1.0, 0.0, 0.0, -2.0,  0.0, 0.0, 0.0,
+     -2.0, 0.0, 1.0, 0.0,  0.0, -2.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 5.0,  0.0,  0.0, 3.0, 0.0,
     // batch 1: x = 7, y = 11, z = 13
-    11.0, 0.0, 0.0, 7.0,  0.0,  0.0,  0.0, 0.0,
-     0.0, 1.0, 0.0, 0.0, -1.0,  0.0,  0.0, 0.0,
-     0.0, 0.0, 1.0, 0.0,  0.0, -1.0,  0.0, 0.0,
-     0.0, 0.0, 0.0, 13.0, 0.0,  0.0, 11.0, 0.0,
+     11.0, 0.0, 0.0, 7.0,  0.0,  0.0,  0.0, 0.0,
+      3.0, 1.0, 0.0, 0.0, -7.0,  0.0,  0.0, 0.0,
+    -0.75, 0.0, 1.0, 0.0,  0.0, -7.0,  0.0, 0.0,
+      0.0, 0.0, 0.0, 13.0, 0.0,  0.0, 11.0, 0.0,
 ];
 
 fn into_vec(t: Tensor<B, 3>) -> Vec<f64> {
@@ -173,7 +173,7 @@ fn jvp_and_vjp_agree_with_the_closed_form() {
 ///
 /// `p` is the second block of `inputs` but occupies columns 1 and 2, and `m` is the second
 /// block of `outputs` but occupies rows 1 and 2. An assembly that indexed by block would
-/// put `∂m₁/∂q₁ = −1` at `J[0][1][3]` instead of `J[0][2][5]`.
+/// put `∂m₁/∂q₁ = −x` at `J[0][1][3]` instead of `J[0][2][5]`.
 #[test]
 fn multi_dimensional_blocks_land_at_their_offsets() {
     let model = Model::new();
@@ -191,7 +191,7 @@ fn multi_dimensional_blocks_land_at_their_offsets() {
     assert_eq!(at(1, 1), 1.0, "J[0][1][1] = ∂m₀/∂p₀ = 1");
     assert_eq!(at(2, 2), 1.0, "J[0][2][2] = ∂m₁/∂p₁ = 1");
     assert_eq!(at(1, 2), 0.0, "J[0][1][2] = ∂m₀/∂p₁ = 0");
-    assert_eq!(at(2, 5), -1.0, "J[0][2][5] = ∂m₁/∂q₁ = −1");
+    assert_eq!(at(2, 5), -2.0, "J[0][2][5] = ∂m₁/∂q₁ = −x");
     assert_eq!(at(3, 6), 3.0, "J[0][3][6] = ∂v/∂z = y");
 }
 
