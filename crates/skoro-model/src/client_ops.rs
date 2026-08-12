@@ -244,6 +244,7 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
 }
 
 impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
+    #[inline(always)]
     fn add_constant<K, T, D>(&self, quantity_type: T, value: &D) -> Q<B, T>
     where
         K: Kind<B>,
@@ -253,6 +254,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::add_constant(self, quantity_type, value)
     }
 
+    #[inline(always)]
     fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
     where
         K: Kind<B>,
@@ -261,6 +263,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::add_parameter(self, quantity_type)
     }
 
+    #[inline(always)]
     fn observe<K, T, D>(&self, q: &Q<B, T>, value: &D) -> SkoroResult<()>
     where
         K: Kind<B>,
@@ -270,22 +273,27 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::observe(self, q, value)
     }
 
+    #[inline(always)]
     fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
         ModelClient::unobserve(self, q)
     }
 
+    #[inline(always)]
     fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
         ModelClient::demote_to_parameter(self, q)
     }
 
+    #[inline(always)]
     fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         ModelClient::remove(self, ids)
     }
 
+    #[inline(always)]
     fn cleanup(&self) {
         ModelClient::cleanup(self)
     }
 
+    #[inline(always)]
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
     where
         K: Kind<B>,
@@ -294,14 +302,17 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::get_quantity_type(self, tag)
     }
 
+    #[inline(always)]
     fn log_density(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
         ModelClient::log_density(self, points)
     }
 
+    #[inline(always)]
     fn log_density_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>> {
         ModelClient::log_density_ord1(self, points)
     }
 
+    #[inline(always)]
     fn log_density_ord2(
         &self,
         points: &ValueMap<B>,
@@ -310,6 +321,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::log_density_ord2(self, points, tangents)
     }
 
+    #[inline(always)]
     fn evaluate<M: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -318,6 +330,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate(self, points, tag)
     }
 
+    #[inline(always)]
     fn evaluate_ord1<M: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -326,6 +339,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_ord1(self, points, tag)
     }
 
+    #[inline(always)]
     fn evaluate_ord2<M: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -335,14 +349,17 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_ord2(self, points, tangents, tag)
     }
 
+    #[inline(always)]
     fn evaluate_ids(&self, points: &ValueMap<B>, ids: &[Id]) -> SkoroResult<ForwardOutput<B>> {
         ModelClient::evaluate_ids(self, points, ids)
     }
 
+    #[inline(always)]
     fn evaluate_ids_ord1(&self, points: &ValueMap<B>, ids: &[Id]) -> SkoroResult<EvalOrder1<B>> {
         ModelClient::evaluate_ids_ord1(self, points, ids)
     }
 
+    #[inline(always)]
     fn evaluate_ids_ord2(
         &self,
         points: &ValueMap<B>,
@@ -352,10 +369,12 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_ids_ord2(self, points, tangents, ids)
     }
 
+    #[inline(always)]
     fn generate(&self, batch_size: usize) -> SkoroResult<ForwardOutput<B>> {
         ModelClient::generate(self, batch_size)
     }
 
+    #[inline(always)]
     fn generate_from(
         &self,
         points: &ValueMap<B>,
@@ -364,6 +383,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::generate_from(self, points, batch_size)
     }
 
+    #[inline(always)]
     fn evaluate_jvp<T: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -373,6 +393,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_jvp(self, points, tangents, tag)
     }
 
+    #[inline(always)]
     fn evaluate_vjp<T: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -382,6 +403,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_vjp(self, points, cotangents, tag)
     }
 
+    #[inline(always)]
     fn evaluate_hvp<T: ContinuousQuantity<B>>(
         &self,
         points: &ValueMap<B>,
@@ -400,6 +422,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         )
     }
 
+    #[inline(always)]
     fn evaluate_ids_jvp(
         &self,
         points: &ValueMap<B>,
@@ -409,6 +432,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_ids_jvp(self, points, tangents, ids)
     }
 
+    #[inline(always)]
     fn evaluate_ids_vjp(
         &self,
         points: &ValueMap<B>,
@@ -418,6 +442,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         ModelClient::evaluate_ids_vjp(self, points, cotangents, ids)
     }
 
+    #[inline(always)]
     fn evaluate_ids_hvp(
         &self,
         points: &ValueMap<B>,
@@ -438,6 +463,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
 }
 
 impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
+    #[inline(always)]
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
@@ -446,6 +472,7 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
         ModelClient::add_quantity(self, distr)
     }
 
+    #[inline(always)]
     fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
     where
         K: Kind<B>,
@@ -454,6 +481,7 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
         ModelClient::update_quantity(self, tag, distr)
     }
 
+    #[inline(always)]
     fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         ModelClient::mark_likelihood(self, likelihood)
     }

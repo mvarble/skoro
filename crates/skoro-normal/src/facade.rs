@@ -41,30 +41,6 @@ use skoro_riemann::euclidean::VectorD;
 
 use crate::distribution::Normal;
 
-/// Trait bound bundle required to build a [`Normal`] for a given backend.
-///
-/// Mirrors the `where` clause on [`Normal::new`].
-pub trait GaussianElem: Backend
-where
-    Self::FloatElem: std::ops::Div<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Mul<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Add<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Sub<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Neg<Output = Self::FloatElem>
-        + std::ops::AddAssign<Self::FloatElem>,
-{
-}
-
-impl<B: Backend> GaussianElem for B where
-    B::FloatElem: std::ops::Div<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Mul<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Add<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Sub<Self::FloatElem, Output = Self::FloatElem>
-        + std::ops::Neg<Output = Self::FloatElem>
-        + std::ops::AddAssign<Self::FloatElem>
-{
-}
-
 /// Capability: a client that can add Gaussian-distributed quantities.
 ///
 /// Extends [`ModelClientOps`] with [`add_gaussian_quantity`](Self::add_gaussian_quantity),

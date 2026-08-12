@@ -13,6 +13,7 @@ pub mod client_ops;
 pub mod discrete;
 pub mod distribution;
 pub mod hash_map_builders;
+pub mod jacobian;
 pub mod map;
 pub mod model;
 pub mod ops;
@@ -20,6 +21,10 @@ pub mod point_map_access;
 pub mod q;
 
 pub use client_ops::{ModelBuilderOps, ModelClientOps};
+
+/// The flattened tangent-space layout the [`jacobian`] functions index by, re-exported
+/// from `skoro-graph` so a caller assembling dense matrices needs only this crate.
+pub use skoro_graph::tangent_layout::{TangentBlock, TangentLayout};
 
 /// The recoverable error type for interfacing with a model, re-exported from
 /// `skoro-core`.

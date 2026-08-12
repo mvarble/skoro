@@ -1,281 +1,9 @@
-# Phase 1 — Interfaces
-
-A header-file document. Every signature that phase 1 introduces or changes, with prose instead of
-docstrings, so the shapes can be reviewed before a single `.rs` file is touched.
-
-Bodies are `todo!()` throughout. There are no algorithms here, no loops, no numerics — only types,
-generics and bounds. Where a signature comes from a design document, the document and section are
-named immediately above it.
-
----
-
-## Part 0 — What phase 1 is
-
-**Deliverable: a working Levenberg-Marquardt optimizer**, run on a linear-Gaussian least-squares
-problem and checked against the analytic solution.
-
-That target is chosen because it is the shortest path that exercises every foundation the other
-documents rest on — the tangent-space layout, Jacobian assembly, the host dense-linear-algebra
-boundary, and the structural preconditions — while remaining **batch and stateless**. It needs no
-covariance carried between steps, no per-tick model building, and no graph surgery.
-
-Deliberately excluded, and why:
-
-| excluded | why |
-|---|---|
-| graph teardown, `Graph::remove` fixes | only the sequential loop deletes nodes; LM builds once |
-| the tick layer (`TimeSequence`, `Chain`, `Transition`) | LM has no notion of time |
-| `advance`, `retract_flat` pairing across ticks | no state advance in a batch optimizer |
-| marginalization, the graveyard | nothing retires |
-| `skoro-ekf` | needs all of the above |
-
-## Status: the groundwork is done
-
-**Part A — the changes to structures that already existed — has been applied and removed from this
-document.** The workspace builds and all tests pass (121 then; 140 after B.1). What landed:
-
-| | | |
-|---|---|---|
-| `skoro-core/error.rs` | 6 new `SkoroError` variants + `Display` arms | 🟢 |
-| `skoro-core/id.rs` | `Id: PartialOrd + Ord` | 🟢 |
-| `skoro-graph/compiler.rs` | VJP cotangent panic → zeros; dead `ForwardOutput.observations` removed | 🔴 |
-| `skoro-graph/point_map.rs` | `inverse_retract` takes `&PointMap<B>` | 🔴 |
-| `skoro-graph/graph.rs` | 5 `pub` fields → read accessors; `add_mapped -> SkoroResult<Id>` | 🔴 |
-| `skoro-model/hash_map_builders.rs` | `with_quantity` on both builders | 🟢 |
-| `skoro-model/q.rs` | `client`/`id` private; `Q::mark_likelihood` and `get_server` gone | 🔴 |
-| `skoro-model/client_ops.rs` | `ModelBuilderOps`; growth methods moved off `ModelClient` | 🔴 |
-| `skoro-model` + `skoro-normal` | `Distribution::log_density -> SkoroResult`; `Normal::whitened_residual` | 🔴 |
-| workspace-wide | **the whole node-building surface is fallible** — see below | 🔴 |
-
-### Node building is fallible end to end
-
-Beyond the original Part A: `register_map1..11`, `ModelClient::add_mapped`, every `std::ops`
-operator on `Q`, and all 43 `*Ops` extension methods now return `SkoroResult<Q<..>>`. **No panic
-remains anywhere on the path that builds a graph node.** The single surviving `expect` in
-`skoro-model` is in `cleanup()` (`model.rs:215`), which removes only ids the model itself queued —
-a genuine internal invariant rather than a user-reachable one.
-
-Chaining is preserved by implementing the operators for `SkoroResult<Q>` on the left as well, so a
-left-associative chain costs one `?` at the end rather than one per step:
-
-```rust
-let z = (a + b + c)?;            // (a + b) is a Result; `Result + Q` is implemented
-let d = (x.norm_squared()? * -0.5)?;
-```
-
-Two shapes are **not** expressible, both blocked by the orphan rule — neither operand names a local
-type:
-
-| shape | example | write instead |
-|---|---|---|
-| `Result op Result` | `a * b + c * d` | `(a * b)? + (c * d)?` |
-| `Result op literal` | `a * b + 1.0` | `(a * b)? + 1.0` |
-
-`Q op Result` (`a + b * c`) is also absent, and that one is a deliberate trade rather than a hard
-limit: it would overlap the blanket literal impl `Add<E: ToElement> for Q`, since nothing tells the
-compiler a `SkoroResult` is not an element. Keeping the blanket impl means bare float literals still
-infer; dropping it would have forced an `f32`/`f64` suffix on every literal in every model. Write
-`a + (b * c)?`.
-
-**One Part A item was not applied and moves to Part B**, because it turned out to depend on work this
-document schedules later:
-
-> **`PointMap::retract_flat` / `retract_flat_mut` need `TangentLayout`**, which is B.1. The
-> signature is `retract_flat(&self, layout: &TangentLayout, delta: Tensor<B, 2>)`, so it cannot be
-> written before the layout type exists. It belongs with B.1 and is listed there. This was an
-> ordering mistake in the original Part A, not a change of plan.
-
-The remaining parts are in dependency order.
-
-## On breaking changes
-
-The library has no external users, so a breaking change costs a migration and nothing else. That is
-the cheapest this will ever be, and several interfaces were worse than they needed to be only
-because fixing them would move a signature.
-
-**New interfaces below are labelled — 🟢 additive, 🔴 breaking — with the migration cost stated.**
-Where an interface would be meaningfully better if it were allowed to break, that is called out even
-when the change is not taken, so the choice is visible rather than silent.
-
-The bar applied: a breaking change is taken when it removes a panic from a public path, closes a
-capability leak, or fixes an asymmetry that will otherwise be copied. It is *not* taken merely for
-tidiness, because each one still costs review.
-
----
-
-# Part B — New code, by crate
-
-## B.1 `skoro-graph` — new module `tangent_layout.rs` — ✅ **implemented**
-
-> **Done.** `crates/skoro-graph/src/tangent_layout.rs` plus `PointMap::retract_flat{,_mut}`, with
-> 13 tests in `skoro-graph/tests/tangent_layout_tests.rs` and 2 backend-generic tests in
-> `skoro-se3/tests/common/mod.rs`. Workspace: 140 tests passing, clippy clean.
->
-> One supporting change: `Graph::get_manifold` was private and is now `pub`, which is what lets
-> `from_ids` size a block. It already resolved [`Node::LogDensity`] to `Real`, so a layout can name
-> density nodes as rows — exactly what a Jacobian's row layout needs.
->
-> The interface below is as-built; the only deviation is that `flatten_vectors`/`flatten_frames`
-> validate supplied block shapes (`BatchSizeMismatch` / `InconsistentFrameCount`) rather than
-> trusting them, since a wrong-shaped block would otherwise fail inside `Tensor::cat` with no id
-> to name.
-
-**Existing crate.** The layout lives here, below every algorithm crate, because an EKF, a
-least-squares optimizer, HMC and MALA all need the same object. It needs only
-`DynQuantityType::as_manifold()` (`skoro-graph/src/quantity.rs:184`) and `Graph` for lookups, both
-local.
-
-*From `flattened-tangent-spaces.md` §3.*
-
-```rust
-// crates/skoro-graph/src/tangent_layout.rs
-
-/// A contiguous ordering of the tangent spaces of a set of quantities.
-///
-/// Laid out by **manifold dimension**, never by storage size: `SO3` occupies 3 slots and
-/// `SE3` occupies 6, not 9 and 12. Every shape downstream depends on this.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TangentLayout {
-    blocks: Vec<TangentBlock>,
-    index: HashMap<Id, usize>,
-    total: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TangentBlock {
-    pub id: Id,
-    pub offset: usize,
-    pub dimension: usize,
-}
-```
-
-Ordering is caller-specified by design: a block structure the caller chose is one they can reason
-about when reading a covariance or a Jacobian.
-
-```rust
-impl TangentLayout {
-    /// Preserves the caller's ordering.
-    ///
-    /// Errors `NotContinuous` for a discrete id, `NodeNotFound` for an unknown one, and
-    /// `DuplicateLayoutId` if an id appears twice.
-    pub fn from_ids<B: Backend>(graph: &Graph<B>, ids: &[Id]) -> SkoroResult<Self> { todo!() }
-
-    /// The same ids in ascending `Id` order, for callers who do not care.
-    pub fn from_ids_sorted<B: Backend>(graph: &Graph<B>, ids: &[Id]) -> SkoroResult<Self> { todo!() }
-
-    pub fn total(&self) -> usize { todo!() }
-    pub fn blocks(&self) -> &[TangentBlock] { todo!() }
-    pub fn block(&self, id: Id) -> Option<TangentBlock> { todo!() }
-    pub fn contains(&self, id: Id) -> bool { todo!() }
-    pub fn ids(&self) -> impl Iterator<Item = Id> + '_ { todo!() }
-
-    /// Block dimensions equal, in order — two layouts describing the same tangent space
-    /// over different quantities. Phase 1 does not use this; it is the rule a sequential
-    /// estimator pairs `state` and `state_next` with.
-    pub fn same_shape(&self, other: &Self) -> bool { todo!() }
-}
-```
-
-A layout holds no tensors and carries no backend parameter, so it is cheap to clone and store. It is
-**not** revalidated against a graph after construction — reusing one after `Graph::remove` is a
-caller error.
-
-*From `flattened-tangent-spaces.md` §4.*
-
-```rust
-impl TangentLayout {
-    /// rank-2: `[batch, d_i]` blocks -> `[batch, N]`.
-    ///
-    /// Ids missing from `map` are filled with zeros rather than erroring: a VJP
-    /// legitimately returns no cotangent for a leaf that does not reach the target.
-    pub fn flatten_vectors<B: Backend>(
-        &self,
-        map: &HashMap<Id, TangentVector<B>>,
-        batch: usize,
-        device: &B::Device,
-    ) -> SkoroResult<Tensor<B, 2>> { todo!() }
-
-    pub fn unflatten_vector<B: Backend>(
-        &self,
-        flat: Tensor<B, 2>,
-    ) -> SkoroResult<HashMap<Id, TangentVector<B>>> { todo!() }
-
-    /// rank-3: `[batch, d_i, f]` blocks -> `[batch, N, f]`.
-    pub fn flatten_frames<B: Backend>(
-        &self,
-        map: &HashMap<Id, CotangentFrame<B>>,
-        batch: usize,
-        frames: usize,
-        device: &B::Device,
-    ) -> SkoroResult<Tensor<B, 3>> { todo!() }
-
-    pub fn unflatten_frame<B: Backend>(
-        &self,
-        flat: Tensor<B, 3>,
-    ) -> SkoroResult<HashMap<Id, CotangentFrame<B>>> { todo!() }
-
-    /// Per-id blocks of the `N x N` identity, where `N = self.total()`:
-    /// block `j` is rows `o_j .. o_j + d_j`, shape `[batch, d_j, N]`.
-    ///
-    /// Both Jacobian paths seed through this one helper, which is what keeps their
-    /// index conventions from drifting apart.
-    pub fn identity_frames<B: Backend>(
-        &self,
-        batch: usize,
-        device: &B::Device,
-    ) -> HashMap<Id, Tensor<B, 3>> { todo!() }
-}
-```
-
-Flattening is a **single** `Tensor::cat` over the ordered block list along dim 1, not a pairwise fold.
-Unflattening is `narrow(1, offset, dimension)` per block. Every entry point validates
-`flat.dims()[1] == self.total()` and returns `LayoutDimensionMismatch` otherwise.
-
-### `PointMap::retract_flat` lands with this module
-
-Carried over from the original Part A, where it was scheduled too early: it takes a `&TangentLayout`
-and so cannot exist before the type above.
-
-*From `flattened-tangent-spaces.md` §4.* 🟢 additive.
-
-```rust
-// crates/skoro-graph/src/point_map.rs — new methods on `impl<B: Backend> PointMap<B>`
-
-impl<B: Backend> PointMap<B> {
-    /// Retract only the quantities named by `layout`, leaving every other point untouched.
-    ///
-    /// This is deliberately unlike the existing `retract_mut`, which requires a tangent
-    /// for *every* point in the map and errors `MissingPoint` otherwise. An optimizer's
-    /// `PointMap` also holds constants and nuisance quantities that are not being
-    /// stepped, so partial retraction is the operation it actually needs.
-    ///
-    /// `delta` is `[batch, layout.total()]`; each block is unflattened and applied
-    /// through its own manifold's retraction. Errors `LayoutDimensionMismatch` if the
-    /// widths disagree, `MissingPoint` for a layout id absent from the map.
-    pub fn retract_flat(
-        &self,
-        layout: &TangentLayout,
-        delta: Tensor<B, 2>,
-    ) -> SkoroResult<Self> { todo!() }
-
-    pub fn retract_flat_mut(
-        &mut self,
-        layout: &TangentLayout,
-        delta: Tensor<B, 2>,
-    ) -> SkoroResult<()> { todo!() }
-}
-```
-
-The manifold for each block is reached as the existing private helper does (`manifold_point`,
-`point_map.rs:126`), via `quantity_type.as_manifold()` to a `&dyn DynManifold<B>`. `DynManifold` is
-sealed with a blanket impl (`skoro-riemann/src/base.rs:36-51`), so it is consumed, never implemented.
-
 ## B.2 `skoro-model` — new module `jacobian.rs`
 
 **Existing crate.** These take a client, so they sit above `skoro-graph` where `TangentLayout` lives.
 `skoro-model` re-exports `TangentLayout` alongside `hash_map_builders`.
 
-*From `flattened-tangent-spaces.md` §5.*
+_From `flattened-tangent-spaces.md` §5._
 
 ```rust
 // crates/skoro-model/src/jacobian.rs
@@ -302,7 +30,7 @@ Both return the same `[batch, D_out, D_in]` tensor; they differ only in cost. Th
 over a large state) favours VJP, which is the case a least-squares problem is usually in.
 
 > **The transpose asymmetry is where this pair fails silently.** The JVP path concatenates output
-> blocks and is done. The VJP path concatenates *input* blocks, producing `[batch, D_in, D_out]`, and
+> blocks and is done. The VJP path concatenates _input_ blocks, producing `[batch, D_in, D_out]`, and
 > must then `.swap_dims(1, 2)`. Getting it wrong yields a well-shaped, wrong `J` whenever the matrix
 > happens to be square. The two are checked against each other in Part D, item 2.
 
@@ -316,7 +44,7 @@ are mapped, cannot be differentiated block-to-block.
 
 **Existing crate.** The factor-local bound and the certificate that accumulates it.
 
-*From `model-structure-bounds.md` §4.*
+_From `model-structure-bounds.md` §4._
 
 ```rust
 // crates/skoro-model/src/structure.rs
@@ -338,7 +66,7 @@ pub trait WhitenedResidual<B: Backend>: Distribution<B, Continuous> {
 }
 ```
 
-*From `model-structure-bounds.md` §6, with the amendment in [Part C](#part-c--what-writing-the-interfaces-changed).*
+_From `model-structure-bounds.md` §6, with the amendment in [Part C](#part-c--what-writing-the-interfaces-changed)._
 
 ```rust
 /// What a builder recorded about one factor, at the moment it built it.
@@ -426,7 +154,7 @@ Host-resident, `f64`, batch 1. Depends on `skoro-backend` and `skoro-core` and *
 workspace** — in particular not `skoro-graph` or `skoro-model`, so nothing that merely uses `Normal`
 or `Tril` pays for `faer`.
 
-*From `estimator-linear-algebra.md` §7.*
+_From `estimator-linear-algebra.md` §7._
 
 ```toml
 # crates/skoro-dense/Cargo.toml
@@ -545,7 +273,7 @@ several thousand iterations later.
 
 **Existing crate.** The Gaussian refinement, and the certificate on the facade that already exists.
 
-*From `model-structure-bounds.md` §4.*
+_From `model-structure-bounds.md` §4._
 
 ```rust
 // crates/skoro-normal/src/structure.rs
@@ -589,7 +317,7 @@ pub struct GaussianBlock {
 Gaussian model is accepted by a least-squares algorithm for free — but **phase 1 has no consumer for
 `blocks()`**. Its consumer is the EKF.
 
-*From `model-structure-bounds.md` §6.* The facade gains the cache:
+_From `model-structure-bounds.md` §6._ The facade gains the cache:
 
 ```rust
 // crates/skoro-normal/src/facade.rs:139
@@ -608,7 +336,7 @@ changes ride along, and they are the point of the naming convention:
 
 - `facade.rs:11-15` and `:196-199` currently claim `GaussianModelClient` is "the structural guarantee
   that every conditional in this model is Gaussian, used by inference algorithms". That is a
-  *structure* claim written next to an *`Ops`* trait. It moves to `GaussianStructure`, and the prose
+  _structure_ claim written next to an _`Ops`_ trait. It moves to `GaussianStructure`, and the prose
   is rewritten to claim capability only.
 - `into_client()` (`facade.rs:162`) is documented as **dissolving the certificate**: a caller who
   takes the raw client can add factors the cache will never see.
@@ -646,7 +374,7 @@ skoro-model = { workspace = true, features = ["testing"] }
 burn-ndarray.workspace = true
 ```
 
-*From `model-structure-bounds.md` §5.* The precondition, first, because it gates everything else:
+_From `model-structure-bounds.md` §5._ The precondition, first, because it gates everything else:
 
 ```rust
 // crates/skoro-levenberg-marquardt/src/precondition.rs
@@ -669,7 +397,7 @@ where
 It returns `NormalizerNotConstant { density, parent }`, naming both the offending factor and the
 parent that leaked into the free set — the two things needed to fix the model.
 
-*From `flattened-tangent-spaces.md` §7 and `estimator-linear-algebra.md` §3.*
+_From `flattened-tangent-spaces.md` §7 and `estimator-linear-algebra.md` §3._
 
 ```rust
 // crates/skoro-levenberg-marquardt/src/lib.rs
@@ -778,8 +506,8 @@ certificate. The trait is forgeable; the evidence is not.
   in B.3 and B.5 assert that a certificate cannot be bypassed. Writing them made clear that `Graph`'s
   five `pub` fields plus a `pub` `ModelServer.graph` made every such assertion provisional — a
   `&mut Graph` reached through `get_server` could append to `log_likelihoods` directly. Privatizing
-  `Q.client` closes the route from a *quantity*; encapsulating `Graph` closes the route from a
-  *client*, and without it the rest is a convention. This only became visible once the certificate
+  `Q.client` closes the route from a _quantity_; encapsulating `Graph` closes the route from a
+  _client_, and without it the rest is a convention. This only became visible once the certificate
   had a written signature to defend. Both are now applied.
 
 ---
@@ -802,17 +530,17 @@ already did. Prefer finite differences and closed forms.
 
 Items 2 and 5 are the gates — the two that fail silently otherwise. Write them first.
 
-| # | test | from |
-|---|---|---|
-| 1 | **Layout round-trip.** `unflatten(flatten(map)) == map` for a mixed layout of `Real`, `EuclideanD`, `Tril`, `SO3`, `SE3`. Confirms dimension-not-storage: the `SO3` block is 3 wide, not 9. | `flattened-tangent-spaces.md` §8.1 |
-| 2 | **JVP/VJP agreement.** `jacobian_jvp` and `jacobian_vjp` produce identical `[b, D_out, D_in]` tensors on the same model. **This is the test that catches the transpose asymmetry**, and it must include a non-square case or it proves nothing. | §8.2 |
-| 3 | **Finite differences.** Both Jacobian paths against a central difference taken *through the retraction* (`retract_flat` with `±ε eᵢ`), on an `SE3` model so the 6-versus-12 split is exercised. | §8.3 |
-| 4 | **Dense linalg.** `spd_solve(A, A) ≈ I`; `cholesky(L Lᵀ) ≈ L`; agreement with `TrilInvert` on a packed lower-triangular input converted to dense; `lstsq` on an ill-conditioned `J` beating `spd_solve(JᵀJ, ..)`, which is the QR argument made checkable. Plus the batch-1 guard: a `[2, m, n]` tensor returns `BatchNotSingleton`. | `estimator-linear-algebra.md` §9 |
-| 5 | **The normalizer precondition, both directions.** A model with a free `Tril` covariance **in** the `free` layout is rejected with `NormalizerNotConstant`; the *same model* with that covariance outside `free` is accepted. A naive "covariances must be constant" implementation passes the first half and fails the second. | `model-structure-bounds.md` §9.2 |
-| 6 | **Certificate honesty.** A `ResidualCertificate` built by hand is empty, and `record` cannot be called without a `WhitenedResidual` distribution — a `trybuild` compile-fail test. | Part C |
-| 7 | **Residual and density agree.** `‖whitened_residual(x)‖²` reconstructs `Normal::log_density(x)` up to `constant + log_det`, on `Real`, `EuclideanD` and `SE3` means. | `model-structure-bounds.md` §9.1 |
-| 8 | **LM end-to-end.** A linear-Gaussian least-squares problem. At `λ = 0` the analytic solution is reached in **one** iteration — the undamped step is exact on a linear problem, so anything else is a bug in `J` or in the solve. With `λ > 0` it converges to the **same** point in several, which checks that damping rescales the step without moving the optimum. | `flattened-tangent-spaces.md` §8.6 |
-| 9 | **Cotangent defaulting.** A model with a free parameter that does not reach the residuals produces a zero column in `J` rather than panicking — the regression for the `vjp_forward` zero-defaulting already applied in `compiler.rs`. | `flattened-tangent-spaces.md` §5 |
+| #   | test                                                                                                                                                                                                                                                                                                                                                                 | from                               |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1   | **Layout round-trip.** `unflatten(flatten(map)) == map` for a mixed layout of `Real`, `EuclideanD`, `Tril`, `SO3`, `SE3`. Confirms dimension-not-storage: the `SO3` block is 3 wide, not 9.                                                                                                                                                                          | `flattened-tangent-spaces.md` §8.1 |
+| 2   | **JVP/VJP agreement.** `jacobian_jvp` and `jacobian_vjp` produce identical `[b, D_out, D_in]` tensors on the same model. **This is the test that catches the transpose asymmetry**, and it must include a non-square case or it proves nothing.                                                                                                                      | §8.2                               |
+| 3   | **Finite differences.** Both Jacobian paths against a central difference taken _through the retraction_ (`retract_flat` with `±ε eᵢ`), on an `SE3` model so the 6-versus-12 split is exercised.                                                                                                                                                                      | §8.3                               |
+| 4   | **Dense linalg.** `spd_solve(A, A) ≈ I`; `cholesky(L Lᵀ) ≈ L`; agreement with `TrilInvert` on a packed lower-triangular input converted to dense; `lstsq` on an ill-conditioned `J` beating `spd_solve(JᵀJ, ..)`, which is the QR argument made checkable. Plus the batch-1 guard: a `[2, m, n]` tensor returns `BatchNotSingleton`.                                 | `estimator-linear-algebra.md` §9   |
+| 5   | **The normalizer precondition, both directions.** A model with a free `Tril` covariance **in** the `free` layout is rejected with `NormalizerNotConstant`; the _same model_ with that covariance outside `free` is accepted. A naive "covariances must be constant" implementation passes the first half and fails the second.                                       | `model-structure-bounds.md` §9.2   |
+| 6   | **Certificate honesty.** A `ResidualCertificate` built by hand is empty, and `record` cannot be called without a `WhitenedResidual` distribution — a `trybuild` compile-fail test.                                                                                                                                                                                   | Part C                             |
+| 7   | **Residual and density agree.** `‖whitened_residual(x)‖²` reconstructs `Normal::log_density(x)` up to `constant + log_det`, on `Real`, `EuclideanD` and `SE3` means.                                                                                                                                                                                                 | `model-structure-bounds.md` §9.1   |
+| 8   | **LM end-to-end.** A linear-Gaussian least-squares problem. At `λ = 0` the analytic solution is reached in **one** iteration — the undamped step is exact on a linear problem, so anything else is a bug in `J` or in the solve. With `λ > 0` it converges to the **same** point in several, which checks that damping rescales the step without moving the optimum. | `flattened-tangent-spaces.md` §8.6 |
+| 9   | **Cotangent defaulting.** A model with a free parameter that does not reach the residuals produces a zero column in `J` rather than panicking — the regression for the `vjp_forward` zero-defaulting already applied in `compiler.rs`.                                                                                                                               | `flattened-tangent-spaces.md` §5   |
 
 Run with `cargo test --workspace`. The wgpu suites additionally exercise the device path, and will
 surface the `TrilInvert` host round-trip as a sync point.
@@ -823,16 +551,16 @@ surface the `TrilInvert` host round-trip as a sync point.
 
 Part A is applied; only the remaining work is listed.
 
-| | file | change | |
-|---|---|---|---|
-| B.1 | `crates/skoro-graph/src/tangent_layout.rs` | new module | |
-| B.1 | `crates/skoro-graph/src/point_map.rs` | `retract_flat`, `retract_flat_mut` (carried from Part A) | 🟢 |
-| B.2 | `crates/skoro-model/src/jacobian.rs` | new module | |
-| B.3 | `crates/skoro-model/src/structure.rs` | new module | |
-| B.4 | `crates/skoro-dense/` | **new crate** | |
-| B.5 | `crates/skoro-normal/src/structure.rs`, `facade.rs` | new module; cache on the facade | |
-| B.6 | `crates/skoro-levenberg-marquardt/` | **new crate** | |
-| — | `Cargo.toml` | `faer`, `skoro-dense`, `skoro-levenberg-marquardt` in `[workspace.dependencies]` | |
+|     | file                                                | change                                                                           |     |
+| --- | --------------------------------------------------- | -------------------------------------------------------------------------------- | --- |
+| B.1 | `crates/skoro-graph/src/tangent_layout.rs`          | new module                                                                       |     |
+| B.1 | `crates/skoro-graph/src/point_map.rs`               | `retract_flat`, `retract_flat_mut` (carried from Part A)                         | 🟢  |
+| B.2 | `crates/skoro-model/src/jacobian.rs`                | new module                                                                       |     |
+| B.3 | `crates/skoro-model/src/structure.rs`               | new module                                                                       |     |
+| B.4 | `crates/skoro-dense/`                               | **new crate**                                                                    |     |
+| B.5 | `crates/skoro-normal/src/structure.rs`, `facade.rs` | new module; cache on the facade                                                  |     |
+| B.6 | `crates/skoro-levenberg-marquardt/`                 | **new crate**                                                                    |     |
+| —   | `Cargo.toml`                                        | `faer`, `skoro-dense`, `skoro-levenberg-marquardt` in `[workspace.dependencies]` |     |
 
 ### Breaking changes not taken
 
@@ -846,9 +574,10 @@ Recorded so the choice is visible rather than forgotten.
   something a second consumer breaks.
 - **`IdGenerator: Clone` still copies the counter** (`skoro-core/src/id.rs:11-15`), so two clones of a
   graph issue colliding ids forever. Removing the impl would forbid `Graph: Clone` — which
-  `sequential-estimation.md` §7 wants for snapshot/restore, where counter preservation is a *feature*.
+  `sequential-estimation.md` §7 wants for snapshot/restore, where counter preservation is a _feature_.
   The right resolution belongs to the phase that builds retirement rollback, not to this one.
 - **`Q<B, T>`'s type parameter stays unbounded.** Bounding `T: QuantityType<B, K>` would catch
   nonsense instantiations at construction rather than at first use, but `K` cannot be inferred at the
   struct definition without a second parameter, which is the `Q<B, T, Fam>` shape
   `model-structure-bounds.md` §6 rejects for unrelated reasons.
+
