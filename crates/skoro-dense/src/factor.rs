@@ -1,0 +1,125 @@
+//! Factorizations and solves over [`Dense`], backed by `faer`.
+//!
+//! All five entry points return [`SkoroResult`]. That is the design argument made
+//! structural: a matrix that has stopped being positive definite is a condition the caller
+//! must be able to observe, not a `NaN` that surfaces several thousand iterations later.
+//!
+//! Four of the five could be reimplemented on `Tensor<B, 3>` behind the same names if a
+//! batched consumer ever appears. [`lstsq`] could not — `burn` 0.21 has no QR. An
+//! algorithm written against it is committed to the host path, deliberately.
+
+use faer::linalg::solvers::{ColPivQr, Llt, Solve, SolveLstsq};
+use faer::linalg::triangular_solve::{
+    solve_lower_triangular_in_place, solve_upper_triangular_in_place,
+};
+use faer::{Mat, MatRef, Par, Side};
+use skoro_core::error::{SkoroError, SkoroResult};
+
+use crate::dense::Dense;
+
+/// The lower Cholesky factor `L` with `A = L Lᵀ`, or [`SkoroError::NotPositiveDefinite`].
+///
+/// Only the lower triangle of `spd` is read.
+pub fn cholesky(spd: &Dense) -> SkoroResult<Dense> {
+    let a = to_faer(square(spd)?);
+    let llt = Llt::new(a.as_ref(), Side::Lower)
+        .map_err(|_| SkoroError::NotPositiveDefinite { rows: spd.rows() })?;
+    Ok(from_faer(llt.L()))
+}
+
+/// Solves `L x = b` for a lower-triangular `L`.
+pub fn solve_lower(l: &Dense, b: &Dense) -> SkoroResult<Dense> {
+    let l = to_faer(square(l)?);
+    let mut rhs = to_faer(compatible(&l.nrows(), b)?);
+    solve_lower_triangular_in_place(l.as_ref(), rhs.as_mut(), Par::Seq);
+    Ok(from_faer(rhs.as_ref()))
+}
+
+/// Solves `U x = b` for an upper-triangular `U`.
+pub fn solve_upper(u: &Dense, b: &Dense) -> SkoroResult<Dense> {
+    let u = to_faer(square(u)?);
+    let mut rhs = to_faer(compatible(&u.nrows(), b)?);
+    solve_upper_triangular_in_place(u.as_ref(), rhs.as_mut(), Par::Seq);
+    Ok(from_faer(rhs.as_ref()))
+}
+
+/// Solves `A x = b` for a symmetric positive-definite `A`, by Cholesky.
+///
+/// Errors [`SkoroError::NotPositiveDefinite`] rather than returning `NaN`s. Only the lower
+/// triangle of `a` is read.
+pub fn spd_solve(a: &Dense, b: &Dense) -> SkoroResult<Dense> {
+    let mat = to_faer(square(a)?);
+    let rhs = to_faer(compatible(&mat.nrows(), b)?);
+    let llt = Llt::new(mat.as_ref(), Side::Lower)
+        .map_err(|_| SkoroError::NotPositiveDefinite { rows: a.rows() })?;
+    Ok(from_faer(llt.solve(rhs.as_ref()).as_ref()))
+}
+
+/// Least squares by column-pivoted QR: `min ‖J δ − r‖`, without forming `JᵀJ`.
+///
+/// Forming `JᵀJ` squares the condition number; this path works at `κ` rather than `κ²`,
+/// which is the whole argument for the host boundary (`docs/estimator-linear-algebra.md`
+/// §3).
+///
+/// This gives the **undamped** step. Damping is the caller's job and costs nothing extra:
+/// `(JᵀJ + λI) δ = −Jᵀr` is exactly `min ‖[J; √λ I] δ − [−r; 0]‖`, so an iteration
+/// augments with [`Dense::vstack`] and calls this. The QR path is therefore available at
+/// every damping value.
+pub fn lstsq(j: &Dense, r: &Dense) -> SkoroResult<Dense> {
+    if j.rows() != r.rows() {
+        return Err(SkoroError::ShapeMismatch {
+            expected: j.rows(),
+            found: r.rows(),
+        });
+    }
+    if j.rows() < j.cols() {
+        // faer's least-squares solve is defined for a tall or square system; an
+        // underdetermined one has no unique answer and would read past the factor.
+        return Err(SkoroError::ShapeMismatch {
+            expected: j.cols(),
+            found: j.rows(),
+        });
+    }
+    let a = to_faer(j);
+    let rhs = to_faer(r);
+    let qr = ColPivQr::new(a.as_ref());
+    Ok(from_faer(qr.solve_lstsq(rhs.as_ref()).as_ref()))
+}
+
+/// Reject a non-square matrix where a factorization needs one.
+fn square(m: &Dense) -> SkoroResult<&Dense> {
+    if m.rows() != m.cols() {
+        return Err(SkoroError::ShapeMismatch {
+            expected: m.rows(),
+            found: m.cols(),
+        });
+    }
+    Ok(m)
+}
+
+/// Reject a right-hand side whose row count does not match the system.
+fn compatible<'a>(n: &usize, b: &'a Dense) -> SkoroResult<&'a Dense> {
+    if b.rows() != *n {
+        return Err(SkoroError::ShapeMismatch {
+            expected: *n,
+            found: b.rows(),
+        });
+    }
+    Ok(b)
+}
+
+fn to_faer(m: &Dense) -> Mat<f64> {
+    Mat::from_fn(m.rows(), m.cols(), |r, c| m.get(r, c))
+}
+
+fn from_faer(m: MatRef<'_, f64>) -> Dense {
+    let (rows, cols) = (m.nrows(), m.ncols());
+    let mut data = Vec::with_capacity(rows * cols);
+    for r in 0..rows {
+        for c in 0..cols {
+            data.push(m[(r, c)]);
+        }
+    }
+    Dense::from_row_major(rows, cols, data)
+        .expect("internal: the row-major length is rows * cols by construction")
+}

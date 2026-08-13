@@ -21,7 +21,7 @@ type B = NdArrayBackend<f32, i32>;
 /// quantities. Demonstrates the capability-trait (contravariant) use: it works
 /// against both a general `ModelClient` and a restricted `GaussianModelClient`.
 fn add_unit_gaussian<C: GaussianModelClientOps<B>>(
-    client: &C,
+    client: &mut C,
     mean: &Q<B, EuclideanD>,
 ) -> Q<B, EuclideanD> {
     let cov = constant_covariance_identity(client, 3);
@@ -30,7 +30,7 @@ fn add_unit_gaussian<C: GaussianModelClientOps<B>>(
 
 #[test]
 fn gaussian_client_add_gaussian_quantity_density() {
-    let model = GaussianModelClient::<B>::new(Default::default());
+    let mut model = GaussianModelClient::<B>::new(Default::default());
     let mean = model.add_constant(EuclideanD(3), &VectorD::new(&[10.0, 20.0, 30.0]));
     let std_dev = constant_covariance_diagonal(&model, &[1.0, 2.0, 3.0]);
 
@@ -57,14 +57,14 @@ fn gaussian_client_add_gaussian_quantity_density() {
 #[test]
 fn capability_trait_works_on_both_clients() {
     // General client: the trait is implemented, so the adapter accepts it.
-    let general = ModelClient::<B>::new(Default::default());
+    let mut general = ModelClient::<B>::new(Default::default());
     let mean1 = general.add_constant(EuclideanD(3), &VectorD::new(&[0.0, 0.0, 0.0]));
-    let _x1 = add_unit_gaussian(&general, &mean1);
+    let _x1 = add_unit_gaussian(&mut general, &mean1);
 
     // Restricted Gaussian client: also accepted by the same adapter.
-    let gaussian = GaussianModelClient::<B>::new(Default::default());
+    let mut gaussian = GaussianModelClient::<B>::new(Default::default());
     let mean2 = gaussian.add_constant(EuclideanD(3), &VectorD::new(&[1.0, 2.0, 3.0]));
-    let x2 = add_unit_gaussian(&gaussian, &mean2);
+    let x2 = add_unit_gaussian(&mut gaussian, &mean2);
 
     // The restricted client can still observe / evaluate via `ModelClientOps`.
     gaussian

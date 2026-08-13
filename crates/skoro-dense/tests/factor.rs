@@ -1,0 +1,229 @@
+//! Identities the host factorizations must satisfy.
+//!
+//! Nothing here is a hand-computed constant: every expectation is an identity
+//! (`A A⁻¹ = I`, `chol(L Lᵀ) = L`) or a closed form the fixture was built from. Per the
+//! workspace doctrine, a table of numbers generated from the implementation would only
+//! lock in whatever the implementation already did.
+//!
+//! These tests carry no backend parameter — [`Dense`] is `f64` host memory whatever the
+//! backend is. The dtype-sensitive half lives in `common/`, wired per backend.
+
+use approx::assert_abs_diff_eq;
+use skoro_core::error::SkoroError;
+use skoro_dense::dense::Dense;
+use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
+
+/// A lower-triangular factor with a positive diagonal, far from the identity: near `I`
+/// almost every triangular bug is invisible.
+fn lower_factor() -> Dense {
+    #[rustfmt::skip]
+    let data = vec![
+        2.0,  0.0,  0.0,  0.0,
+       -1.5,  3.0,  0.0,  0.0,
+        0.75, 2.5,  1.25, 0.0,
+       -2.0,  0.5, -1.75, 4.0,
+    ];
+    Dense::from_row_major(4, 4, data).unwrap()
+}
+
+fn spd() -> Dense {
+    let l = lower_factor();
+    l.matmul(&l.transpose()).unwrap()
+}
+
+/// A right-hand side with no zeros and no repeats.
+fn rhs() -> Dense {
+    Dense::from_row_major(4, 1, vec![1.5, -3.25, 7.0, -0.5]).unwrap()
+}
+
+fn assert_close(actual: &Dense, expected: &Dense, epsilon: f64) {
+    assert_eq!(
+        (actual.rows(), actual.cols()),
+        (expected.rows(), expected.cols())
+    );
+    for (a, e) in actual.data().iter().zip(expected.data()) {
+        assert_abs_diff_eq!(a, e, epsilon = epsilon);
+    }
+}
+
+/// `chol(L Lᵀ) = L`. The factor is recovered, not merely some factor: Cholesky is unique
+/// for a positive diagonal, which `lower_factor` has.
+#[test]
+fn cholesky_recovers_the_factor_it_was_built_from() {
+    let l = lower_factor();
+    assert_close(&cholesky(&spd()).unwrap(), &l, 1e-12);
+}
+
+/// `A⁻¹ A = I`, expressed without ever forming an inverse.
+#[test]
+fn spd_solve_of_a_matrix_by_itself_is_the_identity() {
+    let a = spd();
+    assert_close(&spd_solve(&a, &a).unwrap(), &Dense::identity(4), 1e-10);
+}
+
+/// `A x = b` for the `x` the solve returned. Checking the residual rather than a stored
+/// `x` keeps the fixture free of implementation-generated numbers.
+#[test]
+fn spd_solve_reproduces_its_right_hand_side() {
+    let a = spd();
+    let b = rhs();
+    let x = spd_solve(&a, &b).unwrap();
+    assert_close(&a.matmul(&x).unwrap(), &b, 1e-10);
+}
+
+#[test]
+fn the_triangular_solves_invert_their_triangles() {
+    let l = lower_factor();
+    let u = l.transpose();
+    let b = rhs();
+
+    let x = solve_lower(&l, &b).unwrap();
+    assert_close(&l.matmul(&x).unwrap(), &b, 1e-12);
+
+    let y = solve_upper(&u, &b).unwrap();
+    assert_close(&u.matmul(&y).unwrap(), &b, 1e-12);
+}
+
+/// Assert on the variant, not on `is_nan` — the whole point of the `SkoroResult` return
+/// is that a covariance which has drifted indefinite is observable at the call site.
+#[test]
+fn an_indefinite_matrix_is_reported_rather_than_returning_nans() {
+    // Symmetric, and `[1, -1]` is an eigenvector with eigenvalue −1.
+    #[rustfmt::skip]
+    let a = Dense::from_row_major(2, 2, vec![
+        1.0, 2.0,
+        2.0, 1.0,
+    ]).unwrap();
+    assert_eq!(
+        cholesky(&a),
+        Err(SkoroError::NotPositiveDefinite { rows: 2 })
+    );
+    assert_eq!(
+        spd_solve(&a, &Dense::identity(2)),
+        Err(SkoroError::NotPositiveDefinite { rows: 2 })
+    );
+}
+
+#[test]
+fn a_non_square_system_is_rejected() {
+    let m = Dense::zeros(2, 3);
+    assert_eq!(
+        cholesky(&m),
+        Err(SkoroError::ShapeMismatch {
+            expected: 2,
+            found: 3
+        })
+    );
+}
+
+/// `lstsq` on an overdetermined system whose solution is exact must reproduce it.
+#[test]
+fn lstsq_is_exact_when_the_system_is_consistent() {
+    #[rustfmt::skip]
+    let j = Dense::from_row_major(4, 2, vec![
+         1.0,  0.5,
+        -2.0,  1.5,
+         0.25, 3.0,
+         1.75, -1.0,
+    ]).unwrap();
+    let x = Dense::from_row_major(2, 1, vec![2.5, -1.25]).unwrap();
+    let r = j.matmul(&x).unwrap();
+
+    assert_close(&lstsq(&j, &r).unwrap(), &x, 1e-12);
+}
+
+/// The `n × n` Hilbert matrix, `H[i][j] = 1 / (i + j + 1)`. `κ(H₆) ≈ 1.5e7`, so `κ² ≈ 2e14`
+/// — inside `f64`'s range for the Cholesky to succeed, and well outside it for the answer
+/// to survive.
+fn hilbert(n: usize) -> Dense {
+    let mut data = Vec::with_capacity(n * n);
+    for i in 0..n {
+        for j in 0..n {
+            data.push(1.0 / (i + j + 1) as f64);
+        }
+    }
+    Dense::from_row_major(n, n, data).unwrap()
+}
+
+/// **Without this test, the argument for the whole host boundary is an assertion.**
+///
+/// Forming `JᵀJ` squares the condition number. On a Hilbert `J` the normal equations lose
+/// most of the mantissa and the QR path does not, so the two must disagree by orders of
+/// magnitude with `lstsq` on the right side.
+#[test]
+fn lstsq_beats_the_normal_equations_on_an_ill_conditioned_problem() {
+    let n = 6;
+    let j = hilbert(n);
+    let x = Dense::from_row_major(n, 1, (0..n).map(|i| 1.0 + i as f64).collect()).unwrap();
+    let r = j.matmul(&x).unwrap();
+
+    let qr = lstsq(&j, &r).unwrap();
+    let jt = j.transpose();
+    let normal = spd_solve(&jt.matmul(&j).unwrap(), &jt.matmul(&r).unwrap()).unwrap();
+
+    let err = |sol: &Dense| {
+        sol.data()
+            .iter()
+            .zip(x.data())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f64, f64::max)
+    };
+    let (qr_err, normal_err) = (err(&qr), err(&normal));
+
+    assert!(
+        qr_err < 1e-6,
+        "column-pivoted QR should stay near the analytic solution, got {qr_err}"
+    );
+    assert!(
+        normal_err > 100.0 * qr_err,
+        "the normal equations should be visibly worse; qr {qr_err}, normal {normal_err}"
+    );
+}
+
+/// The damping identity `estimator-linear-algebra.md` §7 rests on:
+/// `(JᵀJ + λI) δ = −Jᵀr` **is** `min ‖[J; √λ I] δ − [−r; 0]‖`.
+///
+/// On a well-conditioned `J` the two routes must agree, which is what licenses a
+/// Levenberg-Marquardt iteration to reach for `lstsq` at every `λ` rather than only at
+/// `λ = 0`.
+#[test]
+fn row_augmentation_is_the_damped_normal_equations() {
+    #[rustfmt::skip]
+    let j = Dense::from_row_major(4, 3, vec![
+         1.0,  0.5, -2.0,
+        -2.0,  1.5,  0.25,
+         0.25, 3.0,  1.75,
+         1.75, -1.0,  0.5,
+    ]).unwrap();
+    let r = Dense::from_row_major(4, 1, vec![0.75, -1.5, 2.25, -0.25]).unwrap();
+    let lambda: f64 = 0.375;
+
+    let augmented = lstsq(
+        &j.vstack(&Dense::scaled_identity(3, lambda.sqrt())).unwrap(),
+        &r.neg().vstack(&Dense::zeros(3, 1)).unwrap(),
+    )
+    .unwrap();
+
+    let jt = j.transpose();
+    let damped = {
+        let mut data = jt.matmul(&j).unwrap().data().to_vec();
+        for i in 0..3 {
+            data[i * (3 + 1)] += lambda;
+        }
+        Dense::from_row_major(3, 3, data).unwrap()
+    };
+    let normal = spd_solve(&damped, &jt.matmul(&r.neg()).unwrap()).unwrap();
+
+    assert_close(&augmented, &normal, 1e-10);
+}
+
+#[test]
+fn vstack_rejects_a_column_count_mismatch() {
+    assert_eq!(
+        Dense::zeros(2, 3).vstack(&Dense::zeros(1, 4)),
+        Err(SkoroError::ShapeMismatch {
+            expected: 3,
+            found: 4
+        })
+    );
+}

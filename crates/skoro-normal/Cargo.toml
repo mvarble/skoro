@@ -19,3 +19,7 @@ skoro-pointwise.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
+# `SE3` is 6-dimensional over 12 components, which is the case that catches a residual
+# sized by storage. No cycle: `skoro-se3` does not depend on `skoro-normal`.
+skoro-se3.workspace = true
+skoro-so3.workspace = true

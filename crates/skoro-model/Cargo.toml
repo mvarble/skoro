@@ -23,3 +23,9 @@ ndarray = { workspace = true, optional = true, features = ["approx"] }
 
 [dev-dependencies]
 approx.workspace = true
+trybuild.workspace = true
+
+# Duplicated from `[dependencies]` so `trybuild`'s generated manifest can reach them: it
+# lists the host crate plus its dev-dependencies, not the host's own dependencies.
+skoro-backend.workspace = true
+skoro-riemann.workspace = true

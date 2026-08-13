@@ -8,12 +8,14 @@ version.workspace = true
 [dependencies]
 skoro-backend.workspace = true
 skoro-core.workspace = true
+skoro-dense.workspace = true
 skoro-operation.workspace = true
 skoro-graph.workspace = true
 skoro-model.workspace = true
 skoro-normal.workspace = true
 skoro-riemann.workspace = true
 skoro-pointwise.workspace = true
+skoro-levenberg-marquardt.workspace = true
 skoro-linalg.workspace = true
 skoro-so3.workspace = true
 skoro-se3.workspace = true

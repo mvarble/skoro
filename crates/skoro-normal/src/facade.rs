@@ -7,19 +7,32 @@
 //! [`ModelClient`] and the restricted [`GaussianModelClient`].
 //!
 //! - **Trait [`GaussianModelClientOps`]** is the *capability* "can add Gaussian
-//!   quantities" — used as a bound by adapter/producer code that builds models.
-//! - **Type [`GaussianModelClient`]** is the *structural guarantee* "every conditional in this
-//!   model is Gaussian" — used by inference algorithms (e.g. EKF / Levenberg–Marquardt) that need
-//!   the nonlinear-least-squares structure. The guarantee holds because `GaussianModelClient` does
-//!   not expose the general `add_quantity`/`get_server` surface (it intentionally does **not**
-//!   `Deref` to [`ModelClient`]).
+//!   quantities" — used as a bound by adapter/producer code that builds models. It is
+//!   implemented for the unrestricted [`ModelClient`] too, so it says *can add Gaussians*
+//!   and never *only ever did*. It claims nothing about what a model contains.
+//! - **Type [`GaussianModelClient`]** is the *builder*: it restricts model growth to
+//!   Gaussian conditionals and records what it built. It does not expose the general
+//!   `add_quantity` surface, and intentionally does **not** `Deref` to [`ModelClient`].
+//!
+//! **The structural claim lives elsewhere.** "Every conditional in this model is Gaussian"
+//! is what an inference algorithm bounds on, and it belongs on
+//! [`GaussianStructure`](crate::structure::GaussianStructure), whose methods return a
+//! certificate nothing outside a bounded constructor can populate. A capability trait
+//! cannot carry that claim, however it is documented — see
+//! [`skoro_model::structure`] for why the guarantee is on the returned evidence rather
+//! than on the trait.
 
 use std::collections::HashMap;
 
 use skoro_backend::{
     Backend, CotangentFrame, ElementConversion, Point, TangentFrame, TangentVector,
 };
-use skoro_core::{error::SkoroResult, id::Id, kind::Kind, pack::Packable};
+use skoro_core::{
+    error::{SkoroError, SkoroResult},
+    id::Id,
+    kind::Kind,
+    pack::Packable,
+};
 use skoro_graph::compiler::{ForwardOutput, HvpForwardOutput, JvpForwardOutput, VjpForwardOutput};
 use skoro_graph::{
     graph::{
@@ -32,19 +45,25 @@ use skoro_graph::{
 use skoro_linalg::tril::Tril;
 use skoro_model::ModelBuilderOps;
 use skoro_model::{
-    ModelClientOps,
+    ModelClientOps, NlsStructure, ResidualCertificate, TangentLayout, WhitenedResidual,
     model::{ModelClient, ModelServer},
     q::Q,
 };
 use skoro_operation::ValueMap;
-use skoro_riemann::euclidean::VectorD;
+use skoro_riemann::euclidean::{EuclideanD, VectorD};
 
 use crate::distribution::Normal;
+use crate::structure::{GaussianBlock, GaussianStructure};
 
 /// Capability: a client that can add Gaussian-distributed quantities.
 ///
 /// Extends [`ModelClientOps`] with [`add_gaussian_quantity`](Self::add_gaussian_quantity),
 /// which is semantically `add_quantity` with a [`Normal`] distribution.
+///
+/// This is a *capability*, not a guarantee: it is implemented for the unrestricted
+/// [`ModelClient`] as well, so a `C: GaussianModelClientOps<B>` bound says the client can
+/// add Gaussians, never that it only ever did. For the latter, bound on
+/// [`GaussianStructure`](crate::structure::GaussianStructure).
 pub trait GaussianModelClientOps<B: Backend>: ModelClientOps<B>
 where
     B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
@@ -56,8 +75,13 @@ where
 {
     /// Add a quantity with a `Normal(mean, std_dev)` conditional distribution,
     /// where `std_dev` is a lower-triangular covariance factor.
+    ///
+    /// Takes `&mut self` because an implementor may *record* what it built —
+    /// [`GaussianModelClient`] does, and the cache it accumulates is the evidence an
+    /// inference algorithm consumes. An implementor that records nothing, such as the
+    /// blanket impl for [`ModelClient`], simply ignores the stronger receiver.
     fn add_gaussian_quantity<T: ContinuousQuantity<B>>(
-        &self,
+        &mut self,
         mean: &Q<B, T>,
         std_dev: &Q<B, Tril>,
     ) -> SkoroResult<Q<B, T>>;
@@ -73,7 +97,7 @@ where
         + std::ops::AddAssign<B::FloatElem>,
 {
     fn add_gaussian_quantity<T: ContinuousQuantity<B>>(
-        &self,
+        &mut self,
         mean: &Q<B, T>,
         std_dev: &Q<B, Tril>,
     ) -> SkoroResult<Q<B, T>> {
@@ -106,16 +130,33 @@ impl<B: Backend> GaussianModelServer<B> {
     }
 }
 
-/// A model client restricted to Gaussian conditionals.
+/// A builder restricted to Gaussian conditionals, which records what it built.
 ///
 /// Wraps a [`ModelClient`] but deliberately does **not** expose the general
-/// `add_quantity` / `get_server` surface, so the only way a stochastic node
-/// enters the model is via [`add_gaussian_quantity`](GaussianModelClientOps::add_gaussian_quantity).
-/// This makes "all conditionals are Gaussian" a compile-time guarantee carried by
-/// the type, which inference algorithms can require.
-#[derive(Debug, Clone)]
+/// `add_quantity` / `get_server` surface, so the only way a stochastic node enters the
+/// model is via
+/// [`add_gaussian_quantity`](GaussianModelClientOps::add_gaussian_quantity) — which
+/// records a [`GaussianBlock`] and a certificate entry as it goes.
+///
+/// The recording is the whole point. A distribution is consumed when a quantity is added
+/// and nothing identifying it survives into the graph, so the moment of building is the
+/// only moment the family is knowable. What is accumulated here is handed to inference
+/// algorithms through [`NlsStructure`] and [`GaussianStructure`].
+///
+/// **Not [`Clone`].** Two clones would share one graph while owning separate caches, so
+/// each could record half the factors and both would report a certificate that omitted the
+/// other's — exactly the forgery the certificate exists to prevent.
+#[derive(Debug)]
 pub struct GaussianModelClient<B: Backend> {
     client: ModelClient<B>,
+    certificate: ResidualCertificate,
+    blocks: Vec<GaussianBlock>,
+    /// Keeps the recorded residual nodes alive.
+    ///
+    /// A residual is a `Mapped` node with no children, so dropping the last [`Q`] naming it
+    /// queues it for garbage collection and the ids in `certificate` would dangle after the
+    /// next `cleanup()`.
+    residuals: Vec<Q<B, EuclideanD>>,
 }
 
 impl<B: Backend> Default for GaussianModelClient<B> {
@@ -129,23 +170,42 @@ impl<B: Backend> GaussianModelClient<B> {
     pub fn new(device: B::Device) -> Self {
         Self {
             client: ModelClient::new(device),
+            certificate: ResidualCertificate::new(),
+            blocks: Vec::new(),
+            residuals: Vec::new(),
         }
     }
 
     /// Consume the facade and return the underlying general client.
     ///
-    /// This is an explicit escape hatch: once you hold a general
-    /// [`ModelClient`], the Gaussian-only guarantee no longer applies.
+    /// **This dissolves the certificate.** It is an explicit exit from the guarantee, not a
+    /// view onto it: a caller holding the general [`ModelClient`] can add factors of any
+    /// family, and the cache accumulated here — which is dropped along with the facade —
+    /// would never see them. Anything already handed a [`ResidualCertificate`] keeps a
+    /// snapshot that was honest when it was taken and says nothing about the model
+    /// afterwards.
     pub fn into_client(self) -> ModelClient<B> {
         self.client
     }
 }
 
-/// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose
-/// diagonal is `diag` and whose off-diagonal entries are zero.
+impl<B: Backend> NlsStructure<B> for GaussianModelClient<B> {
+    fn certificate(&self) -> &ResidualCertificate {
+        &self.certificate
+    }
+}
+
+impl<B: Backend> GaussianStructure<B> for GaussianModelClient<B> {
+    fn blocks(&self) -> &[GaussianBlock] {
+        &self.blocks
+    }
+}
+
+/// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose diagonal is `diag` and
+/// whose off-diagonal entries are zero.
 ///
-/// `diag` are the standard deviations along each axis (the Cholesky factor of a
-/// diagonal covariance). The resulting factor has side `diag.len()`.
+/// `diag` are the standard deviations along each axis (the Cholesky factor of a diagonal
+/// covariance). The resulting factor has side `diag.len()`.
 pub fn constant_covariance_diagonal<B, C>(client: &C, diag: &[f64]) -> Q<B, Tril>
 where
     B: Backend,
@@ -161,13 +221,34 @@ where
     client.add_constant(Tril(n), &VectorD::from_vec(packed))
 }
 
-/// Build a constant identity covariance factor `Q<B, Tril>` of side `n`.
+/// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose diagonal isotropic with
+/// value `scale`, size `n`, and off-diagonal entries are zero.
+///
+/// `diag` are the standard deviations along each axis (the Cholesky factor of a diagonal
+/// covariance). The resulting factor has side `diag.len()`.
+pub fn constant_covariance_isotropic<B, C>(client: &C, scale: f64, n: usize) -> Q<B, Tril>
+where
+    B: Backend,
+    C: ModelClientOps<B>,
+{
+    let k = n * (n + 1) / 2;
+    let mut packed = vec![B::FloatElem::from_elem(0.0); k];
+    let s = B::FloatElem::from_elem(scale);
+    for i in 0..n {
+        // Diagonal entry of row `i` in the row-major packed lower-triangular layout.
+        packed[i * (i + 3) / 2] = s
+    }
+    client.add_constant(Tril(n), &VectorD::from_vec(packed))
+}
+
+/// Build a constant identity covariance factor `Q<B, Tril>` of on space of dimension `n`.
+#[inline(always)]
 pub fn constant_covariance_identity<B, C>(client: &C, n: usize) -> Q<B, Tril>
 where
     B: Backend,
     C: ModelClientOps<B>,
 {
-    constant_covariance_diagonal(client, &vec![1.0; n])
+    constant_covariance_isotropic(client, 1.0, n)
 }
 
 // `GaussianModelClient` exposes the distribution-agnostic surface by delegating
@@ -215,6 +296,10 @@ impl<B: Backend> ModelClientOps<B> for GaussianModelClient<B> {
 
     fn cleanup(&self) {
         self.client.cleanup()
+    }
+
+    fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout> {
+        self.client.tangent_layout(ids)
     }
 
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
@@ -365,12 +450,34 @@ where
         + std::ops::Neg<Output = B::FloatElem>
         + std::ops::AddAssign<B::FloatElem>,
 {
+    /// Adds the factor **and records it**, which is what a plain [`ModelClient`] does not
+    /// do.
+    ///
+    /// The residual node built here is a second copy of the one `Normal::log_density`
+    /// builds internally. That is not free — it is an extra subgraph — but it is the node
+    /// whose id the certificate names, and a least-squares consumer evaluates it on every
+    /// iteration anyway.
     fn add_gaussian_quantity<T: ContinuousQuantity<B>>(
-        &self,
+        &mut self,
         mean: &Q<B, T>,
         std_dev: &Q<B, Tril>,
     ) -> SkoroResult<Q<B, T>> {
-        self.client
-            .add_quantity(Normal::new(mean.clone(), std_dev.clone()))
+        let distr = Normal::new(mean.clone(), std_dev.clone());
+        let x = self.client.add_quantity(distr.clone())?;
+        let residual = WhitenedResidual::whitened_residual(&distr, &x)?;
+        let density = self
+            .client
+            .server_call(|server| server.graph().density_of(x.id()))
+            .ok_or(SkoroError::NotStochastic { id: x.id() })?;
+
+        self.certificate.record(&distr, density, &residual)?;
+        self.blocks.push(GaussianBlock {
+            density,
+            residual: residual.id(),
+            mean: mean.id(),
+            whitening: std_dev.id(),
+        });
+        self.residuals.push(residual);
+        Ok(x)
     }
 }

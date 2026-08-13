@@ -390,6 +390,79 @@ where
     );
 }
 
+/// `unflatten(flatten(map)) == map` over **every** manifold shape at once.
+///
+/// The mix is the point. `layout_is_sized_by_dimension` checks the offsets; this checks that
+/// the data actually survives a round trip through them, and it is the only place `Tril`,
+/// `SO3` and `SE3` appear in one layout together — `skoro-graph`'s own suite cannot reach
+/// the group manifolds, and `skoro-so3`'s cannot reach `SE3`.
+///
+/// A block sized by storage rather than by dimension fails on the width; a block written at
+/// its index rather than its offset fails on the values.
+pub fn mixed_layout_round_trip_impl<B: Backend>()
+where
+    SE3: ContinuousQuantity<B>,
+    skoro_so3::quantity::SO3: ContinuousQuantity<B>,
+{
+    use skoro_graph::tangent_layout::TangentLayout;
+    use skoro_linalg::tril::Tril;
+    use skoro_riemann::euclidean::EuclideanD;
+    use skoro_so3::quantity::SO3;
+    use std::collections::HashMap;
+
+    let model = ModelClient::<B>::default();
+    let real = model.add_parameter(Real);
+    let euclidean = model.add_parameter(EuclideanD(2));
+    let tril = model.add_parameter(Tril(3));
+    let rotation = model.add_parameter(SO3);
+    let pose = model.add_parameter(SE3);
+
+    let ids = [
+        real.id(),
+        euclidean.id(),
+        tril.id(),
+        rotation.id(),
+        pose.id(),
+    ];
+    let layout = model
+        .server_call(|server| TangentLayout::from_ids(server.graph(), &ids))
+        .unwrap();
+
+    // 1 + 2 + 6 + 3 + 6. `SO3` is 3 and `SE3` is 6, never 9 and 12.
+    assert_eq!(layout.total(), 18);
+
+    // Distinct, non-repeating values, so a block landing at the wrong offset is visible.
+    let mut original = HashMap::new();
+    let mut next = 0.5f64;
+    for block in layout.blocks() {
+        let values: Vec<f64> = (0..block.dimension)
+            .map(|_| {
+                next += 1.25;
+                next
+            })
+            .collect();
+        original.insert(
+            block.id,
+            Tensor::<B, 1>::from_floats(values.as_slice(), &Default::default())
+                .reshape([1, block.dimension]),
+        );
+    }
+
+    let flat = layout
+        .flatten_vectors(&original, 1, &Default::default())
+        .unwrap();
+    assert_eq!(flat.dims(), [1, 18]);
+    let recovered = layout.unflatten_vector(flat).unwrap();
+
+    assert_eq!(recovered.len(), original.len());
+    for (id, expected) in &original {
+        let actual = recovered.get(id).expect("every block round-trips");
+        assert_eq!(actual.dims(), expected.dims());
+        let to_f64 = |t: Tensor<B, 2>| t.into_data().convert::<f64>().to_vec::<f64>().unwrap();
+        assert_eq!(to_f64(actual.clone()), to_f64(expected.clone()));
+    }
+}
+
 #[macro_export]
 macro_rules! tests {
     ($B:ty, $delta:literal, $epsilon:literal) => {
@@ -404,6 +477,10 @@ macro_rules! tests {
         #[test]
         fn layout_is_sized_by_dimension() {
             common::layout_is_sized_by_dimension_impl::<$B>();
+        }
+        #[test]
+        fn mixed_layout_round_trip() {
+            common::mixed_layout_round_trip_impl::<$B>();
         }
         #[test]
         fn retract_flat_is_partial() {

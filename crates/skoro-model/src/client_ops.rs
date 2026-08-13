@@ -31,6 +31,7 @@ use skoro_graph::{
     },
     node::Node,
     quantity::{ContinuousQuantity, QuantityType},
+    tangent_layout::TangentLayout,
 };
 use skoro_operation::ValueMap;
 
@@ -88,6 +89,17 @@ pub trait ModelClientOps<B: Backend> {
 
     /// Garbage-collect unreferenced mapped quantities.
     fn cleanup(&self);
+
+    /// A [`TangentLayout`] over quantities of this model, in the given order.
+    ///
+    /// Layouts are built from a [`Graph`](skoro_graph::graph::Graph), which this trait
+    /// deliberately does not hand out, so a client that wants one has to offer this. Every
+    /// consumer of the flattened tangent API needs it: an optimizer names its free
+    /// variables here, a filter its state and measurement blocks.
+    ///
+    /// Ordering is the caller's, because a block structure they chose is one they can
+    /// reason about when reading a covariance or a Jacobian.
+    fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout>;
 
     /// Fetch the quantity type associated with a quantity.
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
@@ -294,6 +306,10 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
     }
 
     #[inline(always)]
+    fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout> {
+        self.server_call(|server| TangentLayout::from_ids(server.graph(), ids))
+    }
+
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
     where
         K: Kind<B>,

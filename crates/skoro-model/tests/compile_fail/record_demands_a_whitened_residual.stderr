@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `NotAWhitenedResidual: WhitenedResidual<_>` is not satisfied
+  --> tests/compile_fail/record_demands_a_whitened_residual.rs:18:17
+   |
+18 |         .record(&NotAWhitenedResidual, residual.id(), &residual)
+   |          ------ ^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |          |
+   |          required by a bound introduced by this call
+   |
+help: the trait `WhitenedResidual<_>` is not implemented for `NotAWhitenedResidual`
+  --> tests/compile_fail/record_demands_a_whitened_residual.rs:9:1
+   |
+ 9 | struct NotAWhitenedResidual;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `ResidualCertificate::record`
+  --> src/structure.rs
+   |
+   |     pub fn record<B, D>(
+   |            ------ required by a bound in this associated function
+...
+   |         D: WhitenedResidual<B>,
+   |            ^^^^^^^^^^^^^^^^^^^ required by this bound in `ResidualCertificate::record`

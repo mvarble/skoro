@@ -11,7 +11,7 @@ that solve a precondition of its filter phase — phase 2, behind only the graph
 estimator in the roadmap starts until this is settled.
 
 **Conclusion, up front.** For the deterministic estimators — `skoro-ekf` and `skoro-levenberg-marquardt` —
-the dense linear algebra runs on the **host, in `f64`, at batch 1**, in a new leaf crate
+the dense linear algebra runs on the **host, in `f64`, one matrix per solve**, in a new leaf crate
 `skoro-dense` backed by `faer`. Everything else in the workspace stays on `burn` tensors, including
 every graph operation, the Jacobian assembly that feeds the estimator, and the MCMC family, whose
 workload is batching in the first place.
@@ -186,10 +186,30 @@ backend struggles with. The performance point in §8 there is reusing one compil
 tick's several evaluation passes — cross-tick hoisting is not available, since the graph is rebuilt
 every tick — which is a backend-independent win either way.
 
-## 5. What batch 1 costs
+## 5. What one-matrix-at-a-time costs
 
-The user's offered concession — that an estimator may assume `Point<B>` is always `[1, _]` — is what
-makes a host library viable. It is not free, and the costs are specific.
+> **Amended.** This section was written as "what batch 1 costs", on the offered concession that an
+> estimator may assume `Point<B>` is always `[1, _]`. The concession turned out to be stronger than
+> the argument needs, and `skoro-levenberg-marquardt` now accepts a batch of **N independent
+> problems** — multi-start optimization, where several starting points are run at once to see which
+> local optima they find.
+>
+> **Nothing below changes.** The claim was never `N = 1` versus `N = 20`; it was *host* versus
+> *device kernels*. Every premise survives: still host, still `f64`, still **one matrix per solve**
+> — the batch axis is split around the factorizations rather than pushed into them — and still
+> column-pivoted QR, which §3 makes load-bearing and which `burn` has no counterpart for at any batch
+> size. What §5 rules out is 4,096 MCMC chains, where the batch axis *is* the workload. Twenty
+> independent 6×20 QR solves in a host loop is not that, and is not the case §8 defers.
+>
+> The expensive half is shared rather than looped: one `jacobian_vjp` pass produces every row's
+> Jacobian, because frames and batch are different axes.
+>
+> One real limit, which belongs here rather than in the crate: constants and observations are rank-1
+> storage that the compiler expands to the running batch, so **every row sees the same data**. "One
+> dataset, N starting points" works; "N datasets" does not.
+
+Making a host library viable needs only that each *solve* is one matrix. That is not free, and the
+costs are specific.
 
 `Point<B>` is `[batch, storage]` (`crates/skoro-backend/src/lib.rs:77`) and `TangentFrame<B>` is
 `[batch, dimension, frame]` (`:100`). Fixing `batch = 1` collapses exactly the axis a GPU is
@@ -206,7 +226,8 @@ pass stays on the backend.
 filters, and the batched-chain MCMC family — `skoro-hmc`, `skoro-mala`,
 `skoro-metropolis-hastings`, all named as future `TangentLayout` consumers in
 `flattened-tangent-spaces.md` §7 — have batching as their *entire* workload. Running 4,096 chains is
-running `batch = 4096`, and a host batch-1 solve is simply the wrong tool.
+running `batch = 4096`, and a host loop over 4,096 solves is simply the wrong tool — which is a
+statement about the *count*, not about the axis existing.
 
 > **This is why the recommendation is scoped to the deterministic estimators.** `skoro-ekf` and
 > `skoro-levenberg-marquardt` take the host `f64` path. The MCMC family stays on `burn` tensors, where the
@@ -271,12 +292,13 @@ Two arguments deliberately **not** made:
 Start from:
 
 ```toml
-faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
+faer = { version = "0.24", default-features = false, features = ["std"] }
 ```
 
-which drops `rayon`, `sparse-linalg`, `rand` and `npy` from the default set. **Verify the feature
-names when the crate is created** — `linalg` is published as an empty feature list, so its being the
-right switch is inferred from the module layout, not confirmed.
+✅ **Verified against 0.24.4 as published.** There is no `linalg` feature — the published set is
+`std`, `rayon`, `npy`, `perf-warn`, `nightly`, with `std` and `rayon` on by default. Dropping the
+defaults and re-adding `std` therefore drops `rayon` and `npy`, and the whole of `faer::linalg` is
+available unconditionally. The line above is what `crates/skoro-dense` builds against.
 
 > **Write `skoro`-side signatures concretely; treat every `faer` call site as illustrative.** Its API
 > has churned across versions, and a fabricated snippet in a design document is the likeliest way for
@@ -296,10 +318,14 @@ also matches the shape §7 of that document already describes, where each algori
 The surface, sketched:
 
 ```rust
-/// A single-batch dense matrix, host-resident, always `f64`.
+/// A single dense matrix, host-resident, always `f64`.
 ///
-/// Constructed from a `[1, m, n]` tensor; errors with `LayoutDimensionMismatch`
+/// Constructed from a `[1, m, n]` tensor; errors with `BatchNotSingleton`
 /// on a leading dimension other than 1, rather than silently taking slice 0.
+/// A batched caller reaches the same factorizations through `split_tensor` /
+/// `split_vector` / `stack_vector`, which turn an `[N, ..]` tensor into N of
+/// these in **one** host transfer — so the batch axis is handled around the
+/// factorizations rather than inside them, and none of the five below changes.
 pub struct Dense { rows: usize, cols: usize, data: Vec<f64> }
 
 impl Dense {

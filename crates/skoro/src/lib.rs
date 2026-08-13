@@ -41,7 +41,9 @@
 // ---------------------------------------------------------------------------
 pub use skoro_backend as backend;
 pub use skoro_core as core;
+pub use skoro_dense as dense;
 pub use skoro_graph as graph;
+pub use skoro_levenberg_marquardt as levenberg_marquardt;
 pub use skoro_linalg as linalg;
 pub use skoro_model as model;
 pub use skoro_normal as normal;
@@ -70,8 +72,13 @@ pub mod prelude {
 
     // ----- the model interface -----
     pub use skoro_model::ModelClientOps;
+
+    // ----- structural claims an inference algorithm bounds on -----
+    pub use skoro_levenberg_marquardt::{LmOptions, LmReport, Termination};
     pub use skoro_model::model::{ModelClient, ModelServer};
     pub use skoro_model::q::Q;
+    pub use skoro_model::{NlsModelClient, NlsStructure, ResidualCertificate, WhitenedResidual};
+    pub use skoro_normal::structure::{GaussianBlock, GaussianFactor, GaussianStructure};
 
     // ----- distributions -----
     pub use skoro_core::sampler::Sampler;
@@ -96,6 +103,10 @@ pub mod prelude {
 
     // discrete quantity types
     pub use skoro_core::discrete::{Boolean, Categorical, Integer};
+
+    // ----- host dense linear algebra (estimators only; batch 1, f64) -----
+    pub use skoro_dense::dense::Dense;
+    pub use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
 
     // ----- linear algebra & pointwise op traits (operator/method sugar on Q) -----
     pub use skoro_linalg::matrix::{MatmulOps, TransposeOps};

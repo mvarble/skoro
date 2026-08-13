@@ -226,9 +226,11 @@ Notes on the bounds:
   resolves only through the blanket `AssociatedTangentVectorBuilder<EuclideanD, B>`
   (`skoro-model/src/ops/base.rs:18`). So `whitened_residual` returns `Q<B, EuclideanD>` and needs no
   bound on `M` beyond the one `Normal` already carries.
-- **Reuse `GaussianElem`.** The six `B::FloatElem` operator bounds these traits need are already
-  bundled at `skoro-normal/src/facade.rs:46-65` — and never used, with every impl restating them
-  longhand (§8.2). This is the chance to make the bundle earn its place.
+- **There is no `GaussianElem` to reuse.** ❌ An earlier draft of this section, and of §8.2, said
+  the six `B::FloatElem` operator bounds were already bundled at `skoro-normal/src/facade.rs:46-65`.
+  They are not: that location is `GaussianModelClientOps`, and the bound is spelled out longhand at
+  nine sites. Phase 1 restates it longhand once more rather than introducing the bundle — see §8.2
+  for what introducing it would actually cost.
 
 ### `Normal` implements both nearly for free
 
@@ -331,13 +333,27 @@ pub trait NlsStructure<B: Backend>: ModelClientOps<B> {
 
     /// The rows of `J` — `flattened-tangent-spaces.md` §7's `residuals` layout.
     fn residual_layout(&self) -> SkoroResult<TangentLayout>;
-    fn normalizer_parents(&self) -> impl Iterator<Item = Id> + '_;
 }
 
 pub trait GaussianStructure<B: Backend>: NlsStructure<B> {
     fn blocks(&self) -> &[GaussianBlock];   // { mean, whitening, residual }
 }
 ```
+
+> **`normalizer_parents` is not on the trait as built.** An earlier draft put a third method here.
+> It is unnecessary: `certificate().factors()` already carries `normalizer_parents: Vec<Id>` per
+> factor, so the precondition check reads it from the evidence rather than from a parallel accessor
+> that could disagree with it.
+>
+> **`residual_layout` has a default body**, over a new `ModelClientOps::tangent_layout(&[Id])`.
+> Layouts are built from a `&Graph`, which `ModelClientOps` deliberately does not hand out, so
+> without that method no holder of a facade could name its *free* variables either — the row layout
+> was reachable and the column layout was not. It is a capability, not evidence, so it belongs on the
+> `Ops` trait per §3.
+>
+> **`add_gaussian_quantity` takes `&mut self` as built**, on the trait and on both impls, because
+> recording mutates the cache; and `GaussianModelClient` is consequently **not `Clone`**, since two
+> clones would share one graph while owning separate caches. Nothing in the workspace cloned one.
 
 `NlsModelClient: NlsStructure`. `GaussianModelClient: NlsStructure + GaussianStructure`. Then
 `fn solve<M: NlsStructure<B>>(..)` is Levenberg-Marquardt, `fn step<M: GaussianStructure<B>>(..)` is
@@ -409,9 +425,20 @@ Following the sibling documents' idiom. Each is independently reachable and none
    `ModelClient` (`:89`) and proves nothing; the type intends the invariant but leaks it four ways
    (§6). Per §3, **the trait is correct and the prose is the defect** — it should claim capability
    only, and the invariant should move to `GaussianStructure`.
-2. **`GaussianElem` is dead.** `facade.rs:46-65` bundles the six `FloatElem` operator bounds and is
-   never used as a bound anywhere; every impl restates them longhand. The traits of §4 need the same
-   bounds — use it.
+2. **The six-clause `FloatElem` bound is restated at nine sites, and there is no alias.** Six in
+   `skoro-normal` (`distribution.rs:112`, `:146`, `:169`; `facade.rs:50`, `:68`, `:361`) and three in
+   `skoro-linalg` (`tril/invert.rs:73`, `:174`; `tril/mod.rs:26`). *This entry previously claimed a
+   `GaussianElem` trait already bundled them and was merely unused — that trait does not exist.*
+
+   Introducing one is not the local change it looks like. It must be a **supertrait bundle on the
+   element** (`trait GaussianElem: Div<Self, Output = Self> + …`), not a trait with a `where` clause
+   on `Self::FloatElem`: a trait's `where` clause is an obligation on implementors, not an implied
+   bound for users, so bundling that way buys nothing at a call site. And it must live *below*
+   `skoro-linalg` — `skoro-backend` is the only home from which all nine sites can reach it — which
+   makes it a change to the bottom of the crate graph rather than to `skoro-normal`. Deferred, with
+   the shape recorded so the next attempt does not rediscover it.
+   `skoro-levenberg-marquardt/tests/common/mod.rs` carries a test-local `LmElem` in exactly that
+   shape, which is the working prototype.
 3. **`GaussianModelServer` is orphaned.** `facade.rs:113-130` is constructed nowhere;
    `GaussianModelClient::new` builds a `ModelClient` directly. It is the natural home for the
    certificate cache if the facade ever grows a server half.

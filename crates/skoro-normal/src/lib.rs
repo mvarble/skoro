@@ -6,6 +6,12 @@
 //! ([`facade`]): the [`GaussianModelClientOps`](facade::GaussianModelClientOps) capability trait
 //! and the Gaussian-restricted [`GaussianModelClient`](facade::GaussianModelClient) /
 //! [`GaussianModelServer`](facade::GaussianModelServer).
+//!
+//! The [`structure`] module carries the *structural* claims — [`GaussianFactor`](structure::GaussianFactor)
+//! on a single distribution, [`GaussianStructure`](structure::GaussianStructure) on a whole
+//! model — which are what an inference algorithm bounds on. The facade traits are
+//! capabilities and claim nothing about what a model contains.
 
 pub mod distribution;
 pub mod facade;
+pub mod structure;

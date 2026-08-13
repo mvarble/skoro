@@ -175,18 +175,35 @@ impl<B: Backend> PointMap<B> {
     ///
     /// `delta` is `[batch, layout.total()]`; each block is unflattened and applied through
     /// its own manifold's retraction. Errors [`SkoroError::LayoutDimensionMismatch`] if
-    /// the widths disagree, [`SkoroError::MissingPoint`] for a layout id absent here.
+    /// the widths disagree, [`SkoroError::BatchSizeMismatch`] if `delta`'s batch disagrees
+    /// with the point being stepped, and [`SkoroError::MissingPoint`] for a layout id
+    /// absent here.
+    ///
+    /// The batch check is not defensive bookkeeping. Without it the mismatch reaches
+    /// `manifold.retract`, where the two families behave differently and one of them is
+    /// silent: a flat manifold retracts by `Addition`, which **broadcasts and returns a
+    /// plausible wrong answer**, while `SO3`/`SE3` take their batch from the *point* and
+    /// panic inside a `reshape`. Neither is something a caller can act on.
     pub fn retract_flat_mut(
         &mut self,
         layout: &TangentLayout,
         delta: Tensor<B, 2>,
     ) -> SkoroResult<()> {
+        let batch = delta.dims()[0];
         let tangents = layout.unflatten_vector(delta)?;
         for block in layout.blocks() {
             let tangent = tangents
                 .get(&block.id)
                 .expect("internal: unflatten yields every block in the layout");
             let (point, manifold) = self.manifold_point(&block.id)?;
+            let found = point.dims()[0];
+            if found != batch {
+                return Err(SkoroError::BatchSizeMismatch {
+                    id: block.id,
+                    expected: batch,
+                    found,
+                });
+            }
             let new_point = manifold.retract(point.clone(), tangent.clone());
             self.points.insert(block.id, Input::Float(new_point));
         }

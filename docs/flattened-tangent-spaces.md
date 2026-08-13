@@ -350,7 +350,9 @@ path, which is an ordinary occurrence rather than a corner case.
 > **Superseded for the deterministic estimators.** This section identifies the gap correctly, but
 > the resolution below — hand-written `Tensor<B, 3>` kernels — was reconsidered in
 > `estimator-linear-algebra.md`. For `skoro-ekf` and `skoro-levenberg-marquardt`, this solve runs on the
-> **host, in `f64`, at batch 1**, in a `skoro-dense` crate backed by `faer`. Read that document
+> **host, in `f64`, one matrix per solve**, in a `skoro-dense` crate backed by `faer`. (An
+> optimizer may carry a batch of N independent problems; the batch axis is split around the
+> factorizations, not pushed into them — `estimator-linear-algebra.md` §5.) Read that document
 > before implementing anything here. The survey of what exists and what `burn` provides is still
 > accurate and is what the decision rests on.
 
@@ -523,7 +525,7 @@ code gives for free and which is exact on a linear problem (§8, item 6).
    exercised.
 4. **Dense linalg.** `spd_solve(A, A) ≈ I`; `cholesky(L Lᵀ) ≈ L`; agreement with `TrilInvert` on
    a packed lower-triangular input converted to dense. Extended in
-   `estimator-linear-algebra.md` §9, which adds the conversion round-trips, the batch-1 guard, and
+   `estimator-linear-algebra.md` §9, which adds the conversion round-trips, the single-matrix guard, and
    the ill-conditioned case that makes the QR argument checkable.
 5. **EKF end-to-end.** A linear-Gaussian model, where the EKF must reproduce the exact Kalman
    filter, checked against the closed-form posterior.

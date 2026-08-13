@@ -39,6 +39,11 @@ macro_rules! tests {
             }
 
             #[test]
+            fn invert_agrees_with_dense() {
+                super::common::tril::invert_agrees_with_dense_impl::<$B>();
+            }
+
+            #[test]
             fn diag() {
                 super::common::tril::diag_impl::<$B>();
             }

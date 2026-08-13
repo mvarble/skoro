@@ -147,11 +147,21 @@ impl TangentLayout {
             let part = match map.get(&block.id) {
                 Some(tangent) => {
                     let dims = tangent.dims();
-                    if dims != [batch, block.dimension] {
+                    // Each axis is reported on its own. Testing the whole shape and then
+                    // reporting `dims[0]` turns a *width* disagreement into
+                    // `BatchSizeMismatch { expected: 2, found: 2 }`, which names neither
+                    // the axis that disagrees nor a value that differs.
+                    if dims[0] != batch {
                         return Err(SkoroError::BatchSizeMismatch {
                             id: block.id,
                             expected: batch,
                             found: dims[0],
+                        });
+                    }
+                    if dims[1] != block.dimension {
+                        return Err(SkoroError::ShapeMismatch {
+                            expected: block.dimension,
+                            found: dims[1],
                         });
                     }
                     tangent.clone()
@@ -196,7 +206,23 @@ impl TangentLayout {
             let part = match map.get(&block.id) {
                 Some(frame) => {
                     let dims = frame.dims();
-                    if dims != [batch, block.dimension, frames] {
+                    // Three axes, three errors — see [`Self::flatten_vectors`]. Reporting
+                    // every mismatch as `InconsistentFrameCount` made a batch disagreement
+                    // read as `{ expected: 5, found: 5 }`.
+                    if dims[0] != batch {
+                        return Err(SkoroError::BatchSizeMismatch {
+                            id: block.id,
+                            expected: batch,
+                            found: dims[0],
+                        });
+                    }
+                    if dims[1] != block.dimension {
+                        return Err(SkoroError::ShapeMismatch {
+                            expected: block.dimension,
+                            found: dims[1],
+                        });
+                    }
+                    if dims[2] != frames {
                         return Err(SkoroError::InconsistentFrameCount {
                             expected: frames,
                             found: dims[2],

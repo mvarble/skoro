@@ -13,13 +13,17 @@ burn = "0.21"
 burn-cubecl = "0.21"
 burn-ndarray = "0.21"
 cubecl = "0.10"
+faer = { version = "0.24", default-features = false, features = ["std"] }
 ndarray = "0.17.2"
 num-traits = "0.2"
+trybuild = "1.0"
 burn-wgpu = "0.21"
 
 skoro = { path = "./crates/skoro" }
 skoro-backend = { path = "./crates/skoro-backend" }
 skoro-core = { path = "./crates/skoro-core" }
+skoro-dense = { path = "./crates/skoro-dense" }
+skoro-levenberg-marquardt = { path = "./crates/skoro-levenberg-marquardt" }
 skoro-operation = { path = "./crates/skoro-operation" }
 skoro-graph = { path = "./crates/skoro-graph" }
 skoro-linalg = { path = "./crates/skoro-linalg" }

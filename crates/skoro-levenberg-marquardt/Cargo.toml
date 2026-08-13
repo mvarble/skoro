@@ -1,0 +1,28 @@
+[package]
+name = "skoro-levenberg-marquardt"
+description = "Levenberg-Marquardt optimization over Skoro models."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+burn.workspace = true
+
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-graph.workspace = true
+skoro-model.workspace = true
+skoro-dense.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+burn-ndarray.workspace = true
+burn-wgpu.workspace = true
+skoro-normal.workspace = true
+skoro-linalg.workspace = true
+skoro-riemann.workspace = true
+skoro-operation.workspace = true
+# `SE3` is 6-dimensional over 12 components, which is what the finite-difference check
+# needs in order to exercise the dimension-versus-storage split.
+skoro-se3.workspace = true
+skoro-so3.workspace = true

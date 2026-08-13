@@ -321,3 +321,61 @@ where
         epsilon = B::FloatElem::from_elem(1e-6),
     );
 }
+
+/// `TrilInvert` and `skoro-dense` must agree on the same triangle.
+///
+/// The two implementations are deliberately kept apart — `TrilInvert` is a differentiable
+/// graph operation on every backend and stays there (`docs/estimator-linear-algebra.md`
+/// §8), while `skoro-dense` is host `f64` for the estimators. This is the check that the
+/// fence did not let them drift: the packed forward substitution and the host triangular
+/// solve compute the same inverse.
+///
+/// The triangle is `4 × 4` and far from the identity, where a transposed index or a
+/// mis-derived off-diagonal is visible.
+pub fn invert_agrees_with_dense_impl<B: Backend>()
+where
+    Q<B, Tril>: TrilOps<B>,
+    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
+{
+    // Row-major packed lower triangle: element (i, j≤i) is at `i(i+1)/2 + j`.
+    const N: usize = 4;
+    #[rustfmt::skip]
+    const PACKED: [f64; 10] = [
+        2.0,
+       -1.5,  3.0,
+        0.75, 2.5,  1.25,
+       -2.0,  0.5, -1.75, 4.0,
+    ];
+
+    let model = ModelClient::<B>::default();
+    let l = model.add_parameter(Tril(N));
+    let linv = l.invert().unwrap();
+    let points = points().with_tensor(
+        l.id(),
+        Input::<B>::Float(tensor([PACKED], &Default::default())),
+    );
+    let packed_inverse = into_vec(linv.evaluate(&points).unwrap());
+
+    // The same triangle, unpacked, inverted on the host by a triangular solve against `I`.
+    let mut dense_l = vec![0.0; N * N];
+    for i in 0..N {
+        for j in 0..=i {
+            dense_l[i * N + j] = PACKED[i * (i + 1) / 2 + j];
+        }
+    }
+    let dense_inverse = skoro_dense::factor::solve_lower(
+        &skoro_dense::dense::Dense::from_row_major(N, N, dense_l).unwrap(),
+        &skoro_dense::dense::Dense::identity(N),
+    )
+    .unwrap();
+
+    for i in 0..N {
+        for j in 0..=i {
+            assert_abs_diff_eq!(
+                packed_inverse[i * (i + 1) / 2 + j],
+                B::FloatElem::from_elem(dense_inverse.get(i, j)),
+                epsilon = B::FloatElem::from_elem(1e-5),
+            );
+        }
+    }
+}

@@ -19,8 +19,12 @@ pub mod model;
 pub mod ops;
 pub mod point_map_access;
 pub mod q;
+pub mod structure;
 
 pub use client_ops::{ModelBuilderOps, ModelClientOps};
+pub use structure::{
+    FactorRecord, NlsModelClient, NlsStructure, ResidualCertificate, WhitenedResidual,
+};
 
 /// The flattened tangent-space layout the [`jacobian`] functions index by, re-exported
 /// from `skoro-graph` so a caller assembling dense matrices needs only this crate.

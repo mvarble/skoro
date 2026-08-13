@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use skoro_backend::{Backend, Tensor};
 use skoro_core::{id::Id, kind::Kind, pack::Packable};
-use skoro_graph::quantity::QuantityType;
+use skoro_graph::{point_map::PointMap, quantity::QuantityType};
 use skoro_operation::Input;
 
 use crate::q::Q;
@@ -148,7 +148,65 @@ impl<B: Backend> InputMapBuilder<B> {
     }
 }
 
+/// Builder for a [`PointMap`], which pairs each value with its quantity type and is
+/// therefore the map that knows how to retract.
+///
+/// [`InputMapBuilder`] produces a bare [`ValueMap`](skoro_operation::ValueMap), which is
+/// what the evaluation entry points take. An optimizer needs the richer map as well, since
+/// [`PointMap::retract_flat`] has to reach each block's manifold — and outside
+/// `skoro-graph` the only supply of one was a `ForwardOutput`. This closes that gap.
+///
+/// **What belongs in it.** Every `Parameter` / `Stochastic` leaf the evaluation reaches,
+/// free or not. *Observed* quantities do not: an observed node lowers to a compiled
+/// constant carrying its own value, so it is held by the graph rather than by this map and
+/// survives an `evaluate → retract_flat → evaluate` loop untouched.
+#[derive(Debug, Clone, Default)]
+pub struct PointMapBuilder<B: Backend>(PointMap<B>);
+
+impl<B: Backend> From<PointMapBuilder<B>> for PointMap<B> {
+    fn from(value: PointMapBuilder<B>) -> Self {
+        value.0
+    }
+}
+
+impl<B: Backend> std::ops::Deref for PointMapBuilder<B> {
+    type Target = PointMap<B>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<B: Backend> PointMapBuilder<B> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn build(self) -> PointMap<B> {
+        self.into()
+    }
+
+    /// Insert by quantity, which is what supplies the quantity type.
+    ///
+    /// There is no `with_tensor` counterpart: an id alone cannot name a manifold, and a
+    /// `PointMap` whose quantity types were guessed would retract wrongly rather than
+    /// error.
+    pub fn with_quantity<K, T>(mut self, q: &Q<B, T>, point: impl Into<Input<B>>) -> Self
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K>,
+    {
+        let quantity_type = q.get_quantity_type::<K>();
+        self.0
+            .insert(q.id(), point.into(), quantity_type.into_dyn());
+        self
+    }
+}
+
 pub fn points<B: Backend>() -> InputMapBuilder<B> {
+    Default::default()
+}
+
+pub fn point_map<B: Backend>() -> PointMapBuilder<B> {
     Default::default()
 }
 
