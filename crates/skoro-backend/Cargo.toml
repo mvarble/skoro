@@ -10,3 +10,6 @@ burn.workspace = true
 burn-cubecl.workspace = true
 burn-ndarray.workspace = true
 num-traits.workspace = true
+
+[dev-dependencies]
+burn-wgpu.workspace = true

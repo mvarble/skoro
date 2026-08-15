@@ -63,7 +63,7 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt, const D: usize> ToCubeTensor<R>
     fn to_cube_tensor(self) -> CubeTensor<R> {
         match self.into_primitive() {
             TensorPrimitive::Float(x) => x,
-            TensorPrimitive::QFloat(_) => unreachable!("Skoro will never quantize."),
+            TensorPrimitive::QFloat(_) => panic!("Skoro should never quantize tensors."),
         }
     }
 }

@@ -31,11 +31,18 @@ use crate::sampler::{GraphSampler, KindedSampler};
 ///
 /// It stores variables, transformations, and their statistical properties.
 #[derive(Clone)]
-/// The five collections below carry an invariant between them: every id in
-/// `log_likelihoods` names a [`Node::LogDensity`] in `nodes`, and the two density maps
-/// are inverses of one another over the subset of densities that belong to a stochastic
-/// quantity. Only the mutating methods on this type maintain that invariant, so the
-/// fields are private and reachable through the read accessors below.
+/// The four collections below carry an invariant between them: every id in
+/// `log_likelihoods` names a [`Node::LogDensity`] in `nodes`, and `stochastic_to_log_density`
+/// is the inverse of the `stochastic_id` those density nodes carry. Only the mutating methods
+/// on this type maintain that invariant, so the fields are private and reachable through the
+/// read accessors below.
+///
+/// **The density → stochastic direction is stored on the node, not in a map.**
+/// [`LogDensityNode::stochastic_id`] is the single source of truth for which quantity a
+/// density scores; [`stochastic_of`](Self::stochastic_of) reads it directly.
+/// `stochastic_to_log_density` exists only to make the reverse lookup O(1) and is derived
+/// state over that field — which is why every write to one happens beside a write to the
+/// other, in the same method.
 pub struct Graph<B: Backend> {
     /// Arena of all nodes.
     nodes: HashMap<Id, Node<B>>,
@@ -43,9 +50,8 @@ pub struct Graph<B: Backend> {
     children: HashMap<Id, HashSet<Id>>,
     /// Log-likelihood terms
     log_likelihoods: Vec<Id>,
-    /// A map from Ids of log-densities to their stochastic quantities.
-    log_density_to_stochastic: HashMap<Id, Id>,
-    /// A map from Ids of stochastic quantities to their log-densities.
+    /// Reverse index over [`LogDensityNode::stochastic_id`]: the density scoring a given
+    /// stochastic quantity. Derived — see the type-level note above.
     stochastic_to_log_density: HashMap<Id, Id>,
     /// Generates unique IDs for nodes.
     id_generator: IdGenerator,
@@ -110,7 +116,6 @@ impl<B: Backend> Graph<B> {
             log_likelihoods: Vec::new(),
             id_generator: IdGenerator::new(),
             stochastic_to_log_density: HashMap::new(),
-            log_density_to_stochastic: HashMap::new(),
         }
     }
 
@@ -150,9 +155,192 @@ impl<B: Backend> Graph<B> {
     }
 
     /// The stochastic quantity that `density` scores, if it belongs to one. A
-    /// free-standing likelihood factor belongs to none and yields `None`.
+    /// free-standing likelihood factor belongs to none and yields `None`, as does an id that
+    /// is not a density at all.
+    ///
+    /// Read straight off the node rather than from an index, so there is no second copy to
+    /// fall out of step with it.
     pub fn stochastic_of(&self, density: Id) -> Option<Id> {
-        self.log_density_to_stochastic.get(&density).copied()
+        match self.nodes.get(&density) {
+            Some(Node::LogDensity(LogDensityNode { stochastic_id, .. })) => *stochastic_id,
+            _ => None,
+        }
+    }
+
+    /// Density nodes that no longer score anything and are no longer likelihood terms.
+    ///
+    /// `unregister_density` deliberately leaves the node in the arena — it may still be
+    /// referenced as a child, and removing it is the caller's decision — but until now there
+    /// was no way to get its [`Id`] back: the tag that named it is dropped when the
+    /// distribution is replaced, so the only recourse was scanning `nodes()` by hand.
+    ///
+    /// The orphan is not inert. It keeps its `parent_ids`, so its parents' `children` sets stay
+    /// non-empty and [`remove`](Self::remove) is blocked on the whole cone above it. Pair this
+    /// with [`remove_closure`](Self::remove_closure) to reclaim one.
+    pub fn orphaned_densities(&self) -> Vec<Id> {
+        self.nodes
+            .iter()
+            .filter(|(id, node)| {
+                matches!(
+                    node,
+                    Node::LogDensity(LogDensityNode {
+                        stochastic_id: None,
+                        ..
+                    })
+                ) && !self.log_likelihoods.contains(id)
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    /// Remove `roots` together with everything downstream of them.
+    ///
+    /// [`remove`](Self::remove) is leaf-only and all-or-nothing: it rejects a batch that any
+    /// surviving node still points into. That is the right primitive, but it makes every caller
+    /// compute the downward closure itself, and retiring a tick of a filter needs exactly that
+    /// closure at every retention policy. This is that walk, done once here.
+    ///
+    /// Returns the removed nodes. The closure includes `roots`; ids not in the arena are
+    /// skipped rather than reported, so removing an already-removed subtree is a no-op.
+    pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        let mut closure = HashSet::new();
+        let mut queue: VecDeque<Id> = roots
+            .iter()
+            .copied()
+            .filter(|id| self.nodes.contains_key(id))
+            .collect();
+        while let Some(id) = queue.pop_front() {
+            if !closure.insert(id) {
+                continue;
+            }
+            if let Some(children) = self.children.get(&id) {
+                queue.extend(children.iter().copied());
+            }
+        }
+        // Children before parents: `remove` checks that nothing outside the batch still names
+        // a node, and it takes the batch as one closed set, so any order within it is legal —
+        // but keeping the dependency order makes a partial failure easier to reason about.
+        let ordered: Vec<Id> = self
+            .topological_sort(&closure.iter().copied().collect::<Vec<_>>())
+            .into_iter()
+            .filter(|id| closure.contains(id))
+            .rev()
+            .collect();
+        self.remove(&ordered)
+    }
+
+    /// Recompute every derived collection from `nodes` and report the first disagreement.
+    ///
+    /// `nodes` is the source of truth. `children`, `log_likelihoods` and
+    /// `stochastic_to_log_density` are all derived from it and are maintained by hand across a
+    /// dozen mutating methods, which is exactly the arrangement that historically drifts. This
+    /// turns "the indices may leak" from a standing comment into something a test can fail on.
+    ///
+    /// Checked here:
+    ///
+    /// - `children` is the exact reverse of every node's `parent_ids`, with no empty sets left
+    ///   behind;
+    /// - every id in `log_likelihoods` names a [`Node::LogDensity`], and names it once;
+    /// - `stochastic_to_log_density` is the exact inverse of the density nodes'
+    ///   [`stochastic_id`](LogDensityNode::stochastic_id);
+    /// - a density that scores a quantity is among the likelihood terms. The converse does not
+    ///   hold: a free-standing likelihood factor scores no particular quantity.
+    ///
+    /// Runs after every mutation in debug builds, and is public so a test can assert it
+    /// directly after a sequence the mutators do not cover.
+    pub fn validate_indices(&self) -> Result<(), String> {
+        let mut derived: HashMap<Id, HashSet<Id>> = HashMap::new();
+        for (id, node) in &self.nodes {
+            for parent in node.parent_ids() {
+                derived.entry(*parent).or_default().insert(*id);
+            }
+        }
+        for (parent, actual) in &self.children {
+            match derived.get(parent) {
+                Some(expected) if expected == actual => {}
+                Some(expected) => {
+                    return Err(format!(
+                        "children[{parent:?}] is {actual:?}, but parent_ids gives {expected:?}"
+                    ));
+                }
+                None => {
+                    return Err(format!(
+                        "children[{parent:?}] is {actual:?}, but no node names {parent:?} as a parent"
+                    ));
+                }
+            }
+        }
+        for (parent, expected) in &derived {
+            if !self.children.contains_key(parent) {
+                return Err(format!(
+                    "children has no entry for {parent:?}, but {expected:?} name it as a parent"
+                ));
+            }
+        }
+
+        for (i, id) in self.log_likelihoods.iter().enumerate() {
+            if !matches!(self.nodes.get(id), Some(Node::LogDensity(_))) {
+                return Err(format!(
+                    "log_likelihoods[{i}] = {id:?} does not name a LogDensity node"
+                ));
+            }
+            if self.log_likelihoods[..i].contains(id) {
+                return Err(format!("log_likelihoods names {id:?} more than once"));
+            }
+        }
+
+        for (stochastic, density) in &self.stochastic_to_log_density {
+            match self.nodes.get(density) {
+                Some(Node::LogDensity(LogDensityNode {
+                    stochastic_id: Some(claimed),
+                    ..
+                })) if claimed == stochastic => {}
+                Some(Node::LogDensity(LogDensityNode { stochastic_id, .. })) => {
+                    return Err(format!(
+                        "stochastic_to_log_density[{stochastic:?}] = {density:?}, but that node claims {stochastic_id:?}"
+                    ));
+                }
+                _ => {
+                    return Err(format!(
+                        "stochastic_to_log_density[{stochastic:?}] = {density:?}, which is not a LogDensity node"
+                    ));
+                }
+            }
+        }
+        for (id, node) in &self.nodes {
+            let Node::LogDensity(LogDensityNode {
+                stochastic_id: Some(stochastic),
+                ..
+            }) = node
+            else {
+                continue;
+            };
+            if self.stochastic_to_log_density.get(stochastic) != Some(id) {
+                return Err(format!(
+                    "{id:?} scores {stochastic:?}, but stochastic_to_log_density does not point back at it"
+                ));
+            }
+            if !self.log_likelihoods.contains(id) {
+                return Err(format!(
+                    "{id:?} scores {stochastic:?} but is not among the likelihood terms"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// [`validate_indices`](Self::validate_indices) as a debug assertion.
+    ///
+    /// Compiled away entirely in release. Every mutating method ends with a call to this, so a
+    /// method that leaves an index inconsistent fails the test that exercised it rather than
+    /// the unrelated one that reads the index later.
+    #[inline]
+    fn debug_validate_indices(&self) {
+        #[cfg(debug_assertions)]
+        if let Err(disagreement) = self.validate_indices() {
+            panic!("graph index invariant violated: {disagreement}");
+        }
     }
 
     /// Add a fixed, immutable quantity, continuous or discrete.
@@ -180,6 +368,7 @@ impl<B: Backend> Graph<B> {
                 quantity_type,
             }),
         );
+        self.debug_validate_indices();
         id
     }
 
@@ -196,6 +385,7 @@ impl<B: Backend> Graph<B> {
         let id = self.id_generator.issue_id();
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
+        self.debug_validate_indices();
         id
     }
 
@@ -240,6 +430,7 @@ impl<B: Backend> Graph<B> {
                 quantity_type,
             }),
         );
+        self.debug_validate_indices();
         Ok(id)
     }
 
@@ -270,7 +461,7 @@ impl<B: Backend> Graph<B> {
     ) -> SkoroResult<Id> {
         let id = self.id_generator.issue_id();
         self.register_children(id, &parent_ids)?;
-        let value = self.check_cache(&parent_ids, &op);
+        let value = self.check_cache(&parent_ids, &op)?;
         self.nodes.insert(
             id,
             Node::Mapped(MappedNode {
@@ -281,6 +472,7 @@ impl<B: Backend> Graph<B> {
                 value,
             }),
         );
+        self.debug_validate_indices();
         Ok(id)
     }
 
@@ -295,6 +487,37 @@ impl<B: Backend> Graph<B> {
     }
 
     fn mark_likelihood_impl(&mut self, id: Id, stochastic_id: Option<Id>) -> SkoroResult<()> {
+        // The two density maps are inverses of one another, so both directions have to be
+        // checked before anything is written:
+        //
+        // - **one density per quantity** — the reading [`SkoroError::DuplicateDensity`] names,
+        //   and the one that was missing. The old guard keyed on the *density* id, so it never
+        //   fired when a second density claimed an already-scored quantity. The `Mapped` arm
+        //   below had no guard at all, and that is the arm a freshly built density arrives
+        //   through.
+        // - **one quantity per density** — rebinding an existing density to a different
+        //   quantity would strand the old `stochastic_to_log_density` entry, since nothing
+        //   removes it.
+        //
+        // Checked here rather than inside the arms so a rejected call leaves the graph
+        // untouched, with no node to re-insert on the way out. The second direction reads the
+        // node, which is still in the arena at this point — `stochastic_of` would do as well,
+        // but this keeps both halves of the invariant visible side by side.
+        if let Some(stochastic_id) = stochastic_id {
+            if let Some(existing) = self.stochastic_to_log_density.get(&stochastic_id)
+                && *existing != id
+            {
+                return Err(SkoroError::DuplicateDensity { stochastic_id });
+            }
+            if let Some(Node::LogDensity(LogDensityNode {
+                stochastic_id: Some(existing),
+                ..
+            })) = self.nodes.get(&id)
+                && *existing != stochastic_id
+            {
+                return Err(SkoroError::DuplicateDensity { stochastic_id });
+            }
+        }
         match self.nodes.remove(&id) {
             Some(Node::Mapped(MappedNode {
                 id,
@@ -317,51 +540,22 @@ impl<B: Backend> Graph<B> {
                     );
                     return Err(SkoroError::NotReal { id });
                 }
+                // Promoted unbound: `link_density` below writes the binding and both derived
+                // collections together, for this arm and the next alike.
                 self.nodes.insert(
                     id,
                     Node::LogDensity(LogDensityNode {
                         id,
                         op,
-                        stochastic_id,
+                        stochastic_id: None,
                         parent_ids,
                         value,
                     }),
                 );
-                if !self.log_likelihoods.contains(&id) {
-                    self.log_likelihoods.push(id);
-                }
-                if let Some(stochastic_id) = stochastic_id {
-                    self.log_density_to_stochastic.insert(id, stochastic_id);
-                    self.stochastic_to_log_density.insert(stochastic_id, id);
-                }
             }
-            Some(Node::LogDensity(mut dens)) => {
-                match &stochastic_id {
-                    Some(stochastic_id) => {
-                        match self.log_density_to_stochastic.entry(id) {
-                            Entry::Vacant(entry) => {
-                                entry.insert(*stochastic_id);
-                                let _ = self.stochastic_to_log_density.insert(*stochastic_id, id);
-                            }
-                            Entry::Occupied(entry) => {
-                                if *entry.get() != *stochastic_id {
-                                    // re-insert the node we removed before erroring
-                                    let stochastic_id = *stochastic_id;
-                                    self.nodes.insert(id, Node::LogDensity(dens));
-                                    return Err(SkoroError::DuplicateDensity { stochastic_id });
-                                }
-                            }
-                        };
-                    }
-                    None => {
-                        let stochastic_id = self.log_density_to_stochastic.remove(&id);
-                        if let Some(stochastic_id) = stochastic_id {
-                            self.stochastic_to_log_density.remove(&stochastic_id);
-                        }
-                    }
-                };
-                dens.stochastic_id = stochastic_id;
-                self.nodes.insert(id, Node::LogDensity(dens));
+            // Already a density — re-marking only changes what it is bound to.
+            Some(node @ Node::LogDensity(_)) => {
+                self.nodes.insert(id, node);
             }
             Some(node) => {
                 // re-insert the node we removed before erroring
@@ -370,6 +564,8 @@ impl<B: Backend> Graph<B> {
             }
             None => return Err(SkoroError::NodeNotFound { id }),
         }
+        self.link_density(id, stochastic_id);
+        self.debug_validate_indices();
         Ok(())
     }
 
@@ -445,54 +641,68 @@ impl<B: Backend> Graph<B> {
             return Ok(());
         }
 
-        if let Some(children_ids) = self.children.get(&id) {
-            let mut visit: VecDeque<Id> = children_ids.iter().copied().collect();
-            while let Some(ancestor_id) = visit.pop_front() {
-                // if the ancestor is not a mapped node, continue
-                if !matches!(
-                    self.nodes
-                        .get(&ancestor_id)
-                        .expect("A node's children should be present in the graph."),
-                    Node::Mapped(_) | Node::LogDensity(_)
-                ) {
-                    continue;
+        // Fold every descendant that has become concrete, each exactly once, in an order
+        // where a node is reached only after every parent of it has settled.
+        //
+        // **A plain `visited` set is not enough here**, which is the difference between this
+        // walk and `clear_cached_descendants`. Clearing is order-independent and idempotent,
+        // so that walk can skip anything it has already seen. Folding is neither: a node whose
+        // parents lie on paths of different lengths can be dequeued *before* the last of them
+        // folds, and refusing to revisit it would leave it unfolded forever. Ordering the walk
+        // by dependency removes both the quadratic re-enqueueing and that hazard at once.
+        for descendant in self.descendants_in_dependency_order(id) {
+            match self.nodes.remove(&descendant) {
+                // Already folded. Nothing an `observe` does can make a concrete node
+                // non-concrete, so this stays true and the recompute is pure waste.
+                Some(node @ (Node::Mapped(MappedNode { value: Some(_), .. })
+                | Node::LogDensity(LogDensityNode { value: Some(_), .. }))) => {
+                    self.nodes.insert(descendant, node);
                 }
-
-                // If the ancestor is a mapped node, we see if we can cache the value.
-                // This requires removing the node, since we cannot mutably access it while
-                // accessing its parents.
-                match self.nodes.remove(&ancestor_id).unwrap() {
-                    Node::Mapped(mapped) => {
-                        let value = self.check_cache(&mapped.parent_ids, &mapped.op);
-
-                        if value.is_some()
-                            && let Some(children_ids) = self.children.get(&ancestor_id)
-                        {
-                            children_ids.iter().for_each(|id| visit.push_back(*id));
-                        }
-
-                        self.nodes
-                            .insert(ancestor_id, Node::Mapped(MappedNode { value, ..mapped }));
-                    }
-                    Node::LogDensity(dens) => {
-                        let value = self.check_cache(&dens.parent_ids, &dens.op);
-
-                        if value.is_some()
-                            && let Some(children_ids) = self.children.get(&ancestor_id)
-                        {
-                            children_ids.iter().for_each(|id| visit.push_back(*id));
-                        }
-
-                        self.nodes.insert(
-                            ancestor_id,
-                            Node::LogDensity(LogDensityNode { value, ..dens }),
-                        );
-                    }
-                    _ => unreachable!(),
-                };
+                Some(Node::Mapped(mapped)) => {
+                    let value = self.check_cache(&mapped.parent_ids, &mapped.op)?;
+                    self.nodes
+                        .insert(descendant, Node::Mapped(MappedNode { value, ..mapped }));
+                }
+                Some(Node::LogDensity(dens)) => {
+                    let value = self.check_cache(&dens.parent_ids, &dens.op)?;
+                    self.nodes
+                        .insert(descendant, Node::LogDensity(LogDensityNode { value, ..dens }));
+                }
+                // A leaf descendant folds nothing; put it back untouched.
+                Some(other) => {
+                    self.nodes.insert(descendant, other);
+                }
+                None => {}
             }
         }
+        self.debug_validate_indices();
         Ok(())
+    }
+
+    /// Every descendant of `id`, ordered so that each follows all of its parents.
+    ///
+    /// Reachability first, then [`topological_sort`](Self::topological_sort) over that set —
+    /// which orders *ancestors* first, so filtering its output back down to the reachable set
+    /// gives exactly the dependency order the fold walk needs.
+    fn descendants_in_dependency_order(&self, id: Id) -> Vec<Id> {
+        let Some(children) = self.children.get(&id) else {
+            return Vec::new();
+        };
+        let mut reachable = HashSet::new();
+        let mut queue: VecDeque<Id> = children.iter().copied().collect();
+        while let Some(next) = queue.pop_front() {
+            if !reachable.insert(next) {
+                continue;
+            }
+            if let Some(children) = self.children.get(&next) {
+                queue.extend(children.iter().copied());
+            }
+        }
+        let targets: Vec<Id> = reachable.iter().copied().collect();
+        self.topological_sort(&targets)
+            .into_iter()
+            .filter(|id| reachable.contains(id))
+            .collect()
     }
 
     /// Undo the effects of [`observe`](Self::observe).
@@ -528,6 +738,7 @@ impl<B: Backend> Graph<B> {
             }),
         );
         self.clear_cached_descendants(id);
+        self.debug_validate_indices();
         Ok(())
     }
 
@@ -629,37 +840,24 @@ impl<B: Backend> Graph<B> {
             }
         }
 
-        // update the node and the children registry
+        // Swap the edges. Reading the old parents first confines this to the node's own
+        // edges; the previous version swept every children set in the graph to find them.
+        let Some(Node::Stochastic(stoch)) = self.nodes.get(&id) else {
+            unreachable!("node kind validated above");
+        };
+        let old_parents = stoch.parent_ids.clone();
+        self.unregister_children(id, &old_parents);
+        self.register_children(id, &new_parents)?;
+
+        // update the node (kind validated above)
         if let Some(Node::Stochastic(stoch)) = self.nodes.get_mut(&id) {
-            // remove this node from the children registry
-            let mut remove = Vec::new();
-            for (pid, children) in self.children.iter_mut() {
-                children.remove(&id);
-                if children.is_empty() && !new_parents.contains(pid) {
-                    remove.push(*pid);
-                }
-            }
-
-            // add this node back into the children registry
-            for &pid in &new_parents {
-                match self.children.entry(pid) {
-                    Entry::Occupied(mut entry) => entry.get_mut().insert(id),
-                    Entry::Vacant(entry) => entry.insert(HashSet::new()).insert(id),
-                };
-            }
-
-            // remove the children sets of bereaved parents
-            for id in remove {
-                self.children.remove(&id);
-            }
-
-            // update the node (kind validated above)
             stoch.sampler = new_sampler;
             stoch.parent_ids = new_parents;
         } else {
             unreachable!("node kind validated above");
         }
         self.unregister_density(id);
+        self.debug_validate_indices();
         Ok(())
     }
 
@@ -669,19 +867,23 @@ impl<B: Backend> Graph<B> {
     /// The [`LogDensity`](Node::LogDensity) node itself is left in the arena: it may still be
     /// referenced as a child, and removing it is the caller's decision. A caller replacing a
     /// distribution wholesale is expected to clean up the orphan.
+    ///
+    /// The orphan's own [`stochastic_id`](LogDensityNode::stochastic_id) is cleared along with
+    /// the maps, because [`remove`](Self::remove) reads that field to decide which map entries
+    /// to drop. Leaving it set is not a cosmetic leak: if a *different* density is registered
+    /// against the same stochastic quantity before the orphan is removed — which is exactly
+    /// what "replace the distribution, then clean up the orphan" does — then removing the
+    /// orphan would delete the live density's entry, and `density_of` would report `None` for
+    /// a quantity that still has a density in `log_likelihoods`.
     fn unregister_density(&mut self, stochastic_id: Id) {
-        let Some(log_density_id) = self.stochastic_to_log_density.remove(&stochastic_id) else {
+        let Some(density) = self.stochastic_to_log_density.get(&stochastic_id).copied() else {
             return;
         };
-        self.log_density_to_stochastic.remove(&log_density_id);
-        if let Some((i, _)) = self
-            .log_likelihoods
-            .iter()
-            .enumerate()
-            .find(|(_, id)| **id == log_density_id)
-        {
-            self.log_likelihoods.remove(i);
-        }
+        // Retirement is "unbind, then stop scoring": `link_density(_, None)` releases the
+        // reverse entry and clears the node's own field, and `drop_density_term` takes it out
+        // of the sum. Neither collection is touched outside those two helpers.
+        self.link_density(density, None);
+        self.drop_density_term(density);
     }
 
     /// Demote a stochastic quantity to a free [`Parameter`](Node::Parameter), at the
@@ -720,16 +922,7 @@ impl<B: Backend> Graph<B> {
         };
 
         // Drop the edges from the old distribution's parameters into this node.
-        for parent_id in &parent_ids {
-            let mut bereaved = false;
-            if let Some(children) = self.children.get_mut(parent_id) {
-                children.remove(&id);
-                bereaved = children.is_empty();
-            }
-            if bereaved {
-                self.children.remove(parent_id);
-            }
-        }
+        self.unregister_children(id, &parent_ids);
 
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
@@ -741,6 +934,7 @@ impl<B: Backend> Graph<B> {
         // parents, and a fold rule that ever admitted stochastic parents would make
         // every descendant stale.
         self.clear_cached_descendants(id);
+        self.debug_validate_indices();
         Ok(())
     }
 
@@ -763,39 +957,21 @@ impl<B: Backend> Graph<B> {
         // Perform removal.
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
+            // Not a parent-edge write: this drops the departing node's *own* children set,
+            // which the loop above already proved is empty of survivors. Edges into this node
+            // from its parents are `unregister_children`'s job, below.
             self.children.remove(id);
             let Some(node) = self.nodes.remove(id) else {
                 return Err(SkoroError::NodeNotFound { id: *id });
             };
-            for pid in node.parent_ids() {
-                // TODO: check if I need to remove children
-                let mut remove = false;
-                if let Some(children) = self.children.get_mut(pid) {
-                    children.remove(id);
-                    if children.is_empty() {
-                        remove = true;
-                    }
-                }
-                if remove {
-                    self.children.remove(pid);
-                }
-            }
+            let parent_ids = node.parent_ids().to_vec();
+            self.unregister_children(*id, &parent_ids);
             if let Node::LogDensity(LogDensityNode { stochastic_id, .. }) = &node {
-                if let Some((i, _)) = self
-                    .log_likelihoods
-                    .iter()
-                    .enumerate()
-                    .find(|(_, iid)| *iid == id)
-                {
-                    self.log_likelihoods.remove(i);
-                }
-                if let Some(stochastic_id) = stochastic_id {
-                    self.log_density_to_stochastic.remove(id);
-                    self.stochastic_to_log_density.remove(stochastic_id);
-                }
+                self.forget_density_node(*id, *stochastic_id);
             }
             out.push(node);
         }
+        self.debug_validate_indices();
         Ok(out)
     }
 
@@ -1283,19 +1459,92 @@ impl<B: Backend> Graph<B> {
         Ok(())
     }
 
+    /// Drop the edges from `parent_ids` into `id`, forgetting any parent left childless.
+    ///
+    /// The inverse of [`register_children`](Self::register_children), and the one place a
+    /// child edge is torn down. `update_stochastic_impl`, `demote_to_parameter` and `remove`
+    /// each carried their own copy of this loop; `validate_indices` checks the result of all
+    /// three against `parent_ids`, so they had to agree exactly.
+    fn unregister_children(&mut self, id: Id, parent_ids: &[Id]) {
+        for parent_id in parent_ids {
+            let Some(children) = self.children.get_mut(parent_id) else {
+                continue;
+            };
+            children.remove(&id);
+            if children.is_empty() {
+                self.children.remove(parent_id);
+            }
+        }
+    }
+
+    /// Bind `density` to `stochastic` — or to nothing — and make it a live likelihood term.
+    ///
+    /// The single place a density's registration is written. All three pieces move together:
+    /// [`LogDensityNode::stochastic_id`], which is the source of truth; the
+    /// `stochastic_to_log_density` reverse index; and membership in `log_likelihoods`. Any
+    /// previous binding is released first, so re-marking a density as a bare likelihood does
+    /// not strand the old reverse entry.
+    ///
+    /// A no-op on an id that is not a density. Callers reach this only through
+    /// `mark_likelihood_impl`, which has already established the node kind.
+    fn link_density(&mut self, density: Id, stochastic: Option<Id>) {
+        let previous = match self.nodes.get_mut(&density) {
+            Some(Node::LogDensity(dens)) => {
+                std::mem::replace(&mut dens.stochastic_id, stochastic)
+            }
+            _ => return,
+        };
+        if let Some(previous) = previous
+            && Some(previous) != stochastic
+        {
+            self.stochastic_to_log_density.remove(&previous);
+        }
+        if let Some(stochastic) = stochastic {
+            self.stochastic_to_log_density.insert(stochastic, density);
+        }
+        if !self.log_likelihoods.contains(&density) {
+            self.log_likelihoods.push(density);
+        }
+    }
+
+    /// Remove `density` from the likelihood terms. The one place that vector shrinks.
+    fn drop_density_term(&mut self, density: Id) {
+        if let Some(i) = self.log_likelihoods.iter().position(|id| *id == density) {
+            self.log_likelihoods.remove(i);
+        }
+    }
+
+    /// Forget a density's registrations as its node leaves the arena.
+    ///
+    /// The node carries its own `stochastic_id` out with it, so only the two derived
+    /// collections need clearing. Distinct from
+    /// [`unregister_density`](Self::unregister_density), which leaves the node in place.
+    fn forget_density_node(&mut self, density: Id, stochastic: Option<Id>) {
+        self.drop_density_term(density);
+        if let Some(stochastic) = stochastic {
+            self.stochastic_to_log_density.remove(&stochastic);
+        }
+    }
+
+    /// The constant-folded value of an operation over `parent_ids`, if every parent is
+    /// already concrete.
+    ///
+    /// Errors [`SkoroError::NodeNotFound`] on a parent that is not in the arena. That used to
+    /// be an `expect`, and it is reachable rather than internal: a retired parent leaves its
+    /// children naming an id the arena no longer has.
     fn check_cache(
         &self,
         parent_ids: &[Id],
         op: &Arc<dyn GraphOperation<B>>,
-    ) -> Option<ConstantValue<B>> {
+    ) -> SkoroResult<Option<ConstantValue<B>>> {
         let parents: Vec<&Node<B>> = parent_ids
             .iter()
             .map(|parent_id| {
                 self.nodes
                     .get(parent_id)
-                    .expect("Parent node should be in graph.")
+                    .ok_or(SkoroError::NodeNotFound { id: *parent_id })
             })
-            .collect();
+            .collect::<SkoroResult<_>>()?;
         let parent_values: Vec<Option<Input<B>>> = parents
             .iter()
             .map(|parent| match parent {
@@ -1318,14 +1567,14 @@ impl<B: Backend> Graph<B> {
 
         // if the value is not stochastic, we may cache it
         if is_stochastic {
-            None
+            Ok(None)
         } else {
             let n = parent_values.len();
             let mut points = parent_values;
             points.push(None);
             op.lower((0..n).collect(), parent_diffs, n)
                 .forward(&mut points);
-            points[n].take().map(ConstantValue::unbatch)
+            Ok(points[n].take().map(ConstantValue::unbatch))
         }
     }
 

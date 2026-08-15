@@ -57,11 +57,7 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(diag),
             DiffModeState::Jvp(tvecs) => {
                 let [dmat_packed] = tvecs.try_into().unwrap();
-                if let Some(dmat_packed) = dmat_packed {
-                    DiffOperationForward::jvp(diag, Some(diagonal(dmat_packed)))
-                } else {
-                    DiffOperationForward::jvp(diag, None)
-                }
+                DiffOperationForward::jvp(diag, dmat_packed.map(diagonal))
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(diag, diffs[0]),
             DiffModeState::Hvp {

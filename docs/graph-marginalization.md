@@ -491,22 +491,47 @@ What remains:
    It is *not* a phase-1 blocker: `unregister_density` runs only from `update_stochastic` and
    `demote_to_parameter`, and a retention-1 filter calls neither. It becomes one the moment a window
    is retained.
-1a. **`Graph::remove` has no transitive teardown helper.** It is leaf-only and all-or-nothing —
-   `NodeStillReferenced` if any target has a child outside the batch (`graph.rs:714`) — so every
-   caller must compute the downward closure itself and pass a closed batch. Retiring a tick needs
-   exactly that closure, at every retention policy, so the helper belongs in `skoro-graph` next to
-   `stochastic_blanket` rather than in each caller. **Phase-1 blocker.**
-2. **`observe`'s descendant walk lacks a `visited` set** (`graph.rs:415-461`), unlike
-   `clear_cached_descendants`. Quadratic on a diamond DAG. Fold it into that helper.
+
+   ✅ **Reclaimable.** `Graph::orphaned_densities()` returns them — a `LogDensity` whose
+   `stochastic_id` is `None` and which is absent from `log_likelihoods` — and `remove_closure`
+   (1a) takes one out with its cone. **Deliberately not auto-retired inside `unregister_density`:**
+   that method returns `()` while removal is fallible (an orphan with children cannot be removed),
+   so retiring there would have to either grow an error path through `update_stochastic` and
+   `demote_to_parameter`, or silently skip exactly the cases that leak. The documented contract —
+   the node stays, removing it is the caller's decision — is kept, and the caller now has the `Id`
+   it was missing.
+1a. ~~**`Graph::remove` has no transitive teardown helper.**~~ ✅ **Fixed.** `Graph::remove_closure`
+   computes the downward closure and hands `remove` a closed batch, children first. `remove` itself
+   stays leaf-only and all-or-nothing, which is the right primitive.
+2. ~~**`observe`'s descendant walk lacks a `visited` set.**~~ ✅ **Fixed, but not as prescribed —
+   a plain `visited` set is wrong here.** Clearing is order-independent and idempotent, so
+   `clear_cached_descendants` may skip anything it has seen. *Folding is neither.* A node whose
+   parents sit at different depths can be dequeued before the last of them folds, and refusing to
+   revisit it leaves it unfolded permanently. Worse, whether that happens depends on `HashSet`
+   iteration order, so the bug is intermittent rather than deterministic — measured at 2 failures
+   in 6 runs against a naive-`visited` implementation of the same test. The walk is now ordered by
+   dependency (`descendants_in_dependency_order`), which visits each descendant exactly once, after
+   its parents. Regression test:
+   `observing_folds_a_descendant_whose_parents_differ_in_depth`.
 3. ~~**`Graph::add_mapped` returns a bare `Id` and panics on a dangling parent.**~~ ✅ **Fixed.** It
    returns `SkoroResult<Id>`, and the whole building surface above it is fallible too (§6), so a
    dangling parent is now reported rather than asserted away.
-4. **`check_cache`'s `.expect("Parent node should be in graph.")`** (`graph.rs:1296`) — reachable
-   from a retired parent, and the last remaining panic of this family. **Open.**
-5. **`Graph::remove`'s unresolved `// TODO: check if I need to remove children`** (`graph.rs:771`) —
-   retirement exercises this path hard and it should not be uncertain. **Phase-1 blocker**: per-tick
-   teardown runs this path once per tick from the very first phase, and nothing tests it today.
-   **Open.**
+4. ~~**`check_cache`'s `.expect("Parent node should be in graph.")`**~~ ✅ **Fixed.** It returns
+   `SkoroResult<Option<ConstantValue<B>>>` and reports `NodeNotFound`; `add_mapped_impl` and the
+   `observe` walk propagate it.
+5. ~~**`Graph::remove`'s unresolved `// TODO: check if I need to remove children`**~~ ✅
+   **Resolved.** The logic was correct: `remove` rejects a batch that any survivor still names, so
+   a target's children are either in the batch or absent. The loop is now
+   `unregister_children`, shared with `update_stochastic` and `demote_to_parameter` and checked by
+   `validate_indices` against `parent_ids` after every mutation. Tests:
+   `removing_one_child_leaves_a_shared_parent_intact` and `remove_closure_takes_a_diamond_subtree`.
+
+**New in `skoro-graph` alongside these:** `Graph::validate_indices()` recomputes `children`,
+`log_likelihoods` and `stochastic_to_log_density` from `nodes` and reports the first disagreement.
+It runs as a debug assertion after every mutating method, so a method that leaves an index
+inconsistent fails the test that exercised it rather than an unrelated later read. `log_density_to_stochastic`
+was deleted outright — [`LogDensityNode::stochastic_id`] is the source of truth and `stochastic_of`
+reads it directly.
 6. ~~Carried from `flattened-tangent-spaces.md` §5: `compiler.rs` panics
    `"Point should have a cotangent vector."`~~ ✅ **Fixed.** A continuous leaf that receives no tape
    write now yields a zero cotangent of the right shape, matching the missing-id rule that

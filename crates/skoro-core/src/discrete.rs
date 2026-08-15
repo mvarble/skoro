@@ -56,11 +56,28 @@ macro_rules! impl_categorical_packable {
     ($ty:ty) => {
         impl Packable<$ty, usize> for Categorical {
             fn pack(&self, data: &usize, offset: usize, dst: &mut [$ty]) {
-                dst[offset] = *data as $ty;
+                if *data < self.0 {
+                    dst[offset] = *data as $ty;
+                } else {
+                    panic!(
+                        "Cannot pack categorical data {} exceeding maximum {}.",
+                        *data,
+                        self.0 - 1
+                    );
+                }
             }
 
             fn unpack(&self, tensor: &[$ty], offset: usize) -> usize {
-                tensor[offset] as usize
+                let out = tensor[offset];
+                if out < self.0 as $ty {
+                    return out as usize;
+                } else {
+                    panic!(
+                        "Cannot unpack categorical data {} exceeding maximum {}.",
+                        out,
+                        self.0 - 1
+                    );
+                }
             }
         }
     };
@@ -97,7 +114,12 @@ macro_rules! impl_boolean_packable {
             }
 
             fn unpack(&self, tensor: &[$ty], offset: usize) -> bool {
-                tensor[offset] != 0
+                let out = tensor[offset];
+                if out == 0 || out == 1 {
+                    return out != 0;
+                } else {
+                    panic!("Cannot unpack boolean data {} not in {{0, 1}}.", out);
+                }
             }
         }
     };

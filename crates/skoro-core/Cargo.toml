@@ -7,3 +7,4 @@ version.workspace = true
 
 [dependencies]
 skoro-backend.workspace = true
+burn-wgpu.workspace = true
