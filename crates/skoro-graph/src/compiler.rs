@@ -2,7 +2,7 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use skoro_backend::{Backend, CotangentFrame, TangentFrame, TangentVector, Tensor};
 use skoro_core::{
-    constant_value::ConstantValue,
+    constant_value::QuantityValue,
     error::{SkoroError, SkoroResult},
     id::Id,
     kind::QuantityKind,
@@ -16,7 +16,7 @@ use crate::{point_map::PointMap, quantity::DynQuantityType};
 pub enum CompiledStep<B: Backend> {
     Constant {
         id: Id,
-        value: ConstantValue<B>,
+        value: QuantityValue<B>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
     },
     Parameter {
@@ -31,7 +31,7 @@ pub enum CompiledStep<B: Backend> {
     Operation {
         id: Id,
         op: Box<dyn DynSequenceOperation<B>>,
-        value: Option<ConstantValue<B>>,
+        value: Option<QuantityValue<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
         /// If true, the operation is non-differentiable (e.g. a discrete
         /// kernel): it is evaluated forward-only in every pass, and its inputs
@@ -182,7 +182,7 @@ impl<B: Backend> CompiledSequence<B> {
                         &input.options,
                         &mut point_seq,
                         &mut out,
-                    );
+                    )?;
                 }
                 _ => {
                     non_op_forward(
@@ -229,7 +229,7 @@ impl<B: Backend> CompiledSequence<B> {
                             &input.options,
                             &mut point_seq,
                             &mut out.primal,
-                        );
+                        )?;
                     } else {
                         op.jvp_forward(&mut point_seq, &mut tangent_seq);
                         out.primal.evaluations.insert(
@@ -289,7 +289,7 @@ impl<B: Backend> CompiledSequence<B> {
                             &input.options,
                             &mut point_seq,
                             &mut out.primal,
-                        );
+                        )?;
                     } else {
                         let cotangent = input.cotangents.get(id);
                         check_tensor_frames(&mut frame_count, cotangent)?;
@@ -386,7 +386,7 @@ impl<B: Backend> CompiledSequence<B> {
                             &input.options,
                             &mut point_seq,
                             &mut out.primal,
-                        );
+                        )?;
                         if tangent_seq[index].is_none()
                             && let Some(vector) = input.tangents.get(id)
                         {
@@ -459,23 +459,6 @@ impl<B: Backend> CompiledSequence<B> {
     }
 }
 
-fn ensure_batch_size<B: Backend>(
-    id: Id,
-    point: &Input<B>,
-    batch_size: usize,
-) -> SkoroResult<Input<B>> {
-    let found = point.dims()[0];
-    if found == batch_size {
-        Ok(point.clone())
-    } else {
-        Err(SkoroError::BatchSizeMismatch {
-            id,
-            expected: batch_size,
-            found,
-        })
-    }
-}
-
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn non_op_forward<B: Backend>(
@@ -496,14 +479,14 @@ fn non_op_forward<B: Backend>(
             value,
             quantity_type,
         } => {
-            let input = value.expand(options.batch_size);
+            let input = value.materialize(options.batch_size, *id)?;
             out.constants
                 .insert(*id, input.clone(), quantity_type.clone());
             point_seq[index] = Some(input);
         }
         CompiledStep::Parameter { id, quantity_type } => {
             let input = if let Some(parameter) = points.get(id) {
-                ensure_batch_size(*id, parameter, options.batch_size)?
+                parameter.ensure_batch(options.batch_size, *id)?
             } else {
                 return Err(SkoroError::MissingPoint { id: *id });
             };
@@ -529,7 +512,7 @@ fn non_op_forward<B: Backend>(
             quantity_type,
         } => {
             if let Some(sample) = points.get(id) {
-                let input = ensure_batch_size(*id, sample, options.batch_size)?;
+                let input = sample.ensure_batch(options.batch_size, *id)?;
                 out.variables
                     .insert(*id, input.clone(), quantity_type.clone());
                 point_seq[index] = Some(input);
@@ -566,15 +549,15 @@ fn non_op_forward<B: Backend>(
 fn forward_only_op<B: Backend>(
     id: Id,
     op: &Box<dyn DynSequenceOperation<B>>,
-    value: &Option<ConstantValue<B>>,
+    value: &Option<QuantityValue<B>>,
     quantity_type: &Arc<dyn DynQuantityType<B>>,
     index: usize,
     options: &ForwardOptions,
     tensor_seq: &mut [Option<Input<B>>],
     out: &mut ForwardOutput<B>,
-) {
+) -> SkoroResult<()> {
     if let Some(value) = value {
-        let input = value.expand(options.batch_size);
+        let input = value.materialize(options.batch_size, id)?;
         out.evaluations
             .insert(id, input.clone(), quantity_type.clone());
         tensor_seq[index] = Some(input);
@@ -586,6 +569,7 @@ fn forward_only_op<B: Backend>(
             quantity_type.clone(),
         );
     }
+    Ok(())
 }
 
 #[inline(always)]

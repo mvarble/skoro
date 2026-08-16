@@ -19,3 +19,10 @@ skoro-levenberg-marquardt.workspace = true
 skoro-linalg.workspace = true
 skoro-so3.workspace = true
 skoro-se3.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+
+# The cross-manifold tests need `skoro-model`'s numeric-derivative helpers, which live behind
+# its `testing` feature -- the same way `skoro-so3` and `skoro-se3` ask for them.
+skoro-model = { workspace = true, features = ["testing"] }

@@ -6,14 +6,15 @@ use skoro_backend::{
     Backend, CotangentFrame, CotangentVector, Point, TangentFrame, TangentVector, Tensor,
 };
 use skoro_core::{
-    constant_value::ConstantValue,
+    constant_value::{ConstantValue, QuantityValue},
     error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
     kind::{Kind, QuantityKind},
     pack::Packable,
     sampler::Sampler,
 };
-use skoro_operation::{Input, ValueMap};
+use skoro_operation::{Input, ValueMap, ops::TangentConcat};
+use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
 use crate::compiler::{
@@ -24,6 +25,7 @@ use crate::node::{
     ConstantNode, LogDensityNode, MappedNode, Node, ObservedNode, ParameterNode, StochasticNode,
 };
 use crate::operation::GraphOperation;
+use crate::point_map::PointMap;
 use crate::quantity::{DynContinuous, DynQuantityType, QuantityType};
 use crate::sampler::{GraphSampler, KindedSampler};
 
@@ -351,13 +353,46 @@ impl<B: Backend> Graph<B> {
         D: 'static,
     {
         let value = K::wrap_unbatched_point(quantity_type.pack_value(value));
-        self.add_constant_impl(quantity_type.into_dyn(), value)
+        self.add_constant_impl(quantity_type.into_dyn(), QuantityValue::Unbatched(value))
+    }
+
+    /// Add a fixed, immutable quantity that **differs across the batch**.
+    ///
+    /// One value per batch row, in order, rather than one value broadcast to every row. A batch
+    /// is a set of independent problems (independent optimizations, independent conditioning),
+    /// and this is how each row gets its own constant.
+    ///
+    /// The cost is that the value pins the batch: a graph containing a batch-`n` constant can
+    /// only be evaluated at batch `n`, and any other batch size is a
+    /// [`SkoroError::BatchSizeMismatch`] rather than a broadcast. Use
+    /// [`add_constant`](Self::add_constant) for a value shared by every row.
+    pub fn add_batched_constant<K, T, D>(&mut self, quantity_type: T, values: &[D]) -> Id
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        let value = K::wrap_point(quantity_type.pack_values(values));
+        self.add_constant_impl(quantity_type.into_dyn(), QuantityValue::Batched(value))
+    }
+
+    /// [`add_batched_constant`](Self::add_batched_constant) over an already-erased quantity type
+    /// and an already-packed value.
+    ///
+    /// The entry point for callers holding a quantity type only as `dyn` -- freezing a snapshot of
+    /// a quantity whose manifold is not known statically, for instance.
+    pub fn add_batched_constant_dyn(
+        &mut self,
+        quantity_type: Arc<dyn DynQuantityType<B>>,
+        value: Input<B>,
+    ) -> Id {
+        self.add_constant_impl(quantity_type, QuantityValue::Batched(value))
     }
 
     fn add_constant_impl(
         &mut self,
         quantity_type: Arc<dyn DynQuantityType<B>>,
-        value: ConstantValue<B>,
+        value: QuantityValue<B>,
     ) -> Id {
         let id = self.id_generator.issue_id();
         self.nodes.insert(
@@ -451,6 +486,102 @@ impl<B: Backend> Graph<B> {
         T: QuantityType<B, K>,
     {
         self.add_mapped_impl(quantity_type.into_dyn(), Arc::new(op), parent_ids)
+    }
+
+    /// [`add_mapped`](Self::add_mapped) over an already-erased quantity type and operation.
+    ///
+    /// The entry point for a caller building nodes from ids alone, where neither the manifold nor
+    /// the operation has a name at the call site -- a factor over a set of quantities whose
+    /// membership is only known at run time. Pairs with
+    /// [`inverse_retraction_op`](Self::inverse_retraction_op).
+    pub fn add_mapped_dyn(
+        &mut self,
+        quantity_type: Arc<dyn DynQuantityType<B>>,
+        op: Box<dyn GraphOperation<B>>,
+        parent_ids: Vec<Id>,
+    ) -> SkoroResult<Id> {
+        self.add_mapped_impl(quantity_type, Arc::from(op), parent_ids)
+    }
+
+    /// The manifold dimension of `id` and its inverse-retraction, as an erased operation.
+    ///
+    /// Both halves are needed together to build `x ⊖ p` from an id: the operation to register, and
+    /// the dimension, which is the width of the resulting tangent -- and which is the *manifold*
+    /// dimension, not the storage size, so an `SE3` quantity reports 6 rather than 12.
+    ///
+    /// Errors [`SkoroError::NotContinuous`] for a discrete quantity, which has no tangent space,
+    /// and [`SkoroError::NodeNotFound`] for an unknown id.
+    pub fn inverse_retraction_op(
+        &self,
+        id: Id,
+    ) -> SkoroResult<(usize, Box<dyn GraphOperation<B>>)> {
+        let quantity_type = self.get_quantity_type_impl(id)?;
+        let op = quantity_type
+            .inverse_retraction_op()
+            .ok_or(SkoroError::NotContinuous { id })?;
+        let dimension = quantity_type
+            .as_manifold()
+            .ok_or(SkoroError::NotContinuous { id })?
+            .dimension();
+        Ok((dimension, op))
+    }
+
+    /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
+    /// quantities, as one `EuclideanD(Σ dᵢ)` node.
+    ///
+    /// This is what lets a single factor score *several* quantities at once, which a joint
+    /// likelihood over a Markov blanket needs and which no distribution can express -- a
+    /// [`Distribution`](skoro_core) is over one quantity type. It is deliberately **not** a
+    /// product manifold: the members keep their own ids, their own storage, and their own
+    /// children, and only their *tangents* are stacked. A product would have to re-home them into
+    /// one merged quantity, which is exactly what `demote_to_parameter` exists to avoid.
+    ///
+    /// Each `pᵢ` is frozen as a batch-pinned `Constant` of `xᵢ`'s own quantity type, taken from
+    /// `at`. That is the point of the call rather than an implementation detail: a factor
+    /// linearized at an estimate must not follow the quantity it summarizes, so the anchor is a
+    /// snapshot and never a live node. Because the anchors are batch-pinned, a batch of `N`
+    /// independent problems carries `N` independent linearization points -- and the graph is
+    /// thereafter pinned to that batch.
+    ///
+    /// Widths are *manifold dimensions*: an `SE3` member contributes 6, not 12. The block order is
+    /// the caller's, and is the order any matrix expressed in these coordinates must agree with.
+    ///
+    /// **Retiring one of these is not yet a one-liner.** The anchors and the per-block tangents
+    /// sit *upstream* of the returned node, and [`remove_closure`](Self::remove_closure) walks
+    /// downstream — so rooting it at the returned id takes that node alone and leaves the other
+    /// `2k` behind. They also carry no [`Q`](skoro_model), so `cleanup()` never queues them, and
+    /// nothing else will collect them either.
+    ///
+    /// Rooting `remove_closure` at the **anchors** does take the whole subgraph, since every other
+    /// node it built is downstream of one. Their ids are not returned today, which is the concrete
+    /// shape of the teardown gap `docs/skoro.md` calls GAP 3.
+    pub fn stacked_tangent(&mut self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Id> {
+        if ids.is_empty() {
+            return Err(SkoroError::ShapeMismatch {
+                expected: 1,
+                found: 0,
+            });
+        }
+        let mut widths = Vec::with_capacity(ids.len());
+        let mut blocks = Vec::with_capacity(ids.len());
+        for &id in ids {
+            let (dimension, op) = self.inverse_retraction_op(id)?;
+            let quantity_type = self.get_quantity_type_impl(id)?.clone_arc();
+            let (value, _) = at.get(&id).ok_or(SkoroError::MissingPoint { id })?;
+            let anchor = self.add_batched_constant_dyn(quantity_type, value.clone());
+            // `inverse_retract(point, other)` yields `other ⊖ point`, so the anchor goes first:
+            // the residual is the displacement *from* the linearization point.
+            let block =
+                self.add_mapped_dyn(EuclideanD(dimension).into_dyn(), op, vec![anchor, id])?;
+            widths.push(dimension);
+            blocks.push(block);
+        }
+        let total = widths.iter().sum();
+        self.add_mapped_dyn(
+            EuclideanD(total).into_dyn(),
+            Box::new(TangentConcat(widths)),
+            blocks,
+        )
     }
 
     fn add_mapped_impl(
@@ -619,7 +750,9 @@ impl<B: Backend> Graph<B> {
                         .as_any()
                         .downcast_ref::<T>()
                         .expect("internal: quantity type validated above");
-                    K::wrap_unbatched_point(quantity_type_ref.pack_value(value))
+                    QuantityValue::Unbatched(K::wrap_unbatched_point(
+                        quantity_type_ref.pack_value(value),
+                    ))
                 };
 
                 // update the stochastic node to now be observed
@@ -1447,6 +1580,32 @@ impl<B: Backend> Graph<B> {
     }
 
     fn register_children(&mut self, id: Id, parent_ids: &[Id]) -> SkoroResult<()> {
+        // Two parents pinning *different* batch sizes describe a node that can never be
+        // evaluated, so reject it here rather than at the first pass. Checked before the
+        // mutation loop below, so a rejected call leaves no half-registered edges behind.
+        //
+        // Deliberately partial: a parent whose batch is pinned only indirectly -- through a
+        // mapped node that did not fold, because it has a free variable above it -- reports no
+        // pin here. That residue is caught in full at evaluation time, where every pinned value
+        // in the sequence checks against the same `ForwardOptions::batch_size`.
+        let mut pinned: Option<(Id, usize)> = None;
+        for &parent_id in parent_ids {
+            let Some(batch) = self.pinned_batch_of(parent_id) else {
+                continue;
+            };
+            match pinned {
+                Some((_, expected)) if expected != batch => {
+                    return Err(SkoroError::BatchSizeMismatch {
+                        id: parent_id,
+                        expected,
+                        found: batch,
+                    });
+                }
+                Some(_) => {}
+                None => pinned = Some((parent_id, batch)),
+            }
+        }
+
         for &parent_id in parent_ids {
             if !self.nodes.contains_key(&parent_id) {
                 return Err(SkoroError::DanglingParent { parent_id });
@@ -1457,6 +1616,22 @@ impl<B: Backend> Graph<B> {
             };
         }
         Ok(())
+    }
+
+    /// The batch a node's stored value pins the graph to, if it pins one.
+    ///
+    /// `None` for a node with no stored value at all -- a parameter, an unfolded mapped node --
+    /// which is a statement that nothing is known here, not that the node is batch-agnostic.
+    fn pinned_batch_of(&self, id: Id) -> Option<usize> {
+        match self.nodes.get(&id)? {
+            Node::Constant(ConstantNode { value, .. })
+            | Node::Observed(ObservedNode { value, .. }) => value.pinned_batch(),
+            Node::Mapped(MappedNode { value, .. })
+            | Node::LogDensity(LogDensityNode { value, .. }) => {
+                value.as_ref().and_then(QuantityValue::pinned_batch)
+            }
+            Node::Parameter(_) | Node::Stochastic(_) => None,
+        }
     }
 
     /// Drop the edges from `parent_ids` into `id`, forgetting any parent left childless.
@@ -1536,7 +1711,7 @@ impl<B: Backend> Graph<B> {
         &self,
         parent_ids: &[Id],
         op: &Arc<dyn GraphOperation<B>>,
-    ) -> SkoroResult<Option<ConstantValue<B>>> {
+    ) -> SkoroResult<Option<QuantityValue<B>>> {
         let parents: Vec<&Node<B>> = parent_ids
             .iter()
             .map(|parent_id| {
@@ -1545,14 +1720,14 @@ impl<B: Backend> Graph<B> {
                     .ok_or(SkoroError::NodeNotFound { id: *parent_id })
             })
             .collect::<SkoroResult<_>>()?;
-        let parent_values: Vec<Option<Input<B>>> = parents
+        let parent_values: Vec<Option<(Id, &QuantityValue<B>)>> = parents
             .iter()
             .map(|parent| match parent {
-                Node::Constant(ConstantNode { value, .. })
-                | Node::Observed(ObservedNode { value, .. }) => Some(value.expand(1)),
-                Node::Mapped(MappedNode { value, .. })
-                | Node::LogDensity(LogDensityNode { value, .. }) => {
-                    value.as_ref().map(|value| value.expand(1))
+                Node::Constant(ConstantNode { id, value, .. })
+                | Node::Observed(ObservedNode { id, value, .. }) => Some((*id, value)),
+                Node::Mapped(MappedNode { id, value, .. })
+                | Node::LogDensity(LogDensityNode { id, value, .. }) => {
+                    value.as_ref().map(|value| (*id, value))
                 }
                 _ => None,
             })
@@ -1567,15 +1742,39 @@ impl<B: Backend> Graph<B> {
 
         // if the value is not stochastic, we may cache it
         if is_stochastic {
-            Ok(None)
-        } else {
-            let n = parent_values.len();
-            let mut points = parent_values;
-            points.push(None);
-            op.lower((0..n).collect(), parent_diffs, n)
-                .forward(&mut points);
-            Ok(points[n].take().map(ConstantValue::unbatch))
+            return Ok(None);
         }
+
+        // A parent that pins a batch forces the fold to run at that batch, and the folded value
+        // to stay rank-2. Folding at 1 and unbatching -- which is what this did before batch-pinned
+        // values existed -- would silently keep row 0 and discard the rest.
+        //
+        // Disagreeing parents are rejected in `register_children`, so the first pin found is the
+        // only one.
+        let pinned = parent_values
+            .iter()
+            .flatten()
+            .find_map(|(_, value)| value.pinned_batch());
+        let batch = pinned.unwrap_or(1);
+
+        let n = parent_values.len();
+        let mut points: Vec<Option<Input<B>>> = parent_values
+            .into_iter()
+            .map(|value| {
+                let (id, value) = value.expect("internal: stochastic parents returned above");
+                value.materialize(batch, id)
+            })
+            .collect::<SkoroResult<Vec<_>>>()?
+            .into_iter()
+            .map(Some)
+            .collect();
+        points.push(None);
+        op.lower((0..n).collect(), parent_diffs, n)
+            .forward(&mut points);
+        Ok(points[n].take().map(|out| match pinned {
+            None => QuantityValue::Unbatched(ConstantValue::unbatch(out)),
+            Some(_) => QuantityValue::Batched(out),
+        }))
     }
 
     /// Returns a topologically sorted list of node Ids ending at the given execution leaves.

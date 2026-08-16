@@ -19,6 +19,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use skoro_backend::{Backend, DiscretePoint, Point};
 
+use crate::error::{SkoroError, SkoroResult};
 use crate::id::Id;
 
 /// A map of node ids to batched values, continuous or discrete.
@@ -124,6 +125,25 @@ impl<B: Backend> OperationInput<B> {
         match self {
             OperationInput::Float(t) => t.dims(),
             OperationInput::Int(t) => t.dims(),
+        }
+    }
+
+    /// This value, if its batch axis matches `batch_size`.
+    ///
+    /// The single batch check in the workspace. Everything that is *checked* rather than
+    /// broadcast goes through here -- parameters, samplers, and batch-pinned constants -- so the
+    /// three cannot come to disagree about what counts as a match or about which id gets blamed.
+    #[inline(always)]
+    pub fn ensure_batch(&self, batch_size: usize, id: Id) -> SkoroResult<Self> {
+        let found = self.dims()[0];
+        if found == batch_size {
+            Ok(self.clone())
+        } else {
+            Err(SkoroError::BatchSizeMismatch {
+                id,
+                expected: batch_size,
+                found,
+            })
         }
     }
 

@@ -123,3 +123,39 @@ fn from_faer(m: MatRef<'_, f64>) -> Dense {
     Dense::from_row_major(rows, cols, data)
         .expect("internal: the row-major length is rows * cols by construction")
 }
+
+/// The whitening of a precision matrix, packed for a `Tril` quantity, with its log-determinant.
+///
+/// Given a precision `Λ`, returns `(w, ln|det W|)` where `W` is lower-triangular with
+/// `Wᵀ W = Λ`, and `w` is `W`'s lower triangle in `Tril` packing order — row-major, `(i, j)` at
+/// `i(i+1)/2 + j`. A residual `r = W δ` then has `‖r‖² = δᵀ Λ δ`, which is the convention
+/// `skoro-normal` already uses for `Normal`, so the result drops straight into a `Tril` constant.
+///
+/// **This is the composition, not a new factorization**: `Σ = Λ⁻¹` by SPD solve, `L = chol(Σ)`,
+/// then `W = L⁻¹` by a triangular solve against the identity. `W` comes out lower-triangular
+/// because the inverse of a lower-triangular matrix is lower-triangular, which is what lets it
+/// live in a `Tril` at all — `chol(Λ)ᵀ` would satisfy the same equation but is upper.
+///
+/// The route costs an inversion that cancels analytically but not numerically, and `Λ` is
+/// ill-conditioned exactly when the blanket is under-constrained — which is the case a marginal
+/// over a poorly observed window produces. [`SkoroError::NotPositiveDefinite`] is the honest
+/// failure there, and it is reported rather than returned as `NaN`s.
+pub fn whitening_from_precision(precision: &Dense) -> SkoroResult<(Vec<f64>, f64)> {
+    let n = square(precision)?.rows();
+    let identity = Dense::identity(n);
+    let covariance = spd_solve(precision, &identity)?;
+    let l = cholesky(&covariance)?;
+    let w = solve_lower(&l, &identity)?;
+
+    let mut packed = Vec::with_capacity(n * (n + 1) / 2);
+    let mut log_det = 0.0;
+    for i in 0..n {
+        for j in 0..=i {
+            packed.push(w.get(i, j));
+        }
+        // `W` is triangular, so its determinant is the product of the diagonal — and the diagonal
+        // of an inverse-Cholesky factor is strictly positive, so the log is real.
+        log_det += w.get(i, i).abs().ln();
+    }
+    Ok((packed, log_det))
+}

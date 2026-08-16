@@ -1,4 +1,6 @@
-use skoro_backend::{CotangentFrame, NdArrayBackend, Point};
+use skoro_backend::{CotangentFrame, NdArrayBackend, Point, Tensor};
+use skoro_core::constant_value::QuantityValue;
+use skoro_core::id::Id;
 use skoro_core::kind::Continuous;
 use skoro_core::sampler::Sampler;
 use skoro_graph::{
@@ -112,6 +114,8 @@ fn observe() {
     match graph.node(stoch_id).unwrap() {
         Node::Observed(ObservedNode { value, .. }) => {
             let d = value
+                .as_unbatched()
+                .expect("observe stores an unbatched value")
                 .clone()
                 .unwrap_float()
                 .into_data()
@@ -537,4 +541,196 @@ fn re_marking_an_unregistered_density_restores_it_as_a_term() {
         graph.log_likelihoods().contains(&density),
         "a re-marked density is registered in the maps but does not score the model"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Batch-pinned constant values
+// ---------------------------------------------------------------------------------------------
+
+/// The elements of a folded mapped node's stored value, whatever its rank.
+///
+/// Also asserts which variant it is, because that is half of what these tests are about: a fold
+/// over a batch-pinned parent has to *stay* rank-2. Collapsing it to rank-1 would keep row 0 and
+/// silently discard the rest, and nothing downstream would announce that.
+fn folded_rows(graph: &Graph<B>, id: skoro_core::id::Id, expect_pinned: Option<usize>) -> Vec<f32> {
+    let Some(Node::Mapped(MappedNode { value: Some(v), .. })) = graph.node(id) else {
+        panic!("expected a folded mapped node");
+    };
+    assert_eq!(v.pinned_batch(), expect_pinned, "wrong fold representation");
+    match v {
+        QuantityValue::Batched(input) => input
+            .clone()
+            .into_float()
+            .into_data()
+            .to_vec::<f32>()
+            .unwrap(),
+        QuantityValue::Unbatched(c) => c
+            .clone()
+            .unwrap_float()
+            .into_data()
+            .to_vec::<f32>()
+            .unwrap(),
+    }
+}
+
+/// A fold over batch-pinned parents keeps every row.
+///
+/// The failure this guards against is the tempting one: folding at batch 1 and `unbatch`ing the
+/// result, which is what the walk did before batch-pinned values existed. That path silently
+/// returns row 0 three times.
+#[test]
+fn a_fold_over_batched_parents_keeps_its_rows() {
+    let mut graph = Graph::<B>::new();
+    let a = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let b = graph.add_batched_constant(Real, &[10.0f32, 20.0, 30.0]);
+    let sum = graph.add_mapped(Real, SumOperation, vec![a, b]).unwrap();
+
+    assert!(folded(&graph, sum));
+    assert_eq!(folded_rows(&graph, sum, Some(3)), vec![11.0, 22.0, 33.0]);
+}
+
+/// A batch-agnostic parent broadcasts into a fold that a sibling has pinned.
+///
+/// This is the case that makes the fold batch a property of the *parent set* rather than of any
+/// one parent: the rank-1 value has to expand to 3, not the pinned one collapse to 1.
+#[test]
+fn a_fold_mixing_pinned_and_agnostic_parents_runs_at_the_pinned_batch() {
+    let mut graph = Graph::<B>::new();
+    let batched = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let shared = graph.add_constant(Real, &100.0f32);
+    let sum = graph
+        .add_mapped(Real, SumOperation, vec![batched, shared])
+        .unwrap();
+
+    assert_eq!(folded_rows(&graph, sum, Some(3)), vec![101.0, 102.0, 103.0]);
+}
+
+/// Where nothing is pinned, folding is exactly what it was: rank-1, and reusable at any batch.
+#[test]
+fn a_fold_over_agnostic_parents_stays_agnostic() {
+    let mut graph = Graph::<B>::new();
+    let a = graph.add_constant(Real, &2.0f32);
+    let b = graph.add_constant(Real, &5.0f32);
+    let sum = graph.add_mapped(Real, SumOperation, vec![a, b]).unwrap();
+
+    assert_eq!(folded_rows(&graph, sum, None), vec![7.0]);
+}
+
+/// A node whose parents pin *different* batches can never be evaluated, so it is refused at
+/// construction rather than at the first pass.
+#[test]
+fn parents_pinning_different_batches_are_rejected() {
+    let mut graph = Graph::<B>::new();
+    let three = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let five = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0, 4.0, 5.0]);
+
+    assert!(matches!(
+        graph.add_mapped(Real, SumOperation, vec![three, five]),
+        Err(skoro_core::error::SkoroError::BatchSizeMismatch { .. })
+    ));
+
+    // The rejected call left no half-registered edges behind.
+    graph.validate_indices().unwrap();
+    assert_eq!(graph.children_of(three), None);
+    assert_eq!(graph.children_of(five), None);
+}
+
+/// Observing folds through a batch-pinned parent, and unobserving clears the fold again.
+///
+/// The observed value is stored rank-1 and broadcasts; the pinned sibling sets the batch. This
+/// exercises the fold walk rather than `add_mapped`'s eager path, which is a different caller.
+#[test]
+fn observing_folds_through_a_pinned_parent_and_unobserving_clears_it() {
+    let mut graph = Graph::<B>::new();
+    let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
+    let batched = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let sum = graph
+        .add_mapped(Real, SumOperation, vec![stoch, batched])
+        .unwrap();
+
+    assert!(!folded(&graph, sum));
+
+    graph.observe::<_, Real, _>(stoch, &10.0).unwrap();
+    assert_eq!(folded_rows(&graph, sum, Some(3)), vec![11.0, 12.0, 13.0]);
+
+    graph.unobserve(stoch).unwrap();
+    assert!(!folded(&graph, sum));
+    graph.validate_indices().unwrap();
+}
+
+/// A batch-pinned constant is an ordinary leaf for every other purpose.
+#[test]
+fn a_batched_constant_removes_like_any_constant() {
+    let mut graph = Graph::<B>::new();
+    let a = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+
+    assert!(matches!(graph.node(a), Some(Node::Constant(_))));
+    assert!(graph.node(a).unwrap().parent_ids().is_empty());
+
+    graph.remove(&[a]).unwrap();
+    assert!(graph.node(a).is_none());
+    graph.validate_indices().unwrap();
+}
+
+/// What `remove_closure` does and does not take when a joint residual is retired.
+///
+/// `stacked_tangent` builds `2k + 1` nodes: an anchor and a tangent per member, plus the
+/// concatenation. All `2k` internals are *upstream* of the node it returns, and `remove_closure`
+/// walks downstream — so rooting it at that node takes one node and strands the rest. They carry
+/// no `Q` either, so `cleanup()` never queues them.
+///
+/// Rooting at the anchors does take everything, which is the teardown a sliding window wants.
+/// This pins both halves, because the first is the surprising one and the second is the workaround
+/// until the anchors are surfaced (`docs/skoro.md` GAP 3).
+#[test]
+fn retiring_a_stacked_tangent_needs_the_anchors_as_roots() {
+    use skoro_core::kind::Continuous;
+    use skoro_graph::{point_map::PointMap, quantity::QuantityType};
+    use skoro_operation::Input;
+
+    let build = || {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        let mut at = PointMap::<B>::default();
+        for (id, v) in [(a, 1.0f32), (b, -2.0f32)] {
+            at.insert(
+                id,
+                Input::Float(Tensor::<B, 2>::from_floats([[v]], &Default::default())),
+                <Real as QuantityType<B, Continuous>>::into_dyn(Real),
+            );
+        }
+        let before = graph.node_count();
+        let joint = graph.stacked_tangent(&at, &[a, b]).unwrap();
+        // Two anchors, two per-block tangents, one concatenation.
+        assert_eq!(graph.node_count() - before, 5);
+        (graph, a, b, joint, before)
+    };
+
+    // Rooted at the returned node: one node, and four stranded.
+    let (mut graph, _a, _b, joint, before) = build();
+    let removed = graph.remove_closure(&[joint]).unwrap();
+    assert_eq!(
+        removed.len(),
+        1,
+        "the internals are upstream, not downstream"
+    );
+    assert_eq!(graph.node_count(), before + 4);
+    graph.validate_indices().unwrap();
+
+    // Rooted at the anchors: the whole subgraph, and the scored quantities survive.
+    let (mut graph, a, b, _joint, before) = build();
+    let anchors: Vec<Id> = graph
+        .nodes()
+        .filter(|(_, node)| matches!(node, Node::Constant(_)))
+        .map(|(id, _)| *id)
+        .collect();
+    assert_eq!(anchors.len(), 2);
+
+    let removed = graph.remove_closure(&anchors).unwrap();
+    assert_eq!(removed.len(), 5);
+    assert_eq!(graph.node_count(), before);
+    assert!(graph.node(a).is_some(), "the scored quantities survive");
+    assert!(graph.node(b).is_some());
+    graph.validate_indices().unwrap();
 }

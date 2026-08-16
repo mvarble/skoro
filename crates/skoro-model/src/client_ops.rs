@@ -57,6 +57,20 @@ pub trait ModelClientOps<B: Backend> {
         T: QuantityType<B, K> + Packable<K::Elem, D>,
         D: 'static;
 
+    /// Add a fixed, immutable quantity that differs across the batch: one value per batch row,
+    /// in order, rather than one value broadcast to every row.
+    ///
+    /// A batch is a set of *independent* problems, so this is how each row gets its own
+    /// constant -- its own linearization point, its own observation. The cost is that the value
+    /// pins the batch: a model holding a batch-`n` constant can only be evaluated at batch `n`,
+    /// and any other batch size is an error rather than a broadcast. Use
+    /// [`add_constant`](Self::add_constant) for a value shared by every row.
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static;
+
     /// Add a free quantity, intended to be inferred, continuous or discrete.
     fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
     where
@@ -264,6 +278,16 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         D: 'static,
     {
         ModelClient::add_constant(self, quantity_type, value)
+    }
+
+    #[inline(always)]
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        ModelClient::add_batched_constant(self, quantity_type, values)
     }
 
     #[inline(always)]

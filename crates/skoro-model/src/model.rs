@@ -23,9 +23,11 @@ use skoro_graph::{
     },
     node::Node,
     operation::GraphOperation,
+    point_map::PointMap,
     quantity::{ContinuousQuantity, QuantityType},
 };
 use skoro_operation::ValueMap;
+use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
 use crate::{distribution::Distribution, q::Q};
@@ -87,6 +89,19 @@ impl<B: Backend> ModelServer<B> {
         self.graph.add_constant(quantity_type, value)
     }
 
+    /// Add a fixed, immutable quantity that differs across the batch.
+    ///
+    /// See [`Graph::add_batched_constant`](skoro_graph::graph::Graph::add_batched_constant).
+    #[inline(always)]
+    pub fn add_batched_constant<K, T, D>(&mut self, quantity_type: T, values: &[D]) -> Id
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        self.graph.add_batched_constant(quantity_type, values)
+    }
+
     /// Add a free quantity to the graph of the model server, continuous or
     /// discrete.
     #[inline(always)]
@@ -126,6 +141,14 @@ impl<B: Backend> ModelServer<B> {
         T: QuantityType<B, K>,
     {
         self.graph.add_mapped(quantity_type, op, parent_ids)
+    }
+
+    /// The stacked tangent of several quantities against frozen anchors.
+    ///
+    /// See [`Graph::stacked_tangent`](skoro_graph::graph::Graph::stacked_tangent).
+    #[inline(always)]
+    fn stacked_tangent(&mut self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Id> {
+        self.graph.stacked_tangent(at, ids)
     }
 
     /// Mark a mapped quantity as a density for the stochastic quantity.
@@ -513,6 +536,31 @@ impl<B: Backend> ModelClient<B> {
         )
     }
 
+    /// Add a fixed, immutable quantity that differs across the batch: one value per batch row,
+    /// in order, rather than one value broadcast to every row.
+    ///
+    /// See [`Graph::add_batched_constant`](skoro_graph::graph::Graph::add_batched_constant) for
+    /// the batch-pinning this implies.
+    pub fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        let mut server = self.server.write().unwrap();
+        server.cleanup();
+        let id = server.add_batched_constant(quantity_type, values);
+        Q::new(
+            id,
+            self.clone(),
+            Arc::new(NodeDropGuard {
+                id,
+                is_mapped_leaf: AtomicBool::new(false),
+                cleanup_queue: server.cleanup_queue.clone(),
+            }),
+        )
+    }
+
     /// Add a free quantity to the graph of the model server, continuous or
     /// discrete.
     pub fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
@@ -567,6 +615,33 @@ impl<B: Backend> ModelClient<B> {
         server.cleanup();
         server.mark_density(&density, &x)?;
         Ok(x)
+    }
+
+    /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
+    /// quantities, as one `Q<B, EuclideanD>` of width `Σ dᵢ`.
+    ///
+    /// This is how a factor scores several quantities at once without a product manifold; see
+    /// [`Graph::stacked_tangent`](skoro_graph::graph::Graph::stacked_tangent) for what it builds
+    /// and why the anchors are frozen.
+    ///
+    /// Inherent on [`ModelClient`] and deliberately **not** on [`ModelClientOps`] or
+    /// [`ModelBuilderOps`]: the type gate is a statement about what the *traits* offer, and an
+    /// estimator bounded on `NlsStructure` holds one of those rather than a `ModelClient`. A
+    /// facade that restricts the model therefore still withholds this, while the builder that
+    /// assembles a joint factor -- which already holds an unrestricted client -- can reach it.
+    pub fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>> {
+        let mut server = self.server.write().unwrap();
+        server.cleanup();
+        let id = server.stacked_tangent(at, ids)?;
+        Ok(Q::new(
+            id,
+            self.clone(),
+            Arc::new(NodeDropGuard {
+                id,
+                is_mapped_leaf: AtomicBool::new(true),
+                cleanup_queue: server.cleanup_queue.clone(),
+            }),
+        ))
     }
 
     pub(crate) fn add_mapped<K, T>(

@@ -106,6 +106,8 @@ fn assert_observed(client: &ModelClient<B>, id: Id, expected: f32) {
     client.server_call(|server| match server.graph().node(id).unwrap() {
         Node::Observed(ObservedNode { value, .. }) => {
             let d = value
+                .as_unbatched()
+                .expect("observe stores an unbatched value")
                 .clone()
                 .unwrap_float()
                 .into_data()

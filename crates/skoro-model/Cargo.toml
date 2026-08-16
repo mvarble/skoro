@@ -25,6 +25,10 @@ ndarray = { workspace = true, optional = true, features = ["approx"] }
 approx.workspace = true
 trybuild.workspace = true
 
+# This crate's own `test_utils` lives behind the `testing` feature, so its own integration
+# tests have to ask for it the same way `skoro-so3` and `skoro-linalg` do.
+skoro-model = { workspace = true, features = ["testing"] }
+
 # Duplicated from `[dependencies]` so `trybuild`'s generated manifest can reach them: it
 # lists the host crate plus its dev-dependencies, not the host's own dependencies.
 skoro-backend.workspace = true

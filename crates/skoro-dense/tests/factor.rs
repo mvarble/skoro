@@ -11,7 +11,9 @@
 use approx::assert_abs_diff_eq;
 use skoro_core::error::SkoroError;
 use skoro_dense::dense::Dense;
-use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
+use skoro_dense::factor::{
+    cholesky, lstsq, solve_lower, solve_upper, spd_solve, whitening_from_precision,
+};
 
 /// A lower-triangular factor with a positive diagonal, far from the identity: near `I`
 /// almost every triangular bug is invisible.
@@ -226,4 +228,75 @@ fn vstack_rejects_a_column_count_mismatch() {
             found: 4
         })
     );
+}
+
+/// `W` whitens: `‖W δ‖² = δᵀ Λ δ`, for a `Λ` that is not diagonal.
+///
+/// The property the joint-factor path depends on, checked against the definition rather than
+/// against the implementation. A diagonal `Λ` would pass under a transposed or mis-packed `W`, so
+/// the fixture is deliberately correlated.
+#[test]
+fn whitening_reproduces_the_quadratic_form() {
+    let lambda =
+        Dense::from_row_major(3, 3, vec![4.0, 1.0, 0.5, 1.0, 3.0, -0.75, 0.5, -0.75, 2.5]).unwrap();
+
+    let (packed, log_det) = whitening_from_precision(&lambda).unwrap();
+    assert_eq!(packed.len(), 6, "lower triangle of a 3x3");
+
+    // Rebuild `W` from the `Tril` packing the way `skoro-linalg` reads it: row-major lower
+    // triangle, `(i, j)` at `i(i+1)/2 + j`.
+    let mut w_rows = vec![0.0; 9];
+    for i in 0..3 {
+        for j in 0..=i {
+            w_rows[i * 3 + j] = packed[i * (i + 1) / 2 + j];
+        }
+    }
+    let w = Dense::from_row_major(3, 3, w_rows).unwrap();
+
+    for delta in [
+        vec![1.0, 0.0, 0.0],
+        vec![0.0, 1.0, 0.0],
+        vec![0.0, 0.0, 1.0],
+        vec![1.0, -2.0, 0.5],
+        vec![-0.25, 0.75, 3.0],
+    ] {
+        let d = Dense::from_row_major(3, 1, delta.clone()).unwrap();
+        // `δᵀ Λ δ`
+        let quadratic = d.transpose().matmul(&lambda.matmul(&d).unwrap()).unwrap();
+        // `‖W δ‖²`
+        let r = w.matmul(&d).unwrap();
+        let whitened: f64 = r.data().iter().map(|x| x * x).sum();
+        assert!(
+            (quadratic.get(0, 0) - whitened).abs() < 1e-10,
+            "δ = {delta:?}: δᵀΛδ = {}, ‖Wδ‖² = {whitened}",
+            quadratic.get(0, 0)
+        );
+    }
+
+    // `ln|det W|` is half of `ln det Λ`, since `Λ = WᵀW`.
+    let expected = 0.5
+        * cholesky(&lambda)
+            .unwrap()
+            .data()
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k % 4 == 0)
+            .map(|(_, v)| v.abs().ln() * 2.0)
+            .sum::<f64>();
+    assert!(
+        (log_det - expected).abs() < 1e-10,
+        "log_det {log_det} vs {expected}"
+    );
+}
+
+/// An under-constrained blanket gives a singular precision, and that is reported rather than
+/// silently producing `NaN`s.
+#[test]
+fn a_singular_precision_is_rejected() {
+    // Rank 1: two identical rows.
+    let lambda = Dense::from_row_major(2, 2, vec![1.0, 1.0, 1.0, 1.0]).unwrap();
+    assert!(matches!(
+        whitening_from_precision(&lambda),
+        Err(SkoroError::NotPositiveDefinite { .. })
+    ));
 }

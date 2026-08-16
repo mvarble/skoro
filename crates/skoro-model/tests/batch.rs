@@ -1,10 +1,12 @@
 //! How the batch axis behaves when not every quantity carries one.
 //!
-//! The compiler **normalizes rather than broadcasts**, and the two halves are asymmetric:
-//! a [`ConstantValue`] is rank-1 unbatched storage and gets `expand`ed to the running batch
-//! size, while a `Parameter` or `Sampler` value is *checked* against it. That asymmetry is
-//! what makes "one dataset, N different starting points" expressible — a multi-start
-//! optimizer supplies N rows of free variables against constants stored once.
+//! The compiler **normalizes rather than broadcasts**, and which half a value falls in is a
+//! property of the value: a `QuantityValue::Unbatched` is rank-1 storage and gets `expand`ed to
+//! the running batch size, while a `QuantityValue::Batched`, a `Parameter`, or a `Sampler` value
+//! is *checked* against it. That asymmetry is what makes "one dataset, N different starting
+//! points" expressible — a multi-start optimizer supplies N rows of free variables against
+//! constants stored once — while `add_batched_constant` covers the opposite case, where each of
+//! the N problems carries its own constant.
 //!
 //! Nothing in the workspace exercised this before. `tests/jacobian.rs` runs at batch 2, but
 //! every input there is a `Parameter`, so the expansion path never executed.
@@ -170,5 +172,124 @@ fn retract_flat_rejects_a_delta_at_the_wrong_batch() {
     assert_eq!(
         into_vec(value.as_float().clone()),
         vec![1.5, 2.5, 4.0, 5.0, 7.0, 8.0]
+    );
+}
+
+/// A batch-pinned constant gives every row its own value.
+///
+/// The counterpart to `a_constant_is_expanded_to_the_running_batch`: there, one value reaches
+/// each row; here, each row gets a different one. A batch is a set of *independent* problems, and
+/// without this there is no way to give them independent data.
+#[test]
+fn a_batched_constant_gives_each_row_its_own_value() {
+    let model = ModelClient::<B>::default();
+    let offsets = model.add_batched_constant(
+        EuclideanD(2),
+        &[
+            VectorD::new(&[10.0, -20.0]),
+            VectorD::new(&[0.0, 0.0]),
+            VectorD::new(&[-1.0, 1.0]),
+        ],
+    );
+    let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
+    let y = (x.clone() - offsets).unwrap();
+
+    let values = points()
+        .with_quantity(&x, tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
+        .build();
+
+    assert_eq!(
+        into_vec(model.evaluate(&values, &y).unwrap()),
+        vec![
+            1.0 - 10.0,
+            2.0 + 20.0,
+            3.0 - 0.0,
+            4.0 - 0.0,
+            5.0 + 1.0,
+            6.0 - 1.0,
+        ]
+    );
+}
+
+/// A batch-pinned constant is *checked* against the running batch, in both directions.
+///
+/// The batch-1 case is the one worth pinning: it is the tempting relaxation, since a single row
+/// looks broadcastable. Broadcasting is what `add_constant` already is, and a rule where batch 1
+/// silently widens but batch 5 errors is how a caller ends up solving one problem N times without
+/// being told.
+#[test]
+fn a_batched_constant_at_the_wrong_batch_is_rejected() {
+    let model = ModelClient::<B>::default();
+    let offsets = model.add_batched_constant(
+        EuclideanD(2),
+        &[
+            VectorD::new(&[10.0, -20.0]),
+            VectorD::new(&[0.0, 0.0]),
+            VectorD::new(&[-1.0, 1.0]),
+        ],
+    );
+    let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
+    let y = (x.clone() - offsets.clone()).unwrap();
+
+    let single =
+        Tensor::<B, 1>::from_floats([7.0, 8.0].as_slice(), &Default::default()).reshape([1, 2]);
+    assert_eq!(
+        model
+            .evaluate(&points().with_quantity(&x, single).build(), &y)
+            .err(),
+        Some(SkoroError::BatchSizeMismatch {
+            id: offsets.id(),
+            expected: 1,
+            found: BATCH,
+        })
+    );
+
+    let five = Tensor::<B, 1>::from_floats(
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0].as_slice(),
+        &Default::default(),
+    )
+    .reshape([5, 2]);
+    assert_eq!(
+        model
+            .evaluate(&points().with_quantity(&x, five).build(), &y)
+            .err(),
+        Some(SkoroError::BatchSizeMismatch {
+            id: offsets.id(),
+            expected: 5,
+            found: BATCH,
+        })
+    );
+}
+
+/// A batch-pinned constant is still a constant: it carries no derivative.
+///
+/// It reaches the pass through the same `CompiledStep::Constant` as any other, so
+/// `is_differentiable_parent` never sees it as a free variable and no cotangent is collected for
+/// it. What the Jacobian sees is `∂y/∂x = I` on every row, undisturbed by the per-row offsets.
+#[test]
+fn a_batched_constant_carries_no_derivative() {
+    let model = ModelClient::<B>::default();
+    let offsets = model.add_batched_constant(
+        EuclideanD(2),
+        &[
+            VectorD::new(&[10.0, -20.0]),
+            VectorD::new(&[0.0, 0.0]),
+            VectorD::new(&[-1.0, 1.0]),
+        ],
+    );
+    let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
+    let y = (x.clone() - offsets).unwrap();
+
+    let values = points()
+        .with_quantity(&x, tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
+        .build();
+    let columns = model.tangent_layout(&[x.id()]).unwrap();
+    let rows = model.tangent_layout(&[y.id()]).unwrap();
+
+    let jacobian = jacobian_vjp(&model, &values, &columns, &rows).unwrap();
+    assert_eq!(jacobian.dims(), [BATCH, 2, 2]);
+    assert_eq!(
+        into_vec(jacobian.reshape([BATCH * 2, 2])),
+        vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]
     );
 }

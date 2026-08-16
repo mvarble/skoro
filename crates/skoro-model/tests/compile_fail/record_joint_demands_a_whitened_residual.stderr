@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `NotAJointWhitenedResidual: JointWhitenedResidual<_>` is not satisfied
+  --> tests/compile_fail/record_joint_demands_a_whitened_residual.rs:19:23
+   |
+19 |         .record_joint(&NotAJointWhitenedResidual, residual.id(), &residual)
+   |          ------------ ^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |          |
+   |          required by a bound introduced by this call
+   |
+help: the trait `JointWhitenedResidual<_>` is not implemented for `NotAJointWhitenedResidual`
+  --> tests/compile_fail/record_joint_demands_a_whitened_residual.rs:10:1
+   |
+10 | struct NotAJointWhitenedResidual;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `ResidualCertificate::record_joint`
+  --> src/structure.rs
+   |
+   |     pub fn record_joint<B, F>(
+   |            ------------ required by a bound in this associated function
+...
+   |         F: JointWhitenedResidual<B>,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ResidualCertificate::record_joint`

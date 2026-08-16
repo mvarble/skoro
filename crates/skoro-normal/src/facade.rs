@@ -265,6 +265,15 @@ impl<B: Backend> ModelClientOps<B> for GaussianModelClient<B> {
         self.client.add_constant(quantity_type, value)
     }
 
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        self.client.add_batched_constant(quantity_type, values)
+    }
+
     fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
     where
         K: Kind<B>,

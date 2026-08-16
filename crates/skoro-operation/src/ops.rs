@@ -855,3 +855,124 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
         }
     }
 }
+
+/// Concatenation of tangent blocks along the component axis.
+///
+/// `[b, d₀] … [b, dₙ] ↦ [b, Σdᵢ]`, in the order the inputs are given. This is what expresses a
+/// joint over several quantities without a product manifold: each quantity's own
+/// inverse-retraction produces its tangent block, and this stacks them into one flat residual
+/// whose manifold is an ordinary `EuclideanD(Σdᵢ)`.
+///
+/// The op holds the per-block widths because the pullback needs them and the cotangent frame
+/// alone does not carry them: `vjp` slices `ω` back into the same blocks. The map is linear, so
+/// the second-order term is zero -- but each slot is still gated on its own `VjpState` slot
+/// rather than returned as a blanket `None`, so a block rooted only in constants stays `None`
+/// while a differentiable one gets its zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TangentConcat(pub Vec<usize>);
+
+impl TangentConcat {
+    /// The half-open component range block `i` occupies in the output.
+    fn block(&self, i: usize) -> std::ops::Range<usize> {
+        let offset: usize = self.0[..i].iter().sum();
+        offset..offset + self.0[i]
+    }
+
+    /// Assemble the output from per-input blocks, zero-filling the ones that are absent.
+    ///
+    /// A missing block cannot be skipped: it occupies real columns of the output, so it has to
+    /// become zeros of its own width. This is `cat`, never `sum_opt_tensors` -- these are
+    /// *different blocks* of one vector, not contributions to the same one.
+    fn assemble<B: Backend, const D: usize>(
+        &self,
+        blocks: Vec<Option<Tensor<B, D>>>,
+        reference: &Tensor<B, D>,
+    ) -> Tensor<B, D> {
+        let mut dims = reference.dims();
+        let parts: Vec<Tensor<B, D>> = blocks
+            .into_iter()
+            .zip(&self.0)
+            .map(|(block, &width)| {
+                block.unwrap_or_else(|| {
+                    dims[1] = width;
+                    Tensor::zeros(dims, &reference.device())
+                })
+            })
+            .collect();
+        Tensor::cat(parts, 1)
+    }
+}
+
+impl<B: Backend> DiffOperation<B> for TangentConcat {
+    /// One flag per input, gated on `diffs` -- never on whether a tangent was seeded.
+    type VjpState = Vec<bool>;
+    type HvpState = ();
+
+    fn forward(
+        &self,
+        inputs: Vec<Input<B>>,
+        diff_state: DiffModeState<B>,
+    ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
+        assert_eq!(
+            inputs.len(),
+            self.0.len(),
+            "TangentConcat: {} inputs for {} declared blocks",
+            inputs.len(),
+            self.0.len()
+        );
+        let output = Tensor::cat(inputs.clone(), 1);
+        match diff_state {
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(output),
+            DiffModeState::Jvp(tangents) => {
+                // Concatenation is its own pushforward: the tangent of a stacked vector is the
+                // stack of the tangents. Absent blocks contribute zeros of their own width.
+                let tangent = tangents
+                    .iter()
+                    .flatten()
+                    .next()
+                    .map(|reference| self.assemble(tangents.clone(), reference));
+                DiffOperationForward::jvp(output, tangent)
+            }
+            DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(output, diffs),
+            DiffModeState::Hvp { diffs, tangents } => {
+                let tangent = tangents
+                    .iter()
+                    .flatten()
+                    .next()
+                    .map(|reference| self.assemble(tangents.clone(), reference));
+                DiffOperationForward::hvp(output, tangent, diffs, ())
+            }
+        }
+    }
+
+    fn vjp(
+        &self,
+        state: &Self::VjpState,
+        omega: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        state
+            .iter()
+            .enumerate()
+            .map(|(i, &diff)| diff.then(|| omega.clone().slice_dim(1, self.block(i))))
+            .collect()
+    }
+
+    fn hvp(
+        &self,
+        vjp_state: &Self::VjpState,
+        _: &Self::HvpState,
+        omega: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        // Linear, so `∇_v dF*_p` vanishes. Each slot is still gated on the corresponding
+        // `VjpState` slot: if the first-order cotangent of an input is `None`, its second-order
+        // one must be too.
+        vjp_state
+            .iter()
+            .enumerate()
+            .map(|(i, &diff)| {
+                diff.then(|| Tensor::zeros_like(&omega.clone().slice_dim(1, self.block(i))))
+            })
+            .collect()
+    }
+}

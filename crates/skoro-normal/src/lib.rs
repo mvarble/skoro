@@ -14,4 +14,5 @@
 
 pub mod distribution;
 pub mod facade;
+pub mod joint;
 pub mod structure;

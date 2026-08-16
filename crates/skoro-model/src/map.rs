@@ -46,6 +46,53 @@ where
     x0.client.add_mapped(quantity_type, op, vec![x0.id, x1.id])
 }
 
+/// Register a mapped quantity over a **runtime-variadic** input list.
+///
+/// The `register_mapN` family fixes arity in the type system and lets each input have its own
+/// quantity type; this trades that for an arity only known at run time, at the cost of one shared
+/// input type. Every layer below is already variadic -- `MappedNode::parent_ids` is a `Vec<Id>`,
+/// and `DiffOperation::forward` takes a `Vec<Input<B>>` -- so this closes the only fixed-arity
+/// seam in the stack.
+///
+/// The two invariants the macro-generated siblings enforce are enforced here too: every input must
+/// belong to the same client, and every input's drop guard must stop claiming to be a mapped leaf,
+/// or `cleanup()` reclaims a node that is now someone's parent.
+///
+/// An empty `inputs` names no client and no graph, so there is nothing to register against; it is
+/// reported as [`SkoroError::ShapeMismatch`] rather than panicking.
+pub fn register_map_slice<B, I, O, K, Op>(
+    quantity_type: O,
+    op: Op,
+    inputs: &[&Q<B, I>],
+) -> SkoroResult<Q<B, O>>
+where
+    B: Backend,
+    O: QuantityType<B, K>,
+    K: Kind<B>,
+    Op: GraphOperation<B>,
+{
+    let Some(first) = inputs.first() else {
+        return Err(SkoroError::ShapeMismatch {
+            expected: 1,
+            found: 0,
+        });
+    };
+    for input in &inputs[1..] {
+        if first.client != input.client {
+            return Err(SkoroError::ModelMismatch {
+                lhs: first.client.server_id,
+                rhs: input.client.server_id,
+            });
+        }
+    }
+    for input in inputs {
+        input.guard.set_mapped_leaf(false);
+    }
+    first
+        .client
+        .add_mapped(quantity_type, op, inputs.iter().map(|q| q.id).collect())
+}
+
 macro_rules! impl_register_map {
     (
         // The name of the function (e.g., register_map3)

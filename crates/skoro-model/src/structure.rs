@@ -35,6 +35,14 @@
 //! honest certificate. **The trait is forgeable; the evidence is not**, and the evidence is
 //! what the algorithm consumes.
 //!
+//! ## The joint sibling
+//!
+//! [`ResidualCertificate::record_joint`] is a **bounded** sibling of `record`, demanding a
+//! [`JointWhitenedResidual`]. The warning below — that the claims here lapse if `record` grows an
+//! *unbounded* sibling — is untouched by it: a second door with the same lock on it is not a hole.
+//! What it admits is the one factor shape a [`Distribution`] cannot describe, a joint over several
+//! quantities that already exist, which has no single `Qty` and no sampler.
+//!
 //! ## Naming
 //!
 //! An `…Ops` trait answers "can this client *add* X?" and returns whatever the action
@@ -64,6 +72,7 @@ use skoro_graph::{
 };
 use skoro_operation::ValueMap;
 use skoro_riemann::euclidean::EuclideanD;
+use skoro_riemann::real::Real;
 
 use crate::{client_ops::ModelClientOps, distribution::Distribution, model::ModelClient, q::Q};
 
@@ -90,6 +99,43 @@ pub trait WhitenedResidual<B: Backend>: Distribution<B, Continuous> {
     /// the covariance". This asks the narrower question a least-squares consumer actually
     /// has, and the answer is what the objective's validity turns on: minimizing `½Σ‖rᵢ‖²`
     /// is minimizing `−log p` exactly when no id returned here is being optimized.
+    fn normalizer_parents(&self) -> &[Id];
+}
+
+/// A factor over quantities the model **already holds**, whose negative log-density is
+/// `½‖r‖² + n`.
+///
+/// The sibling of [`WhitenedResidual`] for factors that are not distributions. A joint likelihood
+/// over a Markov blanket — what a marginalized-out quantity leaves behind — scores several
+/// quantities at once, so it has no single [`Distribution::Qty`], no sampler, and adds no
+/// stochastic node. It cannot implement `WhitenedResidual`, and the reason is structural rather
+/// than an oversight: `Distribution` is a conditional over *one* quantity.
+///
+/// This deliberately does **not** need a product manifold. The residual is built by stacking each
+/// member's own tangent — see
+/// [`ModelClient::stacked_tangent`](crate::model::ModelClient::stacked_tangent) — so the members
+/// keep their ids, their storage, and their children, and only the *tangent* is joint.
+///
+/// The split between the two methods mirrors [`Distribution::log_density`] and
+/// [`WhitenedResidual::whitened_residual`] exactly, and carries the same obligation: an
+/// implementor must make them agree, since nothing here checks that `log_density` really is
+/// `−½‖whitened_residual‖² + n`. That obligation is easier to discharge here than for `Normal`,
+/// whose normalizer varies with its covariance node — a joint factor's whitening is a frozen
+/// constant, so a concrete implementor can derive both from one expression.
+pub trait JointWhitenedResidual<B: Backend> {
+    /// The residual node `r`, built over quantities the model already holds.
+    ///
+    /// Like [`WhitenedResidual::whitened_residual`] this *builds a graph node* rather than
+    /// computing a number, and the node is what a Jacobian's rows are taken over.
+    fn whitened_residual(&self, client: &ModelClient<B>) -> SkoroResult<Q<B, EuclideanD>>;
+
+    /// The factor's contribution to the model's log-density, `−½‖r‖² + n`.
+    fn log_density(&self, client: &ModelClient<B>) -> SkoroResult<Q<B, Real>>;
+
+    /// The quantities the normalizer `n` depends on.
+    ///
+    /// See [`WhitenedResidual::normalizer_parents`]: minimizing `½Σ‖rᵢ‖²` is minimizing `−log p`
+    /// exactly when nothing named here is being optimized.
     fn normalizer_parents(&self) -> &[Id];
 }
 
@@ -140,6 +186,30 @@ impl ResidualCertificate {
             density,
             residual: residual.id(),
             normalizer_parents: distr.normalizer_parents().to_vec(),
+        });
+        Ok(())
+    }
+
+    /// Record a joint factor over quantities the model already holds. The `F` bound is the
+    /// guarantee, exactly as in [`record`](Self::record).
+    ///
+    /// A **bounded** sibling, not an unbounded one: there is still no way to put a fabricated id
+    /// into a certificate, because the only argument that carries ids is a `Q` the factor itself
+    /// built. What it widens is the *shape* of factor admitted, not the evidence required.
+    pub fn record_joint<B, F>(
+        &mut self,
+        factor: &F,
+        density: Id,
+        residual: &Q<B, EuclideanD>,
+    ) -> SkoroResult<()>
+    where
+        B: Backend,
+        F: JointWhitenedResidual<B>,
+    {
+        self.factors.push(FactorRecord {
+            density,
+            residual: residual.id(),
+            normalizer_parents: factor.normalizer_parents().to_vec(),
         });
         Ok(())
     }
@@ -238,6 +308,31 @@ impl<B: Backend> NlsModelClient<B> {
         self.residuals.push(residual);
         Ok(x)
     }
+
+    /// Add a factor over quantities the model **already holds**, and record it.
+    ///
+    /// This is what a marginalized-out quantity leaves behind: a joint over its Markov blanket,
+    /// which is not a distribution over any new quantity and so arrives through
+    /// [`JointWhitenedResidual`] rather than [`WhitenedResidual`]. It adds no stochastic node —
+    /// the factor is attached with `mark_likelihood`, and the quantities it scores are untouched.
+    ///
+    /// The returned handle is the log-density node, for a caller that wants to inspect or remove
+    /// the factor later.
+    pub fn add_joint_factor<F>(&mut self, factor: F) -> SkoroResult<Q<B, Real>>
+    where
+        F: JointWhitenedResidual<B>,
+    {
+        let residual = factor.whitened_residual(&self.client)?;
+        let density = factor.log_density(&self.client)?;
+        self.client.mark_likelihood(&density)?;
+        self.certificate
+            .record_joint(&factor, density.id(), &residual)?;
+        // The residual is a mapped leaf, so the certificate's id would dangle after the next
+        // `cleanup()` if nothing held it — the same hazard `residuals` exists for above. The
+        // density needs no such care: `mark_likelihood` already clears its mapped-leaf flag.
+        self.residuals.push(residual);
+        Ok(density)
+    }
 }
 
 impl<B: Backend> NlsStructure<B> for NlsModelClient<B> {
@@ -257,6 +352,15 @@ impl<B: Backend> ModelClientOps<B> for NlsModelClient<B> {
         D: 'static,
     {
         self.client.add_constant(quantity_type, value)
+    }
+
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        self.client.add_batched_constant(quantity_type, values)
     }
 
     fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
