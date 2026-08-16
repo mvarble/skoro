@@ -79,12 +79,25 @@ An arena of nodes and edges representing the model's logical structure:
 
 | Node         | Role                                                                |
 | ------------ | ------------------------------------------------------------------- |
-| `Constant`   | Fixed data                                                          |
+| `Constant`   | Fixed data — shared across the batch, or one value per row          |
 | `Parameter`  | Free leaf, to be inferred                                           |
 | `Stochastic` | A conditional random variable with a distribution                   |
 | `Observed`   | A `Stochastic` bound to a value — this is what conditions the model |
 | `Mapped`     | A deterministic transformation of other nodes                       |
 | `LogDensity` | A real-valued mapped node that scores the model                     |
+
+**A constant's value is either batch-agnostic or batch-pinned**, and that is a property of the
+value rather than of the node kind. `QuantityValue::Unbatched` is rank-1 storage broadcast to
+whatever batch a pass runs at; `QuantityValue::Batched` is rank-2 and pins the pass to its own
+batch, so a batch of N independent problems can carry N different constants. Matching is strict in
+both directions, batch 1 included — broadcasting is what `Unbatched` already is, and a rule where 1
+widens but 5 errors is how a caller solves one problem N times without being told. `Observed`
+shares the field, so per-row conditioning needs no further machinery.
+
+Keeping the distinction in the value is what lets a mapped node over batch-pinned parents still
+_fold_: `check_cache` takes its fold batch from the parents rather than hard-coding 1. A separate
+node kind would have split "concrete" and "foldable" into two predicates that agree everywhere but
+one arm — a second reader of value state, in the area §4.2 item 4 exists to clean up.
 
 `compile_backward_from(targets)` topologically sorts the ancestor closure of `targets` and lowers
 it into a `CompiledSequence` of `CompiledStep`s, replacing `HashMap` ids with contiguous indices
@@ -154,13 +167,18 @@ A linear-Gaussian hidden Markov model with a sliding window: the state chain gro
 summarized and retired, and the window stays bounded.
 
 > **This snippet is verified by reading, not by compiling.** Every call is checked against
-> `crates/skoro-levenberg-marquardt/tests/common/mod.rs` and `crates/skoro-normal/tests/demote.rs`.
-> Three calls, marked `GAP`, do not exist yet — they are the subject of §4.
+> `crates/skoro-levenberg-marquardt/tests/common/mod.rs`, `crates/skoro-normal/tests/demote.rs` and
+> `crates/skoro/tests/stacked_tangent.rs`. Three calls, marked `GAP`, do not exist yet — they are
+> the subject of §4.
 
 ```rust
+use skoro_dense::factor::whitening_from_precision;
 use skoro_linalg::{matrix::matmul, tril::Tril};
-use skoro_model::{ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q};
-use skoro_normal::distribution::Normal;
+use skoro_model::{
+    ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q,
+    structure::JointWhitenedResidual,
+};
+use skoro_normal::{distribution::Normal, joint::JointNormal};
 use skoro_riemann::{
     euclidean::{EuclideanD, VectorD},
     matrix::{EuclideanMatrixD, MatrixD},
@@ -213,10 +231,20 @@ for z_obs in observations {
     //    estimate. Demotion strips its own density and its parents but keeps its identity, so
     //    everything downstream is undisturbed.
     let oldest = states.remove(0);
-    let survivor = states[0].clone();
+    let blanket = vec![states[0].id()];
     model.demote_to_parameter(&oldest)?;
-    let factor = estimator.marginal_likelihood(&model, &points, &oldest, &[survivor])?;  // GAP 2
-    model.mark_likelihood(&factor)?;
+
+    // The estimator returns *numbers* — a precision in tangent coordinates and the block
+    // ordering it is expressed in. It cannot return the factor itself: bounded on
+    // `NlsStructure`, it has no way to grow the model (§1.7).
+    let precision = estimator.marginal_precision(&model, &points, oldest.id(), &blanket)?;  // GAP 2
+
+    // Attaching it is ordinary model building. The blanket may hold any number of quantities
+    // over any mixture of manifolds; only their tangents are joined.
+    let (w, normalizer) = whitening_from_precision(&precision)?;
+    let whitening = model.add_constant(Tril(precision.rows()), &VectorD::new(&w));
+    let factor = JointNormal::new(blanket, points.clone(), whitening, normalizer);
+    model.mark_likelihood(&factor.log_density(&model)?)?;
 
     // 3. Retire the state and measurement the factor replaced, with everything below them.
     let stale = measurements.remove(0);
@@ -234,6 +262,9 @@ for z_obs in observations {
   the same id and parents.
 - **Marginalization is three moves**: demote the quantity so it no longer carries its own density,
   attach a factor that summarizes what was lost, then delete what the factor replaced.
+- **The factor joins tangents, not points.** The blanket here is one state, but nothing in the
+  second move depends on that: a blanket of any size over any mixture of manifolds is expressible,
+  because what is joined is `Σdᵢ` tangent coordinates and never the quantities themselves.
 
 ### Corrections against the sketch this was based on
 
@@ -392,20 +423,44 @@ complement:
 The numerics are composition of what `skoro-dense` already has — `cholesky` and `spd_solve` — not
 new factorizations. What is needed:
 
-- a `MarginalLikelihood` capability on the estimator, returning a `Q<B, Real>` factor node;
 - the Schur complement over `Dense`;
-- a way to _express_ the result as a factor.
+- a capability on the estimator that produces `Λ_survivor` at the estimate.
 
-**That last point is the blocker.** The factor is a Gaussian over the retired quantity's Markov
-blanket. If the blanket holds more than one quantity, there is no way to express a joint over
-several manifolds: `Normal<B, M>` is a single manifold, and a cross-manifold joint needs a
-**product manifold**, which does not exist. Scope the first version to a **single-quantity
-blanket** — which is exactly the chain structure in §2, where the blanket is the next state — and
-implement it as `update_quantity` on the survivor. Record the product manifold as the
-generalization; it is what a loop-closure or landmark model would need.
+**Expressing the result as a factor is done**, and it needed no product manifold. A joint over a
+blanket needs a joint _tangent_, not a joint _point_: stacking each member's own `x ⊖ p` gives one
+while the members keep their ids, their storage, and their other children. A product manifold would
+have had to re-home them into a single merged quantity, which is what `demote_to_parameter` exists
+to avoid — and nothing downstream wants a product point anyway, since the factor's return type is
+`Q<B, Real>`.
 
-There is also a correctness precondition worth stating: the Laplace marginal is **exact** for a
-linear-Gaussian model and an approximation otherwise. That is what makes it testable (§4.4).
+`ModelClient::stacked_tangent` builds `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` as one `EuclideanD(Σdᵢ)` node
+over an arbitrary, heterogeneous set of quantities. Widths are manifold dimensions, so a blanket of
+`SE3` and `ℝ³` stacks to 9 rather than 15. `JointNormal` (`skoro-normal`) whitens it by a frozen
+`Tril` constant and `JointWhitenedResidual` / `ResidualCertificate::record_joint` — a **bounded**
+sibling of `record`, so §1.7's evidence is unweakened — carry it into a certificate as an ordinary
+row block of `J`. There is no restriction to a single-quantity blanket, so a loop-closure or
+landmark model is served by the same path as the chain in §2.
+
+Three things made that possible, and they are worth knowing independently:
+
+- `Manifold::inverse_retraction` is RPITIT, so `DynManifold` can only offer a forward-only
+  `inverse_retract` and a blanket held as `Vec<Id>` has no typed quantity to call. The escape is
+  `DynQuantityType::inverse_retraction_op`, which boxes the opaque type at the one impl site where
+  a concrete `T` is in scope. A runtime product manifold, if one is ever wanted, needs exactly this
+  and nothing more.
+- `TangentConcat` (`skoro-operation`) is the variadic stacking operation, and
+  `Graph::add_mapped_dyn` / `register_map_slice` are the runtime-variadic registration the
+  `register_mapN` family could not express.
+- The anchors `pᵢ` are **batch-pinned** constants, so a batch of N independent problems carries N
+  independent linearization points rather than one broadcast across all of them. See §1.4.
+
+Two correctness preconditions worth stating. The Laplace marginal is **exact** for a
+linear-Gaussian model and an approximation otherwise, which is what makes it testable (§4.4). And
+the estimator cannot return the factor itself: it is bounded on `NlsStructure: ModelClientOps`,
+which by §1.7 has no way to grow the model, so returning a `Q` would mean it had built nodes. The
+split is forced — the estimator returns `Λ_survivor` and the block ordering it is expressed in, and
+a builder attaches the factor. The `// GAP 2` line in §2 is written the other way round and is
+wrong on that point.
 
 **GAP 3 — `remove_closure` is not reachable from the client.** `Graph::remove_closure` exists;
 `ModelClientOps::remove` is still leaf-only and all-or-nothing. Expose the closure form through
@@ -493,6 +548,11 @@ How each is checked:
   solver tolerance. That is a real test of the mathematics, not of the plumbing, and the linear
   fixture in `skoro-levenberg-marquardt/tests/common/mod.rs` is the model for it.
 
+  Note what that fixture will _not_ exercise: its blanket is a single state, so it says nothing
+  about the multi-member case. That half is covered separately in
+  `crates/skoro/tests/stacked_tangent.rs`, against an `SE3` + `ℝ³` blanket — a chain model cannot
+  reach it, and a joint that is only ever tested at `k = 1` is a joint in name.
+
 ### 4.5 Where the library stands
 
 Model building is genuinely estimator-agnostic and well factored: nothing in `skoro-graph` knows
@@ -505,3 +565,11 @@ narrower than "it needs sparse linear algebra": it needs block-structured Jacobi
 needs captured per-factor adjacency and cached compiled subsequences, which needed the graph's
 derived state to stop leaking. That last prerequisite is done. What remains is a chain of concrete
 changes, not an architectural rewrite.
+
+One structural question that looked like part of that chain turned out not to be. Expressing a
+joint over a Markov blanket read as needing a product manifold, and a product manifold would have
+been an architectural change — merged storage, re-homed quantities, a second notion of what a
+`Point` is. It was never needed: a factor scores _tangents_, and tangents stack. The lesson
+generalizes past this case. Where the library seems to want a new kind of quantity, check first
+whether it only wants a new arrangement of tangent coordinates, since the second costs an operation
+and the first costs a layer.
