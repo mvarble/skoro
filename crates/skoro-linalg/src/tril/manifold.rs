@@ -16,6 +16,7 @@ use skoro_operation::{
         ScalarDivision, ScalarMultiplication, Subtraction,
     },
 };
+use skoro_riemann::euclidean::EuclideanInverseRetraction;
 use skoro_riemann::{Manifold, euclidean::VectorD, real::Real};
 
 /// A lower triangular matrix of a runtime dimension, specified by the number of diagonal
@@ -33,7 +34,7 @@ impl<B: Backend> Manifold<B> for Tril {
     }
 
     fn inverse_retraction(&self) -> impl DiffOperation<B> {
-        Subtraction
+        EuclideanInverseRetraction
     }
 }
 

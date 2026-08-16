@@ -29,6 +29,11 @@ macro_rules! tests {
 
         mod tril {
             #[test]
+            fn inverse_retraction_round_trip() {
+                super::common::tril::inverse_retraction_round_trip_impl::<$B>();
+            }
+
+            #[test]
             fn vector_product() {
                 super::common::tril::vector_product_impl::<$B>();
             }

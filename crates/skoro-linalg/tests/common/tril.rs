@@ -379,3 +379,37 @@ where
         }
     }
 }
+
+/// `retract(p, inverse_retract(p, q)) == q` — the law every manifold owes.
+///
+/// `Tril` is a vector space, so the retraction is `Addition` and the inverse-retraction has to be
+/// `q − p`. The trap is argument order: `DynManifold::inverse_retract(point, other)` forwards
+/// `vec![point, other]`, and the shared `Subtraction` operation destructures `[x, y]` and returns
+/// `x − y` — the opposite. Using it here gives `2p − q`, which is a well-shaped tangent of the
+/// right dimension that no shape check rejects and no other test in the workspace exercises.
+///
+/// Asserted through the *dyn* surface, because that is the one a joint residual over a
+/// heterogeneous blanket reaches: it looks a quantity's manifold up at run time and has no typed
+/// path to fall back on.
+pub fn inverse_retraction_round_trip_impl<B: Backend>()
+where
+    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
+    Tril: skoro_riemann::Manifold<B>,
+{
+    use skoro_riemann::DynManifold;
+
+    let manifold = Tril(3);
+    // Two distinct points of the 6-component lower triangle, neither near the other.
+    let p = tensor::<B, 2>([[1.0, -2.0, 0.5, 3.0, -1.5, 4.0]], &Default::default());
+    let q = tensor::<B, 2>([[-0.25, 5.0, 2.5, -3.0, 0.75, 1.0]], &Default::default());
+
+    let delta = DynManifold::inverse_retract(&manifold, p.clone(), q.clone());
+    // `q ⊖ p`, not `p ⊖ q`: the sign is half of what this test is for.
+    assert_abs_diff_eq!(
+        into_vec(delta.clone()).as_slice(),
+        into_vec(q.clone() - p.clone()).as_slice()
+    );
+
+    let round_tripped = DynManifold::retract(&manifold, p, delta);
+    assert_abs_diff_eq!(into_vec(round_tripped).as_slice(), into_vec(q).as_slice());
+}
