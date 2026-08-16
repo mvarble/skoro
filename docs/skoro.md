@@ -30,11 +30,11 @@ are aware of retraction rather than of raw storage.
 
 Three shape conventions carry the whole system:
 
-| Alias | Shape | Meaning |
-|---|---|---|
-| `Point<B>` | `[batch, storage]` | A point on a manifold, in its storage encoding |
-| `TangentVector<B>` | `[batch, dimension]` | One tangent vector |
-| `TangentFrame<B>` | `[batch, dimension, frame]` | *Many* tangent vectors at once |
+| Alias              | Shape                       | Meaning                                        |
+| ------------------ | --------------------------- | ---------------------------------------------- |
+| `Point<B>`         | `[batch, storage]`          | A point on a manifold, in its storage encoding |
+| `TangentVector<B>` | `[batch, dimension]`        | One tangent vector                             |
+| `TangentFrame<B>`  | `[batch, dimension, frame]` | _Many_ tangent vectors at once                 |
 
 The **frame axis** is the one that matters. It lets a single forward or reverse pass carry many
 derivative directions simultaneously, which is what makes assembling a Jacobian one pass rather
@@ -45,14 +45,14 @@ Knows nothing about: manifolds, graphs, probability.
 ### 1.2 Differentiable operations — `skoro-operation`
 
 `DiffOperation` is the stateless mathematics of a single operation: `forward`, `vjp`, `hvp`. The
-forward pass always computes eagerly, but *what it memoizes* is selected by `DiffModeState`:
+forward pass always computes eagerly, but _what it memoizes_ is selected by `DiffModeState`:
 
 - `ForwardOnly` — no derivative tracking.
 - `Jvp` — forward map plus the pushforward on an input tangent frame.
 - `Vjp` — forward map plus the state needed for the first-order cotangent pullback.
 - `Hvp` — forward map plus state for both the pullback and the second-order sensitivity.
 
-Both backward passes operate on *frames*, not single vectors.
+Both backward passes operate on _frames_, not single vectors.
 
 Knows nothing about: which graph it belongs to, whether it is part of a density.
 
@@ -63,7 +63,7 @@ span flat spaces (`Real`, `Euclidean<D>`, `EuclideanD`, `EuclideanMatrix`), matr
 `SE3`) and the lower-triangular covariance-factor manifold (`Tril`).
 
 **The invariant that shapes everything downstream: dimension is not storage.** `SE3` is
-6-dimensional but 12 components wide. A Jacobian column is a *dimension*, so `SE3` contributes 6
+6-dimensional but 12 components wide. A Jacobian column is a _dimension_, so `SE3` contributes 6
 columns and never 12. Points never flatten into tangent coordinates; only tangents do.
 
 **Discrete quantities are excluded structurally, not by convention.** `Kind` is a sealed trait with
@@ -77,14 +77,14 @@ quantity cannot reach a tangent layout at all. The discrete machinery lives in
 
 An arena of nodes and edges representing the model's logical structure:
 
-| Node | Role |
-|---|---|
-| `Constant` | Fixed data |
-| `Parameter` | Free leaf, to be inferred |
-| `Stochastic` | A conditional random variable with a distribution |
-| `Observed` | A `Stochastic` bound to a value — this is what conditions the model |
-| `Mapped` | A deterministic transformation of other nodes |
-| `LogDensity` | A real-valued mapped node that scores the model |
+| Node         | Role                                                                |
+| ------------ | ------------------------------------------------------------------- |
+| `Constant`   | Fixed data                                                          |
+| `Parameter`  | Free leaf, to be inferred                                           |
+| `Stochastic` | A conditional random variable with a distribution                   |
+| `Observed`   | A `Stochastic` bound to a value — this is what conditions the model |
+| `Mapped`     | A deterministic transformation of other nodes                       |
+| `LogDensity` | A real-valued mapped node that scores the model                     |
 
 `compile_backward_from(targets)` topologically sorts the ancestor closure of `targets` and lowers
 it into a `CompiledSequence` of `CompiledStep`s, replacing `HashMap` ids with contiguous indices
@@ -92,7 +92,7 @@ and type-erasing each operation. Evaluation walks the sequence forward, recordin
 reverse pass walks the tape.
 
 **Derived state, and its invariant.** Alongside `nodes` the graph keeps `children`,
-`log_likelihoods` and `stochastic_to_log_density`. All three are *derived* from `nodes`, and the
+`log_likelihoods` and `stochastic_to_log_density`. All three are _derived_ from `nodes`, and the
 density direction's source of truth is the node itself (`LogDensityNode::stochastic_id`);
 `stochastic_to_log_density` exists only to make the reverse lookup O(1). `Graph::validate_indices`
 recomputes all three from `nodes` and reports the first disagreement, and runs as a debug assertion
@@ -129,12 +129,12 @@ residuals.
 This is the most load-bearing decision in the library and the one least visible from any single
 file. Four traits form a deliberate lattice:
 
-| Trait | Adds | Can grow the model? |
-|---|---|---|
-| `ModelClientOps` | evaluate, JVP/VJP/HVP, `observe`, `demote_to_parameter`, `remove`, `tangent_layout` | **No** |
-| `ModelBuilderOps: ModelClientOps` | `add_quantity`, `update_quantity`, `mark_likelihood` | Yes |
-| `NlsStructure: ModelClientOps` | `certificate()`, `residual_layout()` | No |
-| `GaussianModelClientOps: ModelClientOps` | `add_gaussian_quantity` | Yes |
+| Trait                                    | Adds                                                                                | Can grow the model? |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------- |
+| `ModelClientOps`                         | evaluate, JVP/VJP/HVP, `observe`, `demote_to_parameter`, `remove`, `tangent_layout` | **No**              |
+| `ModelBuilderOps: ModelClientOps`        | `add_quantity`, `update_quantity`, `mark_likelihood`                                | Yes                 |
+| `NlsStructure: ModelClientOps`           | `certificate()`, `residual_layout()`                                                | No                  |
+| `GaussianModelClientOps: ModelClientOps` | `add_gaussian_quantity`                                                             | Yes                 |
 
 The consequence: **an estimator bounded on `NlsStructure` can evaluate and differentiate but cannot
 invalidate the evidence it was handed**, because `ModelClientOps` contains no way to add a factor
@@ -144,7 +144,7 @@ That evidence is `ResidualCertificate`. It is unforgeable not because the type i
 because entries can only enter through `record`, which demands a `WhitenedResidual` bound — so a
 hand-built certificate is empty and there is no way to insert a fabricated id.
 `crates/skoro-model/tests/compile_fail/` pins this. The module comment states the condition under
-which every claim in it lapses: *if `record` ever grows an unbounded sibling*.
+which every claim in it lapses: _if `record` ever grows an unbounded sibling_.
 
 ---
 
@@ -281,10 +281,10 @@ iteration.
 getting it wrong yields a well-shaped, wrong `J` whenever `D_in == D_out`. Both paths route through
 the single `identity_frames` helper so their index conventions cannot drift.
 
-The structural constraint, which is a constraint on *how models are written*: **Jacobian columns
+The structural constraint, which is a constraint on _how models are written_: **Jacobian columns
 must be `Parameter`/`Stochastic` leaves and rows must be `Mapped`/`LogDensity` nodes.** Cotangents
 are only collected at leaves and tangents only emitted at operations. A bad row is reported as
-`NotMapped`; a bad column is *not* — it yields a silently zero column, and that is the one failure
+`NotMapped`; a bad column is _not_ — it yields a silently zero column, and that is the one failure
 mode here no return value announces.
 
 **The cost, stated honestly.** One pass with `D_out` frames costs `D_out × |graph|`, and that is
@@ -315,7 +315,7 @@ The right-hand form is solved directly, so the iteration runs at condition `κ` 
 avoiding it is the entire argument for the host boundary, since `burn` has no QR.
 
 A host `f64` solve is not `f64` end to end: when `B::FloatElem = f32` the Jacobian arrives already
-rounded and `δ` is rounded back. What it buys is `f64` *inside* the solve, which is where the
+rounded and `δ` is rounded back. What it buys is `f64` _inside_ the solve, which is where the
 conditioning lives.
 
 ### 3.4 Taking the step
@@ -326,7 +326,7 @@ tangent is an exact no-op on every manifold, which is what lets one retraction s
 accept and reject branches of the iteration.
 
 Per batch row, LM carries its own `λ`, its own cost, its own accept/reject and its own termination.
-A batch is `N` *independent* problems — multi-start search — sharing one Jacobian pass, because
+A batch is `N` _independent_ problems — multi-start search — sharing one Jacobian pass, because
 frames and batch are different axes.
 
 ### 3.5 Where caching happens, and where it does not
@@ -338,7 +338,7 @@ order**, which is load-bearing rather than an optimization — a plain visited-s
 node before the last of its parents has folded, and refusing to revisit leaves it unfolded
 permanently. Whether that happens depends on hash iteration order, so the bug would be
 intermittent. `clear_cached_descendants` drops folds when a mutation makes a node non-constant; it
-*may* use a plain visited set, because clearing is order-independent and idempotent.
+_may_ use a plain visited set, because clearing is order-independent and idempotent.
 
 **Compilation does not cache.** `compile_backward_from` runs fresh at ten call sites. Per LM sweep,
 `step_columns` compiles for `jacobian_vjp`, again for the residual evaluation, and `costs()`
@@ -346,7 +346,7 @@ compiles again. Each call topologically sorts the ancestor closure and rebuilds 
 
 **And it cannot cache today**, which is the deeper problem. `is_differentiable_parent` returns
 `value.is_none()` for mapped nodes, and that feeds `constant_inputs` and `forward_only` into every
-compiled step. So *which steps are on the tape* is derived from the fold cache — value state, not
+compiled step. So _which steps are on the tape_ is derived from the fold cache — value state, not
 topology. A sequence keyed on topology alone would go stale whenever a fold changed. This is a
 layering inversion: an optimization determines a structural property.
 
@@ -356,12 +356,6 @@ layering inversion: an optimization determines a structural property.
 
 The example in §2 names three calls that do not exist. They are not independent of the structural
 issues in §3, and the ordering below reflects that.
-
-> **On the defect ledger.** `graph-marginalization.md` §8 tracked seven numbered defects in
-> `skoro-graph`. **All are now closed** — orphaned densities are discoverable and reclaimable,
-> `remove` has a transitive teardown, the `observe` walk is ordered, `check_cache` reports rather
-> than panics, and the `remove` TODO is resolved and tested. Nothing is lost by that document
-> going away.
 
 ### 4.1 The three gaps
 
@@ -388,7 +382,7 @@ tolerances belong. Small and mostly mechanical.
 smoothing possible.
 
 At the estimate `θ̂`, a Laplace approximation over the Gauss-Newton model gives precision
-`Λ = JᵀJ` in *tangent* coordinates. Retiring a block means marginalizing it out, which is the Schur
+`Λ = JᵀJ` in _tangent_ coordinates. Retiring a block means marginalizing it out, which is the Schur
 complement:
 
 ```
@@ -400,7 +394,7 @@ new factorizations. What is needed:
 
 - a `MarginalLikelihood` capability on the estimator, returning a `Q<B, Real>` factor node;
 - the Schur complement over `Dense`;
-- a way to *express* the result as a factor.
+- a way to _express_ the result as a factor.
 
 **That last point is the blocker.** The factor is a Gaussian over the retired quantity's Markov
 blanket. If the blanket holds more than one quantity, there is no way to express a joint over
@@ -425,7 +419,7 @@ linear-Gaussian model and an approximation otherwise. That is what makes it test
 `compile_backward_from`, `check_cache`, `clear_cached_descendants`, the `observe` walk, and
 `mark_likelihood_impl`.
 
-Note that `constant_inputs` does double duty — it marks a step off the tape *and* short-circuits
+Note that `constant_inputs` does double duty — it marks a step off the tape _and_ short-circuits
 the forward path — so the forward pass must consult the fold table at execution time or the
 optimization is silently lost. "More steps on the tape, identical answers" is an assumption to
 confirm against the finite-difference suite, not to assert.
@@ -439,14 +433,14 @@ impossible without it. `Graph` derives `Clone`, so a manual impl must drop the c
 sharing a revision space with its origin would serve a sequence against the wrong topology.
 
 The invalidation surface has one trap worth naming: `observe`/`unobserve` keep the same node id
-*and* the same parents, but flip the node between being a cotangent collection point and not. A
+_and_ the same parents, but flip the node between being a cotangent collection point and not. A
 stale sequence therefore yields **right values and wrong derivatives**.
 
 **6. Per-factor compiled subsequences, and block-sparse `J`.** Extend `FactorRecord` with the roots
 its residual depends on and a cached subsequence for that subgraph.
 
 This is the change that matters most, and it sidesteps the standing objection to storing adjacency.
-That objection — that a `FactorGraph` would be a *derived projection* needing invalidation across
+That objection — that a `FactorGraph` would be a _derived projection_ needing invalidation across
 the whole mutation API — is correct about a derived global index. It does not apply to a
 **captured** one: `ResidualCertificate::record` runs at the moment the builder creates the factor,
 when its roots are already known. It is captured evidence, the same pattern that makes the
@@ -473,7 +467,7 @@ hundreds of poses" — which could not be built efficiently until they landed. O
 three times.
 
 **Item 6 breaks the cycle**, and it is the right one to force, because it is the only one whose
-*interface* the others depend on. A device-side batched solve is a swap behind names `skoro-dense`
+_interface_ the others depend on. A device-side batched solve is a swap behind names `skoro-dense`
 already fixes; adjacency is needed only in the captured, per-factor form item 6 introduces.
 
 ### 4.4 Sequencing and verification
@@ -491,7 +485,7 @@ How each is checked:
 - `cargo test --workspace` after every item.
 - **Item 4**: the JVP/VJP agreement tests and the `SE3` central-difference check through the
   retraction are the guard that decoupling changed no derivative.
-- **Item 5**: assert cache hits across LM iterations *and* that mutation invalidates. The
+- **Item 5**: assert cache hits across LM iterations _and_ that mutation invalidates. The
   correctness test is `observe` mid-loop — derivatives must change.
 - **Item 6**: per-factor blocks must reassemble to exactly the flat `jacobian_vjp` result.
 - **GAP 2**: the check is statistical rather than structural. On a **linear-Gaussian** HMM the
@@ -504,7 +498,7 @@ How each is checked:
 Model building is genuinely estimator-agnostic and well factored: nothing in `skoro-graph` knows
 what an estimator is, the type gate is enforced by the compiler rather than by discipline, and
 `TangentLayout` is the right abstraction — it survives a sparse rewrite untouched, as does
-flattening for *vectors*, since `r` and `δ` are dense whether or not `J` is.
+flattening for _vectors_, since `r` and `δ` are dense whether or not `J` is.
 
 The library serves **filtering** well today. It does not yet serve **smoothing**, and the reason is
 narrower than "it needs sparse linear algebra": it needs block-structured Jacobian assembly, which
