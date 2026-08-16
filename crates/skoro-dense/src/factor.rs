@@ -58,7 +58,7 @@ pub fn spd_solve(a: &Dense, b: &Dense) -> SkoroResult<Dense> {
 /// Least squares by column-pivoted QR: `min ‖J δ − r‖`, without forming `JᵀJ`.
 ///
 /// Forming `JᵀJ` squares the condition number; this path works at `κ` rather than `κ²`,
-/// which is the whole argument for the host boundary (`docs/estimator-linear-algebra.md`
+/// which is the whole argument for the host boundary (`docs/skoro.md`
 /// §3).
 ///
 /// This gives the **undamped** step. Damping is the caller's job and costs nothing extra:

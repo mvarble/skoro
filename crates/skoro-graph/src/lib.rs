@@ -14,6 +14,7 @@ pub mod graph;
 pub mod node;
 pub mod operation;
 pub mod point_map;
+pub mod products;
 pub mod quantity;
 pub mod sampler;
 pub mod tangent_layout;

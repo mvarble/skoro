@@ -325,7 +325,7 @@ where
 /// `TrilInvert` and `skoro-dense` must agree on the same triangle.
 ///
 /// The two implementations are deliberately kept apart — `TrilInvert` is a differentiable
-/// graph operation on every backend and stays there (`docs/estimator-linear-algebra.md`
+/// graph operation on every backend and stays there (`docs/skoro.md`
 /// §8), while `skoro-dense` is host `f64` for the estimators. This is the check that the
 /// fence did not let them drift: the packed forward substitution and the host triangular
 /// solve compute the same inverse.
