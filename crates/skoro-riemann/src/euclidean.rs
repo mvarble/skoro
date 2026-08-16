@@ -131,8 +131,15 @@ impl NumComponents for EuclideanD {
 
 impl<F: Element> Packable<F, VectorD<F>> for EuclideanD {
     fn pack(&self, data: &VectorD<F>, offset: usize, target: &mut [F]) {
-        assert_eq!(data.len(), self.0);
-        target[offset..(offset + self.0)].copy_from_slice(data.slice());
+        if data.len() == self.0 {
+            target[offset..(offset + self.0)].copy_from_slice(data.slice());
+        } else {
+            panic!(
+                "Cannot pack vector data of length {} into a Euclidean space of dimension {}",
+                data.len(),
+                self.0
+            );
+        }
     }
     fn unpack(&self, source: &[F], offset: usize) -> VectorD<F> {
         VectorD::<F>::new(&source[offset..(offset + self.0)])

@@ -82,6 +82,16 @@ impl<F: Element> MatrixD<F> {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    #[inline]
+    pub fn rows(&self) -> usize {
+        self.0.nrows()
+    }
+
+    #[inline]
+    pub fn cols(&self) -> usize {
+        self.0.ncols()
+    }
 }
 
 /// A matrix with a static shape.
@@ -186,8 +196,16 @@ impl NumComponents for EuclideanMatrixD {
 
 impl<F: Element> Packable<F, MatrixD<F>> for EuclideanMatrixD {
     fn pack(&self, data: &MatrixD<F>, offset: usize, target: &mut [F]) {
-        assert_eq!(data.len(), self.0);
-        target[offset..(offset + self.0)].copy_from_slice(data.slice());
+        let drows = data.rows();
+        let dcols = data.cols();
+        if drows == self.0 && dcols == self.1 {
+            target[offset..(offset + self.0 * self.1)].copy_from_slice(data.slice());
+        } else {
+            panic!(
+                "Cannot pack matrix data of shape {}×{} into a Euclidean matrix space of shape {}×{}",
+                drows, dcols, self.0, self.1
+            );
+        }
     }
     fn unpack(&self, source: &[F], offset: usize) -> MatrixD<F> {
         MatrixD::<F>::new(
