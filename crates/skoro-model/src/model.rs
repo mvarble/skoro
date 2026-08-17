@@ -1,16 +1,14 @@
-use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, Weak};
 
 use skoro_backend::{Backend, CotangentFrame, Point, TangentFrame, TangentVector};
 use skoro_core::kind::Kind;
 use skoro_core::{
-    error::SkoroResult,
+    error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
     pack::Packable,
     sampler::Sampler,
@@ -30,7 +28,8 @@ use skoro_operation::ValueMap;
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
-use crate::{distribution::Distribution, q::Q};
+use crate::structure::{JointWhitenedResidual, ResidualCertificate, WhitenedResidual};
+use crate::{cleanup::CleanupRegistry, distribution::Distribution, q::Q};
 
 lazy_static! {
     /// Global Id generator of model servers.
@@ -46,7 +45,18 @@ lazy_static! {
 pub struct ModelServer<B: Backend> {
     graph: Graph<B>,
     pub device: B::Device,
-    cleanup_queue: Arc<SegQueue<Id>>,
+    cleanup_registry: Arc<CleanupRegistry>,
+    /// The evidence that every factor this server holds is least-squares shaped,
+    /// pruned against the graph inside every mutating method below — so a record and
+    /// the factor it names cannot drift apart between calls, only within one, where
+    /// `prune_certificate` is the last thing that runs.
+    ///
+    /// It is also the pin table: the nodes it names are the ones neither the collector
+    /// may reclaim nor [`remove`](Self::remove) may delete. That is one set, owned by
+    /// [`ResidualCertificate`] and asked through
+    /// [`names`](ResidualCertificate::names), rather than a copy kept here — a
+    /// second owner would be a second thing to keep in step.
+    certificate: ResidualCertificate,
 }
 
 impl<B: Backend> std::fmt::Debug for ModelServer<B> {
@@ -64,7 +74,8 @@ impl<B: Backend> ModelServer<B> {
         Self {
             graph: Graph::new(),
             device,
-            cleanup_queue: Arc::new(SegQueue::new()),
+            cleanup_registry: Arc::new(CleanupRegistry::default()),
+            certificate: ResidualCertificate::new(),
         }
     }
 
@@ -157,19 +168,12 @@ impl<B: Backend> ModelServer<B> {
         density: &Q<B, Real>,
         stochastic: &Q<B, T>,
     ) -> SkoroResult<()> {
-        self.graph.mark_density(density.id, stochastic.id)?;
-        density.guard.is_mapped_leaf.store(false, Ordering::SeqCst);
-        Ok(())
+        self.graph.mark_density(density.id, stochastic.id)
     }
 
     /// Mark a mapped quantity as a likelihood.
     pub fn mark_likelihood(&mut self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
-        self.graph.mark_likelihood(likelihood.id)?;
-        likelihood
-            .guard
-            .is_mapped_leaf
-            .store(false, Ordering::SeqCst);
-        Ok(())
+        self.graph.mark_likelihood(likelihood.id)
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.
@@ -201,8 +205,13 @@ impl<B: Backend> ModelServer<B> {
         K: Kind<B>,
         S: Sampler<B, K>,
     {
-        self.graph
-            .update_stochastic(tag.id, new_sampler, new_parents)
+        let severed = self
+            .graph
+            .update_stochastic::<K, S>(tag.id, new_sampler, new_parents)?;
+        self.cleanup_registry.offer(severed);
+        self.prune_certificate();
+        self.cleanup();
+        Ok(())
     }
 
     /// Demote a stochastic quantity to a free parameter, keeping its identity.
@@ -212,16 +221,47 @@ impl<B: Backend> ModelServer<B> {
     /// when a quantity's distribution is superseded by a joint likelihood factor
     /// over several quantities — a marginalization whose result does not factorize.
     ///
+    /// The demoted quantity's log-density leaves the objective here, so a certificate
+    /// record naming it leaves too: `prune_certificate` runs in the same call, and the
+    /// rows of `J` shrink exactly when the term stops scoring.
+    ///
+    /// Everything the demotion made unreachable is collected before returning — the orphaned
+    /// density, the subgraph it was holding up, the now-uncertified residual, and the parent
+    /// edges the old distribution owned. The graph reports each of those, because none of them
+    /// is an event a later pass could reconstruct.
+    ///
     /// Returns an error if the quantity does not exist or is neither stochastic nor
     /// already a parameter.
     #[inline(always)]
     pub fn demote_to_parameter<T>(&mut self, tag: &Q<B, T>) -> SkoroResult<()> {
-        self.graph.demote_to_parameter(tag.id)
+        let severed = self.graph.demote_to_parameter(tag.id)?;
+        self.cleanup_registry.offer(severed);
+        self.prune_certificate();
+        self.cleanup();
+        Ok(())
     }
 
     /// Removes quantities, verifying they have no children which would be kept in the graph.
+    ///
+    /// Refuses a node the certificate names, for the same reason it refuses one another node
+    /// still points into: this is the primitive that will not break a reference, and a record
+    /// is a reference. That refusal is what keeps `remove` safe on
+    /// [`ModelClientOps`](crate::client_ops::ModelClientOps) — an estimator bounded on
+    /// [`NlsStructure`](crate::structure::NlsStructure) holds it, and a certified residual is
+    /// childless, so without the check a `remove` could silently take a factor out of the
+    /// objective. Retiring a factor is [`remove_closure`](Self::remove_closure), one tier up.
+    ///
+    /// The removal is also a collection point: anything it orphaned unwinds in the
+    /// cascade before returning, so the model is clean after every retire.
     pub fn remove(&mut self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        self.graph.remove(ids)
+        if let Some(id) = ids.iter().find(|id| self.certificate.names(**id)) {
+            return Err(SkoroError::NodeIsCertified { id: *id });
+        }
+        let removed = self.graph.remove(ids)?;
+        self.prune_certificate();
+        self.offer_parents(&removed);
+        self.cleanup();
+        Ok(removed)
     }
 
     /// Remove `roots` together with everything downstream of them.
@@ -230,28 +270,194 @@ impl<B: Backend> ModelServer<B> {
     /// [`remove`](Self::remove) this cannot fail on a still-referenced node, because it takes
     /// the referents too — which is why it is reachable from
     /// [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps) and not from the client tier.
+    ///
+    /// The removal is also a collection point: nodes the closure orphaned but did not
+    /// take — everything *upstream* of the roots, like a retired factor's body — unwind
+    /// in the cascade before returning.
     pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        self.graph.remove_closure(roots)
+        let removed = self.graph.remove_closure(roots)?;
+        self.prune_certificate();
+        self.offer_parents(&removed);
+        self.cleanup();
+        Ok(removed)
     }
 
-    /// Remove all non-likelihood mapped quantities which have no more references.
+    /// Queue the parents of `removed` for garbage collection: a node that lost its last
+    /// child in the removal may now be collectable, and the handle that once named it is
+    /// long gone.
+    fn offer_parents(&mut self, removed: &[Node<B>]) {
+        self.cleanup_registry.offer(
+            removed
+                .iter()
+                .flat_map(|node| node.parent_ids().iter().copied()),
+        );
+    }
+
+    /// Drop the certificate entries whose factor no longer exists — and unregister the
+    /// density of a record whose *residual* died while the density still scores. Half a
+    /// factor is not a factor: a term the objective sums but `J` has no rows for is the
+    /// one failure mode here nothing reports, so the two leave in the same breath.
+    ///
+    /// Liveness is two questions, both asked of the graph, right now: the residual must
+    /// be in the arena, and the density must still be a live likelihood term. The second
+    /// is the one arena membership cannot answer — `unregister_density` orphans a demoted
+    /// or replaced quantity's density without removing it, and an orphaned density scores
+    /// nothing.
+    ///
+    /// **A dropped record's nodes are re-offered to the collector.** Being named by a record is
+    /// what protected them, and losing a protector is not an event the graph can see — no edge
+    /// changed, so nothing else will ever reconsider them. Every mutation that reduces a node's
+    /// reachability has to say so here, or the node is unreachable *and* uncollected, which is
+    /// a leak that repeats once per retired factor.
+    fn prune_certificate(&mut self) {
+        let registry = self.cleanup_registry.clone();
+        let graph = &self.graph;
+        let mut densities = Vec::new();
+        self.certificate.retain(
+            |record| graph.contains(record.residual) && graph.is_scoring(record.density),
+            |record| {
+                if !graph.contains(record.residual) && graph.is_scoring(record.density) {
+                    densities.push(record.density);
+                }
+                registry.offer([record.density, record.residual]);
+            },
+        );
+        for density in densities {
+            self.graph.unregister_density_node(density);
+        }
+        self.debug_validate_state();
+    }
+
+    /// Record a factor in the server's certificate. The `D` bound is the whole guarantee;
+    /// see [`ResidualCertificate::record`].
+    ///
+    /// Recording pins the factor's nodes: neither `cleanup` nor [`remove`](Self::remove) may
+    /// take one until the record leaves.
+    pub fn record_factor<D>(
+        &mut self,
+        distr: &D,
+        density: Id,
+        residual: &Q<B, EuclideanD>,
+    ) -> SkoroResult<()>
+    where
+        D: WhitenedResidual<B>,
+    {
+        self.certificate.record(distr, density, residual)?;
+        self.debug_validate_state();
+        Ok(())
+    }
+
+    /// Record a joint factor over quantities the model already holds. The `F` bound is
+    /// the guarantee, exactly as in [`record_factor`](Self::record_factor); see
+    /// [`ResidualCertificate::record_joint`].
+    pub fn record_joint_factor<F>(
+        &mut self,
+        factor: &F,
+        density: Id,
+        residual: &Q<B, EuclideanD>,
+    ) -> SkoroResult<()>
+    where
+        F: JointWhitenedResidual<B>,
+    {
+        self.certificate.record_joint(factor, density, residual)?;
+        self.debug_validate_state();
+        Ok(())
+    }
+
+    /// The evidence this server maintains about its factors, pruned against the graph at
+    /// every mutation above.
+    pub fn certificate(&self) -> &ResidualCertificate {
+        &self.certificate
+    }
+
+    /// The certificate invariants, checked after every certificate mutation in debug
+    /// builds — the same regime [`Graph::validate_indices`] runs under, one layer up.
+    ///
+    /// Only the certificate-against-graph half is asserted here. The certificate's own
+    /// index is no longer a second copy to cross-check: it is private to
+    /// [`ResidualCertificate`] and written beside every record that enters or leaves.
+    fn debug_validate_state(&self) {
+        #[cfg(debug_assertions)]
+        for record in self.certificate.factors() {
+            assert!(
+                self.graph.contains(record.residual),
+                "certificate names residual {:?}, which is not in the arena",
+                record.residual
+            );
+            assert!(
+                self.graph.is_scoring(record.density),
+                "certificate names density {:?}, which is not a live likelihood term",
+                record.density
+            );
+        }
+    }
+
+    /// Remove all collectable quantities, cascading to any parents the collection
+    /// itself orphans.
+    ///
+    /// Eligibility is decided *at collection time* from the graph's current state, never
+    /// from anything recorded when a handle died: a candidate id may name nothing (a
+    /// closure removal took it), may name a node that has since gained a child, or may
+    /// name a pinned or model-owned node — each is simply skipped. A garbage collector
+    /// must treat "already collected" as ordinary, so there is no way for a stale queue
+    /// entry to fail here, by construction.
     pub fn cleanup(&mut self) {
-        // A queued id may already be gone: `remove_closure` takes nodes the caller does not
-        // hold a `Q` for alongside ones it does, and dropping that `Q` afterwards queues an id
-        // that names nothing. Collecting an already-collected node is the one thing a garbage
-        // collector must treat as ordinary, so it is filtered here rather than reported.
-        let mut ids = Vec::with_capacity(self.cleanup_queue.len());
-        while let Some(id) = self.cleanup_queue.pop() {
-            if self.graph.contains(id) {
-                ids.push(id);
+        loop {
+            let mut batch = Vec::new();
+            let mut seen = HashSet::new();
+            while let Some(id) = self.cleanup_registry.pop() {
+                if seen.insert(id) && self.collectable(id) {
+                    batch.push(id);
+                }
+            }
+            if batch.is_empty() {
+                return;
+            }
+            // Eligibility was checked above against the live graph: every id in the
+            // batch is present, childless, unowned and unreferenced, so the batch is
+            // closed and `remove` cannot refuse it. A failure here is a bug in
+            // `collectable`, not bad input.
+            let removed = self
+                .graph
+                .remove(&batch)
+                .expect("internal: cleanup collected an ineligible batch");
+            for node in &removed {
+                self.cleanup_registry
+                    .offer(node.parent_ids().iter().copied());
             }
         }
-        if !ids.is_empty() {
-            // Cleanup only removes leaf mapped nodes the model itself queued; a
-            // failure here would indicate an internal bookkeeping bug.
-            self.graph
-                .remove(&ids)
-                .expect("internal: cleanup removed a referenced node");
+    }
+
+    /// Whether `id` may be collected right now. Re-derived from the graph and the handle
+    /// registry on every call — see [`cleanup`](Self::cleanup).
+    fn collectable(&self, id: Id) -> bool {
+        if self.cleanup_registry.is_tracked(id) || self.certificate.names(id) {
+            return false;
+        }
+        if self
+            .graph
+            .children_of(id)
+            .is_some_and(|children| !children.is_empty())
+        {
+            return false;
+        }
+        match self.graph.node(id) {
+            Some(Node::Mapped(_)) => true,
+            // A density that still scores is a root: the objective sums it, so no absence of
+            // handles makes it garbage. One that has been *orphaned* — by a demotion, or by a
+            // distribution being replaced — scores nothing and is reachable from nothing, which
+            // is the same condition every other node is collected under.
+            //
+            // This is the arm that makes a demotion actually free anything. The orphan holds
+            // the whole subgraph its density was built over, so leaving it to
+            // `orphaned_densities` plus an explicit `remove_closure` strands a factor's worth
+            // of nodes per demotion — once per tick of a sliding window.
+            Some(Node::LogDensity(_)) => !self.graph.is_scoring(id),
+            // A graph-created constant (a stacked-tangent anchor) carries no handle and
+            // cannot be named once orphaned, so it is collectable where an ordinary
+            // constant is not — a caller may still hold an `Id` for one of those.
+            Some(Node::Constant(_)) => self.graph.is_private(id),
+            _ => false,
         }
     }
 
@@ -449,25 +655,33 @@ impl<B: Backend> ModelServer<B> {
     }
 }
 
-/// Drop guard for [`Q`] instances which allows us to perform graph cleanup of no-longer referenced
-/// mapped nodes.
+/// Drop guard for [`Q`] instances, reporting handle liveness to the server's
+/// [`CleanupRegistry`].
+///
+/// One guard exists per handle-family: `Q` clones share it, so a guard is created
+/// exactly once per node and dropped when the last clone naming it is gone. Creation
+/// registers the id; the drop deregisters it and offers it to `cleanup` as a candidate.
+/// The guard carries no opinion about collectability — that is re-derived from the
+/// graph at collection time, so this type can never be the reason a live node is
+/// collected or a dead one panics the collector.
 pub(crate) struct NodeDropGuard {
     id: Id,
-    is_mapped_leaf: AtomicBool,
-    cleanup_queue: Arc<SegQueue<Id>>,
+    registry: Arc<CleanupRegistry>,
+}
+
+impl NodeDropGuard {
+    pub(crate) fn new(id: Id, registry: &Arc<CleanupRegistry>) -> Arc<Self> {
+        registry.track(id);
+        Arc::new(Self {
+            id,
+            registry: registry.clone(),
+        })
+    }
 }
 
 impl Drop for NodeDropGuard {
     fn drop(&mut self) {
-        if self.is_mapped_leaf.load(Ordering::SeqCst) {
-            self.cleanup_queue.push(self.id);
-        }
-    }
-}
-
-impl NodeDropGuard {
-    pub(crate) fn set_mapped_leaf(&self, is_mapped_leaf: bool) {
-        self.is_mapped_leaf.store(is_mapped_leaf, Ordering::SeqCst);
+        self.registry.untrack(self.id);
     }
 }
 
@@ -544,11 +758,7 @@ impl<B: Backend> ModelClient<B> {
         Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(false),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         )
     }
 
@@ -569,11 +779,7 @@ impl<B: Backend> ModelClient<B> {
         Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(false),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         )
     }
 
@@ -590,11 +796,7 @@ impl<B: Backend> ModelClient<B> {
         Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(false),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         )
     }
 
@@ -614,11 +816,7 @@ impl<B: Backend> ModelClient<B> {
         let x = Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(false),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         );
 
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
@@ -652,11 +850,7 @@ impl<B: Backend> ModelClient<B> {
         Ok(Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(true),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         ))
     }
 
@@ -676,11 +870,7 @@ impl<B: Backend> ModelClient<B> {
         Ok(Q::new(
             id,
             self.clone(),
-            Arc::new(NodeDropGuard {
-                id,
-                is_mapped_leaf: AtomicBool::new(true),
-                cleanup_queue: server.cleanup_queue.clone(),
-            }),
+            NodeDropGuard::new(id, &server.cleanup_registry),
         ))
     }
 
@@ -733,10 +923,7 @@ impl<B: Backend> ModelClient<B> {
     ///
     /// See [`ModelServer::demote_to_parameter`].
     pub fn demote_to_parameter<T>(&self, tag: &Q<B, T>) -> SkoroResult<()> {
-        let mut server = self.server.write().unwrap();
-        server.demote_to_parameter(tag)?;
-        server.cleanup();
-        Ok(())
+        self.server.write().unwrap().demote_to_parameter(tag)
     }
 
     /// Removes quantities, verifying they have no children which would be kept in the graph.

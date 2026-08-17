@@ -200,7 +200,7 @@ fn the_gaussian_facade_records_what_it_built() {
     let cov_b = constant_covariance_diagonal(&model, &[0.5]);
     let b = model.add_gaussian_quantity(&mean_b, &cov_b).unwrap();
 
-    let blocks: Vec<_> = GaussianStructure::blocks(&model).to_vec();
+    let blocks: Vec<_> = GaussianStructure::blocks(&model);
     assert_eq!(blocks.len(), 2);
     assert_eq!(blocks[0].mean, mean_a.id());
     assert_eq!(blocks[0].whitening, cov_a.id());
@@ -208,7 +208,8 @@ fn the_gaussian_facade_records_what_it_built() {
     assert_eq!(blocks[1].whitening, cov_b.id());
 
     // The certificate agrees with the blocks, factor for factor and in order.
-    let factors = NlsStructure::certificate(&model).factors();
+    let certificate = NlsStructure::certificate(&model);
+    let factors = certificate.factors();
     assert_eq!(factors.len(), 2);
     for (factor, block) in factors.iter().zip(&blocks) {
         assert_eq!(factor.density, block.density);
@@ -229,7 +230,7 @@ fn the_gaussian_facade_records_what_it_built() {
         .iter()
         .map(|id| {
             let (value, _) = evaluated.evaluations.get(id).expect("a recorded density");
-            scalar(value.as_float().clone())
+            scalar(value.unwrap_float_ref().clone())
         })
         .sum();
     approx::assert_abs_diff_eq!(
@@ -262,7 +263,8 @@ fn the_least_squares_builder_records_what_it_built() {
         .add_residual_quantity(Normal::new(mean, cov.clone()))
         .unwrap();
 
-    let factors = NlsStructure::certificate(&model).factors();
+    let certificate = NlsStructure::certificate(&model);
+    let factors = certificate.factors();
     assert_eq!(factors.len(), 1);
     assert_eq!(factors[0].normalizer_parents, vec![cov.id()]);
 
@@ -274,7 +276,7 @@ fn the_least_squares_builder_records_what_it_built() {
         .get(&factors[0].density)
         .expect("the recorded density");
     approx::assert_abs_diff_eq!(
-        scalar(density.as_float().clone()),
+        scalar(density.unwrap_float_ref().clone()),
         scalar(model.log_density(&values).unwrap()),
         epsilon = 1e-9
     );
@@ -362,7 +364,8 @@ fn retiring_a_factor_prunes_both_caches_and_keeps_the_order() {
     model.remove_closure(&[b.id()]).unwrap();
     model.cleanup();
 
-    let after = NlsStructure::certificate(&model).factors();
+    let certificate = NlsStructure::certificate(&model);
+    let after = certificate.factors();
     assert_eq!(
         after,
         [before[0].clone(), before[2].clone()],

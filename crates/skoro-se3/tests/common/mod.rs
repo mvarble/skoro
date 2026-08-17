@@ -368,8 +368,8 @@ where
     let step = Tensor::<B, 2>::ones([1, 6], &Default::default()).mul_scalar(delta);
     let stepped = points.retract_flat(&layout, step).unwrap();
 
-    let before = points.get(&pose.id()).unwrap().0.clone().into_float();
-    let after = stepped.get(&pose.id()).unwrap().0.clone().into_float();
+    let before = points.get(&pose.id()).unwrap().0.clone().unwrap_float();
+    let after = stepped.get(&pose.id()).unwrap().0.clone().unwrap_float();
     assert!(
         before
             .into_data()
@@ -381,8 +381,18 @@ where
         "the pose named by the layout should have moved"
     );
 
-    let quiet_before = points.get(&untouched.id()).unwrap().0.clone().into_float();
-    let quiet_after = stepped.get(&untouched.id()).unwrap().0.clone().into_float();
+    let quiet_before = points
+        .get(&untouched.id())
+        .unwrap()
+        .0
+        .clone()
+        .unwrap_float();
+    let quiet_after = stepped
+        .get(&untouched.id())
+        .unwrap()
+        .0
+        .clone()
+        .unwrap_float();
     assert_eq!(
         quiet_before.into_data().to_vec::<B::FloatElem>().unwrap(),
         quiet_after.into_data().to_vec::<B::FloatElem>().unwrap(),

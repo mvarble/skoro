@@ -65,7 +65,7 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
         diff_state: DiffModeState<CubeBackend<R, F, I>>,
     ) -> DiffOperationForward<CubeBackend<R, F, I>, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<CubeBackend<R, F, I>>> =
-            inputs.into_iter().map(Input::into_float).collect();
+            inputs.into_iter().map(Input::unwrap_float).collect();
         let [rp0, rp1] = inputs.try_into().unwrap();
         let b = rp0.dims()[0];
         let r0 = rp0.clone().slice_dim(1, 0..9).reshape([b, 3, 3]);
@@ -289,7 +289,7 @@ where
         diff_state: DiffModeState<NdArrayBackend<F, I>>,
     ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::into_float).collect();
+            inputs.into_iter().map(Input::unwrap_float).collect();
         let [rp0, rp1] = inputs.try_into().unwrap();
         let b = rp0.dims()[0];
         let r0 = rp0.clone().slice_dim(1, 0..9).reshape([b, 3, 3]);

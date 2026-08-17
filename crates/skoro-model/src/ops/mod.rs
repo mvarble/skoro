@@ -35,8 +35,8 @@
 //!
 //! When writing a kernel that reads a **discrete input** (e.g. a continuous map
 //! that selects a component by a categorical index):
-//! - extract the operand once with `.into_int()` / `.as_int()` (continuous
-//!   operands use `.into_float()`); the transparent `Float` arithmetic operators
+//! - extract the operand once with `.unwrap_int()` / `.unwrap_int_ref()` (continuous
+//!   operands use `.unwrap_float()`); the transparent `Float` arithmetic operators
 //!   panic on an `Int` operand — there is no implicit coercion;
 //! - the framework already sets the discrete input's tangent to `None`
 //!   (it is classified non-differentiable), so do not propagate a tangent for it;

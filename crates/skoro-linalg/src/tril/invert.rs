@@ -84,7 +84,7 @@ where
         inputs: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
+        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [mat_packed] = inputs.try_into().unwrap();
         let shape = mat_packed.shape();
         let mat_data = mat_packed.clone().into_data().convert::<B::FloatElem>();

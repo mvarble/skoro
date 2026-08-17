@@ -1,16 +1,16 @@
-use skoro_backend::{Backend, Element, UnbatchedDiscretePoint, UnbatchedPoint};
+use skoro_backend::{Backend, Element, Int, Tensor};
 use skoro_core::{
-    constant_value::ConstantValue,
     discrete::{Boolean, Categorical, Integer},
+    kind_erased_tensor::KindErasedTensor,
     pack::{Cardinality, Packable},
 };
 
-pub fn constant_int<B: Backend>() -> ConstantValue<B> {
-    UnbatchedDiscretePoint::<B>::from_ints([0], &Default::default()).into()
+pub fn constant_int<B: Backend>() -> KindErasedTensor<B, 1> {
+    Tensor::<B, 1, Int>::from_ints([0], &Default::default()).into()
 }
 
-pub fn constant_float<B: Backend>() -> ConstantValue<B> {
-    UnbatchedPoint::<B>::from_floats([0.0], &Default::default()).into()
+pub fn constant_float<B: Backend>() -> KindErasedTensor<B, 1> {
+    Tensor::<B, 1>::from_floats([0.0], &Default::default()).into()
 }
 
 pub fn constant_values<B: Backend>() {
@@ -166,13 +166,13 @@ macro_rules! tests {
         }
 
         #[test]
-        #[should_panic(expected = "expected a continuous (float) value, found a discrete one")]
+        #[should_panic(expected = "expected a continuous (float) tensor, found a discrete one")]
         fn unwrap_float_fails() {
             common::poorly_unwrap_float::<B>();
         }
 
         #[test]
-        #[should_panic(expected = "expected a discrete (int) value, found a continuous one")]
+        #[should_panic(expected = "expected a discrete (int) tensor, found a continuous one")]
         fn unwrap_int_fails() {
             common::poorly_unwrap_int::<B>();
         }

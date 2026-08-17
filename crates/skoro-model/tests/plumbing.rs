@@ -32,7 +32,7 @@ impl DiffOperation<B> for DummyOperation {
         points: Vec<Input<B>>,
         _: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         DiffOperationForward::forward_only(2.0 * points.into_iter().next().unwrap())
     }
 

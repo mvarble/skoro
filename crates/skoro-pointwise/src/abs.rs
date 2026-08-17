@@ -16,7 +16,7 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
         inputs: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
+        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [x] = inputs.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x.abs()),

@@ -98,7 +98,7 @@ where
     }
 
     fn get_inner_tensor(&self, input: Input<B>) -> Tensor<B, 2> {
-        input.into_float()
+        input.unwrap_float()
     }
 }
 
@@ -148,7 +148,7 @@ where
     }
 
     fn get_inner_tensor(&self, input: Input<B>) -> Tensor<B, 2, Int> {
-        input.into_int()
+        input.unwrap_int()
     }
 }
 

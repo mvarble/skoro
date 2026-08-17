@@ -39,7 +39,7 @@ fn discrete_constant_surfaces_in_forward_output() {
         .expect("discrete constant should be surfaced in forward output");
     let data = value
         .clone()
-        .into_int()
+        .unwrap_int()
         .into_data()
         .to_vec::<i32>()
         .unwrap();

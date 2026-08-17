@@ -17,7 +17,7 @@ impl<B: Backend> DiffOperation<B> for Matmul {
         inputs: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
+        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [u, v] = inputs.try_into().unwrap();
         let [b, _] = u.dims();
         let Matmul(m, n, k) = *self;

@@ -2,10 +2,10 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use skoro_backend::{Backend, CotangentFrame, TangentFrame, TangentVector, Tensor};
 use skoro_core::{
-    constant_value::QuantityValue,
     error::{SkoroError, SkoroResult},
     id::Id,
     kind::QuantityKind,
+    kind_erased_tensor::QuantityValue,
     sampler::DynSequenceSampler,
 };
 use skoro_operation::{DynSequenceOperation, Input, tape::Tape};

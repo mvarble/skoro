@@ -85,7 +85,7 @@ fn demotion_preserves_identity_and_dependents() {
         .unwrap()
         .0
         .clone()
-        .into_float()
+        .unwrap_float()
         .into_data()
         .to_vec::<f32>()
         .unwrap();
@@ -102,7 +102,7 @@ fn demotion_preserves_identity_and_dependents() {
         .unwrap()
         .0
         .clone()
-        .into_float()
+        .unwrap_float()
         .into_data()
         .to_vec::<f32>()
         .unwrap();

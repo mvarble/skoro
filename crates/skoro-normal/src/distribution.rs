@@ -70,8 +70,8 @@ impl<B: Backend, T: ContinuousQuantity<B>> NormalSampler<B, T> {
 impl<B: Backend, M: ContinuousQuantity<B>> Sampler<B, Continuous> for NormalSampler<B, M> {
     fn sample(&self, batch_size: usize, parameters: Vec<Input<B>>) -> Point<B> {
         let [mean, std_dev] = parameters.try_into().unwrap();
-        let mean = mean.into_float();
-        let std_dev = std_dev.into_float();
+        let mean = mean.unwrap_float();
+        let std_dev = std_dev.unwrap_float();
         assert_eq!(batch_size, mean.dims()[0]);
         self.sample(mean, std_dev)
     }

@@ -48,10 +48,9 @@ use skoro_model::{
     ModelClientOps, NlsStructure, ResidualCertificate, TangentLayout, WhitenedResidual,
     model::{ModelClient, ModelServer},
     q::Q,
-    structure::retire_recorded,
 };
 use skoro_operation::ValueMap;
-use skoro_riemann::euclidean::{EuclideanD, VectorD};
+use skoro_riemann::euclidean::VectorD;
 
 use crate::distribution::Normal;
 use crate::structure::{GaussianBlock, GaussianStructure};
@@ -144,20 +143,31 @@ impl<B: Backend> GaussianModelServer<B> {
 /// only moment the family is knowable. What is accumulated here is handed to inference
 /// algorithms through [`NlsStructure`] and [`GaussianStructure`].
 ///
-/// **Not [`Clone`].** Two clones would share one graph while owning separate caches, so
-/// each could record half the factors and both would report a certificate that omitted the
-/// other's — exactly the forgery the certificate exists to prevent.
+/// The certificate lives in the server, pruned inside every mutation it performs; what
+/// stays here is only the Gaussian *refinement* — `μ` and `L` per certified residual —
+/// which is data, not a second list of which factors exist. Membership in
+/// [`blocks`](GaussianStructure::blocks) is decided by the certificate alone, so the two
+/// cannot disagree: a demoted quantity's block vanishes at the demote, with no pruning
+/// call of this facade's own.
+///
+/// **Not [`Clone`].** Two clones would share one graph while owning separate refinement
+/// tables, so each could refine half the factors the certificate reports — exactly the
+/// forgery the certificate exists to prevent.
 #[derive(Debug)]
 pub struct GaussianModelClient<B: Backend> {
     client: ModelClient<B>,
-    certificate: ResidualCertificate,
-    blocks: Vec<GaussianBlock>,
-    /// Keeps the recorded residual nodes alive.
-    ///
-    /// A residual is a `Mapped` node with no children, so dropping the last [`Q`] naming it
-    /// queues it for garbage collection and the ids in `certificate` would dangle after the
-    /// next `cleanup()`.
-    residuals: Vec<Q<B, EuclideanD>>,
+    /// `μ` and `L` for each certified factor, keyed by its residual id. Membership is
+    /// never read off this table — that is the certificate's decision — so a stale entry
+    /// is harmless and simply never emitted.
+    refinements: HashMap<Id, GaussianRefinement>,
+}
+
+/// The Gaussian refinement of one certified factor: the pieces of `r = L⁻¹(x ⊖ μ)` that
+/// a filter reads separately — `H = ∂μ/∂x` and `R = L Lᵀ` are different objects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct GaussianRefinement {
+    mean: Id,
+    whitening: Id,
 }
 
 impl<B: Backend> Default for GaussianModelClient<B> {
@@ -171,61 +181,71 @@ impl<B: Backend> GaussianModelClient<B> {
     pub fn new(device: B::Device) -> Self {
         Self {
             client: ModelClient::new(device),
-            certificate: ResidualCertificate::new(),
-            blocks: Vec::new(),
-            residuals: Vec::new(),
+            refinements: HashMap::new(),
         }
     }
 
     /// Consume the facade and return the underlying general client.
     ///
-    /// **This dissolves the certificate.** It is an explicit exit from the guarantee, not a
-    /// view onto it: a caller holding the general [`ModelClient`] can add factors of any
-    /// family, and the cache accumulated here — which is dropped along with the facade —
-    /// would never see them. Anything already handed a [`ResidualCertificate`] keeps a
-    /// snapshot that was honest when it was taken and says nothing about the model
-    /// afterwards.
+    /// **This dissolves the guarantee.** It is an explicit exit, not a view onto it: a
+    /// caller holding the general [`ModelClient`] can add factors of any family, and the
+    /// certificate the server keeps — honest about what it recorded — would never see
+    /// them. Anything already handed a [`ResidualCertificate`] keeps a snapshot that was
+    /// honest when it was taken and says nothing about the model afterwards.
     pub fn into_client(self) -> ModelClient<B> {
         self.client
     }
 
-    /// Remove `roots` with everything downstream, and drop the records that went with them.
-    ///
-    /// The teardown half of a sliding window, and the reason this facade can host one: retiring a
-    /// state deletes the factors that scored it, and both caches here name those factors by id.
-    ///
-    /// **The certificate decides, and the blocks follow.** Asking the graph twice would make the
-    /// two lists agree only by coincidence: a [`GaussianBlock`] names two ids the certificate does
-    /// not — `mean` and `whitening` — so a rule of its own could keep a block whose `μ` has been
-    /// deleted, which is exactly what the EKF consumer this list exists for would read `H = ∂μ/∂x`
-    /// off. One surviving-factor question, asked once, and "the two cannot disagree" is true by
-    /// construction.
+    /// Remove `roots` with everything downstream; the server drops the records that went
+    /// with them in the same locked call, and [`blocks`](GaussianStructure::blocks)
+    /// follows by derivation.
     ///
     /// Inherent rather than a [`ModelBuilderOps`](skoro_model::ModelBuilderOps) impl — this facade
     /// withholds that trait deliberately, exactly as it withholds `add_quantity`.
     pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        let removed = retire_recorded(
-            &self.client,
-            &mut self.certificate,
-            &mut self.residuals,
-            roots,
-        )?;
-        let certified: Vec<Id> = self.certificate.residual_ids().collect();
-        self.blocks
-            .retain(|block| certified.contains(&block.residual));
+        let removed = self.client.remove_closure(roots)?;
+        let certified: Vec<Id> = self
+            .client
+            .server_call(|server| server.certificate().residual_ids().collect());
+        self.refinements
+            .retain(|residual, _| certified.contains(residual));
         Ok(removed)
+    }
+
+    /// The number of nodes in the underlying graph — the bound a retention policy watches.
+    pub fn graph_node_count(&self) -> usize {
+        self.client
+            .server_call(|server| server.graph().node_count())
     }
 }
 
 impl<B: Backend> NlsStructure<B> for GaussianModelClient<B> {
-    fn certificate(&self) -> &ResidualCertificate {
-        &self.certificate
+    fn certificate(&self) -> ResidualCertificate {
+        self.client
+            .server_call(|server| server.certificate().clone())
     }
 }
 
 impl<B: Backend> GaussianStructure<B> for GaussianModelClient<B> {
-    fn blocks(&self) -> &[GaussianBlock] {
-        &self.blocks
+    /// The certified factors with their Gaussian refinements, derived per call:
+    /// membership is the certificate's decision, and the refinement table supplies `μ`
+    /// and `L` for the survivors. A block whose record died simply never appears.
+    fn blocks(&self) -> Vec<GaussianBlock> {
+        self.client
+            .server_call(|server| server.certificate().clone())
+            .factors()
+            .iter()
+            .filter_map(|record| {
+                self.refinements
+                    .get(&record.residual)
+                    .map(|refinement| GaussianBlock {
+                        density: record.density,
+                        residual: record.residual,
+                        mean: refinement.mean,
+                        whitening: refinement.whitening,
+                    })
+            })
+            .collect()
     }
 }
 
@@ -507,14 +527,15 @@ where
             .server_call(|server| server.graph().density_of(x.id()))
             .ok_or(SkoroError::NotStochastic { id: x.id() })?;
 
-        self.certificate.record(&distr, density, &residual)?;
-        self.blocks.push(GaussianBlock {
-            density,
-            residual: residual.id(),
-            mean: mean.id(),
-            whitening: std_dev.id(),
-        });
-        self.residuals.push(residual);
+        self.client
+            .server_call_mut(|server| server.record_factor(&distr, density, &residual))?;
+        self.refinements.insert(
+            residual.id(),
+            GaussianRefinement {
+                mean: mean.id(),
+                whitening: std_dev.id(),
+            },
+        );
         Ok(x)
     }
 }

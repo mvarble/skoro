@@ -52,7 +52,12 @@ pub struct GaussianBlock {
 /// refinement is the thing being validated, and declaring it later would mean revisiting
 /// the facade a second time.
 pub trait GaussianStructure<B: Backend>: NlsStructure<B> {
-    fn blocks(&self) -> &[GaussianBlock];
+    /// The certified factors with their Gaussian refinements, in certificate order.
+    ///
+    /// Returned by value: membership in this list is decided by the certificate, which
+    /// lives behind the server lock, and the refinement is derived per call rather than
+    /// kept as a parallel list that could disagree with it.
+    fn blocks(&self) -> Vec<GaussianBlock>;
 }
 
 impl<B: Backend, M: ContinuousQuantity<B>> WhitenedResidual<B> for Normal<B, M>

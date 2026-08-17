@@ -25,7 +25,7 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
         diff_state: DiffModeState<CubeBackend<R, F, I>>,
     ) -> DiffOperationForward<CubeBackend<R, F, I>, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<CubeBackend<R, F, I>>> =
-            inputs.into_iter().map(Input::into_float).collect();
+            inputs.into_iter().map(Input::unwrap_float).collect();
         let [u, v] = inputs.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(cross_product(u, v)),

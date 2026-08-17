@@ -22,7 +22,7 @@ impl DiffOperation<B> for Square {
         points: Vec<Input<B>>,
         mode: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         let output = x.clone() * x.clone();
         match mode {
@@ -91,7 +91,7 @@ fn run_forward(
     for op in ops {
         op.forward(&mut points);
     }
-    points[output_index].take().unwrap().into_float()
+    points[output_index].take().unwrap().unwrap_float()
 }
 
 fn run_jvp(
@@ -106,7 +106,7 @@ fn run_jvp(
         op.jvp_forward(&mut points, &mut tangents);
     }
     (
-        points[output_index].take().unwrap().into_float(),
+        points[output_index].take().unwrap().unwrap_float(),
         tangents[output_index].take().unwrap(),
     )
 }

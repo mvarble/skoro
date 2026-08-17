@@ -27,7 +27,7 @@ where
         diff_state: DiffModeState<NdArrayBackend<F, I>>,
     ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::into_float).collect();
+            inputs.into_iter().map(Input::unwrap_float).collect();
         let [r] = inputs.try_into().unwrap();
         let omega = log(r);
         match diff_state {

@@ -542,18 +542,64 @@ fn a_factor_whose_density_was_removed_is_uncertified() {
     let density = model.add_joint_factor(factor).unwrap();
     let residual = model.certificate().factors()[0].residual;
 
-    // Rooted at the density: `ℓ` alone goes, and the residual node is untouched.
+    // Rooted at the density: `ℓ` alone goes, and with the record pruned the residual is
+    // unpinned — so the same call's cascade reclaims it too.
     assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
-    assert!(model.tangent_layout(&[residual]).is_ok());
 
     assert!(model.certificate().factors().is_empty());
     assert_eq!(model.residual_layout().unwrap().total(), 0);
-
-    // Uncertified, so nothing pins it any more.
-    drop(density);
-    model.cleanup();
     assert!(
         model.tangent_layout(&[residual]).is_err(),
-        "an uncertified residual is collectable again"
+        "an uncertified residual is reclaimed in the same breath"
+    );
+
+    // The handle outlives the node; dropping it stays uneventful.
+    drop(density);
+    model.cleanup();
+}
+
+/// Removing a factor's density reclaims the whole factor body — anchors included.
+///
+/// A log-density is a leaf, so the closure takes `ℓ` alone; everything that computed it —
+/// the whitening product, the squared norm, the concatenation, the per-block tangents, the
+/// frozen anchors — sits *upstream* of it and holds no handle. That is the leak the cascade
+/// in `cleanup()` exists for: the removal offers the removed node's parents, each collection
+/// offers the next layer up, and the body unwinds entirely. `private_nodes` alone never
+/// covered this: it reclaims anchors only when the *concatenation* dies inside a closure,
+/// and here the concatenation is upstream of the root.
+#[test]
+fn retiring_a_density_reclaims_the_whole_factor_body() {
+    let model = ModelClient::<B>::default();
+    let pose_q: Q<B, SE3> = model.add_parameter(SE3);
+    let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
+
+    let at = point_map()
+        .with_quantity(&pose_q, pose_row(0.4, [1.5, -2.25, 0.75]))
+        .with_quantity(&point_q, row(&[1.0, 2.0, 3.0]))
+        .build();
+    let (packed, normalizer) = whitening_from_precision(&coupled_precision()).unwrap();
+    let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
+
+    let node_count = || model.server_call(|server| server.graph().node_count());
+    let baseline = node_count();
+
+    let factor = JointNormal::new(
+        vec![pose_q.id(), point_q.id()],
+        at,
+        whitening.clone(),
+        normalizer,
+    );
+    let density = factor.log_density(&model).unwrap();
+    model.mark_likelihood(&density).unwrap();
+    assert!(node_count() > baseline);
+
+    model.remove_closure(&[density.id()]).unwrap();
+    drop(density);
+    model.cleanup();
+
+    assert_eq!(
+        node_count(),
+        baseline,
+        "ℓ goes in the closure; everything that computed it follows in the cascade"
     );
 }

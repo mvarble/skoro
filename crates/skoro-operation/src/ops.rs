@@ -19,7 +19,7 @@ impl<B: Backend> DiffOperation<B> for Negation {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(-x),
@@ -77,7 +77,7 @@ impl<B: Backend> DiffOperation<B> for Addition {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x, y] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x + y),
@@ -138,7 +138,7 @@ impl<B: Backend> DiffOperation<B> for Subtraction {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x, y] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x - y),
@@ -210,7 +210,7 @@ impl<B: Backend> DiffOperation<B> for ScalarMultiplication {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [alpha, x] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(alpha * x),
@@ -304,7 +304,7 @@ impl<B: Backend> DiffOperation<B> for ScalarDivision {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [alpha, x] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x / alpha),
@@ -470,7 +470,7 @@ impl<B: Backend> DiffOperation<B> for LiteralAddition<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         let y = self.0;
         match diff_state {
@@ -531,7 +531,7 @@ impl<B: Backend> DiffOperation<B> for LiteralSubtractionRight<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         let y = self.0;
         match diff_state {
@@ -592,7 +592,7 @@ impl<B: Backend> DiffOperation<B> for LiteralSubtractionLeft<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         let y = self.0;
         match diff_state {
@@ -653,7 +653,7 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarMultiplication<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         let y = self.0;
         match diff_state {
@@ -719,7 +719,7 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionRight<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [x] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x / self.0),
@@ -784,7 +784,7 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [alpha] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => {
@@ -913,7 +913,7 @@ impl<B: Backend> DiffOperation<B> for TangentConcat {
         inputs: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::into_float).collect();
+        let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         assert_eq!(
             inputs.len(),
             self.0.len(),

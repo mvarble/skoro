@@ -15,12 +15,20 @@
 //!   `Q` for, so dropping that handle afterwards queues an id naming nothing — and cleanup used to
 //!   `expect` on exactly that.
 
-use skoro_backend::NdArrayBackend;
+use skoro_backend::{NdArrayBackend, Point};
+use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps, map::register_map_slice, model::ModelClient, q::Q,
+    ModelBuilderOps, ModelClientOps,
+    distribution::{Distribution, Sampler},
+    map::{register_map_slice, register_map1},
+    model::ModelClient,
+    q::Q,
 };
-use skoro_operation::ops::TangentConcat;
-use skoro_riemann::euclidean::EuclideanD;
+use skoro_operation::{
+    Input,
+    ops::{LiteralScalarMultiplication, TangentConcat},
+};
+use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
 type B = NdArrayBackend<f64, i32>;
 
@@ -113,4 +121,126 @@ fn a_second_removal_of_the_same_cone_is_a_no_op() {
     drop(ab);
     model.cleanup();
     assert_eq!(node_count(&model), 1);
+}
+
+/// A distribution whose `log_density` does **not** rebuild over its parents — the one shape
+/// the old drop-guard protocol could not survive.
+///
+/// Nothing in the `Distribution` contract says the density must be expressed over the
+/// quantity's parents, so an implementation is free to score `x` alone. Under the
+/// `is_mapped_leaf` flags that was fatal: the mean's handle dropped with its flag still
+/// set — nothing ever cleared it, since clearing happened as a side effect of building a
+/// child — and `cleanup()` called `remove` on a node with a live child, panicking on what
+/// it called an internal error. With eligibility re-derived at collection time, the same
+/// sequence is ordinary: the mean has a child (the stochastic node), so it is skipped.
+struct LazyDistr {
+    /// Never read, and that is the point: holding it is what keeps the mean's only handle
+    /// alive until this struct is consumed, which is the moment the test is about.
+    #[allow(dead_code)]
+    mean: Q<B, Real>,
+    ids: [Id; 1],
+}
+
+#[derive(Debug, Clone)]
+struct LazySampler;
+
+impl Sampler<B, Continuous> for LazySampler {
+    fn sample(&self, _batch_size: usize, _parameters: Vec<Input<B>>) -> Point<B> {
+        unimplemented!("the test never generates")
+    }
+}
+
+impl Distribution<B, Continuous> for LazyDistr {
+    type Qty = Real;
+    type Sampler = LazySampler;
+
+    fn quantity_type(&self) -> Real {
+        Real
+    }
+
+    fn sampler(&self) -> LazySampler {
+        LazySampler
+    }
+
+    fn parent_ids(&self) -> &[Id] {
+        &self.ids
+    }
+
+    fn log_density(&self, x: &Q<B, Real>) -> SkoroResult<Q<B, Real>> {
+        register_map1(Real, LiteralScalarMultiplication::new(2.0), x)
+    }
+}
+
+/// Building with a lazy distribution must not panic in `cleanup()`, and the skipped
+/// parent must survive.
+#[test]
+fn a_distribution_that_skips_its_parents_cannot_panic_cleanup() {
+    let model = ModelClient::<B>::default();
+    let c = model.add_constant(Real, &2.0f64);
+    let mean = register_map1(Real, LiteralScalarMultiplication::new(2.0), &c).unwrap();
+    let mean_id = mean.id();
+
+    // The distribution holds the only handle to its mean — a mapped node — and that
+    // handle drops at the end of this call, with the stochastic node still pointing at
+    // the mean.
+    ModelBuilderOps::add_quantity(
+        &model,
+        LazyDistr {
+            mean,
+            ids: [mean_id],
+        },
+    )
+    .unwrap();
+
+    model.cleanup();
+    assert!(
+        model.server_call(|server| server.graph().contains(mean_id)),
+        "a node with a live child is skipped, not collected and not a panic"
+    );
+}
+
+/// Demotion must reclaim a severed parent the orphaned density never named.
+///
+/// The reason `demote_to_parameter` reports what it severed instead of leaning on the
+/// density's cascade. For an ordinary `Normal` the two coincide — its `log_density` is built
+/// over the same mean and covariance the stochastic node takes as parents, so collecting the
+/// orphaned density walks down to them anyway, and dropping the severed list changes nothing
+/// observable. `LazyDistr` breaks that coincidence, which is the only way to tell the two
+/// apart: its `mean` is a parent of the quantity and of nothing else, so no cascade from the
+/// density will ever reach it.
+///
+/// The bare `cleanup()` before the demote is load-bearing. `mean`'s handle died inside
+/// `add_quantity`, which queued it — so without a collection in between, the demote would
+/// find that stale candidate still waiting and reclaim `mean` whether or not it reported
+/// anything. Consuming it first is what makes this a test of the report rather than of the
+/// queue's leftovers.
+#[test]
+fn demotion_reclaims_a_parent_the_density_never_named() {
+    let model = ModelClient::<B>::default();
+    let c = model.add_constant(Real, &2.0f64);
+    let mean = register_map1(Real, LiteralScalarMultiplication::new(2.0), &c).unwrap();
+    let mean_id = mean.id();
+
+    let x = ModelBuilderOps::add_quantity(
+        &model,
+        LazyDistr {
+            mean,
+            ids: [mean_id],
+        },
+    )
+    .unwrap();
+
+    model.cleanup();
+    assert!(model.server_call(|server| server.graph().contains(mean_id)));
+
+    model.demote_to_parameter(&x).unwrap();
+
+    assert!(
+        !model.server_call(|server| server.graph().contains(mean_id)),
+        "a severed parent outside the density's subgraph must still be reclaimed"
+    );
+    assert!(
+        model.server_call(|server| server.graph().contains(c.id())),
+        "its own parent is still held by a handle"
+    );
 }

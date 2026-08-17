@@ -18,7 +18,6 @@ where
     K: Kind<B>,
     Op: GraphOperation<B>,
 {
-    x0.guard.set_mapped_leaf(false);
     x0.client.add_mapped(quantity_type, op, vec![x0.id])
 }
 
@@ -41,8 +40,6 @@ where
             rhs: x1.client.server_id,
         });
     }
-    x0.guard.set_mapped_leaf(false);
-    x1.guard.set_mapped_leaf(false);
     x0.client.add_mapped(quantity_type, op, vec![x0.id, x1.id])
 }
 
@@ -54,9 +51,8 @@ where
 /// and `DiffOperation::forward` takes a `Vec<Input<B>>` -- so this closes the only fixed-arity
 /// seam in the stack.
 ///
-/// The two invariants the macro-generated siblings enforce are enforced here too: every input must
-/// belong to the same client, and every input's drop guard must stop claiming to be a mapped leaf,
-/// or `cleanup()` reclaims a node that is now someone's parent.
+/// The invariant the macro-generated siblings enforce is enforced here too: every input must
+/// belong to the same client.
 ///
 /// An empty `inputs` names no client and no graph, so there is nothing to register against; it is
 /// reported as [`SkoroError::ShapeMismatch`] rather than panicking.
@@ -84,9 +80,6 @@ where
                 rhs: input.client.server_id,
             });
         }
-    }
-    for input in inputs {
-        input.guard.set_mapped_leaf(false);
     }
     first
         .client
@@ -136,8 +129,6 @@ macro_rules! impl_register_map {
                 }
             )*
 
-            $first_arg.guard.set_mapped_leaf(false);
-            $($rest_arg.guard.set_mapped_leaf(false);)*
             $first_arg.client.add_mapped(
                     quantity_type,
                     op,

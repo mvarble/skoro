@@ -6,10 +6,10 @@ use skoro_backend::{
     Backend, CotangentFrame, CotangentVector, Point, TangentFrame, TangentVector, Tensor,
 };
 use skoro_core::{
-    constant_value::{ConstantValue, QuantityValue},
     error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
     kind::{Kind, QuantityKind},
+    kind_erased_tensor::QuantityValue,
     pack::Packable,
     sampler::Sampler,
 };
@@ -169,6 +169,23 @@ impl<B: Backend> Graph<B> {
         &self.log_likelihoods
     }
 
+    /// Whether `id` is a live likelihood term — a density the objective still sums.
+    ///
+    /// This is the right "is the factor still there?" question, where [`contains`](Self::contains)
+    /// is the wrong one: `unregister_density` deliberately leaves a demoted or replaced quantity's
+    /// density in the arena, so membership says nothing about whether the term still scores.
+    pub fn is_scoring(&self, id: Id) -> bool {
+        self.log_likelihoods.contains(&id)
+    }
+
+    /// Whether `id` is a node this graph built for itself and never handed out — an anchor or
+    /// per-block tangent of a [`stacked_tangent`](Self::stacked_tangent). Such nodes carry no
+    /// handle, so a garbage collector may treat a childless one as reclaimable where an ordinary
+    /// constant may still be named by an [`Id`] the caller kept.
+    pub fn is_private(&self, id: Id) -> bool {
+        self.private_nodes.contains(&id)
+    }
+
     /// The log-density scoring `stochastic`, if it has one.
     pub fn density_of(&self, stochastic: Id) -> Option<Id> {
         self.stochastic_to_log_density.get(&stochastic).copied()
@@ -197,6 +214,11 @@ impl<B: Backend> Graph<B> {
     /// The orphan is not inert. It keeps its `parent_ids`, so its parents' `children` sets stay
     /// non-empty and [`remove`](Self::remove) is blocked on the whole cone above it. Pair this
     /// with [`remove_closure`](Self::remove_closure) to reclaim one.
+    ///
+    /// A caller that tracks handles has a better route and will rarely need this: `skoro-model`'s
+    /// collector treats a density that no longer scores as ordinary garbage, so an orphan there is
+    /// reclaimed along with the subgraph it was holding up. This stays because the graph itself
+    /// knows nothing about handles, and so cannot make that judgement.
     pub fn orphaned_densities(&self) -> Vec<Id> {
         self.nodes
             .iter()
@@ -853,8 +875,10 @@ impl<B: Backend> Graph<B> {
             match self.nodes.remove(&descendant) {
                 // Already folded. Nothing an `observe` does can make a concrete node
                 // non-concrete, so this stays true and the recompute is pure waste.
-                Some(node @ (Node::Mapped(MappedNode { value: Some(_), .. })
-                | Node::LogDensity(LogDensityNode { value: Some(_), .. }))) => {
+                Some(
+                    node @ (Node::Mapped(MappedNode { value: Some(_), .. })
+                    | Node::LogDensity(LogDensityNode { value: Some(_), .. })),
+                ) => {
                     self.nodes.insert(descendant, node);
                 }
                 Some(Node::Mapped(mapped)) => {
@@ -864,8 +888,10 @@ impl<B: Backend> Graph<B> {
                 }
                 Some(Node::LogDensity(dens)) => {
                     let value = self.check_cache(&dens.parent_ids, &dens.op)?;
-                    self.nodes
-                        .insert(descendant, Node::LogDensity(LogDensityNode { value, ..dens }));
+                    self.nodes.insert(
+                        descendant,
+                        Node::LogDensity(LogDensityNode { value, ..dens }),
+                    );
                 }
                 // A leaf descendant folds nothing; put it back untouched.
                 Some(other) => {
@@ -979,6 +1005,10 @@ impl<B: Backend> Graph<B> {
 
     /// Update a stochastic node's sampling and density mechanisms.
     ///
+    /// **Returns the parents it severed** — the old ones the new distribution did not keep. See
+    /// [`demote_to_parameter`](Self::demote_to_parameter) for why they are reported rather than
+    /// acted on.
+    ///
     /// Returns an error if the node does not exist, is not stochastic, the
     /// sampler's kind does not match the node's, a new parent is dangling, or
     /// the update would introduce a cycle.
@@ -987,7 +1017,7 @@ impl<B: Backend> Graph<B> {
         id: Id,
         new_sampler: S,
         new_parents: Vec<Id>,
-    ) -> SkoroResult<()>
+    ) -> SkoroResult<Vec<Id>>
     where
         K: Kind<B>,
         S: Sampler<B, K>,
@@ -1014,7 +1044,7 @@ impl<B: Backend> Graph<B> {
         id: Id,
         new_sampler: Arc<dyn GraphSampler<B>>,
         new_parents: Vec<Id>,
-    ) -> SkoroResult<()> {
+    ) -> SkoroResult<Vec<Id>> {
         // check that all the new parents are legal
         for &parent_id in &new_parents {
             if !self.nodes.contains_key(&parent_id) {
@@ -1051,21 +1081,30 @@ impl<B: Backend> Graph<B> {
         // update the node (kind validated above)
         if let Some(Node::Stochastic(stoch)) = self.nodes.get_mut(&id) {
             stoch.sampler = new_sampler;
-            stoch.parent_ids = new_parents;
+            stoch.parent_ids = new_parents.clone();
         } else {
             unreachable!("node kind validated above");
         }
-        self.unregister_density(id);
+        let orphaned_density = self.unregister_density(id);
         self.debug_validate_indices();
-        Ok(())
+        // The parents the swap dropped, less any the new distribution kept — only a node that
+        // ended the call with one fewer child needs reconsidering — plus the density the old
+        // distribution owned, which now scores nothing and holds that whole subgraph up.
+        Ok(old_parents
+            .into_iter()
+            .filter(|old| !new_parents.contains(old))
+            .chain(orphaned_density)
+            .collect())
     }
 
     /// Unregister the log-density owned by a stochastic quantity, dropping it from the
     /// model's likelihood terms.
     ///
     /// The [`LogDensity`](Node::LogDensity) node itself is left in the arena: it may still be
-    /// referenced as a child, and removing it is the caller's decision. A caller replacing a
-    /// distribution wholesale is expected to clean up the orphan.
+    /// referenced as a child, and removing it is the caller's decision. **Its id is returned**,
+    /// because orphaning it is a reachability change nothing else announces — it scores nothing
+    /// afterwards, so it and the subgraph it holds up are garbage unless something still names
+    /// them, which only a caller tracking handles can decide.
     ///
     /// The orphan's own [`stochastic_id`](LogDensityNode::stochastic_id) is cleared along with
     /// the maps, because [`remove`](Self::remove) reads that field to decide which map entries
@@ -1074,15 +1113,33 @@ impl<B: Backend> Graph<B> {
     /// what "replace the distribution, then clean up the orphan" does — then removing the
     /// orphan would delete the live density's entry, and `density_of` would report `None` for
     /// a quantity that still has a density in `log_likelihoods`.
-    fn unregister_density(&mut self, stochastic_id: Id) {
-        let Some(density) = self.stochastic_to_log_density.get(&stochastic_id).copied() else {
-            return;
-        };
+    fn unregister_density(&mut self, stochastic_id: Id) -> Option<Id> {
+        let density = self
+            .stochastic_to_log_density
+            .get(&stochastic_id)
+            .copied()?;
         // Retirement is "unbind, then stop scoring": `link_density(_, None)` releases the
         // reverse entry and clears the node's own field, and `drop_density_term` takes it out
         // of the sum. Neither collection is touched outside those two helpers.
         self.link_density(density, None);
         self.drop_density_term(density);
+        Some(density)
+    }
+
+    /// Unbind and de-list a density, addressed **by the density's own id**.
+    ///
+    /// The density-keyed sibling of the stochastic-keyed `unregister_density`, which finds
+    /// its target through the quantity being scored. Needed when the caller knows the
+    /// density and the stochastic is irrelevant or already gone — a recorded factor whose
+    /// residual was removed, say, where the factor's density must leave the objective in the
+    /// same breath or `J` and the log-density would disagree about the model.
+    ///
+    /// Like `unregister_density`, the node itself is left in the arena: removing it is the
+    /// caller's decision.
+    pub fn unregister_density_node(&mut self, density: Id) {
+        self.link_density(density, None);
+        self.drop_density_term(density);
+        self.debug_validate_indices();
     }
 
     /// Demote a stochastic quantity to a free [`Parameter`](Node::Parameter), at the
@@ -1100,13 +1157,18 @@ impl<B: Backend> Graph<B> {
     ///
     /// Demoting a node that is already a parameter is a no-op.
     ///
+    /// **Returns the parents it severed.** Those nodes each just lost a child and may now be
+    /// unreachable, which only a caller that tracks external handles can decide — so the ids
+    /// are reported rather than acted on here. Dropping them on the floor is a leak that grows
+    /// once per demotion, which is once per tick of a sliding window.
+    ///
     /// Returns [`SkoroError::NodeNotFound`] if the node does not exist, or
     /// [`SkoroError::NotStochastic`] if it is neither stochastic nor already a parameter.
-    pub fn demote_to_parameter(&mut self, id: Id) -> SkoroResult<()> {
+    pub fn demote_to_parameter(&mut self, id: Id) -> SkoroResult<Vec<Id>> {
         match self.nodes.get(&id) {
             Some(Node::Stochastic(_)) => {}
             // Already a free variable; nothing to demote.
-            Some(Node::Parameter(_)) => return Ok(()),
+            Some(Node::Parameter(_)) => return Ok(Vec::new()),
             Some(_) => return Err(SkoroError::NotStochastic { id }),
             None => return Err(SkoroError::NodeNotFound { id }),
         };
@@ -1125,7 +1187,8 @@ impl<B: Backend> Graph<B> {
 
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
-        self.unregister_density(id);
+        let mut orphaned = parent_ids;
+        orphaned.extend(self.unregister_density(id));
         // Defensive, and cheap: today `check_cache` folds nothing downstream of a
         // stochastic node (it yields `None` for both `Stochastic` and `Parameter`
         // parents), so this finds nothing to clear. It guards the invariant rather
@@ -1134,7 +1197,7 @@ impl<B: Backend> Graph<B> {
         // every descendant stale.
         self.clear_cached_descendants(id);
         self.debug_validate_indices();
-        Ok(())
+        Ok(orphaned)
     }
 
     /// Removes leaf nodes, verifying they have no children which would be kept in the graph.
@@ -1238,7 +1301,7 @@ impl<B: Backend> Graph<B> {
                     .expect("Log-likelihood should be evaluated.")
                     .0
                     .clone()
-                    .into_float();
+                    .unwrap_float();
         }
         Ok(log_density)
     }
@@ -1277,7 +1340,7 @@ impl<B: Backend> Graph<B> {
                     .expect("Log-likelihood should be evaluated.")
                     .0
                     .clone()
-                    .into_float();
+                    .unwrap_float();
         }
         let cotangents = vjp_output
             .cotangents
@@ -1336,7 +1399,7 @@ impl<B: Backend> Graph<B> {
                     .expect("Log-likelihood should be evaluated.")
                     .0
                     .clone()
-                    .into_float();
+                    .unwrap_float();
         }
         let ord1_cotangents = hvp_output
             .ord1_cotangents
@@ -1731,9 +1794,7 @@ impl<B: Backend> Graph<B> {
     /// `mark_likelihood_impl`, which has already established the node kind.
     fn link_density(&mut self, density: Id, stochastic: Option<Id>) {
         let previous = match self.nodes.get_mut(&density) {
-            Some(Node::LogDensity(dens)) => {
-                std::mem::replace(&mut dens.stochastic_id, stochastic)
-            }
+            Some(Node::LogDensity(dens)) => std::mem::replace(&mut dens.stochastic_id, stochastic),
             _ => return,
         };
         if let Some(previous) = previous
@@ -1839,7 +1900,7 @@ impl<B: Backend> Graph<B> {
         op.lower((0..n).collect(), parent_diffs, n)
             .forward(&mut points);
         Ok(points[n].take().map(|out| match pinned {
-            None => QuantityValue::Unbatched(ConstantValue::unbatch(out)),
+            None => QuantityValue::Unbatched(out.unbatch()),
             Some(_) => QuantityValue::Batched(out),
         }))
     }

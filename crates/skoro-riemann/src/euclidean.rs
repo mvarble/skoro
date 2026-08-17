@@ -202,7 +202,7 @@ impl<B: Backend> DiffOperation<B> for EuclideanInverseRetraction {
         points: Vec<Input<B>>,
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
-        let points: Vec<Point<B>> = points.into_iter().map(Input::into_float).collect();
+        let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [y, x] = points.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x - y),

@@ -75,24 +75,49 @@ quantity cannot reach a tangent layout at all. The discrete machinery lives in
 
 ### 1.4 The graph — `skoro-graph`
 
-An arena of nodes and edges representing the model's logical structure:
+An arena of nodes and edges representing the model's logical structure. Two of the six kinds are
+derived — `Mapped` is a deterministic transformation of other nodes, and `LogDensity` is a
+real-valued `Mapped` node that scores the model. The other four are **leaves, and they form a
+grid**:
 
-| Node         | Role                                                                |
-| ------------ | ------------------------------------------------------------------- |
-| `Constant`   | Fixed data — shared across the batch, or one value per row          |
-| `Parameter`  | Free leaf, to be inferred                                           |
-| `Stochastic` | A conditional random variable with a distribution                   |
-| `Observed`   | A `Stochastic` bound to a value — this is what conditions the model |
-| `Mapped`     | A deterministic transformation of other nodes                       |
-| `LogDensity` | A real-valued mapped node that scores the model                     |
+|                              | **free**     | **bound** (carries a value) |
+| ---------------------------- | ------------ | --------------------------- |
+| **no conditional**           | `Parameter`  | `Constant`                  |
+| **carries a conditional**    | `Stochastic` | `Observed`                  |
+
+That is not a mnemonic, it is the shape of the structs: `ConstantNode` is `ParameterNode` plus a
+`value`, and `ObservedNode` is `StochasticNode` plus a `value` — the same delta on both rows.
+
+The transitions follow the axes:
+
+- **Horizontal — bind or unbind a value**, keeping the id. `observe` / `unobserve`. Implemented
+  today on the bottom row only; the top row is GAP 5.
+- **Vertical — drop the conditional**, keeping the id. `demote_to_parameter`. There is no promotion
+  back, and none is needed: a marginal that does not factorize is attached as a likelihood factor
+  over several quantities instead (§4.1, GAP 2).
+
+**The horizontal axis is the one that carries weight**, and it carries the same three consequences
+on either row, which is why the missing half is worth having rather than merely tidy. Crossing to
+**bound** makes a node non-differentiable (`is_differentiable_parent`), so it stops being a Jacobian
+column; makes it *concrete*, so `check_cache` folds its descendants; and lets it supply its own
+value, so a pass no longer demands one in the `ValueMap` — a `Parameter` absent from the supplied
+points is `MissingPoint`, a `Constant` is not.
+
+The vertical axis moves none of those: `Stochastic` and `Parameter` are alike differentiable,
+non-concrete, and alike require a supplied value. Demotion changes what *scores* the model, not
+what the passes do with the node — which is exactly why it is the right move for marginalization
+and the wrong one for holding a variable fixed.
 
 **A constant's value is either batch-agnostic or batch-pinned**, and that is a property of the
 value rather than of the node kind. `QuantityValue::Unbatched` is rank-1 storage broadcast to
 whatever batch a pass runs at; `QuantityValue::Batched` is rank-2 and pins the pass to its own
 batch, so a batch of N independent problems can carry N different constants. Matching is strict in
 both directions, batch 1 included — broadcasting is what `Unbatched` already is, and a rule where 1
-widens but 5 errors is how a caller solves one problem N times without being told. `Observed`
-shares the field, so per-row conditioning needs no further machinery.
+widens but 5 errors is how a caller solves one problem N times without being told.
+
+`Observed` holds the same field, so the *storage* for per-row conditioning is already in place —
+but nothing constructs it. `observe` writes `Unbatched` unconditionally, and there is no batched
+sibling, so a batch of N independent problems must share one set of observations. See GAP 4.
 
 Keeping the distinction in the value is what lets a mapped node over batch-pinned parents still
 _fold_: `check_cache` takes its fold batch from the parents rather than hard-coding 1. A separate
@@ -154,20 +179,25 @@ invalidate the evidence it was handed**, because `ModelClientOps` contains no wa
 (`skoro-model/src/structure.rs`). It needs no second client parameter and no runtime revalidation.
 
 Note which side of the line deletion falls on, since it is not obvious and the two calls read
-alike. `remove` is a client op because it **refuses** to break a reference: an estimator cannot use
-it to delete a factor another node still points into. `remove_closure` takes the referents too, and
-is therefore a builder op — deciding a cone of the model is finished is the same order of authority
-as adding one. A `trybuild` case pins it off the client tier. (`remove` is not airtight even so: a
-marked `ℓ` is childless, so it can be removed. The certificate then fails to resolve, which is loud
-rather than silent, but the table's claim is an approximation at that edge rather than a theorem.)
+alike. `remove` is a client op because it **refuses** to break a reference. `remove_closure` takes
+the referents too, and is therefore a builder op — deciding a cone of the model is finished is the
+same order of authority as adding one. A `trybuild` case pins it off the client tier.
+
+**A record is a reference**, and that is what makes the claim above a theorem rather than an
+approximation. Nothing about the *graph* would stop a client-tier `remove` from taking a certified
+residual or a marked `ℓ`: both are childless by construction, so both would go without an error and
+a term would silently leave the objective. So `remove` refuses a node the certificate names, with
+`NodeIsCertified`, exactly as it refuses one another node still points into. The only way to retire
+a factor is a closure removal, one tier up.
 
 That evidence is `ResidualCertificate`. It is unforgeable not because the type is sealed but
 because entries can only enter through `record`, which demands a `WhitenedResidual` bound — so a
 hand-built certificate is empty and there is no way to insert a fabricated id.
 `crates/skoro-model/tests/compile_fail/` pins this. The module comment states the condition under
 which every claim in it lapses: _if `record` ever grows an unbounded sibling_. Entries may also
-**leave**, through `retain_live`, when the nodes they name are retired — which weakens nothing,
-because pruning can only ever shrink a certificate.
+**leave** — the certificate is `ModelServer` state, and every mutation that can invalidate a
+record prunes it in the same locked call — which weakens nothing, because pruning can only ever
+shrink a certificate.
 
 ---
 
@@ -178,8 +208,9 @@ summarized and retired, and the window stays bounded.
 
 > **This snippet is verified by reading, not by compiling.** Every call is checked against
 > `crates/skoro-levenberg-marquardt/tests/common/mod.rs`, `crates/skoro-normal/tests/demote.rs` and
-> `crates/skoro/tests/stacked_tangent.rs`. Two calls, marked `GAP`, do not exist yet — they are
-> the subject of §4.
+> `crates/skoro/tests/stacked_tangent.rs`, and the retirement half — demote the blanket, attach the
+> joint, retire the oldest pair — runs end-to-end in `crates/skoro-normal/tests/window.rs`. Two
+> calls, marked `GAP`, do not exist yet — they are the subject of §4.
 
 ```rust
 use skoro_dense::factor::whitening_from_precision;
@@ -238,11 +269,14 @@ for z_obs in observations {
     let report = estimator.solve(&model, &mut points, &free)?;              // GAP 1
 
     // 2. Replace the oldest state with a factor on what it still touches, linearized at the
-    //    estimate. Demotion strips its own density and its parents but keeps its identity, so
-    //    everything downstream is undisturbed.
+    //    estimate. The demotion lands on the *blanket*, not on the state being retired:
+    //    retiring `oldest` takes everything downstream of it, and the blanket is downstream
+    //    of it (its mean was built from `oldest`). Demotion strips the blanket's own density
+    //    and its parents — severing that edge — but keeps its identity, so everything
+    //    downstream of it is undisturbed.
     let oldest = states.remove(0);
     let blanket = vec![states[0].id()];
-    model.demote_to_parameter(&oldest)?;
+    model.demote_to_parameter(&states[0])?;
 
     // The estimator returns *numbers* — a precision in tangent coordinates and the block
     // ordering it is expressed in. It cannot return the factor itself: bounded on
@@ -258,7 +292,9 @@ for z_obs in observations {
 
     // 3. Retire the state and measurement the factor replaced, with everything below them —
     //    including the previous tick's joint factor, whose whole body is downstream of the
-    //    state it scored. A recording builder prunes its certificate in the same call.
+    //    state it scored. The server prunes the certificate in the same call, and its
+    //    cascade reclaims whatever the closure orphaned upstream — the retired joint's
+    //    anchors and body included.
     let stale = measurements.remove(0);
     model.remove_closure(&[oldest.id(), stale.id()])?;
 }
@@ -272,8 +308,8 @@ for z_obs in observations {
   them for anything expressible as `Q` operations, and the derivative machinery follows for free.
 - **Conditioning is `observe`.** It converts a `Stochastic` node to `Observed` in place, keeping
   the same id and parents.
-- **Marginalization is three moves**: demote the quantity so it no longer carries its own density,
-  attach a factor that summarizes what was lost, then delete what the factor replaced.
+- **Marginalization is three moves**: demote the blanket member so it no longer carries its old
+  conditional, attach a factor that summarizes what was lost, then delete what the factor replaced.
 - **The factor joins tangents, not points.** The blanket here is one state, but nothing in the
   second move depends on that: a blanket of any size over any mixture of manifolds is expressible,
   because what is joined is `Σdᵢ` tangent coordinates and never the quantities themselves.
@@ -400,7 +436,11 @@ layering inversion: an optimization determines a structural property.
 The example in §2 names three calls that do not exist. They are not independent of the structural
 issues in §3, and the ordering below reflects that.
 
-### 4.1 The three gaps
+### 4.1 Gaps and defects
+
+A **gap** is a capability the library does not have; a **defect** is behaviour it has and gets
+wrong. They are listed together because a reader planning work needs both, and because the second
+kind outranks the first.
 
 **GAP 1 — there is no `Estimator` abstraction.** `solve` is a free function over `NlsStructure`
 (`skoro-levenberg-marquardt/src/lib.rs`). "Plug an estimator into the model" has no type. Propose a
@@ -482,24 +522,138 @@ one-paragraph version of this gap did not anticipate, and each is a silent failu
   `ModelClientOps`", which is the wrong tier. `remove` is safe there precisely because it *refuses*
   to break a reference, so an `NlsStructure`-bounded estimator cannot delete a factor out from
   under the certificate it was handed; `remove_closure` deliberately takes the referents too. A
-  `trybuild` case pins it off the client tier. (A pre-existing soft spot in §1.7's claim, found
-  while checking this: `remove` does admit deleting a marked `ℓ`, which is childless. Loud rather
-  than silent — the certificate then fails to resolve — and not made worse here.)
-- **A certificate has to be pruned.** Retiring a state deletes the factors that scored it, and a
-  `FactorRecord` naming a deleted node fails `residual_layout` at the *next* solve rather than at
-  the removal that caused it. `ResidualCertificate::retain_live` is how a record leaves, and it
-  weakens nothing: entry is bounded because a fabricated id must never get *in*, while pruning can
-  only take ids *out*.
-- **A stacked tangent's anchors are unreachable by a downstream walk.** They sit upstream of
-  everything the factor built and carry no `Q`, so `cleanup()` would never queue them either —
-  `2k` stranded nodes per tick of a window. `Graph` records them as `private_nodes` when
-  `stacked_tangent` creates them and reclaims each once nothing points at it. Captured, not
-  derived, for the same reason `FactorRecord` is (§4.2): the fact is known at creation and would
-  have to be guessed afterwards.
+  `trybuild` case pins it off the client tier. A marked `ℓ` and a certified residual are childless,
+  so `remove` would have taken either without complaint; it refuses both with `NodeIsCertified`,
+  because a record is a reference and refusing to break one is the whole of what makes `remove`
+  safe at that tier.
+- **The certificate lives in the server.** A certificate kept beside a builder can drift from the
+  graph it describes: retiring a state deletes the factors that scored it, and a record naming a
+  deleted node fails `residual_layout` at the *next* solve rather than at the removal that caused
+  it. So `ModelServer` owns the certificate, and every mutation that can invalidate a record —
+  `remove`, `remove_closure`, `demote_to_parameter`, `update_stochastic` — prunes it in the same
+  locked call, against two questions asked of the graph: the residual must be in the arena, and the
+  density must still be a live likelihood term. The second is the one arena membership cannot
+  answer — demotion orphans a density without removing it, and an orphaned density scores nothing.
+  The certificate is also the pin table, asked through `names`: one set, owned by the type that
+  writes it, rather than a copy kept beside the collector that reads it. Pruning can only ever
+  shrink a certificate, so none of what makes one unforgeable is touched, and a Gaussian facade's
+  block list is derived from it rather than pruned beside it — one surviving-factor question, asked
+  once.
+- **Garbage collection re-derives eligibility; it is never told it.** `cleanup()` used to trust a
+  flag each `Q` carried, cleared as a side effect of building children — a protocol every
+  child-creating path had to honor, a `Distribution::log_density` implementation included. A
+  closure removal, which takes nodes a caller still holds a `Q` for, turned that into a panic on
+  the next drop. Now a dropped handle only *offers* its id, and `cleanup()` decides from the
+  graph's current state — kind, children, pins, live handles — cascading to whatever the
+  collection itself orphans, so a retired factor's whole body unwinds with it. A stacked tangent's
+  anchors are still recorded as `private_nodes` at creation — captured, not derived, for the same
+  reason `FactorRecord` is (§4.2) — which is what makes a constant, of all node kinds,
+  reclaimable by that cascade. An orphaned density is reclaimable for the same reason a mapped node
+  is: it scores nothing, so no absence of handles could make it less garbage. Only a density the
+  objective still sums is a root.
+- **Offering is obligatory, not an optimization.** A candidate is *popped* when examined, so a
+  collector's "not yet" is final — nothing re-derives it. Every mutation that reduces a node's
+  reachability therefore has to say what it orphaned, and the ones that do not are silent,
+  permanent leaks rather than delayed collections. Four do: a removal reports its parents, a
+  demotion and a distribution swap report the parent edges they severed, and a prune reports the
+  nodes whose record left. The last two are the easy ones to miss, because neither changes an edge
+  the graph could notice on its own — one only stops a certificate naming a node, the other only
+  stops a density scoring. `crates/skoro-model/tests/teardown.rs` and
+  `crates/skoro-normal/tests/retire.rs` pin each separately, each arranged so the candidate queue
+  has already been drained — otherwise a leftover entry collects the node anyway and the test
+  passes without exercising the report.
+
+**GAP 4 — a batch cannot be conditioned row by row.** The one place §3.4's *"a batch is N
+independent problems"* is not yet true. Each row can carry its own constants and its own
+linearization point, but every row must be conditioned on the **same** observations — which for a
+batched model is the ordinary case, not an exotic one.
+
+The storage is already right and has been since batch-pinning landed: `ObservedNode::value` is a
+`QuantityValue`, the same field a `Constant` uses, so a rank-2 observation has somewhere to live.
+What is missing is the constructor. `Graph::observe` writes `QuantityValue::Unbatched`
+unconditionally and has no batched sibling.
+
+`Graph::add_batched_constant` is the pattern to copy — `K::wrap_point(quantity_type.pack_values(values))`
+into `QuantityValue::Batched` — and `observe`'s existing body handles everything after the pack,
+including the descendant fold walk. Past the graph, it is the same three delegating
+`ModelClientOps` impls `add_batched_constant` touches.
+
+Model-side, and **independent**: it blocks nothing and nothing blocks it.
+
+**GAP 5 — a `Parameter` cannot be fixed to a value.** The top row of §1.4's grid has no horizontal
+transition: `observe` turns a `Stochastic` into an `Observed`, but a `Parameter` into
+`SkoroError::NotStochastic`. The cast that is missing is `Parameter → Constant` under `observe` and
+`Constant → Parameter` under `unobserve`.
+
+It is the *easier* of the two rows, not a harder generalization. `Stochastic ↔ Observed` has to
+carry a sampler and a parent list across the cast; `Parameter ↔ Constant` carries nothing, because
+`ConstantNode` is `ParameterNode` plus exactly the `value` the cast adds or drops. The round trip is
+lossless in both directions with no state preserved.
+
+Nearly all of the machinery is the shared part of `observe`/`unobserve` already:
+
+- `observe`'s descendant walk folds every node that has just become concrete, and `unobserve`'s
+  `clear_cached_descendants` is its inverse. Both are what the new arms need, unchanged.
+- The client tier needs nothing: `ModelClientOps::observe` already carries
+  `T: QuantityType<B, K> + Packable<K::Elem, D>`, the same bound `add_constant` uses.
+- The guards to widen are three `Some(_) => Err(NotStochastic)` arms in `graph.rs`, and
+  `NotStochastic` becomes the wrong name for a method that now accepts two node kinds.
+
+What it buys is that **fixing a free variable becomes one operation instead of three consequences
+obtained separately.** Today a caller who wants a parameter held fixed omits it from the `free`
+layout — which works, but says nothing to the graph: the node stays differentiable, nothing
+downstream of it folds, and every pass still demands a value for it in the `ValueMap`. Worse,
+`TangentLayout::from_ids` will build a column for a `Constant` id without complaint, and the VJP
+returns that column as zeros — the *silently zero column* `skoro-model/src/jacobian.rs` names as
+the one failure mode no return value announces. A node-kind cast is checkable where a layout
+omission is not.
+
+Two decisions to make when it lands, neither obvious:
+
+- **`unobserve` on a graph-private constant must be refused.** A stacked-tangent anchor is a
+  `Constant` that `collectable` reclaims *because* it is a private constant; as a `Parameter` it
+  would become permanently uncollectable and would start demanding a `ValueMap` entry. Nothing else
+  in the design stops this.
+- **A batch-pinned constant pins the graph's batch and a parameter does not**, so `unobserve` on a
+  `Batched` constant silently un-pins the pass. Whether that is a feature or an error is a call to
+  make deliberately.
+
+Model-side, and **independent** — like GAP 4, it blocks nothing and nothing blocks it.
+
+**DEFECT — re-observing a quantity leaves stale folds downstream.** Not a missing capability: wrong
+values, silently, in shipped code.
+
+`Graph::observe` returns early when the node is *already* bound (`graph.rs`, the `already_observed`
+check), skipping the descendant fold walk. The comment justifying the skip reasons about
+**concreteness** — "nothing an `observe` does can make a concrete node non-concrete" — which is
+true and beside the point, because a fold caches a *value*, not just the fact of being concrete. So:
+
+```rust
+graph.observe(x, 1.0)?;   // folds c = f(1.0)
+graph.observe(x, 2.0)?;   // early return; c is untouched
+// evaluating c yields f(1.0)
+```
+
+Confirmed against `SumOperation` in `crates/skoro-graph/tests/graph_tests.rs`: the second observe
+reads back `[1.0]`. Note this is worse than the failure mode `clear_cached_descendants` was written
+for — that one gives right values and wrong derivatives; this one gives **wrong values**.
+
+The fix is one line — clear the descendants before the early return, or drop the early return — and
+it wants a regression test, because nothing in the suite re-observes anything today. Why it hides:
+the §2 loop conditions each new measurement node exactly once, so a sliding window never reaches it;
+a filter that reuses one measurement node across ticks reaches it immediately.
+
+It is also the sharpest available argument for §4.2 item 4. The bug exists only because a fold
+cache is state that has to be invalidated by hand at every site that can stale it, and the site that
+missed it had a plausible-sounding reason.
 
 ### 4.2 The structural work
 
-**4. Decouple compiled structure from the fold cache.** Move folded values off the nodes into
+Each item names the crate it lands in, because two of the four are **model-side** and the
+sequencing in §4.4 otherwise reads as a queue of estimator work.
+
+**4. Decouple compiled structure from the fold cache.** _Entirely `skoro-graph`._ Move folded
+values off the nodes into
 `Graph::folds`, drop `MappedNode::value` and `LogDensityNode::value`, and make
 `is_differentiable_parent` a function of node kind alone. The read sites are
 `compile_backward_from`, `check_cache`, `clear_cached_descendants`, the `observe` walk, and
@@ -512,7 +666,8 @@ confirm against the finite-difference suite, not to assert.
 
 Largest breaking change here; nothing after it is safe without it.
 
-**5. Cache the `CompiledSequence`** behind a topology `revision` counter. The justification is
+**5. Cache the `CompiledSequence`** behind a topology `revision` counter. _Entirely
+`skoro-graph`._ The justification is
 **enablement, not speed**: compilation is O(|graph|) bookkeeping against a pass doing
 O(`D_out` × |graph|) of tensor arithmetic, so expect a few percent. It must land because item 6 is
 impossible without it. `Graph` derives `Clone`, so a manual impl must drop the cache — a clone
@@ -522,7 +677,9 @@ The invalidation surface has one trap worth naming: `observe`/`unobserve` keep t
 _and_ the same parents, but flip the node between being a cotangent collection point and not. A
 stale sequence therefore yields **right values and wrong derivatives**.
 
-**6. Per-factor compiled subsequences, and block-sparse `J`.** Extend `FactorRecord` with the roots
+**6. Per-factor compiled subsequences, and block-sparse `J`.** _Straddles: `FactorRecord`'s
+captured roots are `skoro-model`, the subsequences are `skoro-graph`, the block assembly that
+consumes them is `skoro-levenberg-marquardt`._ Extend `FactorRecord` with the roots
 its residual depends on and a cached subsequence for that subgraph.
 
 This is the change that matters most, and it sidesteps the standing objection to storing adjacency.
@@ -537,7 +694,7 @@ host transfer becomes `n_factors` device reads instead of one — the exact trad
 was written to avoid. Measure before making block assembly the default, and keep the flat path
 behind the same `NlsStructure` seam.
 
-**7. `skoro-dense` zero-copy.** `to_faer` builds an owned `Mat` by a transposing scalar copy, and
+**7. `skoro-dense` zero-copy.** _Entirely `skoro-dense`._ `to_faer` builds an owned `Mat` by a transposing scalar copy, and
 every faer entry point then copies it again into its own storage (`ColPivQr::new` is `A.to_owned()`).
 Use `MatRef::from_row_major_slice` for the input matrix of all five entry points to delete one of
 the two copies. **Leave the rhs of `solve_lower`/`solve_upper` owned** — it is worked on in place,
@@ -560,11 +717,16 @@ already fixes; adjacency is needed only in the captured, per-factor form item 6 
 
 ```
 GAP 1  →  item 4  →  item 5  →  GAP 2  →  item 6
-              item 7 — any time, independent
+              item 7, GAP 4, GAP 5 — any time, independent
+
+              DEFECT (stale folds on re-observe) — ahead of all of it
 ```
 
 GAP 2 lands after the cache because a marginal likelihood is computed once per window and would
 otherwise recompile the entire model each time.
+
+The chain is not all estimator work, and reading it that way is the mistake §4.5 used to invite:
+**items 4 and 5 are `skoro-graph`**, and they sit between the two gaps that motivate them.
 
 How each is checked:
 
@@ -593,16 +755,39 @@ flattening for _vectors_, since `r` and `δ` are dense whether or not `J` is.
 
 The library serves **filtering** well today. It does not yet serve **smoothing**, and the reason is
 narrower than "it needs sparse linear algebra": it needs block-structured Jacobian assembly, which
-needs captured per-factor adjacency and cached compiled subsequences, which needed the graph's
-derived state to stop leaking. That last prerequisite is done. What remains is a chain of concrete
-changes, not an architectural rewrite.
+needs captured per-factor adjacency and cached compiled subsequences, which need the graph's
+derived state to stop leaking. Half of that last prerequisite is done — the *index* collections no
+longer drift, and `validate_indices` is what keeps them honest. The other half is not: the **fold
+cache** is still derived state that a structural property reads, which is item 4. What remains is a
+chain of concrete changes, not an architectural rewrite.
 
-The **model** side of a sliding window is now complete: a quantity can be demoted, a joint factor
+The **model-side API** for a sliding window is complete: a quantity can be demoted, a joint factor
 over its blanket attached, and the whole cone it replaced retired without leaking a node or a
-record. What is missing is entirely on the **estimator** side. Nothing marginalizes — the Schur
-complement and the capability that produces `Λ_survivor` are GAP 2 — and there is no `Estimator`
-trait to hang either on. A window can be built and torn down by hand today; nothing computes what
-goes in the factor.
+record — `crates/skoro-normal/tests/window.rs` runs exactly that loop, asserting the certificate,
+the row count of `J`, and the graph's size hold steady tick over tick.
+
+**That is a claim about the surface, not about the layer**, and the distinction is worth keeping
+because collapsing it is how a reader concludes the model side is finished. Three things remain,
+and only one of them is an estimator:
+
+- **The estimator does not exist.** Nothing marginalizes — the Schur complement and the capability
+  that produces `Λ_survivor` are GAP 2 — and there is no `Estimator` trait to hang either on
+  (GAP 1). A window can be built and torn down by hand today; nothing computes what goes in the
+  factor. Item 7 is estimator-side too, and independent of everything.
+- **The graph's internals are not done.** Items 4 and 5 are `skoro-graph` from end to end. Item 4
+  in particular is the one §4.2 calls the largest breaking change with nothing after it safe
+  without it: today `is_differentiable_parent` returns `value.is_none()`, so *which steps land on
+  the tape* is derived from the fold cache — an optimization determining a structural property.
+  That is model-layer work sitting in the middle of §4.4's chain, not after it.
+- **Two model-side capabilities are missing outright**: per-row conditioning (GAP 4) and fixing a
+  `Parameter` to a value (GAP 5). Both small, both blocked by nothing, and both are horizontal
+  moves in §1.4's grid that exist on one row and not the other.
+
+Item 6, the one that matters most, straddles: its captured per-factor roots are `skoro-model`, its
+block assembly is not.
+
+And one thing is not missing but **wrong**: re-observing a quantity leaves stale folded values
+downstream (§4.1). That outranks everything above it, and it is a `skoro-graph` defect.
 
 One structural question that looked like part of that chain turned out not to be. Expressing a
 joint over a Markov blanket read as needing a product manifold, and a product manifold would have

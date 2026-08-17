@@ -283,10 +283,9 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// so it sits with the other calls that shape the model rather than with the ones that only
     /// read it.
     ///
-    /// Nodes the graph built for itself and never handed out — the anchors of a stacked tangent
-    /// — are reclaimed alongside, once nothing points at them. A recording builder must also
-    /// drop the certificate entries whose nodes went; see
-    /// [`NlsModelClient::remove_closure`](crate::structure::NlsModelClient::remove_closure).
+    /// The server's certificate is pruned in the same call, and anything the removal orphaned
+    /// upstream — a retired factor's body, the anchors of a stacked tangent — unwinds in the
+    /// cleanup cascade before it returns.
     fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>>;
 }
 

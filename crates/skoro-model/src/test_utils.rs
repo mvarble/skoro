@@ -77,7 +77,7 @@ pub fn test_jvp_numerically<B, InQty, OutQty>(
     let x0 = point
         .remove(&inqty.id)
         .expect("test_jvp_numerically should have input quantity in value-map.")
-        .into_float();
+        .unwrap_float();
     for i in 0..indim {
         let vi = dx.clone().slice_dim(2, i).squeeze_dim(2);
         let xi = intype.retract(x0.clone(), vi.clone());
@@ -139,7 +139,7 @@ pub fn test_vjp_numerically<B, InQty, OutQty>(
     let x0 = point
         .remove(&inqty.id)
         .expect("test_vjp_numerically should have input quantity in value-map.")
-        .into_float();
+        .unwrap_float();
     for i in 0..indim {
         let vi = dx.clone().slice_dim(2, i).squeeze_dim(2);
         let xi = intype.retract(x0.clone(), vi.clone());
@@ -219,7 +219,7 @@ pub fn test_hvp_cross_numerically<B, SeedQty, ReadQty, OutQty>(
     let x0 = other_point
         .remove(&inqty.id)
         .expect("test_vjp_numerically should have input quantity in value-map.")
-        .into_float();
+        .unwrap_float();
     let v = identity_matrix(indim)
         .repeat_dim(0, batches)
         .mul_scalar(delta);

@@ -1,7 +1,7 @@
 use skoro_backend::{CotangentFrame, NdArrayBackend, Point, Tensor};
-use skoro_core::constant_value::QuantityValue;
 use skoro_core::id::Id;
 use skoro_core::kind::Continuous;
+use skoro_core::kind_erased_tensor::QuantityValue;
 use skoro_core::sampler::Sampler;
 use skoro_graph::{
     graph::Graph,
@@ -264,8 +264,12 @@ fn remove_closure_takes_a_diamond_subtree() {
 fn removing_one_child_leaves_a_shared_parent_intact() {
     let mut graph = Graph::<B>::new();
     let shared = graph.add_parameter(Real);
-    let first = graph.add_mapped(Real, DummyOperation, vec![shared]).unwrap();
-    let second = graph.add_mapped(Real, DummyOperation, vec![shared]).unwrap();
+    let first = graph
+        .add_mapped(Real, DummyOperation, vec![shared])
+        .unwrap();
+    let second = graph
+        .add_mapped(Real, DummyOperation, vec![shared])
+        .unwrap();
 
     graph.remove(&[first]).unwrap();
 
@@ -297,7 +301,7 @@ impl DiffOperation<B> for SumOperation {
     ) -> DiffOperationForward<B, (), ()> {
         let sum = inputs
             .into_iter()
-            .map(Input::into_float)
+            .map(Input::unwrap_float)
             .reduce(|a, b| a + b)
             .expect("at least one input");
         match diff_state {
@@ -336,23 +340,34 @@ fn observing_folds_a_descendant_whose_parents_differ_in_depth() {
     let middle = graph.add_mapped(Real, SumOperation, vec![stoch]).unwrap();
     let far = graph.add_mapped(Real, SumOperation, vec![middle]).unwrap();
     // Parents at depth 1 and depth 3.
-    let join = graph.add_mapped(Real, SumOperation, vec![near, far]).unwrap();
+    let join = graph
+        .add_mapped(Real, SumOperation, vec![near, far])
+        .unwrap();
 
     // Nothing is concrete while the root is still stochastic.
     for id in [near, middle, far, join] {
-        assert!(!folded(&graph, id), "{id:?} folded before the root was fixed");
+        assert!(
+            !folded(&graph, id),
+            "{id:?} folded before the root was fixed"
+        );
     }
 
     graph.observe::<_, Real, _>(stoch, &3.0).unwrap();
 
     for id in [near, middle, far, join] {
-        assert!(folded(&graph, id), "{id:?} did not fold after observing the root");
+        assert!(
+            folded(&graph, id),
+            "{id:?} did not fold after observing the root"
+        );
     }
 
     // And unobserving must clear all of them again.
     graph.unobserve(stoch).unwrap();
     for id in [near, middle, far, join] {
-        assert!(!folded(&graph, id), "{id:?} kept a stale fold after unobserve");
+        assert!(
+            !folded(&graph, id),
+            "{id:?} kept a stale fold after unobserve"
+        );
     }
 }
 
@@ -560,7 +575,7 @@ fn folded_rows(graph: &Graph<B>, id: skoro_core::id::Id, expect_pinned: Option<u
     match v {
         QuantityValue::Batched(input) => input
             .clone()
-            .into_float()
+            .unwrap_float()
             .into_data()
             .to_vec::<f32>()
             .unwrap(),

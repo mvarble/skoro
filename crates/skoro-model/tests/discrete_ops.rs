@@ -44,7 +44,7 @@ fn int_value(out: &PointMap<B>, id: &Id) -> i32 {
     let (input, _) = out.get(id).expect("discrete value should be present");
     input
         .clone()
-        .into_int()
+        .unwrap_int()
         .into_data()
         .to_vec::<i32>()
         .unwrap()[0]
@@ -129,8 +129,8 @@ impl DiffOperation<B> for Scale {
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let [x, n] = inputs.try_into().unwrap();
-        let x: Point<B> = x.into_float();
-        let factor: Point<B> = n.into_int().float();
+        let x: Point<B> = x.unwrap_float();
+        let factor: Point<B> = n.unwrap_int().float();
         let out = x.clone() * factor.clone();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(out),
@@ -191,7 +191,12 @@ fn mixed_kernel_gradient_flows_to_continuous_input_only() {
     // forward: 4 * 3 = 12
     let out = model.evaluate_ids(&points, &[y.id()]).unwrap();
     let (yv, _) = out.evaluations.get(&y.id()).unwrap();
-    let yv = yv.clone().into_float().into_data().to_vec::<f32>().unwrap();
+    let yv = yv
+        .clone()
+        .unwrap_float()
+        .into_data()
+        .to_vec::<f32>()
+        .unwrap();
     assert_eq!(yv, vec![12.0]);
 
     // gradient flows to the continuous input only: dy/dx = n = 3
@@ -257,7 +262,7 @@ fn discrete_distribution_samples_observes_and_scores() {
     // Sampling flows through the kinded sampler into the integer arm.
     let out = model.generate(2).unwrap();
     let (v, _) = out.variables.get(&z.id()).unwrap();
-    let data = v.clone().into_int().into_data().to_vec::<i32>().unwrap();
+    let data = v.clone().unwrap_int().into_data().to_vec::<i32>().unwrap();
     assert_eq!(data, vec![1, 1]);
 
     // Observation works through the unified `observe` (packed into int storage).

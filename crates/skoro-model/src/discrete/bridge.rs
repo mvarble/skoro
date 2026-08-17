@@ -39,7 +39,7 @@ impl<B: Backend> DiffOperation<B> for IntToReal {
         diff_state: DiffModeState<B>,
     ) -> DiffOperationForward<B, (), ()> {
         let [x] = inputs.try_into().unwrap();
-        let out: Point<B> = x.into_int().float();
+        let out: Point<B> = x.unwrap_int().float();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(out),
             // The single input is discrete (non-differentiable), so no tangents.
@@ -85,7 +85,7 @@ pub struct Threshold;
 impl<B: Backend> DiscreteOperation<B> for Threshold {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x] = inputs.try_into().unwrap();
-        x.into_float().greater_equal_elem(0.0).int()
+        x.unwrap_float().greater_equal_elem(0.0).int()
     }
 }
 

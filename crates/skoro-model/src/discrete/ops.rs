@@ -14,7 +14,7 @@ pub struct IntAdd;
 impl<B: Backend> DiscreteOperation<B> for IntAdd {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x, y] = inputs.try_into().unwrap();
-        x.into_int() + y.into_int()
+        x.unwrap_int() + y.unwrap_int()
     }
 }
 
@@ -25,7 +25,7 @@ pub struct IntSub;
 impl<B: Backend> DiscreteOperation<B> for IntSub {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x, y] = inputs.try_into().unwrap();
-        x.into_int() - y.into_int()
+        x.unwrap_int() - y.unwrap_int()
     }
 }
 
@@ -36,7 +36,7 @@ pub struct IntMul;
 impl<B: Backend> DiscreteOperation<B> for IntMul {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x, y] = inputs.try_into().unwrap();
-        x.into_int() * y.into_int()
+        x.unwrap_int() * y.unwrap_int()
     }
 }
 
@@ -58,8 +58,8 @@ pub struct IntCompare(pub Comparison);
 impl<B: Backend> DiscreteOperation<B> for IntCompare {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x, y] = inputs.try_into().unwrap();
-        let x = x.into_int();
-        let y = y.into_int();
+        let x = x.unwrap_int();
+        let y = y.unwrap_int();
         let mask = match self.0 {
             Comparison::Eq => x.equal(y),
             Comparison::Ne => x.equal(y).bool_not(),
@@ -86,8 +86,8 @@ pub struct BoolLogic(pub Logic);
 impl<B: Backend> DiscreteOperation<B> for BoolLogic {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x, y] = inputs.try_into().unwrap();
-        let x = x.into_int().bool();
-        let y = y.into_int().bool();
+        let x = x.unwrap_int().bool();
+        let y = y.unwrap_int().bool();
         let out = match self.0 {
             Logic::And => x.bool_and(y),
             Logic::Or => x.bool_or(y),
@@ -103,6 +103,6 @@ pub struct BoolNot;
 impl<B: Backend> DiscreteOperation<B> for BoolNot {
     fn forward(&self, inputs: Vec<Input<B>>) -> DiscretePoint<B> {
         let [x] = inputs.try_into().unwrap();
-        x.into_int().bool().bool_not().int()
+        x.unwrap_int().bool().bool_not().int()
     }
 }

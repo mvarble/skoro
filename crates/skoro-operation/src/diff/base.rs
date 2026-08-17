@@ -129,7 +129,7 @@ pub trait DiffOperation<B: Backend>: Debug + Clone + Send + Sync + 'static {
     ///
     /// Inputs are [`Input`] instances, so a continuous operation may read discrete (integer)
     /// inputs. Continuous operations that only consume continuous inputs typically convert up front
-    /// with [`Input::into_float`].
+    /// with [`Input::unwrap_float`].
     fn forward(
         &self,
         inputs: Vec<Input<B>>,

@@ -374,7 +374,7 @@ where
             .evaluations
             .get(&id)
             .expect("internal: every residual is an evaluation target of this pass");
-        values.insert(id, value.as_float().clone());
+        values.insert(id, value.unwrap_float_ref().clone());
     }
     residuals.flatten_vectors(&values, batch_of(points), &device_of(points))
 }

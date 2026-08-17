@@ -9,6 +9,7 @@
 //! `register_mapN` and the [`ops`] / [`discrete`] modules expose deterministic
 //! operations (with operator sugar) on quantities of either kind.
 
+mod cleanup;
 pub mod client_ops;
 pub mod discrete;
 pub mod distribution;

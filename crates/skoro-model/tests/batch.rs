@@ -170,7 +170,7 @@ fn retract_flat_rejects_a_delta_at_the_wrong_batch() {
     let stepped = points.retract_flat(&layout, delta).unwrap();
     let (value, _) = stepped.get(&x.id()).unwrap();
     assert_eq!(
-        into_vec(value.as_float().clone()),
+        into_vec(value.unwrap_float_ref().clone()),
         vec![1.5, 2.5, 4.0, 5.0, 7.0, 8.0]
     );
 }

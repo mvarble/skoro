@@ -216,7 +216,7 @@ where
     fn read_batched(&self, points: &PointMap<B>) -> Vec<(f64, f64)> {
         let get = |q: &Q<B, Real>| {
             let (value, _) = points.get(&q.id()).unwrap();
-            into_f64(value.as_float().clone())
+            into_f64(value.unwrap_float_ref().clone())
         };
         get(&self.slope)
             .into_iter()
@@ -227,7 +227,7 @@ where
     fn read(&self, points: &PointMap<B>) -> (f64, f64) {
         let get = |q: &Q<B, Real>| {
             let (value, _) = points.get(&q.id()).unwrap();
-            into_f64(value.as_float().clone())[0]
+            into_f64(value.unwrap_float_ref().clone())[0]
         };
         (get(&self.slope), get(&self.intercept))
     }
@@ -449,7 +449,7 @@ where
     let (expected_slope, expected_intercept) = analytic_fit_weighted(&[1.0; 4]);
     let get = |id| {
         let (value, _) = points.get(&id).unwrap();
-        into_f64(value.as_float().clone())[0]
+        into_f64(value.unwrap_float_ref().clone())[0]
     };
     approx::assert_abs_diff_eq!(get(fit.slope.id()), expected_slope, epsilon = epsilon);
     approx::assert_abs_diff_eq!(
@@ -510,7 +510,7 @@ where
 
     fn read(&self, points: &PointMap<B>) -> Vec<f64> {
         let (value, _) = points.get(&self.x.id()).unwrap();
-        into_f64(value.as_float().clone())
+        into_f64(value.unwrap_float_ref().clone())
     }
 }
 
@@ -881,7 +881,7 @@ where
         .iter()
         .flat_map(|id| {
             let (value, _) = evaluated.evaluations.get(id).unwrap();
-            into_f64(value.as_float().clone())
+            into_f64(value.unwrap_float_ref().clone())
         })
         .collect()
 }
