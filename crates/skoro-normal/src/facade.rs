@@ -193,9 +193,13 @@ impl<B: Backend> GaussianModelClient<B> {
     ///
     /// The teardown half of a sliding window, and the reason this facade can host one: retiring a
     /// state deletes the factors that scored it, and both caches here name those factors by id.
-    /// [`retire_recorded`] prunes the certificate; the [`GaussianBlock`] list is pruned beside it,
-    /// against the same liveness question, so the two cannot come to disagree about which factors
-    /// the model holds.
+    ///
+    /// **The certificate decides, and the blocks follow.** Asking the graph twice would make the
+    /// two lists agree only by coincidence: a [`GaussianBlock`] names two ids the certificate does
+    /// not — `mean` and `whitening` — so a rule of its own could keep a block whose `μ` has been
+    /// deleted, which is exactly what the EKF consumer this list exists for would read `H = ∂μ/∂x`
+    /// off. One surviving-factor question, asked once, and "the two cannot disagree" is true by
+    /// construction.
     ///
     /// Inherent rather than a [`ModelBuilderOps`](skoro_model::ModelBuilderOps) impl — this facade
     /// withholds that trait deliberately, exactly as it withholds `add_quantity`.
@@ -206,12 +210,9 @@ impl<B: Backend> GaussianModelClient<B> {
             &mut self.residuals,
             roots,
         )?;
-        let graph_has = |id: Id| {
-            self.client
-                .server_call(|server| server.graph().contains(id))
-        };
+        let certified: Vec<Id> = self.certificate.residual_ids().collect();
         self.blocks
-            .retain(|block| graph_has(block.density) && graph_has(block.residual));
+            .retain(|block| certified.contains(&block.residual));
         Ok(removed)
     }
 }

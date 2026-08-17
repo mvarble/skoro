@@ -66,6 +66,11 @@ pub struct Graph<B: Backend> {
     /// the fact is known for certain, rather than recovered later by a walk that would have to
     /// guess. That is the same distinction `docs/skoro.md` §4.2 draws for `FactorRecord`: a
     /// derived index needs invalidating across the whole mutation API, a captured one does not.
+    ///
+    /// It also clones cleanly, unlike the topology `revision` counter `docs/skoro.md` §4.2 item 5
+    /// warns must be dropped on clone. The difference is that a revision is only meaningful
+    /// against one mutation history, while a private node is private in every copy of the graph
+    /// that holds it — the ids come along with the nodes they name.
     private_nodes: HashSet<Id>,
     /// Generates unique IDs for nodes.
     id_generator: IdGenerator,
