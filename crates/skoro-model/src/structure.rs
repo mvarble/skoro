@@ -43,6 +43,19 @@
 //! What it admits is the one factor shape a [`Distribution`] cannot describe, a joint over several
 //! quantities that already exist, which has no single `Qty` and no sampler.
 //!
+//! ## Retiring a factor
+//!
+//! Evidence can leave a certificate as well as enter it, through
+//! [`ResidualCertificate::retain_live`]. This does not weaken anything, and the asymmetry is the
+//! reason: entry is bounded because a fabricated id must never get *in*, while pruning can only
+//! ever take ids *out*. A certificate that has been pruned is a subset of one that was honest,
+//! which is still honest.
+//!
+//! It is also not optional. A sliding window deletes factor nodes every tick, and a record naming
+//! a deleted node is worse than no record — [`NlsStructure::residual_layout`] would resolve it and
+//! fail. So the builders that own a certificate own its pruning too, in
+//! [`NlsModelClient::remove_closure`] and its Gaussian sibling.
+//!
 //! ## Naming
 //!
 //! An `…Ops` trait answers "can this client *add* X?" and returns whatever the action
@@ -218,6 +231,27 @@ impl ResidualCertificate {
         &self.factors
     }
 
+    /// Drop every record whose nodes are gone, keeping the rest in order.
+    ///
+    /// Retiring part of a model deletes factor nodes, and a record naming a deleted one is not
+    /// evidence of anything: [`residual_layout`](NlsStructure::residual_layout) would resolve it
+    /// through `TangentLayout::from_ids` and fail with `NodeNotFound` at the next solve. Pruning
+    /// is the only way an entry ever leaves a certificate, and it can only ever *shrink* one —
+    /// so the guarantee that no fabricated id can enter is untouched.
+    ///
+    /// **Order survives.** The rows of `J` are the factors in the order they were recorded, so
+    /// the survivors must keep their relative positions; a caller reading a residual block by
+    /// index would otherwise be reading a different factor's rows.
+    ///
+    /// A record is dropped when *either* of its nodes is gone. One whose density was removed but
+    /// whose residual survives is not a half-valid factor — it no longer contributes to the
+    /// log-density at all, and leaving it would put rows in `J` for a term the objective does
+    /// not contain.
+    pub fn retain_live(&mut self, alive: impl Fn(Id) -> bool) {
+        self.factors
+            .retain(|f| alive(f.density) && alive(f.residual));
+    }
+
     /// The residual nodes, in the order they were recorded — the rows of `J`.
     pub fn residual_ids(&self) -> impl Iterator<Item = Id> + '_ {
         self.factors.iter().map(|f| f.residual)
@@ -333,6 +367,48 @@ impl<B: Backend> NlsModelClient<B> {
         self.residuals.push(residual);
         Ok(density)
     }
+
+    /// Remove `roots` with everything downstream, and drop the evidence that went with them.
+    ///
+    /// See [`retire_recorded`], which is the whole body. Inherent rather than a
+    /// [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps) impl for the same reason
+    /// [`add_joint_factor`](Self::add_joint_factor) is: this builder withholds that trait, and
+    /// pruning needs `&mut self` besides.
+    pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        retire_recorded(
+            &self.client,
+            &mut self.certificate,
+            &mut self.residuals,
+            roots,
+        )
+    }
+}
+
+/// Remove a cone of the model and prune a builder's records to match.
+///
+/// Shared by [`NlsModelClient::remove_closure`] and `GaussianModelClient::remove_closure`. The
+/// two facades keep separate caches over one graph, and a retirement that pruned one but not the
+/// other would leave a certificate and a block list disagreeing about which factors exist — so
+/// the part they have in common is written once.
+///
+/// Liveness is asked of the **graph**, not read off the returned nodes: `remove_closure` also
+/// reclaims the graph's own private nodes, and a builder should judge its records against what
+/// actually survived rather than against the roots it named.
+pub fn retire_recorded<B: Backend>(
+    client: &ModelClient<B>,
+    certificate: &mut ResidualCertificate,
+    residuals: &mut Vec<Q<B, EuclideanD>>,
+    roots: &[Id],
+) -> SkoroResult<Vec<Node<B>>> {
+    let removed = client.remove_closure(roots)?;
+    certificate.retain_live(|id| client.server_call(|server| server.graph().contains(id)));
+    // The handles exist to keep *certified* residuals alive, so they follow the certificate
+    // rather than the graph: a residual whose factor is no longer certified should be collectable
+    // again, and one still certified must stay pinned. Dropping a handle queues its id for
+    // `cleanup()`, which is fine either way — `cleanup` skips ids that name nothing.
+    let certified: Vec<Id> = certificate.residual_ids().collect();
+    residuals.retain(|residual| certified.contains(&residual.id()));
+    Ok(removed)
 }
 
 impl<B: Backend> NlsStructure<B> for NlsModelClient<B> {

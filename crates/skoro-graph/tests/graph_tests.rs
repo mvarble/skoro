@@ -672,65 +672,88 @@ fn a_batched_constant_removes_like_any_constant() {
     graph.validate_indices().unwrap();
 }
 
-/// What `remove_closure` does and does not take when a joint residual is retired.
+/// Build the two-member stacked tangent every retirement test below starts from.
 ///
-/// `stacked_tangent` builds `2k + 1` nodes: an anchor and a tangent per member, plus the
-/// concatenation. All `2k` internals are *upstream* of the node it returns, and `remove_closure`
-/// walks downstream — so rooting it at that node takes one node and strands the rest. They carry
-/// no `Q` either, so `cleanup()` never queues them.
-///
-/// Rooting at the anchors does take everything, which is the teardown a sliding window wants.
-/// This pins both halves, because the first is the surprising one and the second is the workaround
-/// until the anchors are surfaced (`docs/skoro.md` GAP 3).
-#[test]
-fn retiring_a_stacked_tangent_needs_the_anchors_as_roots() {
+/// Returns the graph, the two scored parameters, the concatenation, and the node count from
+/// before the call — five nodes later: an anchor and a per-block tangent per member, plus the
+/// concatenation.
+fn stacked_tangent_fixture() -> (Graph<B>, Id, Id, Id, usize) {
     use skoro_core::kind::Continuous;
     use skoro_graph::{point_map::PointMap, quantity::QuantityType};
     use skoro_operation::Input;
 
-    let build = || {
-        let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
-        let mut at = PointMap::<B>::default();
-        for (id, v) in [(a, 1.0f32), (b, -2.0f32)] {
-            at.insert(
-                id,
-                Input::Float(Tensor::<B, 2>::from_floats([[v]], &Default::default())),
-                <Real as QuantityType<B, Continuous>>::into_dyn(Real),
-            );
-        }
-        let before = graph.node_count();
-        let joint = graph.stacked_tangent(&at, &[a, b]).unwrap();
-        // Two anchors, two per-block tangents, one concatenation.
-        assert_eq!(graph.node_count() - before, 5);
-        (graph, a, b, joint, before)
-    };
+    let mut graph = Graph::<B>::new();
+    let a = graph.add_parameter(Real);
+    let b = graph.add_parameter(Real);
+    let mut at = PointMap::<B>::default();
+    for (id, v) in [(a, 1.0f32), (b, -2.0f32)] {
+        at.insert(
+            id,
+            Input::Float(Tensor::<B, 2>::from_floats([[v]], &Default::default())),
+            <Real as QuantityType<B, Continuous>>::into_dyn(Real),
+        );
+    }
+    let before = graph.node_count();
+    let joint = graph.stacked_tangent(&at, &[a, b]).unwrap();
+    assert_eq!(graph.node_count() - before, 5);
+    (graph, a, b, joint, before)
+}
 
-    // Rooted at the returned node: one node, and four stranded.
-    let (mut graph, _a, _b, joint, before) = build();
-    let removed = graph.remove_closure(&[joint]).unwrap();
-    assert_eq!(
-        removed.len(),
-        1,
-        "the internals are upstream, not downstream"
-    );
-    assert_eq!(graph.node_count(), before + 4);
+/// Retiring a joint residual reclaims the `2k` nodes `stacked_tangent` built for itself.
+///
+/// Those nodes are unreachable by every other route. They sit *upstream* of the concatenation, so
+/// a downstream walk cannot find them, and no `Q` names them, so `cleanup()` never queues them.
+/// Without the private-node sweep a sliding window leaks `2k` nodes per tick — which is the shape
+/// `docs/skoro.md` GAP 3 had left open.
+///
+/// Rooted at a **scored quantity**, which is what a window actually retires. Note that the factor
+/// body is already downstream of it, so what the sweep adds is the surviving member's half.
+#[test]
+fn retiring_a_stacked_tangent_reclaims_its_private_nodes() {
+    let (mut graph, a, b, joint, before) = stacked_tangent_fixture();
+
+    let removed = graph.remove_closure(&[a]).unwrap();
+    // `a` itself, its per-block tangent, the concatenation — then both anchors and `b`'s
+    // per-block tangent, none of which any walk from `a` reaches.
+    assert_eq!(removed.len(), 6);
+    assert_eq!(graph.node_count(), before - 1);
+    assert!(graph.node(joint).is_none());
+    assert!(graph.node(b).is_some(), "the scored survivor is untouched");
     graph.validate_indices().unwrap();
+}
 
-    // Rooted at the anchors: the whole subgraph, and the scored quantities survive.
-    let (mut graph, a, b, _joint, before) = build();
-    let anchors: Vec<Id> = graph
-        .nodes()
-        .filter(|(_, node)| matches!(node, Node::Constant(_)))
-        .map(|(id, _)| *id)
-        .collect();
-    assert_eq!(anchors.len(), 2);
+/// The sweep runs to a fixpoint, not once.
+///
+/// An anchor is its per-block tangent's parent, so it is not childless until that tangent has
+/// gone — and the tangent is only reclaimed in the pass before. A single pass over the private set
+/// would strand one anchor, always or never depending on `HashSet` iteration order. This is the
+/// case that catches it: rooting at the concatenation makes *both* per-block tangents reclaimable
+/// in pass one and both anchors only in pass two.
+#[test]
+fn reclaiming_private_nodes_runs_to_a_fixpoint() {
+    let (mut graph, a, b, joint, before) = stacked_tangent_fixture();
 
-    let removed = graph.remove_closure(&anchors).unwrap();
-    assert_eq!(removed.len(), 5);
+    let removed = graph.remove_closure(&[joint]).unwrap();
+    assert_eq!(removed.len(), 5, "the concatenation and all four internals");
     assert_eq!(graph.node_count(), before);
-    assert!(graph.node(a).is_some(), "the scored quantities survive");
+    assert!(graph.node(a).is_some());
     assert!(graph.node(b).is_some());
+    graph.validate_indices().unwrap();
+}
+
+/// A private node is reclaimed when nothing points at it, and not before.
+///
+/// The concatenation is deliberately *not* private — it is what the caller is handed — so a
+/// removal elsewhere in the model must leave the whole subgraph standing. Without this the sweep
+/// would be free to eat a live factor the first time anything else was retired.
+#[test]
+fn an_unrelated_removal_reclaims_nothing() {
+    let (mut graph, _a, _b, joint, before) = stacked_tangent_fixture();
+    let spare = graph.add_parameter(Real);
+
+    let removed = graph.remove_closure(&[spare]).unwrap();
+    assert_eq!(removed.len(), 1);
+    assert_eq!(graph.node_count(), before + 5);
+    assert!(graph.node(joint).is_some());
     graph.validate_indices().unwrap();
 }

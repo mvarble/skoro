@@ -145,7 +145,7 @@ file. Four traits form a deliberate lattice:
 | Trait                                    | Adds                                                                                | Can grow the model? |
 | ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------- |
 | `ModelClientOps`                         | evaluate, JVP/VJP/HVP, `observe`, `demote_to_parameter`, `remove`, `tangent_layout` | **No**              |
-| `ModelBuilderOps: ModelClientOps`        | `add_quantity`, `update_quantity`, `mark_likelihood`                                | Yes                 |
+| `ModelBuilderOps: ModelClientOps`        | `add_quantity`, `update_quantity`, `mark_likelihood`, `remove_closure`              | Yes                 |
 | `NlsStructure: ModelClientOps`           | `certificate()`, `residual_layout()`                                                | No                  |
 | `GaussianModelClientOps: ModelClientOps` | `add_gaussian_quantity`                                                             | Yes                 |
 
@@ -153,11 +153,21 @@ The consequence: **an estimator bounded on `NlsStructure` can evaluate and diffe
 invalidate the evidence it was handed**, because `ModelClientOps` contains no way to add a factor
 (`skoro-model/src/structure.rs`). It needs no second client parameter and no runtime revalidation.
 
+Note which side of the line deletion falls on, since it is not obvious and the two calls read
+alike. `remove` is a client op because it **refuses** to break a reference: an estimator cannot use
+it to delete a factor another node still points into. `remove_closure` takes the referents too, and
+is therefore a builder op — deciding a cone of the model is finished is the same order of authority
+as adding one. A `trybuild` case pins it off the client tier. (`remove` is not airtight even so: a
+marked `ℓ` is childless, so it can be removed. The certificate then fails to resolve, which is loud
+rather than silent, but the table's claim is an approximation at that edge rather than a theorem.)
+
 That evidence is `ResidualCertificate`. It is unforgeable not because the type is sealed but
 because entries can only enter through `record`, which demands a `WhitenedResidual` bound — so a
 hand-built certificate is empty and there is no way to insert a fabricated id.
 `crates/skoro-model/tests/compile_fail/` pins this. The module comment states the condition under
-which every claim in it lapses: _if `record` ever grows an unbounded sibling_.
+which every claim in it lapses: _if `record` ever grows an unbounded sibling_. Entries may also
+**leave**, through `retain_live`, when the nodes they name are retired — which weakens nothing,
+because pruning can only ever shrink a certificate.
 
 ---
 
@@ -168,7 +178,7 @@ summarized and retired, and the window stays bounded.
 
 > **This snippet is verified by reading, not by compiling.** Every call is checked against
 > `crates/skoro-levenberg-marquardt/tests/common/mod.rs`, `crates/skoro-normal/tests/demote.rs` and
-> `crates/skoro/tests/stacked_tangent.rs`. Three calls, marked `GAP`, do not exist yet — they are
+> `crates/skoro/tests/stacked_tangent.rs`. Two calls, marked `GAP`, do not exist yet — they are
 > the subject of §4.
 
 ```rust
@@ -246,9 +256,11 @@ for z_obs in observations {
     let factor = JointNormal::new(blanket, points.clone(), whitening, normalizer);
     model.mark_likelihood(&factor.log_density(&model)?)?;
 
-    // 3. Retire the state and measurement the factor replaced, with everything below them.
+    // 3. Retire the state and measurement the factor replaced, with everything below them —
+    //    including the previous tick's joint factor, whose whole body is downstream of the
+    //    state it scored. A recording builder prunes its certificate in the same call.
     let stale = measurements.remove(0);
-    model.remove_closure(&[oldest.id(), stale.id()])?;                      // GAP 3
+    model.remove_closure(&[oldest.id(), stale.id()])?;
 }
 ```
 
@@ -462,9 +474,28 @@ split is forced — the estimator returns `Λ_survivor` and the block ordering i
 a builder attaches the factor. The `// GAP 2` line in §2 is written the other way round and is
 wrong on that point.
 
-**GAP 3 — `remove_closure` is not reachable from the client.** `Graph::remove_closure` exists;
-`ModelClientOps::remove` is still leaf-only and all-or-nothing. Expose the closure form through
-`ModelServer` and `ModelClientOps`. Small, and it unblocks the example's teardown.
+**GAP 3 — retiring a cone of the model — is done.** `remove_closure` is reachable through
+`ModelBuilderOps`, and inherently on the two recording facades. Three things came with it that the
+one-paragraph version of this gap did not anticipate, and each is a silent failure on its own:
+
+- **It is a builder capability, not a client one.** The gap was written as "expose it through
+  `ModelClientOps`", which is the wrong tier. `remove` is safe there precisely because it *refuses*
+  to break a reference, so an `NlsStructure`-bounded estimator cannot delete a factor out from
+  under the certificate it was handed; `remove_closure` deliberately takes the referents too. A
+  `trybuild` case pins it off the client tier. (A pre-existing soft spot in §1.7's claim, found
+  while checking this: `remove` does admit deleting a marked `ℓ`, which is childless. Loud rather
+  than silent — the certificate then fails to resolve — and not made worse here.)
+- **A certificate has to be pruned.** Retiring a state deletes the factors that scored it, and a
+  `FactorRecord` naming a deleted node fails `residual_layout` at the *next* solve rather than at
+  the removal that caused it. `ResidualCertificate::retain_live` is how a record leaves, and it
+  weakens nothing: entry is bounded because a fabricated id must never get *in*, while pruning can
+  only take ids *out*.
+- **A stacked tangent's anchors are unreachable by a downstream walk.** They sit upstream of
+  everything the factor built and carry no `Q`, so `cleanup()` would never queue them either —
+  `2k` stranded nodes per tick of a window. `Graph` records them as `private_nodes` when
+  `stacked_tangent` creates them and reclaims each once nothing points at it. Captured, not
+  derived, for the same reason `FactorRecord` is (§4.2): the fact is known at creation and would
+  have to be guessed afterwards.
 
 ### 4.2 The structural work
 
@@ -528,8 +559,8 @@ already fixes; adjacency is needed only in the captured, per-factor form item 6 
 ### 4.4 Sequencing and verification
 
 ```
-GAP 3  →  GAP 1  →  item 4  →  item 5  →  GAP 2  →  item 6
-                                  item 7 — any time, independent
+GAP 1  →  item 4  →  item 5  →  GAP 2  →  item 6
+              item 7 — any time, independent
 ```
 
 GAP 2 lands after the cache because a marginal likelihood is computed once per window and would
@@ -565,6 +596,13 @@ narrower than "it needs sparse linear algebra": it needs block-structured Jacobi
 needs captured per-factor adjacency and cached compiled subsequences, which needed the graph's
 derived state to stop leaking. That last prerequisite is done. What remains is a chain of concrete
 changes, not an architectural rewrite.
+
+The **model** side of a sliding window is now complete: a quantity can be demoted, a joint factor
+over its blanket attached, and the whole cone it replaced retired without leaking a node or a
+record. What is missing is entirely on the **estimator** side. Nothing marginalizes — the Schur
+complement and the capability that produces `Λ_survivor` are GAP 2 — and there is no `Estimator`
+trait to hang either on. A window can be built and torn down by hand today; nothing computes what
+goes in the factor.
 
 One structural question that looked like part of that chain turned out not to be. Expressing a
 joint over a Markov blanket read as needing a product manifold, and a product manifold would have

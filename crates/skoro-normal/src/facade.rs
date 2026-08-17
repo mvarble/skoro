@@ -48,6 +48,7 @@ use skoro_model::{
     ModelClientOps, NlsStructure, ResidualCertificate, TangentLayout, WhitenedResidual,
     model::{ModelClient, ModelServer},
     q::Q,
+    structure::retire_recorded,
 };
 use skoro_operation::ValueMap;
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
@@ -186,6 +187,32 @@ impl<B: Backend> GaussianModelClient<B> {
     /// afterwards.
     pub fn into_client(self) -> ModelClient<B> {
         self.client
+    }
+
+    /// Remove `roots` with everything downstream, and drop the records that went with them.
+    ///
+    /// The teardown half of a sliding window, and the reason this facade can host one: retiring a
+    /// state deletes the factors that scored it, and both caches here name those factors by id.
+    /// [`retire_recorded`] prunes the certificate; the [`GaussianBlock`] list is pruned beside it,
+    /// against the same liveness question, so the two cannot come to disagree about which factors
+    /// the model holds.
+    ///
+    /// Inherent rather than a [`ModelBuilderOps`](skoro_model::ModelBuilderOps) impl — this facade
+    /// withholds that trait deliberately, exactly as it withholds `add_quantity`.
+    pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        let removed = retire_recorded(
+            &self.client,
+            &mut self.certificate,
+            &mut self.residuals,
+            roots,
+        )?;
+        let graph_has = |id: Id| {
+            self.client
+                .server_call(|server| server.graph().contains(id))
+        };
+        self.blocks
+            .retain(|block| graph_has(block.density) && graph_has(block.residual));
+        Ok(removed)
     }
 }
 

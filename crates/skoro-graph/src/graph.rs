@@ -55,6 +55,18 @@ pub struct Graph<B: Backend> {
     /// Reverse index over [`LogDensityNode::stochastic_id`]: the density scoring a given
     /// stochastic quantity. Derived — see the type-level note above.
     stochastic_to_log_density: HashMap<Id, Id>,
+    /// Nodes this graph built for itself and never handed out.
+    ///
+    /// [`stacked_tangent`](Self::stacked_tangent) is the only writer: its anchors and per-block
+    /// tangents are created inside the graph, so no `Q` will ever name one and nothing outside
+    /// can be holding one. That makes them reclaimable the moment nothing points at them —
+    /// which ordinary nodes are not, since a caller may still hold a childless leaf.
+    ///
+    /// **Captured, not derived.** The set is written at the moment the nodes are created, when
+    /// the fact is known for certain, rather than recovered later by a walk that would have to
+    /// guess. That is the same distinction `docs/skoro.md` §4.2 draws for `FactorRecord`: a
+    /// derived index needs invalidating across the whole mutation API, a captured one does not.
+    private_nodes: HashSet<Id>,
     /// Generates unique IDs for nodes.
     id_generator: IdGenerator,
 }
@@ -118,6 +130,7 @@ impl<B: Backend> Graph<B> {
             log_likelihoods: Vec::new(),
             id_generator: IdGenerator::new(),
             stochastic_to_log_density: HashMap::new(),
+            private_nodes: HashSet::new(),
         }
     }
 
@@ -204,6 +217,13 @@ impl<B: Backend> Graph<B> {
     ///
     /// Returns the removed nodes. The closure includes `roots`; ids not in the arena are
     /// skipped rather than reported, so removing an already-removed subtree is a no-op.
+    ///
+    /// Afterwards, any [`private_nodes`](Self::private_nodes) entry left pointing at nothing is
+    /// reclaimed too, and appears in the returned vector. Those are nodes the graph built for
+    /// itself, upstream of what it handed out — the anchors of a
+    /// [`stacked_tangent`](Self::stacked_tangent). A downstream walk cannot reach them and no
+    /// `Q` names them, so without this they would be stranded for the life of the model, which
+    /// is a leak that grows once per tick of a sliding window.
     pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         let mut closure = HashSet::new();
         let mut queue: VecDeque<Id> = roots
@@ -228,7 +248,35 @@ impl<B: Backend> Graph<B> {
             .filter(|id| closure.contains(id))
             .rev()
             .collect();
-        self.remove(&ordered)
+        let mut removed = self.remove(&ordered)?;
+        removed.extend(self.reclaim_private_nodes()?);
+        Ok(removed)
+    }
+
+    /// Remove every private node nothing points at, to fixpoint.
+    ///
+    /// **The fixpoint is load-bearing, not defensive.** A private anchor is the parent of a
+    /// private per-block tangent, so it is not childless until that tangent has gone. One pass
+    /// over a `HashSet` would reclaim the anchor never, sometimes, or always depending on
+    /// iteration order — the same intermittent shape as the dependency-order requirement on
+    /// `check_cache`, and just as invisible in a single-member test.
+    fn reclaim_private_nodes(&mut self) -> SkoroResult<Vec<Node<B>>> {
+        let mut removed = Vec::new();
+        loop {
+            let orphans: Vec<Id> = self
+                .private_nodes
+                .iter()
+                .copied()
+                .filter(|id| {
+                    self.nodes.contains_key(id)
+                        && self.children.get(id).is_none_or(|kids| kids.is_empty())
+                })
+                .collect();
+            if orphans.is_empty() {
+                return Ok(removed);
+            }
+            removed.extend(self.remove(&orphans)?);
+        }
     }
 
     /// Recompute every derived collection from `nodes` and report the first disagreement.
@@ -246,7 +294,11 @@ impl<B: Backend> Graph<B> {
     /// - `stochastic_to_log_density` is the exact inverse of the density nodes'
     ///   [`stochastic_id`](LogDensityNode::stochastic_id);
     /// - a density that scores a quantity is among the likelihood terms. The converse does not
-    ///   hold: a free-standing likelihood factor scores no particular quantity.
+    ///   hold: a free-standing likelihood factor scores no particular quantity;
+    /// - every id in `private_nodes` still names a node. That set is *captured* rather than
+    ///   derived, so nothing recomputes it — but a stale id in it would make
+    ///   `reclaim_private_nodes` reach for a node that is gone, and, worse, would claim a
+    ///   reissued id as the graph's to delete.
     ///
     /// Runs after every mutation in debug builds, and is public so a test can assert it
     /// directly after a sequence the mutators do not cover.
@@ -326,6 +378,12 @@ impl<B: Backend> Graph<B> {
                 return Err(format!(
                     "{id:?} scores {stochastic:?} but is not among the likelihood terms"
                 ));
+            }
+        }
+
+        for id in &self.private_nodes {
+            if !self.nodes.contains_key(id) {
+                return Err(format!("private_nodes names {id:?}, which is not a node"));
             }
         }
 
@@ -546,15 +604,14 @@ impl<B: Backend> Graph<B> {
     /// Widths are *manifold dimensions*: an `SE3` member contributes 6, not 12. The block order is
     /// the caller's, and is the order any matrix expressed in these coordinates must agree with.
     ///
-    /// **Retiring one of these is not yet a one-liner.** The anchors and the per-block tangents
-    /// sit *upstream* of the returned node, and [`remove_closure`](Self::remove_closure) walks
-    /// downstream — so rooting it at the returned id takes that node alone and leaves the other
-    /// `2k` behind. They also carry no [`Q`](skoro_model), so `cleanup()` never queues them, and
-    /// nothing else will collect them either.
-    ///
-    /// Rooting `remove_closure` at the **anchors** does take the whole subgraph, since every other
-    /// node it built is downstream of one. Their ids are not returned today, which is the concrete
-    /// shape of the teardown gap `docs/skoro.md` calls GAP 3.
+    /// **Retiring one of these is a `remove_closure` at a scored quantity.** The `2k` internals
+    /// are not reachable by a downstream walk — the anchors are upstream of everything, and a
+    /// surviving member's per-block tangent is upstream of the concatenation — and no
+    /// [`Q`](skoro_model) names them, so `cleanup()` would never queue them either. They are
+    /// recorded in `private_nodes` instead, and
+    /// [`remove_closure`](Self::remove_closure) reclaims each one as soon as nothing points at
+    /// it. Only the concatenation is handed back, and it is deliberately *not* private: it is
+    /// the node the caller holds.
     pub fn stacked_tangent(&mut self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Id> {
         if ids.is_empty() {
             return Err(SkoroError::ShapeMismatch {
@@ -573,6 +630,10 @@ impl<B: Backend> Graph<B> {
             // the residual is the displacement *from* the linearization point.
             let block =
                 self.add_mapped_dyn(EuclideanD(dimension).into_dyn(), op, vec![anchor, id])?;
+            // Neither is ever handed out, so both are the graph's to reclaim. The
+            // concatenation below is the caller's and stays out of the set.
+            self.private_nodes.insert(anchor);
+            self.private_nodes.insert(block);
             widths.push(dimension);
             blocks.push(block);
         }
@@ -1097,6 +1158,7 @@ impl<B: Backend> Graph<B> {
             let Some(node) = self.nodes.remove(id) else {
                 return Err(SkoroError::NodeNotFound { id: *id });
             };
+            self.private_nodes.remove(id);
             let parent_ids = node.parent_ids().to_vec();
             self.unregister_children(*id, &parent_ids);
             if let Node::LogDensity(LogDensityNode { stochastic_id, .. }) = &node {

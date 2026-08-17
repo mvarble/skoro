@@ -267,6 +267,27 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
 
     /// Attach a free-standing likelihood factor to a real-valued quantity.
     fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()>;
+
+    /// Remove `roots` together with everything downstream of them.
+    ///
+    /// The teardown half of a sliding window. [`ModelClientOps::remove`] is leaf-only and
+    /// all-or-nothing: it rejects a batch any survivor still points into, so retiring a state
+    /// means computing the downward closure by hand at every call site. This is that walk.
+    ///
+    /// **Why this is a builder capability and `remove` is not.** `remove` refuses to break a
+    /// reference, so an algorithm holding it cannot silently delete a factor it was handed —
+    /// which is what makes it safe at the [`ModelClientOps`] tier that
+    /// [`NlsStructure`](crate::structure::NlsStructure) sits on. This one deliberately does the
+    /// opposite: it takes the referents too, and cannot fail on a live child. Deciding that a
+    /// whole cone of the model is finished is the same order of authority as adding a factor,
+    /// so it sits with the other calls that shape the model rather than with the ones that only
+    /// read it.
+    ///
+    /// Nodes the graph built for itself and never handed out — the anchors of a stacked tangent
+    /// — are reclaimed alongside, once nothing points at them. A recording builder must also
+    /// drop the certificate entries whose nodes went; see
+    /// [`NlsModelClient::remove_closure`](crate::structure::NlsModelClient::remove_closure).
+    fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>>;
 }
 
 impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
@@ -524,5 +545,10 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         ModelClient::mark_likelihood(self, likelihood)
+    }
+
+    #[inline(always)]
+    fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        ModelClient::remove_closure(self, roots)
     }
 }

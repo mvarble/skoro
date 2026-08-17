@@ -224,11 +224,27 @@ impl<B: Backend> ModelServer<B> {
         self.graph.remove(ids)
     }
 
+    /// Remove `roots` together with everything downstream of them.
+    ///
+    /// See [`Graph::remove_closure`](skoro_graph::graph::Graph::remove_closure). Unlike
+    /// [`remove`](Self::remove) this cannot fail on a still-referenced node, because it takes
+    /// the referents too — which is why it is reachable from
+    /// [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps) and not from the client tier.
+    pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        self.graph.remove_closure(roots)
+    }
+
     /// Remove all non-likelihood mapped quantities which have no more references.
     pub fn cleanup(&mut self) {
+        // A queued id may already be gone: `remove_closure` takes nodes the caller does not
+        // hold a `Q` for alongside ones it does, and dropping that `Q` afterwards queues an id
+        // that names nothing. Collecting an already-collected node is the one thing a garbage
+        // collector must treat as ordinary, so it is filtered here rather than reported.
         let mut ids = Vec::with_capacity(self.cleanup_queue.len());
         while let Some(id) = self.cleanup_queue.pop() {
-            ids.push(id);
+            if self.graph.contains(id) {
+                ids.push(id);
+            }
         }
         if !ids.is_empty() {
             // Cleanup only removes leaf mapped nodes the model itself queued; a
@@ -726,6 +742,13 @@ impl<B: Backend> ModelClient<B> {
     /// Removes quantities, verifying they have no children which would be kept in the graph.
     pub fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         self.server.write().unwrap().remove(ids)
+    }
+
+    /// Remove `roots` together with everything downstream of them.
+    ///
+    /// See [`ModelServer::remove_closure`].
+    pub fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        self.server.write().unwrap().remove_closure(roots)
     }
 
     /// Remove all non-likelihood mapped quantities which have no more references.

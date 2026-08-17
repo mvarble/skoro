@@ -12,7 +12,11 @@
 //! - `record` **cannot be reached** without the bound — checked by `trybuild`, because a
 //!   test that compiles cannot assert that something else does not.
 //!
-//! **This is the gate on the whole design.** Do *not* replace the compile-fail case with a
+//! A third case lives in the same directory and guards the same evidence from the other side:
+//! `remove_closure` must stay off `ModelClientOps`, or an estimator could delete the nodes a
+//! certificate names instead of adding to it.
+//!
+//! **This is the gate on the whole design.** Do *not* replace the compile-fail cases with a
 //! prose comment: if `record` ever grows an unbounded sibling, this is the only thing that
 //! will notice.
 
@@ -29,11 +33,15 @@ fn a_certificate_built_by_hand_is_empty() {
     assert_eq!(certificate, ResidualCertificate::default());
 }
 
-/// `record` is the only way in, and it will not compile without a `WhitenedResidual`.
+/// Every negative claim in the design, as a case that must fail to compile.
 ///
-/// The `.stderr` fixture is regenerated with `TRYBUILD=overwrite cargo test -p skoro-model
-/// --test certificate`. It is expected to need updating when the compiler's wording
-/// changes; what must not change is that the case fails to compile at all.
+/// Two families live here. The `record*` cases pin that a certificate cannot be populated
+/// without the bound. The `remove_closure` case pins the other side of the same guarantee —
+/// that an `NlsStructure` consumer cannot *un*-populate one by deleting the nodes it names.
+///
+/// The `.stderr` fixtures are regenerated with `TRYBUILD=overwrite cargo test -p skoro-model
+/// --test certificate`. They are expected to need updating when the compiler's wording
+/// changes; what must not change is that the cases fail to compile at all.
 #[test]
 fn record_cannot_be_reached_without_a_whitened_residual() {
     trybuild::TestCases::new().compile_fail("tests/compile_fail/*.rs");

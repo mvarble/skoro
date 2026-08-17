@@ -329,3 +329,73 @@ fn cleanup_does_not_collect_the_recorded_residuals() {
         assert!(evaluated.evaluations.get(&id).is_some());
     }
 }
+
+/// Retiring the middle factor of three leaves the outer two, in their original order.
+///
+/// Order is load-bearing twice over: `residual_layout` is *the* row order of `J`, and the
+/// `GaussianBlock` list is read positionally beside it. So it is not enough that the count drops —
+/// a prune that reordered the survivors would hand an optimizer one factor's rows labelled with
+/// another's, which no shape check downstream would reject.
+///
+/// The two caches are pruned against the same liveness question for the same reason: two lists
+/// over one graph that disagreed about which factors exist would be worse than either alone.
+#[test]
+fn retiring_a_factor_prunes_both_caches_and_keeps_the_order() {
+    let mut model = GaussianModelClient::<B>::default();
+
+    let mut add = |dims: &[f64]| {
+        let mean = model.add_constant(
+            EuclideanD(dims.len()),
+            &VectorD::new(&vec![0.0; dims.len()]),
+        );
+        let cov = constant_covariance_diagonal(&model, dims);
+        model.add_gaussian_quantity(&mean, &cov).unwrap()
+    };
+    let a = add(&[1.0, 2.0]);
+    let b = add(&[1.0, 2.0, 3.0]);
+    let c = add(&[0.5]);
+
+    let before: Vec<_> = NlsStructure::certificate(&model).factors().to_vec();
+    assert_eq!(before.len(), 3);
+    assert_eq!(NlsStructure::residual_layout(&model).unwrap().total(), 6);
+
+    model.remove_closure(&[b.id()]).unwrap();
+    model.cleanup();
+
+    let after = NlsStructure::certificate(&model).factors();
+    assert_eq!(
+        after,
+        [before[0].clone(), before[2].clone()],
+        "the survivors keep their identity and their order"
+    );
+    assert_eq!(
+        GaussianStructure::blocks(&model)
+            .iter()
+            .map(|block| block.residual)
+            .collect::<Vec<_>>(),
+        vec![before[0].residual, before[2].residual],
+        "the block list is pruned in step with the certificate"
+    );
+
+    // The rows of `J` are now `a` then `c`: 2 then 1, and never 2 then 3.
+    let layout = NlsStructure::residual_layout(&model).unwrap();
+    assert_eq!(
+        layout
+            .blocks()
+            .iter()
+            .map(|block| block.dimension)
+            .collect::<Vec<_>>(),
+        vec![2, 1]
+    );
+
+    // And the model still evaluates over what is left.
+    let values = points()
+        .with_quantity(&a, point(&[0.5, -1.25]))
+        .with_quantity(&c, point(&[2.25]))
+        .build();
+    let ids: Vec<Id> = NlsStructure::certificate(&model).residual_ids().collect();
+    let evaluated = model.evaluate_ids(&values, &ids).unwrap();
+    for id in ids {
+        assert!(evaluated.evaluations.get(&id).is_some());
+    }
+}
