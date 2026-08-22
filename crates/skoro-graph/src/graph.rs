@@ -6,10 +6,10 @@ use skoro_backend::{
     Backend, CotangentFrame, CotangentVector, Point, TangentFrame, TangentVector, Tensor,
 };
 use skoro_core::{
+    any_tensor::QuantityValue,
     error::{SkoroError, SkoroResult},
     id::{Id, IdGenerator},
     kind::{Kind, QuantityKind},
-    kind_erased_tensor::QuantityValue,
     pack::Packable,
     sampler::Sampler,
 };

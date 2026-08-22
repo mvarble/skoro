@@ -11,7 +11,7 @@ use skoro_backend::{
     Backend, DiscretePoint, Element, Point, UnbatchedDiscretePoint, UnbatchedPoint,
 };
 
-use crate::kind_erased_tensor::KindErasedTensor;
+use crate::any_tensor::AnyTensor;
 
 /// Runtime discriminator for the two quantity kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,19 +39,19 @@ pub trait Kind<B: Backend>: 'static + Send + Sync + std::fmt::Debug + private::S
     /// The batched (rank-2) point type of this kind.
     type Point: Clone;
 
-    /// Wrap a kinded unbatched point into the erased [`KindErasedTensor`] operand.
-    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> KindErasedTensor<B, 1>;
+    /// Wrap a kinded unbatched point into the erased [`AnyTensor`] operand.
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> AnyTensor<B, 1>;
 
-    /// Wrap a kinded point into the erased [`KindErasedTensor`] operand.
-    fn wrap_point(point: Self::Point) -> KindErasedTensor<B, 2>;
+    /// Wrap a kinded point into the erased [`AnyTensor`] operand.
+    fn wrap_point(point: Self::Point) -> AnyTensor<B, 2>;
 
-    /// Borrow the kinded point inside an erased [`KindErasedTensor`], if the kind
+    /// Borrow the kinded point inside an erased [`AnyTensor`], if the kind
     /// matches.
-    fn as_point_ref(input: &KindErasedTensor<B, 2>) -> Option<&Self::Point>;
+    fn as_point_ref(input: &AnyTensor<B, 2>) -> Option<&Self::Point>;
 
-    /// Unwrap kinded point inside an erased [`KindErasedTensor`], if the kind
+    /// Unwrap kinded point inside an erased [`AnyTensor`], if the kind
     /// matches.
-    fn unwrap_point(input: KindErasedTensor<B, 2>) -> Option<Self::Point>;
+    fn unwrap_point(input: AnyTensor<B, 2>) -> Option<Self::Point>;
 
     /// Extract the row-major elements of a kinded point.
     fn to_elements(point: &Self::Point) -> Vec<Self::Elem>;
@@ -75,27 +75,27 @@ impl<B: Backend> Kind<B> for Continuous {
     type Point = Point<B>;
 
     #[inline(always)]
-    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> KindErasedTensor<B, 1> {
-        KindErasedTensor::Float(point)
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> AnyTensor<B, 1> {
+        AnyTensor::Float(point)
     }
 
     #[inline(always)]
-    fn wrap_point(point: Self::Point) -> KindErasedTensor<B, 2> {
-        KindErasedTensor::Float(point)
+    fn wrap_point(point: Self::Point) -> AnyTensor<B, 2> {
+        AnyTensor::Float(point)
     }
 
     #[inline(always)]
-    fn as_point_ref(input: &KindErasedTensor<B, 2>) -> Option<&Self::Point> {
+    fn as_point_ref(input: &AnyTensor<B, 2>) -> Option<&Self::Point> {
         match input {
-            KindErasedTensor::Float(t) => Some(t),
+            AnyTensor::Float(t) => Some(t),
             _ => None,
         }
     }
 
     #[inline(always)]
-    fn unwrap_point(input: KindErasedTensor<B, 2>) -> Option<Self::Point> {
+    fn unwrap_point(input: AnyTensor<B, 2>) -> Option<Self::Point> {
         match input {
-            KindErasedTensor::Float(t) => Some(t),
+            AnyTensor::Float(t) => Some(t),
             _ => None,
         }
     }
@@ -116,27 +116,27 @@ impl<B: Backend> Kind<B> for Discrete {
     type Point = DiscretePoint<B>;
 
     #[inline(always)]
-    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> KindErasedTensor<B, 1> {
-        KindErasedTensor::Int(point)
+    fn wrap_unbatched_point(point: Self::UnbatchedPoint) -> AnyTensor<B, 1> {
+        AnyTensor::Int(point)
     }
 
     #[inline(always)]
-    fn wrap_point(point: Self::Point) -> KindErasedTensor<B, 2> {
-        KindErasedTensor::Int(point)
+    fn wrap_point(point: Self::Point) -> AnyTensor<B, 2> {
+        AnyTensor::Int(point)
     }
 
     #[inline(always)]
-    fn unwrap_point(input: KindErasedTensor<B, 2>) -> Option<Self::Point> {
+    fn unwrap_point(input: AnyTensor<B, 2>) -> Option<Self::Point> {
         match input {
-            KindErasedTensor::Int(t) => Some(t),
+            AnyTensor::Int(t) => Some(t),
             _ => None,
         }
     }
 
     #[inline(always)]
-    fn as_point_ref(input: &KindErasedTensor<B, 2>) -> Option<&Self::Point> {
+    fn as_point_ref(input: &AnyTensor<B, 2>) -> Option<&Self::Point> {
         match input {
-            KindErasedTensor::Int(t) => Some(t),
+            AnyTensor::Int(t) => Some(t),
             _ => None,
         }
     }

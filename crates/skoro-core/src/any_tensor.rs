@@ -10,14 +10,14 @@ use crate::id::Id;
 /// A backend tensor enumeration that stores continuous and discrete variants, so that they are
 /// opaque to the compiler and can be determined at runtime.
 #[derive(Debug, Clone)]
-pub enum KindErasedTensor<B: Backend, const D: usize> {
+pub enum AnyTensor<B: Backend, const D: usize> {
     /// A continuous kind `Tensor<B, D>`
     Float(Tensor<B, D>),
     /// A discrete kind `Tensor<B, 2, Int>`
     Int(Tensor<B, D, Int>),
 }
 
-impl<B: Backend, const D: usize> KindErasedTensor<B, D> {
+impl<B: Backend, const D: usize> AnyTensor<B, D> {
     /// Construct a continuous input.
     #[inline(always)]
     pub fn float(point: Tensor<B, D>) -> Self {
@@ -118,7 +118,7 @@ impl<B: Backend, const D: usize> KindErasedTensor<B, D> {
     }
 }
 
-impl<B: Backend> KindErasedTensor<B, 2> {
+impl<B: Backend> AnyTensor<B, 2> {
     /// This value, if its batch axis matches `batch_size`.
     ///
     /// The single batch check in the workspace. Everything that is *checked* rather than
@@ -138,47 +138,45 @@ impl<B: Backend> KindErasedTensor<B, 2> {
         }
     }
 
-    /// Reduce a batched (rank-2) [`KindErasedTensor`] to a rank-1 one (i.e. squeeze).
+    /// Reduce a batched (rank-2) [`AnyTensor`] to a rank-1 one (i.e. squeeze).
     ///
     /// This assumes there is one batch.
-    pub fn unbatch(&self) -> KindErasedTensor<B, 1> {
+    pub fn unbatch(&self) -> AnyTensor<B, 1> {
         match self {
-            Self::Float(t) => KindErasedTensor::Float(t.clone().squeeze_dim::<1>(0)),
-            Self::Int(t) => KindErasedTensor::Int(t.clone().squeeze_dim::<1>(0)),
+            Self::Float(t) => AnyTensor::Float(t.clone().squeeze_dim::<1>(0)),
+            Self::Int(t) => AnyTensor::Int(t.clone().squeeze_dim::<1>(0)),
         }
     }
 }
 
-impl<B: Backend> KindErasedTensor<B, 1> {
-    /// Batch this stored (rank-1) [`KindErasedTensor`] into a rank-2 one.
-    pub fn expand(&self, batch_size: usize) -> KindErasedTensor<B, 2> {
+impl<B: Backend> AnyTensor<B, 1> {
+    /// Batch this stored (rank-1) [`AnyTensor`] into a rank-2 one.
+    pub fn expand(&self, batch_size: usize) -> AnyTensor<B, 2> {
         match self {
             Self::Float(t) => {
-                KindErasedTensor::Float(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size))
+                AnyTensor::Float(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size))
             }
-            Self::Int(t) => {
-                KindErasedTensor::Int(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size))
-            }
+            Self::Int(t) => AnyTensor::Int(t.clone().unsqueeze_dim(0).repeat_dim(0, batch_size)),
         }
     }
 }
 
-impl<B: Backend, const D: usize> From<Tensor<B, D>> for KindErasedTensor<B, D> {
+impl<B: Backend, const D: usize> From<Tensor<B, D>> for AnyTensor<B, D> {
     #[inline(always)]
     fn from(point: Tensor<B, D>) -> Self {
         Self::Float(point)
     }
 }
 
-impl<B: Backend, const D: usize> From<Tensor<B, D, Int>> for KindErasedTensor<B, D> {
+impl<B: Backend, const D: usize> From<Tensor<B, D, Int>> for AnyTensor<B, D> {
     #[inline(always)]
     fn from(point: Tensor<B, D, Int>) -> Self {
         Self::Int(point)
     }
 }
 
-/// A map of [`KindErasedTensor`] instances of a fixed rank, by [`Id`].
-pub type KindErasedTensorMap<B, const D: usize> = HashMap<Id, KindErasedTensor<B, D>>;
+/// A map of [`AnyTensor`] instances of a fixed rank, by [`Id`].
+pub type AnyTensorMap<B, const D: usize> = HashMap<Id, AnyTensor<B, D>>;
 
 /// A stored quantity value, either batch-agnostic or batch-pinned.
 ///
@@ -198,9 +196,9 @@ pub type KindErasedTensorMap<B, const D: usize> = HashMap<Id, KindErasedTensor<B
 #[derive(Clone, Debug)]
 pub enum QuantityValue<B: Backend> {
     /// Rank-1 storage, broadcast to the running batch.
-    Unbatched(KindErasedTensor<B, 1>),
+    Unbatched(AnyTensor<B, 1>),
     /// Rank-2 storage, which the running batch must match exactly.
-    Batched(KindErasedTensor<B, 2>),
+    Batched(AnyTensor<B, 2>),
 }
 
 impl<B: Backend> QuantityValue<B> {
@@ -215,7 +213,7 @@ impl<B: Backend> QuantityValue<B> {
     /// Broadcasting is what `Unbatched` already is, and a rule where batch 1 broadcasts but batch
     /// `n` does not is the failure mode `PointMap::retract_flat_mut` guards against: a flat
     /// manifold's `Addition` broadcasts happily and returns a silently wrong answer.
-    pub fn materialize(&self, batch_size: usize, id: Id) -> SkoroResult<KindErasedTensor<B, 2>> {
+    pub fn materialize(&self, batch_size: usize, id: Id) -> SkoroResult<AnyTensor<B, 2>> {
         match self {
             Self::Unbatched(value) => Ok(value.expand(batch_size)),
             Self::Batched(input) => input.ensure_batch(batch_size, id),
@@ -242,7 +240,7 @@ impl<B: Backend> QuantityValue<B> {
     ///
     /// The two variants hold tensors of different rank, so there is no accessor that serves both.
     /// A caller reaching for the value has to say which it expects.
-    pub fn as_unbatched(&self) -> Option<&KindErasedTensor<B, 1>> {
+    pub fn as_unbatched(&self) -> Option<&AnyTensor<B, 1>> {
         match self {
             Self::Unbatched(value) => Some(value),
             Self::Batched(_) => None,
@@ -250,7 +248,7 @@ impl<B: Backend> QuantityValue<B> {
     }
 
     /// The rank-2 storage, if this value is batch-pinned.
-    pub fn as_batched(&self) -> Option<&KindErasedTensor<B, 2>> {
+    pub fn as_batched(&self) -> Option<&AnyTensor<B, 2>> {
         match self {
             Self::Unbatched(_) => None,
             Self::Batched(input) => Some(input),
@@ -260,24 +258,24 @@ impl<B: Backend> QuantityValue<B> {
 
 impl<B: Backend> From<Tensor<B, 1>> for QuantityValue<B> {
     fn from(value: Tensor<B, 1>) -> Self {
-        Self::Unbatched(KindErasedTensor::Float(value))
+        Self::Unbatched(AnyTensor::Float(value))
     }
 }
 
 impl<B: Backend> From<Tensor<B, 1, Int>> for QuantityValue<B> {
     fn from(value: Tensor<B, 1, Int>) -> Self {
-        Self::Unbatched(KindErasedTensor::Int(value))
+        Self::Unbatched(AnyTensor::Int(value))
     }
 }
 
 impl<B: Backend> From<Tensor<B, 2>> for QuantityValue<B> {
     fn from(value: Tensor<B, 2>) -> Self {
-        Self::Batched(KindErasedTensor::Float(value))
+        Self::Batched(AnyTensor::Float(value))
     }
 }
 
 impl<B: Backend> From<Tensor<B, 2, Int>> for QuantityValue<B> {
     fn from(value: Tensor<B, 2, Int>) -> Self {
-        Self::Batched(KindErasedTensor::Int(value))
+        Self::Batched(AnyTensor::Int(value))
     }
 }

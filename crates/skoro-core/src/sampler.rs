@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use skoro_backend::Backend;
 
+use crate::any_tensor::AnyTensor;
 use crate::kind::Kind;
-use crate::kind_erased_tensor::KindErasedTensor;
 use crate::sequence::SequenceMutator;
 
 /// A pseudorandom sampling procedure producing points of kind `K`.
@@ -14,13 +14,13 @@ use crate::sequence::SequenceMutator;
 /// (e.g. a discrete distribution parameterized by a continuous logit).
 pub trait Sampler<B: Backend, K: Kind<B>>: std::fmt::Debug + Clone + Send + Sync + 'static {
     /// Sample a batch of data with the specified batch_size.
-    fn sample(&self, batch_size: usize, parameters: Vec<KindErasedTensor<B, 2>>) -> K::Point;
+    fn sample(&self, batch_size: usize, parameters: Vec<AnyTensor<B, 2>>) -> K::Point;
 }
 
 /// A sampler which has obscured the output type for dyn-compatibility and has positioned itself and
 /// its inputs in a compiled sequence.
 pub trait DynSequenceSampler<B: Backend>: SequenceMutator {
-    fn sample(&self, batch_size: usize, points: &mut [Option<KindErasedTensor<B, 2>>]);
+    fn sample(&self, batch_size: usize, points: &mut [Option<AnyTensor<B, 2>>]);
 }
 
 /// A context-wrapper for a [`Sampler`] which positions its inputs and outputs in a sequence.
@@ -52,10 +52,7 @@ impl<B: Backend, K: Kind<B>, S: Sampler<B, K>> SequenceSampler<B, K, S> {
     }
 
     /// Get the inputs of the sampler within the larger compiled sequence of quantities.
-    pub fn get_inputs(
-        &self,
-        points: &mut [Option<KindErasedTensor<B, 2>>],
-    ) -> Vec<KindErasedTensor<B, 2>> {
+    pub fn get_inputs(&self, points: &mut [Option<AnyTensor<B, 2>>]) -> Vec<AnyTensor<B, 2>> {
         self.input_indices
             .iter()
             .enumerate()
@@ -81,7 +78,7 @@ impl<B: Backend, K: Kind<B>, S: Sampler<B, K>> SequenceMutator for SequenceSampl
 }
 
 impl<B: Backend, K: Kind<B>, S: Sampler<B, K>> DynSequenceSampler<B> for SequenceSampler<B, K, S> {
-    fn sample(&self, batch_size: usize, points: &mut [Option<KindErasedTensor<B, 2>>]) {
+    fn sample(&self, batch_size: usize, points: &mut [Option<AnyTensor<B, 2>>]) {
         let out = self.sampler.sample(batch_size, self.get_inputs(points));
         points[self.output_index] = Some(K::wrap_point(out));
     }

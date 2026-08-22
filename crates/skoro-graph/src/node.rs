@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use skoro_backend::Backend;
-use skoro_core::{id::Id, kind::QuantityKind, kind_erased_tensor::QuantityValue};
+use skoro_core::{any_tensor::QuantityValue, id::Id, kind::QuantityKind};
 
 use crate::{operation::GraphOperation, quantity::DynQuantityType, sampler::GraphSampler};
 

@@ -1,15 +1,15 @@
 use skoro_backend::{Backend, Element, Int, Tensor};
 use skoro_core::{
+    any_tensor::AnyTensor,
     discrete::{Boolean, Categorical, Integer},
-    kind_erased_tensor::KindErasedTensor,
     pack::{Cardinality, Packable},
 };
 
-pub fn constant_int<B: Backend>() -> KindErasedTensor<B, 1> {
+pub fn constant_int<B: Backend>() -> AnyTensor<B, 1> {
     Tensor::<B, 1, Int>::from_ints([0], &Default::default()).into()
 }
 
-pub fn constant_float<B: Backend>() -> KindErasedTensor<B, 1> {
+pub fn constant_float<B: Backend>() -> AnyTensor<B, 1> {
     Tensor::<B, 1>::from_floats([0.0], &Default::default()).into()
 }
 

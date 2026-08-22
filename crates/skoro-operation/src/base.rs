@@ -1,15 +1,15 @@
 use skoro_backend::{Backend, TangentFrame, TangentVector, Tensor};
 use skoro_core::sequence::SequenceMutator;
 
-pub use skoro_core::kind_erased_tensor::{KindErasedTensor, KindErasedTensorMap};
+pub use skoro_core::any_tensor::{AnyTensor, AnyTensorMap};
 
 use crate::{
     step::{BoxDynHvpStep, BoxDynVjpStep},
     tape::Tape,
 };
 
-pub type Input<B> = KindErasedTensor<B, 2>;
-pub type ValueMap<B> = KindErasedTensorMap<B, 2>;
+pub type Input<B> = AnyTensor<B, 2>;
+pub type ValueMap<B> = AnyTensorMap<B, 2>;
 
 /// Operation which mutates an output value array and pushes backward operations onto tape for
 /// backpropagation.

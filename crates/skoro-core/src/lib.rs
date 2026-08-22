@@ -12,17 +12,17 @@
 //!
 //! - stochastic sampling ([`sampler`]),
 //!
-//! - kind-erasure on the backend tensors ([`kind_erased_tensor`]).
+//! - kind-erasure on the backend tensors ([`any_tensor`]).
 //!
 //! - the indexed sequence abstraction ([`sequence`]).
 //!
 //! - discrete quantity types ([`discrete`]).
 
+pub mod any_tensor;
 pub mod discrete;
 pub mod error;
 pub mod id;
 pub mod kind;
-pub mod kind_erased_tensor;
 pub mod pack;
 pub mod sampler;
 pub mod sequence;
