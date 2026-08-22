@@ -43,7 +43,6 @@ pub use skoro_backend as backend;
 pub use skoro_core as core;
 pub use skoro_dense as dense;
 pub use skoro_graph as graph;
-pub use skoro_levenberg_marquardt as levenberg_marquardt;
 pub use skoro_linalg as linalg;
 pub use skoro_model as model;
 pub use skoro_normal as normal;
@@ -74,7 +73,6 @@ pub mod prelude {
     pub use skoro_model::ModelClientOps;
 
     // ----- structural claims an inference algorithm bounds on -----
-    pub use skoro_levenberg_marquardt::{LmOptions, LmReport, Termination};
     pub use skoro_model::model::{ModelClient, ModelServer};
     pub use skoro_model::q::Q;
     pub use skoro_model::{NlsModelClient, NlsStructure, ResidualCertificate, WhitenedResidual};
@@ -87,19 +85,19 @@ pub mod prelude {
 
     // ----- Gaussian facades -----
     pub use skoro_normal::facade::{
-        GaussianModelClient, GaussianModelClientOps, GaussianModelServer,
-        constant_covariance_diagonal, constant_covariance_identity,
+        constant_covariance_diagonal, constant_covariance_identity, GaussianModelClient,
+        GaussianModelClientOps, GaussianModelServer,
     };
 
     // ----- manifolds / quantity types -----
     pub use skoro_graph::quantity::{ContinuousQuantity, DiscreteQuantity, QuantityType};
-    pub use skoro_riemann::Manifold;
     pub use skoro_riemann::euclidean::{
         Euclidean, Euclidean1, Euclidean2, Euclidean3, Euclidean4, Euclidean5, Euclidean6,
         EuclideanD, VectorD,
     };
     pub use skoro_riemann::matrix::{EuclideanMatrix, EuclideanMatrixD};
     pub use skoro_riemann::real::Real;
+    pub use skoro_riemann::Manifold;
 
     // discrete quantity types
     pub use skoro_core::discrete::{Boolean, Categorical, Integer};
@@ -115,8 +113,8 @@ pub mod prelude {
     pub use skoro_pointwise::PointwiseOps;
 
     // ----- discrete op traits / bridges -----
-    pub use skoro_model::discrete::DiscreteCompare;
     pub use skoro_model::discrete::bridge::{DiscreteEmbed, Discretize};
+    pub use skoro_model::discrete::DiscreteCompare;
 
     // ----- SO(3) / SE(3) -----
     pub use skoro_se3::quantity::SE3;

@@ -5832,7 +5832,6 @@ dependencies = [
  "skoro-core",
  "skoro-dense",
  "skoro-graph",
- "skoro-levenberg-marquardt",
  "skoro-linalg",
  "skoro-model",
  "skoro-normal",
@@ -5882,27 +5881,6 @@ dependencies = [
  "skoro-core",
  "skoro-operation",
  "skoro-riemann",
-]
-
-[[package]]
-name = "skoro-levenberg-marquardt"
-version = "0.0.0"
-dependencies = [
- "approx",
- "burn",
- "burn-ndarray",
- "burn-wgpu",
- "skoro-backend",
- "skoro-core",
- "skoro-dense",
- "skoro-graph",
- "skoro-linalg",
- "skoro-model",
- "skoro-normal",
- "skoro-operation",
- "skoro-riemann",
- "skoro-se3",
- "skoro-so3",
 ]
 
 [[package]]

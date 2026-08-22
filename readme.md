@@ -23,17 +23,14 @@ It breaks this domain down into a few distinct crates:
   This represents the logical structure of a user's model before it gets flattened and executed.
 - **`skoro-model`**: The high-level facade mapping user API concepts (like `ModelClient` and `Q` quantity proxies) down into the backend `Graph` execution logic.
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
-  These are *differentiable graph operations*; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §3.3 explains why they run on the host rather than on the backend.
+  These are _differentiable graph operations_; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §3.3 explains why they run on the host rather than on the backend.
 - **`skoro-so3`**: The SO(3) rotation group (`SO3`, `SO3Matrix`) with differentiable `exp` (Rodrigues' formula), `log`, retraction, compose, rotate/unrotate, and invert operations.
 - **`skoro-se3`**: The SE(3) rigid-body transform group (`SE3`, `SE3Pose`), composing SO(3) rotation operations with translation.
 - **`skoro-pointwise`**: Differentiable elementwise operations (`log`, `abs`).
 - **`skoro-normal`**: A manifold-aware Gaussian distribution (`Normal<B, M>`) parameterized by a `mean: Q<B, M>` and a lower-triangular factor `std_dev: Q<B, Tril>`.
-  It also supplies the *structural* claims an inference algorithm bounds on — `GaussianFactor` on a single distribution, `GaussianStructure` on a whole model — alongside the `GaussianModelClient` builder that accumulates them.
+  It also supplies the _structural_ claims an inference algorithm bounds on — `GaussianFactor` on a single distribution, `GaussianStructure` on a whole model — alongside the `GaussianModelClient` builder that accumulates them.
 - **`skoro-dense`**: Host-resident dense linear algebra in `f64`, one matrix at a time, backed by `faer`: Cholesky, triangular and SPD solves, and a column-pivoted-QR least squares.
   A leaf crate depending on nothing else in the workspace, so only the estimators pay for it. `docs/skoro.md` §3.3 explains why this runs on the host rather than on the backend.
-- **`skoro-levenberg-marquardt`**: Levenberg-Marquardt over any model whose factors carry whitened residuals.
-  Steps are manifold retractions, not vector addition, and the damped step is solved by QR on the row-augmented system rather than through the normal equations.
-  A batch of points is a batch of *independent* optimizations — multi-start search, where each row carries its own damping, cost and termination — sharing a single Jacobian pass.
 - **`skoro`**: The top-level umbrella crate aggregating the workspace and re-exporting the sub-crates (`skoro::dense`, `skoro::prelude`).
 
 ---
