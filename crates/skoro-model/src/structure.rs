@@ -16,25 +16,6 @@
 //!   accumulation of factor-local claims, carried as data by the builder that enforced
 //!   them. That is [`ResidualCertificate`].
 //!
-//! And the property that makes this pay rather than merely typecheck: **the certificate and
-//! the algorithm's input are the same object.** What a restricted builder accumulates is a
-//! list of residual nodes, which is exactly the row layout of the Jacobian an optimizer
-//! needs. [`NlsStructure::residual_layout`] returns the rows of `J`.
-//!
-//! ## Why the trait is open and the evidence is not
-//!
-//! The obvious move is to *seal* [`NlsStructure`], so only builders that enforced the bound
-//! can implement it. It does not work: sealing confines an implementation to the defining
-//! crate, and this trait must live here — it bounds [`Distribution`] and
-//! [`ModelClientOps`] — while `GaussianModelClient` lives in `skoro-normal`. Sealing would
-//! forbid exactly the implementation the trait exists to admit.
-//!
-//! So the guarantee moves into the value the trait returns. [`ResidualCertificate::record`]
-//! demands a [`WhitenedResidual`] distribution and there is no constructor that accepts a
-//! fabricated list of ids, so a hand-rolled implementor can produce only an empty or an
-//! honest certificate. **The trait is forgeable; the evidence is not**, and the evidence is
-//! what the algorithm consumes.
-//!
 //! ## The joint sibling
 //!
 //! [`ResidualCertificate::record_joint`] is a **bounded** sibling of `record`, demanding a

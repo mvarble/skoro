@@ -1,11 +1,12 @@
 use skoro_backend::{CotangentFrame, NdArrayBackend, Point, Tensor};
+use skoro_core::any_tensor::QuantityValue;
 use skoro_core::id::Id;
 use skoro_core::kind::Continuous;
-use skoro_core::kind_erased_tensor::QuantityValue;
 use skoro_core::sampler::Sampler;
 use skoro_graph::{
     graph::Graph,
-    node::{LogDensityNode, MappedNode, Node, ObservedNode},
+    node::{LogLikelihoodNode, MappedNode, Node, ObservedNode},
+    operation::DiffGraphOperation,
 };
 use skoro_operation::{
     Input,
@@ -68,7 +69,7 @@ fn graph_topology() {
 
     // Add a mapped node depending on the stochastic output
     let m1 = graph
-        .add_mapped(Real, DummyOperation, vec![stoch_id])
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch_id])
         .unwrap();
     assert!(graph.contains(m1));
 }
@@ -93,7 +94,9 @@ fn remove_with_children_errors() {
 
     let mut graph = Graph::<B>::new();
     let p1 = graph.add_parameter(Real);
-    let _m1 = graph.add_mapped(Real, DummyOperation, vec![p1]).unwrap();
+    let _m1 = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![p1])
+        .unwrap();
 
     // This should error because m1 depends on p1
     assert!(matches!(
@@ -130,14 +133,16 @@ fn observe() {
 
 /// Unregistering a density must clear the link recorded on the node, not only the maps.
 ///
-/// `remove` reads `LogDensityNode::stochastic_id` to decide which map entries to drop, so a
+/// `remove` reads `LogLikelihoodNode::stochastic_id` to decide which map entries to drop, so a
 /// stale field there is a live hazard rather than a cosmetic leak — see the sibling test.
 #[test]
 fn unregister_density_clears_the_node_link() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(density, stoch).unwrap();
+    let density = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(density, stoch).unwrap();
 
     assert_eq!(graph.density_of(stoch), Some(density));
 
@@ -149,7 +154,7 @@ fn unregister_density_clears_the_node_link() {
 
     assert_eq!(graph.density_of(stoch), None);
     match graph.node(density).unwrap() {
-        Node::LogDensity(LogDensityNode { stochastic_id, .. }) => {
+        Node::LogLikelihood(LogLikelihoodNode { stochastic_id, .. }) => {
             assert_eq!(
                 *stochastic_id, None,
                 "the orphaned density still claims the stochastic quantity it no longer scores"
@@ -170,8 +175,10 @@ fn removing_an_orphaned_density_preserves_the_live_one() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
-    let first = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(first, stoch).unwrap();
+    let first = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(first, stoch).unwrap();
 
     // Replace the distribution: `first` is now an orphan in the arena.
     graph
@@ -179,15 +186,17 @@ fn removing_an_orphaned_density_preserves_the_live_one() {
         .unwrap();
 
     // Register a replacement density against the same quantity.
-    let second = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(second, stoch).unwrap();
-    assert_eq!(graph.density_of(stoch), Some(second));
+    let second = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(second, stoch).unwrap();
+    assert_eq!(graph.log_density_of(stoch), Some(second));
 
     // Now clean up the orphan, as `unregister_density`'s contract tells callers to.
     graph.remove(&[first]).unwrap();
 
     assert_eq!(
-        graph.density_of(stoch),
+        graph.log_density_of(stoch),
         Some(second),
         "removing the orphan deleted the live density's reverse-map entry"
     );
@@ -200,15 +209,17 @@ fn removing_an_orphaned_density_preserves_the_live_one() {
 fn an_orphaned_density_can_be_found_and_reclaimed() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(density, stoch).unwrap();
-    assert!(graph.orphaned_densities().is_empty());
+    let density = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(density, stoch).unwrap();
+    assert_eq!(graph.log_likelihoods().len(), 1);
 
     // Replacing the distribution strands the old density in the arena.
     graph
         .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
         .unwrap();
-    assert_eq!(graph.orphaned_densities(), vec![density]);
+    assert_eq!(graph.log_likelihoods(), [density]);
 
     // The orphan keeps its parent edge, so it blocks removal of the cone above it.
     assert!(matches!(
@@ -541,13 +552,13 @@ fn re_marking_an_unregistered_density_restores_it_as_a_term() {
     graph.mark_density(density, stoch).unwrap();
     assert!(graph.log_likelihoods().contains(&density));
 
-    // Drops it from the likelihood terms and leaves it a `LogDensity` node in the arena.
+    // Drops it from the likelihood terms and leaves it a `LogLikelihood` node in the arena.
     graph
         .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
         .unwrap();
     assert!(!graph.log_likelihoods().contains(&density));
 
-    // Re-marking now takes the `LogDensity` arm, which previously wrote the maps without
+    // Re-marking now takes the `LogLikelihood` arm, which previously wrote the maps without
     // putting the node back among the terms.
     graph.mark_density(density, stoch).unwrap();
 

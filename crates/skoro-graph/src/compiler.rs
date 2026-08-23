@@ -33,9 +33,6 @@ pub enum CompiledStep<B: Backend> {
         op: Box<dyn DynSequenceOperation<B>>,
         value: Option<QuantityValue<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
-        /// If true, the operation is non-differentiable (e.g. a discrete
-        /// kernel): it is evaluated forward-only in every pass, and its inputs
-        /// receive no tangents/cotangents.
         forward_only: bool,
         constant_inputs: bool,
     },
@@ -486,7 +483,7 @@ fn non_op_forward<B: Backend>(
         }
         CompiledStep::Parameter { id, quantity_type } => {
             let input = if let Some(parameter) = points.get(id) {
-                parameter.ensure_batch(options.batch_size, *id)?
+                parameter.ensure_batch(options.batch_size)?
             } else {
                 return Err(SkoroError::MissingPoint { id: *id });
             };
@@ -512,7 +509,7 @@ fn non_op_forward<B: Backend>(
             quantity_type,
         } => {
             if let Some(sample) = points.get(id) {
-                let input = sample.ensure_batch(options.batch_size, *id)?;
+                let input = sample.ensure_batch(options.batch_size)?;
                 out.variables
                     .insert(*id, input.clone(), quantity_type.clone());
                 point_seq[index] = Some(input);

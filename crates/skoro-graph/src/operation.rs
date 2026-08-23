@@ -9,11 +9,9 @@ use skoro_operation::{
 
 /// A deferred graph operation, lowerable into a concrete [`DynSequenceOperation`].
 ///
-/// Both differentiable operations ([`DiffOperation`]) and forward-only discrete
-/// operations ([`DiscreteOperation`], via the [`ForwardOnly`] adapter) lower into the
-/// same dyn sequence-operation interface, since the value sequence is
-/// kind-erased ([`Input`](skoro_operation::Input)).
-pub trait GraphOperation<B: Backend>: 'static + Send + Sync + Debug {
+/// Both differentiable operations ([`DiffOperation`]) and forward-only discrete operations
+/// [`DiscreteOperation`] implement this via adapters.
+pub trait DynGraphOperation<B: Backend>: 'static + Send + Sync + Debug {
     /// Lowers this deferred operation into a concrete [`DynSequenceOperation`].
     fn lower(
         &self,
@@ -22,26 +20,29 @@ pub trait GraphOperation<B: Backend>: 'static + Send + Sync + Debug {
         output_index: usize,
     ) -> Box<dyn DynSequenceOperation<B>>;
 
-    /// Whether this operation propagates derivatives.
-    ///
-    /// Forward-only operations (discrete outputs) return `false`; the compiler
-    /// then evaluates them without differentiation even in JVP/VJP/HVP passes,
-    /// and treats all of their inputs as non-differentiable.
-    fn is_differentiable(&self) -> bool {
-        true
-    }
+    /// Whether this operation propagates derivatives (i.e. returns continuous tensors).
+    fn is_differentiable(&self) -> bool;
 
     /// Returns a new boxed copy of this operation.
-    fn clone_box(&self) -> Box<dyn GraphOperation<B>>;
+    fn clone_box(&self) -> Box<dyn DynGraphOperation<B>>;
 }
 
-impl<B: Backend> Clone for Box<dyn GraphOperation<B>> {
+impl<B: Backend> Clone for Box<dyn DynGraphOperation<B>> {
     fn clone(&self) -> Self {
         self.clone_box()
     }
 }
 
-impl<B: Backend, Op: DiffOperation<B>> GraphOperation<B> for Op {
+/// Adapter which connects the [`DiffOperation`] and [`DynGraphOperation`] traits.
+pub struct DiffGraphOperation<Op>(pub Op);
+
+impl<Op: Debug> Debug for DiffGraphOperation<Op> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DiffGraphOperation").field(&self.0).finish()
+    }
+}
+
+impl<B: Backend, Op: DiffOperation<B>> DynGraphOperation<B> for DiffGraphOperation<Op> {
     fn lower(
         &self,
         input_indices: Vec<usize>,
@@ -52,29 +53,31 @@ impl<B: Backend, Op: DiffOperation<B>> GraphOperation<B> for Op {
             input_indices,
             input_diffs,
             output_index,
-            self.clone(),
+            self.0.clone(),
         ))
     }
 
-    fn clone_box(&self) -> Box<dyn GraphOperation<B>> {
-        Box::new(self.clone())
+    fn is_differentiable(&self) -> bool {
+        true
+    }
+
+    fn clone_box(&self) -> Box<dyn DynGraphOperation<B>> {
+        Box::new(DiffGraphOperation(self.0.clone()))
     }
 }
 
-/// Adapter presenting a forward-only [`DiscreteOperation`] as a [`GraphOperation`].
-///
-/// The wrapped operation is non-differentiable: it lowers into a
-/// [`SequenceForwardOnlyOperation`] and reports
-/// [`is_differentiable`](GraphOperation::is_differentiable) as `false`.
-pub struct ForwardOnly<Op>(pub Op);
+/// Adapter which connects the [`DiscreteOperation`] and [`DynGraphOperation`] traits.
+pub struct DiscreteGraphOperation<Op>(pub Op);
 
-impl<Op: Debug> Debug for ForwardOnly<Op> {
+impl<Op: Debug> Debug for DiscreteGraphOperation<Op> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ForwardOnly").field(&self.0).finish()
+        f.debug_tuple("DiscreteGraphOperation")
+            .field(&self.0)
+            .finish()
     }
 }
 
-impl<B: Backend, Op: DiscreteOperation<B>> GraphOperation<B> for ForwardOnly<Op> {
+impl<B: Backend, Op: DiscreteOperation<B>> DynGraphOperation<B> for DiscreteGraphOperation<Op> {
     fn lower(
         &self,
         input_indices: Vec<usize>,
@@ -92,7 +95,7 @@ impl<B: Backend, Op: DiscreteOperation<B>> GraphOperation<B> for ForwardOnly<Op>
         false
     }
 
-    fn clone_box(&self) -> Box<dyn GraphOperation<B>> {
-        Box::new(ForwardOnly(self.0.clone()))
+    fn clone_box(&self) -> Box<dyn DynGraphOperation<B>> {
+        Box::new(DiscreteGraphOperation(self.0.clone()))
     }
 }

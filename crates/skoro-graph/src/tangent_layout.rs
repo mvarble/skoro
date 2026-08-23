@@ -1,9 +1,9 @@
 //! A contiguous ordering of the tangent spaces of a set of quantities.
 //!
-//! Inference algorithms want dense matrices — a covariance `P`, a Jacobian `J`, a
-//! correction `δ` — while the graph is keyed by [`Id`]. A [`TangentLayout`] is the
-//! translation: it assigns each quantity a contiguous range of indices, once, so that
-//! flattening and unflattening are unambiguous and reproducible.
+//! Inference algorithms want dense matrices — a covariance `P`, a Jacobian `J`, a correction `δ`
+//! — while the graph is keyed by [`Id`]. A [`TangentLayout`] is the translation: it assigns each
+//! quantity a contiguous range of indices, once, so that flattening and unflattening are
+//! unambiguous and reproducible.
 
 use std::collections::HashMap;
 
@@ -27,17 +27,18 @@ pub struct TangentBlock {
 
 /// A contiguous ordering of the tangent spaces of a set of quantities.
 ///
-/// Laid out by **manifold dimension**, never by storage size: `SO3` occupies 3 slots and
-/// `SE3` occupies 6, not 9 and 12. Every shape downstream depends on this — it is what
-/// lets a filter over `SE3` do its arithmetic in ℝ⁶ with no special casing, leaving the
-/// retraction as the only manifold-aware step.
+/// Laid out by **manifold dimension**, never by storage size: `SO3` occupies 3 slots and `SE3`
+/// occupies 6, not 9 and 12. Every shape downstream depends on this — it is what lets a filter
+/// over `SE3` do its arithmetic in ℝ⁶ with no special casing, leaving the retraction as the only
+/// manifold-aware step.
 ///
-/// Ordering is caller-specified by design: a block structure the caller chose is one they
-/// can reason about when reading a covariance or a Jacobian.
+/// Ordering is caller-specified by design: a block structure the caller chose is one they can
+/// reason about when reading a covariance or a Jacobian.
 ///
-/// A layout holds no tensors and carries no backend parameter, so it is cheap to clone
-/// and store. It is **not** revalidated against a graph after construction — reusing one
-/// after [`Graph::remove`] is a caller error.
+/// A layout holds no tensors and carries no backend parameter, so it is cheap to clone and store.
+/// It is **not** revalidated against a graph after construction — reusing one after graph
+/// operations such as [`Graph::add_stochastic`], [`Graph::add_parameter`], or [`Graph::remove`] is
+/// a caller error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TangentLayout {
     blocks: Vec<TangentBlock>,
@@ -109,9 +110,8 @@ impl TangentLayout {
     /// Whether two layouts describe the same tangent space over different quantities:
     /// equal block dimensions, in order.
     ///
-    /// This is the rule a sequential estimator pairs `state` and `state_next` with. It
-    /// deliberately ignores ids, since the whole point is that the two layouts name
-    /// different quantities.
+    /// This is the rule a sequential estimator pairs `state` and `state_next` with. It deliberately
+    /// ignores ids, since the whole point is that the two layouts name different quantities.
     pub fn same_shape(&self, other: &Self) -> bool {
         self.blocks.len() == other.blocks.len()
             && std::iter::zip(&self.blocks, &other.blocks).all(|(a, b)| a.dimension == b.dimension)
@@ -133,9 +133,9 @@ impl TangentLayout {
 impl TangentLayout {
     /// Gather per-quantity tangents into one `[batch, N]` tensor.
     ///
-    /// Ids missing from `map` are filled with zeros rather than erroring: a VJP
-    /// legitimately returns no cotangent for a leaf that does not reach the target, and
-    /// the right answer there is a zero column, not a failure.
+    /// Ids missing from `map` are filled with zeros rather than erroring: a VJP legitimately
+    /// returns no cotangent for a leaf that does not reach the target, and the right answer there
+    /// is a zero column, not a failure.
     pub fn flatten_vectors<B: Backend>(
         &self,
         map: &HashMap<Id, TangentVector<B>>,
@@ -147,13 +147,12 @@ impl TangentLayout {
             let part = match map.get(&block.id) {
                 Some(tangent) => {
                     let dims = tangent.dims();
-                    // Each axis is reported on its own. Testing the whole shape and then
-                    // reporting `dims[0]` turns a *width* disagreement into
-                    // `BatchSizeMismatch { expected: 2, found: 2 }`, which names neither
-                    // the axis that disagrees nor a value that differs.
+                    // Each axis is reported on its own. Testing the whole shape and then reporting
+                    // `dims[0]` turns a *width* disagreement into
+                    // `BatchSizeMismatch { expected: 2, found: 2 }`, which names neither the axis
+                    // that disagrees nor a value that differs.
                     if dims[0] != batch {
                         return Err(SkoroError::BatchSizeMismatch {
-                            id: block.id,
                             expected: batch,
                             found: dims[0],
                         });
@@ -211,7 +210,6 @@ impl TangentLayout {
                     // read as `{ expected: 5, found: 5 }`.
                     if dims[0] != batch {
                         return Err(SkoroError::BatchSizeMismatch {
-                            id: block.id,
                             expected: batch,
                             found: dims[0],
                         });
@@ -259,8 +257,8 @@ impl TangentLayout {
     /// `o_j .. o_j + d_j`, shape `[batch, d_j, N]`.
     ///
     /// Both Jacobian paths seed through this one helper, which is what keeps their index
-    /// conventions from drifting apart — the JVP seeds columns and the VJP seeds rows, and
-    /// a disagreement between the two would surface as a silently transposed `J`.
+    /// conventions from drifting apart — the JVP seeds columns and the VJP seeds rows, and a
+    /// disagreement between the two would surface as a silently transposed `J`.
     pub fn identity_frames<B: Backend>(
         &self,
         batch: usize,

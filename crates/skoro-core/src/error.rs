@@ -29,9 +29,12 @@ pub enum SkoroError {
     /// The quantity type supplied by the caller does not match the type stored
     /// for the node in the graph.
     QuantityTypeMismatch { id: Id },
-    /// The referenced node is not a stochastic node (required by e.g.
-    /// `observe` / `unobserve` / `update_stochastic`).
+    /// The referenced node is not a stochastic node (required by e.g. `update_stochastic`).
     NotStochastic { id: Id },
+    /// The referenced node is not an observable node.
+    NotObservable { id: Id },
+    /// The referenced node is not a log-likelihood node.
+    NotLogLikelihood { id: Id },
     /// The referenced node is not a mapped node (required to become a
     /// log-density / log-likelihood).
     NotMapped { id: Id },
@@ -44,6 +47,8 @@ pub enum SkoroError {
     /// A stochastic quantity already has a log-density; mark the value as a
     /// log-likelihood instead.
     DuplicateDensity { stochastic_id: Id },
+    /// A log-density was marked as a log-likelihood.
+    MustRemainDensity { id: Id },
     /// A node was added or updated referencing a parent that does not exist.
     DanglingParent { parent_id: Id },
     /// The requested mutation would introduce a cycle into the graph.
@@ -57,11 +62,7 @@ pub enum SkoroError {
     NodeIsCertified { id: Id },
     /// A supplied point has a batch size inconsistent with the rest of the
     /// evaluation.
-    BatchSizeMismatch {
-        id: Id,
-        expected: usize,
-        found: usize,
-    },
+    BatchSizeMismatch { expected: usize, found: usize },
     /// A point required for evaluation (or retraction) was not supplied.
     MissingPoint { id: Id },
     /// The number of tangent/cotangent frames is not constant across the
@@ -115,6 +116,12 @@ impl fmt::Display for SkoroError {
             SkoroError::NotStochastic { id } => {
                 write!(f, "node {id:?} is not a stochastic node")
             }
+            SkoroError::NotObservable { id } => {
+                write!(f, "node {id:?} is not an observable node")
+            }
+            SkoroError::NotLogLikelihood { id } => {
+                write!(f, "node {id:?} is not a log-likelihood node")
+            }
             SkoroError::NotMapped { id } => {
                 write!(f, "node {id:?} is not a mapped node")
             }
@@ -137,6 +144,13 @@ impl fmt::Display for SkoroError {
                      mark the real value as a log-likelihood instead"
                 )
             }
+            SkoroError::MustRemainDensity { id } => {
+                write!(
+                    f,
+                    "log-density quantity {id:?} must maintain this property as long as its \
+                    stochastic quantity is in the graph"
+                )
+            }
             SkoroError::DanglingParent { parent_id } => {
                 write!(f, "quantity added with dangling parent {parent_id:?}")
             }
@@ -156,14 +170,10 @@ impl fmt::Display for SkoroError {
                      (retire the factor with a closure removal instead)"
                 )
             }
-            SkoroError::BatchSizeMismatch {
-                id,
-                expected,
-                found,
-            } => {
+            SkoroError::BatchSizeMismatch { expected, found } => {
                 write!(
                     f,
-                    "batch size for node {id:?} is incorrect; expected {expected}, found {found}"
+                    "batch size is incorrect; expected {expected}, found {found}"
                 )
             }
             SkoroError::MissingPoint { id } => {

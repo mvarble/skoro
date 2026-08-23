@@ -125,13 +125,12 @@ impl<B: Backend> AnyTensor<B, 2> {
     /// broadcast goes through here -- parameters, samplers, and batch-pinned constants -- so the
     /// three cannot come to disagree about what counts as a match or about which id gets blamed.
     #[inline(always)]
-    pub fn ensure_batch(&self, batch_size: usize, id: Id) -> SkoroResult<Self> {
+    pub fn ensure_batch(&self, batch_size: usize) -> SkoroResult<Self> {
         let found = self.dims()[0];
         if found == batch_size {
             Ok(self.clone())
         } else {
             Err(SkoroError::BatchSizeMismatch {
-                id,
                 expected: batch_size,
                 found,
             })
@@ -216,7 +215,7 @@ impl<B: Backend> QuantityValue<B> {
     pub fn materialize(&self, batch_size: usize, id: Id) -> SkoroResult<AnyTensor<B, 2>> {
         match self {
             Self::Unbatched(value) => Ok(value.expand(batch_size)),
-            Self::Batched(input) => input.ensure_batch(batch_size, id),
+            Self::Batched(input) => input.ensure_batch(batch_size),
         }
     }
 
@@ -252,6 +251,14 @@ impl<B: Backend> QuantityValue<B> {
         match self {
             Self::Unbatched(_) => None,
             Self::Batched(input) => Some(input),
+        }
+    }
+
+    /// Number of components in the data (e.g. slice at last index)
+    pub fn num_components(&self) -> usize {
+        match self {
+            Self::Unbatched(value) => value.dims()[0],
+            Self::Batched(value) => value.dims()[1],
         }
     }
 }

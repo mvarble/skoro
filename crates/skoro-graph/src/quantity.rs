@@ -11,7 +11,7 @@ use skoro_core::{
 use skoro_operation::Input;
 use skoro_riemann::{DynManifold, Manifold};
 
-use crate::operation::GraphOperation;
+use crate::operation::{DiffGraphOperation, DynGraphOperation};
 
 /// Trait specifying how a quantity of kind `K` is embedded into tensor storage.
 ///
@@ -176,34 +176,34 @@ impl<B: Backend, T> DiscreteQuantity<B> for T where T: QuantityType<B, Discrete>
 pub trait DynQuantityType<B: Backend>: std::fmt::Debug + Send + Sync {
     /// The runtime kind discriminator.
     fn kind(&self) -> QuantityKind;
+
     /// The concrete quantity type, for downcasting.
     fn as_any(&self) -> &dyn std::any::Any;
+
     /// The number of tensor components a packed value occupies.
     fn num_components(&self) -> usize;
+
     /// Compare against another type-erased quantity type.
     fn compare(&self, other: &dyn std::any::Any) -> bool;
+
     /// The manifold structure, if the quantity is continuous.
     fn as_manifold(&self) -> Option<&dyn DynManifold<B>>;
 
     /// The quantity's inverse-retraction as a type-erased graph operation, if it is continuous.
     ///
-    /// [`Manifold::inverse_retraction`] returns `impl DiffOperation<B>`, which is what makes
-    /// [`Manifold`] itself dyn-incompatible and why [`DynManifold`] can only offer a
-    /// *forward-only* `inverse_retract`. This is the escape hatch: the wrapper below holds a
-    /// concrete `T`, so the opaque type is nameable at that impl site, and the blanket
-    /// `impl<Op: DiffOperation<B>> GraphOperation<B> for Op` boxes it into something the graph
-    /// can store.
-    ///
     /// It exists so a factor can be built over quantities whose manifolds are only known at run
     /// time -- a joint likelihood over a Markov blanket, where each member contributes its own
     /// tangent block. A runtime product manifold would need exactly the same escape.
-    fn inverse_retraction_op(&self) -> Option<Box<dyn GraphOperation<B>>>;
+    ///
+    /// Note that the inverse retraction operation of a `DynManifold` cannot be obtained.
+    fn inverse_retraction_op(&self) -> Option<Box<dyn DynGraphOperation<B>>>;
 
     /// A new handle to this same erased quantity type.
     ///
     /// `Arc::clone` needs a sized receiver, which a `&dyn` is not; a node reusing another's
     /// quantity type -- a frozen anchor beside the quantity it anchors -- goes through here.
     fn clone_arc(&self) -> Arc<dyn DynQuantityType<B>>;
+
     /// The number of distinct values the quantity may take, if discrete with
     /// finite support. Always `None` for continuous quantities.
     fn cardinality(&self) -> Option<usize>;
@@ -240,8 +240,10 @@ where
         Some(&self.0)
     }
 
-    fn inverse_retraction_op(&self) -> Option<Box<dyn GraphOperation<B>>> {
-        Some(Box::new(<T as Manifold<B>>::inverse_retraction(&self.0)))
+    fn inverse_retraction_op(&self) -> Option<Box<dyn DynGraphOperation<B>>> {
+        Some(Box::new(DiffGraphOperation(
+            <T as Manifold<B>>::inverse_retraction(&self.0),
+        )))
     }
 
     fn clone_arc(&self) -> Arc<dyn DynQuantityType<B>> {
@@ -284,7 +286,7 @@ where
         None
     }
 
-    fn inverse_retraction_op(&self) -> Option<Box<dyn GraphOperation<B>>> {
+    fn inverse_retraction_op(&self) -> Option<Box<dyn DynGraphOperation<B>>> {
         None
     }
 
