@@ -212,7 +212,7 @@ impl<B: Backend> QuantityValue<B> {
     /// Broadcasting is what `Unbatched` already is, and a rule where batch 1 broadcasts but batch
     /// `n` does not is the failure mode `PointMap::retract_flat_mut` guards against: a flat
     /// manifold's `Addition` broadcasts happily and returns a silently wrong answer.
-    pub fn materialize(&self, batch_size: usize, id: Id) -> SkoroResult<AnyTensor<B, 2>> {
+    pub fn materialize(&self, batch_size: usize) -> SkoroResult<AnyTensor<B, 2>> {
         match self {
             Self::Unbatched(value) => Ok(value.expand(batch_size)),
             Self::Batched(input) => input.ensure_batch(batch_size),

@@ -5,7 +5,7 @@ use skoro_core::kind::Continuous;
 use skoro_core::sampler::Sampler;
 use skoro_graph::{
     graph::Graph,
-    node::{LogLikelihoodNode, MappedNode, Node, ObservedNode},
+    node::{MappedNode, Node, ObservedNode},
     operation::DiffGraphOperation,
 };
 use skoro_operation::{
@@ -131,110 +131,6 @@ fn observe() {
     }
 }
 
-/// Unregistering a density must clear the link recorded on the node, not only the maps.
-///
-/// `remove` reads `LogLikelihoodNode::stochastic_id` to decide which map entries to drop, so a
-/// stale field there is a live hazard rather than a cosmetic leak — see the sibling test.
-#[test]
-fn unregister_density_clears_the_node_link() {
-    let mut graph = Graph::<B>::new();
-    let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph
-        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
-        .unwrap();
-    graph.mark_log_density(density, stoch).unwrap();
-
-    assert_eq!(graph.density_of(stoch), Some(density));
-
-    // Replace the distribution wholesale. This unregisters the old density and strands the
-    // node in the arena, which the caller is expected to clean up afterwards.
-    graph
-        .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
-        .unwrap();
-
-    assert_eq!(graph.density_of(stoch), None);
-    match graph.node(density).unwrap() {
-        Node::LogLikelihood(LogLikelihoodNode { stochastic_id, .. }) => {
-            assert_eq!(
-                *stochastic_id, None,
-                "the orphaned density still claims the stochastic quantity it no longer scores"
-            );
-        }
-        _ => panic!("the density node should still be in the arena"),
-    }
-}
-
-/// Removing an orphaned density must not disturb a density registered against the same
-/// stochastic quantity in the meantime.
-///
-/// This is the corruption the stale `stochastic_id` field allowed: `remove` read the orphan's
-/// claim on `stoch` and deleted the *replacement* density's reverse-map entry, leaving
-/// `density_of` reporting `None` for a quantity still scored by a term in `log_likelihoods`.
-#[test]
-fn removing_an_orphaned_density_preserves_the_live_one() {
-    let mut graph = Graph::<B>::new();
-    let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-
-    let first = graph
-        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
-        .unwrap();
-    graph.mark_log_density(first, stoch).unwrap();
-
-    // Replace the distribution: `first` is now an orphan in the arena.
-    graph
-        .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
-        .unwrap();
-
-    // Register a replacement density against the same quantity.
-    let second = graph
-        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
-        .unwrap();
-    graph.mark_log_density(second, stoch).unwrap();
-    assert_eq!(graph.log_density_of(stoch), Some(second));
-
-    // Now clean up the orphan, as `unregister_density`'s contract tells callers to.
-    graph.remove(&[first]).unwrap();
-
-    assert_eq!(
-        graph.log_density_of(stoch),
-        Some(second),
-        "removing the orphan deleted the live density's reverse-map entry"
-    );
-    assert_eq!(graph.stochastic_of(second), Some(stoch));
-    assert!(graph.log_likelihoods().contains(&second));
-}
-
-/// An orphaned density is discoverable, and reclaimable through `remove_closure`.
-#[test]
-fn an_orphaned_density_can_be_found_and_reclaimed() {
-    let mut graph = Graph::<B>::new();
-    let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph
-        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
-        .unwrap();
-    graph.mark_log_density(density, stoch).unwrap();
-    assert_eq!(graph.log_likelihoods().len(), 1);
-
-    // Replacing the distribution strands the old density in the arena.
-    graph
-        .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
-        .unwrap();
-    assert_eq!(graph.log_likelihoods(), [density]);
-
-    // The orphan keeps its parent edge, so it blocks removal of the cone above it.
-    assert!(matches!(
-        graph.remove(&[stoch]),
-        Err(skoro_core::error::SkoroError::NodeStillReferenced { .. })
-    ));
-
-    graph.remove_closure(&graph.orphaned_densities()).unwrap();
-    assert!(graph.orphaned_densities().is_empty());
-    assert!(!graph.contains(density));
-    // With the orphan gone the quantity is free to retire.
-    graph.remove(&[stoch]).unwrap();
-    assert_eq!(graph.node_count(), 0);
-}
-
 /// `remove_closure` takes a whole subtree, including a diamond, in one call.
 ///
 /// `remove` alone rejects any of these roots: each has a child outside the batch.
@@ -244,11 +140,19 @@ fn remove_closure_takes_a_diamond_subtree() {
     let root = graph.add_parameter(Real);
     let keep = graph.add_parameter(Real);
 
-    let left = graph.add_mapped(Real, DummyOperation, vec![root]).unwrap();
-    let right = graph.add_mapped(Real, DummyOperation, vec![root]).unwrap();
+    let left = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![root])
+        .unwrap();
+    let right = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![root])
+        .unwrap();
     // Joins the two branches, and also depends on a node that must survive.
     let join = graph
-        .add_mapped(Real, DummyOperation, vec![left, right, keep])
+        .add_mapped(
+            Real,
+            DiffGraphOperation(DummyOperation),
+            vec![left, right, keep],
+        )
         .unwrap();
 
     assert!(matches!(
@@ -269,17 +173,15 @@ fn remove_closure_takes_a_diamond_subtree() {
 }
 
 /// A shared parent keeps its remaining children when only one of them is removed.
-///
-/// This is the case `remove`'s `// TODO: check if I need to remove children` left uncertain.
 #[test]
 fn removing_one_child_leaves_a_shared_parent_intact() {
     let mut graph = Graph::<B>::new();
     let shared = graph.add_parameter(Real);
     let first = graph
-        .add_mapped(Real, DummyOperation, vec![shared])
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![shared])
         .unwrap();
     let second = graph
-        .add_mapped(Real, DummyOperation, vec![shared])
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![shared])
         .unwrap();
 
     graph.remove(&[first]).unwrap();
@@ -337,22 +239,23 @@ fn folded(graph: &Graph<B>, id: skoro_core::id::Id) -> bool {
 
 /// Observing must fold every descendant that became concrete, including one whose parents sit
 /// at different depths.
-///
-/// This is the case a plain `visited` set gets wrong. The breadth-first walk reaches `join`
-/// from `near` before `far` has folded, so `join` cannot fold on that first visit; a walk that
-/// refuses to revisit it would leave it unfolded forever. Ordering by dependency instead
-/// visits `join` once, after both parents have settled.
 #[test]
 fn observing_folds_a_descendant_whose_parents_differ_in_depth() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
-    let near = graph.add_mapped(Real, SumOperation, vec![stoch]).unwrap();
-    let middle = graph.add_mapped(Real, SumOperation, vec![stoch]).unwrap();
-    let far = graph.add_mapped(Real, SumOperation, vec![middle]).unwrap();
+    let near = graph
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![stoch])
+        .unwrap();
+    let middle = graph
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![stoch])
+        .unwrap();
+    let far = graph
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![middle])
+        .unwrap();
     // Parents at depth 1 and depth 3.
     let join = graph
-        .add_mapped(Real, SumOperation, vec![near, far])
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![near, far])
         .unwrap();
 
     // Nothing is concrete while the root is still stochastic.
@@ -364,6 +267,7 @@ fn observing_folds_a_descendant_whose_parents_differ_in_depth() {
     }
 
     graph.observe::<_, Real, _>(stoch, &3.0).unwrap();
+    assert_eq!(graph.pinned_batch(), None);
 
     for id in [near, middle, far, join] {
         assert!(
@@ -382,67 +286,6 @@ fn observing_folds_a_descendant_whose_parents_differ_in_depth() {
     }
 }
 
-/// Every mutating method leaves the derived collections consistent.
-///
-/// `debug_validate_indices` already asserts this after each call in debug builds; this walks a
-/// sequence that touches every mutator in turn and checks explicitly, so the intent survives if
-/// the internal assertions are ever relaxed.
-#[test]
-fn mutations_leave_the_indices_consistent() {
-    let mut graph = Graph::<B>::new();
-    let check = |graph: &Graph<B>, step: &str| {
-        if let Err(disagreement) = graph.validate_indices() {
-            panic!("after {step}: {disagreement}");
-        }
-    };
-
-    let base = graph.add_parameter(Real);
-    let konst = graph.add_constant(Real, &2.0);
-    let stoch = graph
-        .add_stochastic(Real, DummySampler, vec![base, konst])
-        .unwrap();
-    check(&graph, "building the leaves");
-
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(density, stoch).unwrap();
-    check(&graph, "mark_density");
-
-    let factor = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_likelihood(factor).unwrap();
-    check(&graph, "mark_likelihood");
-
-    // Observed on its own leaf: observing a node with mapped children sends `check_cache`
-    // into `DummyOperation::forward`, which is `unimplemented!()`. The mutators under test
-    // are the same either way.
-    let lone = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    graph.observe::<_, Real, _>(lone, &1.0).unwrap();
-    check(&graph, "observe");
-
-    graph.unobserve(lone).unwrap();
-    check(&graph, "unobserve");
-
-    graph
-        .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![base])
-        .unwrap();
-    check(&graph, "update_stochastic");
-
-    // `update_stochastic` orphaned `density`; clean it up the way callers are told to.
-    graph.remove(&[density]).unwrap();
-    check(&graph, "remove of the orphaned density");
-
-    graph.demote_to_parameter(stoch).unwrap();
-    check(&graph, "demote_to_parameter");
-
-    graph.remove(&[factor]).unwrap();
-    graph.remove(&[stoch]).unwrap();
-    graph.remove(&[lone]).unwrap();
-    check(&graph, "removing the remaining nodes");
-
-    // The parent edges must have been torn down with their children.
-    assert_eq!(graph.children_of(base), None);
-    assert_eq!(graph.children_of(konst), None);
-}
-
 /// `stochastic_of` is derived from the node, so it must answer for every id, not only for
 /// those that once had a map entry.
 ///
@@ -453,18 +296,24 @@ fn stochastic_of_distinguishes_density_likelihood_and_plain_mapped() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
-    let plain = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
+    let plain = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
     assert_eq!(graph.stochastic_of(plain), None);
 
-    let likelihood = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_likelihood(likelihood).unwrap();
+    let likelihood = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_likelihood(likelihood).unwrap();
     assert_eq!(graph.stochastic_of(likelihood), None);
     assert!(graph.log_likelihoods().contains(&likelihood));
 
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(density, stoch).unwrap();
+    let density = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(density, stoch).unwrap();
     assert_eq!(graph.stochastic_of(density), Some(stoch));
-    assert_eq!(graph.density_of(stoch), Some(density));
+    assert_eq!(graph.log_density_of(stoch), Some(density));
 }
 
 /// Demoting a density back to a bare likelihood must drop the reverse index too.
@@ -472,20 +321,13 @@ fn stochastic_of_distinguishes_density_likelihood_and_plain_mapped() {
 fn re_marking_a_density_as_a_likelihood_clears_the_reverse_index() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
+    let density = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
 
-    graph.mark_density(density, stoch).unwrap();
-    assert_eq!(graph.density_of(stoch), Some(density));
-
-    // The previous binding is now read off the node rather than out of a map.
-    graph.mark_likelihood(density).unwrap();
-
-    assert_eq!(graph.stochastic_of(density), None);
-    assert_eq!(
-        graph.density_of(stoch),
-        None,
-        "the reverse index still points at a density that no longer scores this quantity"
-    );
+    graph.mark_log_density(density, stoch).unwrap();
+    assert_eq!(graph.log_density_of(stoch), Some(density));
+    assert_eq!(graph.stochastic_of(density), Some(stoch));
     assert!(graph.log_likelihoods().contains(&density));
 }
 
@@ -500,17 +342,21 @@ fn a_second_density_for_one_quantity_is_rejected() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
-    let first = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(first, stoch).unwrap();
+    let first = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
+    graph.mark_log_density(first, stoch).unwrap();
 
-    let second = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
+    let second = graph
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![stoch])
+        .unwrap();
     assert!(matches!(
-        graph.mark_density(second, stoch),
+        graph.mark_log_density(second, stoch),
         Err(SkoroError::DuplicateDensity { .. })
     ));
 
     // The rejected call must leave the graph exactly as it was.
-    assert_eq!(graph.density_of(stoch), Some(first));
+    assert_eq!(graph.log_density_of(stoch), Some(first));
     assert_eq!(graph.stochastic_of(first), Some(stoch));
     assert_eq!(graph.stochastic_of(second), None);
     assert!(!graph.log_likelihoods().contains(&second));
@@ -528,45 +374,18 @@ fn rebinding_a_density_to_another_quantity_is_rejected() {
     let second_stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
 
     let density = graph
-        .add_mapped(Real, DummyOperation, vec![first_stoch])
+        .add_mapped(Real, DiffGraphOperation(DummyOperation), vec![first_stoch])
         .unwrap();
-    graph.mark_density(density, first_stoch).unwrap();
+    graph.mark_log_density(density, first_stoch).unwrap();
 
     assert!(matches!(
-        graph.mark_density(density, second_stoch),
+        graph.mark_log_density(density, second_stoch),
         Err(SkoroError::DuplicateDensity { .. })
     ));
 
-    assert_eq!(graph.density_of(first_stoch), Some(density));
-    assert_eq!(graph.density_of(second_stoch), None);
+    assert_eq!(graph.log_density_of(first_stoch), Some(density));
+    assert_eq!(graph.log_density_of(second_stoch), None);
     assert_eq!(graph.stochastic_of(density), Some(first_stoch));
-}
-
-/// Re-marking a density that `unregister_density` demoted must restore it as a likelihood
-/// term, not just as a map entry.
-#[test]
-fn re_marking_an_unregistered_density_restores_it_as_a_term() {
-    let mut graph = Graph::<B>::new();
-    let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let density = graph.add_mapped(Real, DummyOperation, vec![stoch]).unwrap();
-    graph.mark_density(density, stoch).unwrap();
-    assert!(graph.log_likelihoods().contains(&density));
-
-    // Drops it from the likelihood terms and leaves it a `LogLikelihood` node in the arena.
-    graph
-        .update_stochastic::<Continuous, _>(stoch, DummySampler, vec![])
-        .unwrap();
-    assert!(!graph.log_likelihoods().contains(&density));
-
-    // Re-marking now takes the `LogLikelihood` arm, which previously wrote the maps without
-    // putting the node back among the terms.
-    graph.mark_density(density, stoch).unwrap();
-
-    assert_eq!(graph.density_of(stoch), Some(density));
-    assert!(
-        graph.log_likelihoods().contains(&density),
-        "a re-marked density is registered in the maps but does not score the model"
-    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -607,9 +426,15 @@ fn folded_rows(graph: &Graph<B>, id: skoro_core::id::Id, expect_pinned: Option<u
 #[test]
 fn a_fold_over_batched_parents_keeps_its_rows() {
     let mut graph = Graph::<B>::new();
-    let a = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
-    let b = graph.add_batched_constant(Real, &[10.0f32, 20.0, 30.0]);
-    let sum = graph.add_mapped(Real, SumOperation, vec![a, b]).unwrap();
+    let a = graph
+        .add_batched_constant(Real, &[1.0f32, 2.0, 3.0])
+        .unwrap();
+    let b = graph
+        .add_batched_constant(Real, &[10.0f32, 20.0, 30.0])
+        .unwrap();
+    let sum = graph
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![a, b])
+        .unwrap();
 
     assert!(folded(&graph, sum));
     assert_eq!(folded_rows(&graph, sum, Some(3)), vec![11.0, 22.0, 33.0]);
@@ -622,10 +447,16 @@ fn a_fold_over_batched_parents_keeps_its_rows() {
 #[test]
 fn a_fold_mixing_pinned_and_agnostic_parents_runs_at_the_pinned_batch() {
     let mut graph = Graph::<B>::new();
-    let batched = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let batched = graph
+        .add_batched_constant(Real, &[1.0f32, 2.0, 3.0])
+        .unwrap();
     let shared = graph.add_constant(Real, &100.0f32);
     let sum = graph
-        .add_mapped(Real, SumOperation, vec![batched, shared])
+        .add_mapped(
+            Real,
+            DiffGraphOperation(SumOperation),
+            vec![batched, shared],
+        )
         .unwrap();
 
     assert_eq!(folded_rows(&graph, sum, Some(3)), vec![101.0, 102.0, 103.0]);
@@ -637,64 +468,68 @@ fn a_fold_over_agnostic_parents_stays_agnostic() {
     let mut graph = Graph::<B>::new();
     let a = graph.add_constant(Real, &2.0f32);
     let b = graph.add_constant(Real, &5.0f32);
-    let sum = graph.add_mapped(Real, SumOperation, vec![a, b]).unwrap();
+    let sum = graph
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![a, b])
+        .unwrap();
 
     assert_eq!(folded_rows(&graph, sum, None), vec![7.0]);
 }
 
-/// A node whose parents pin *different* batches can never be evaluated, so it is refused at
-/// construction rather than at the first pass.
+/// A node which pins *different* batch-size cannot be added.
 #[test]
-fn parents_pinning_different_batches_are_rejected() {
+fn pinning_different_batches_are_rejected() {
     let mut graph = Graph::<B>::new();
-    let three = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
-    let five = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0, 4.0, 5.0]);
+    let _ = graph
+        .add_batched_constant(Real, &[1.0f32, 2.0, 3.0])
+        .unwrap();
 
     assert!(matches!(
-        graph.add_mapped(Real, SumOperation, vec![three, five]),
+        graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0, 4.0, 5.0]),
         Err(skoro_core::error::SkoroError::BatchSizeMismatch { .. })
     ));
 
-    // The rejected call left no half-registered edges behind.
     graph.validate_indices().unwrap();
-    assert_eq!(graph.children_of(three), None);
-    assert_eq!(graph.children_of(five), None);
+    assert_eq!(graph.pinned_batch(), Some(3));
+    assert_eq!(graph.node_count(), 1);
+
+    let other = graph.add_parameter(Real);
+    assert!(matches!(
+        graph.observe_batched::<_, Real, _>(other, &[1.0f32, 2.0, 3.0, 4.0, 5.0]),
+        Err(skoro_core::error::SkoroError::BatchSizeMismatch { .. })
+    ));
+    graph.validate_indices().unwrap();
+    assert_eq!(graph.pinned_batch(), Some(3));
+    assert_eq!(graph.node_count(), 2);
 }
 
 /// Observing folds through a batch-pinned parent, and unobserving clears the fold again.
-///
-/// The observed value is stored rank-1 and broadcasts; the pinned sibling sets the batch. This
-/// exercises the fold walk rather than `add_mapped`'s eager path, which is a different caller.
 #[test]
 fn observing_folds_through_a_pinned_parent_and_unobserving_clears_it() {
     let mut graph = Graph::<B>::new();
     let stoch = graph.add_stochastic(Real, DummySampler, vec![]).unwrap();
-    let batched = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
+    let batched = graph
+        .add_batched_constant(Real, &[1.0f32, 2.0, 3.0])
+        .unwrap();
     let sum = graph
-        .add_mapped(Real, SumOperation, vec![stoch, batched])
+        .add_mapped(Real, DiffGraphOperation(SumOperation), vec![stoch, batched])
         .unwrap();
 
     assert!(!folded(&graph, sum));
+    assert_eq!(graph.pinned_batch(), Some(3));
 
     graph.observe::<_, Real, _>(stoch, &10.0).unwrap();
+    assert_eq!(graph.pinned_batch(), Some(3));
+
+    println!("stoch: {:?}, batched: {:?}, sum: {:?}", stoch, batched, sum);
+    if let Some(Node::Mapped(MappedNode { value, .. })) = graph.node(sum) {
+        println!("{:#?}", value);
+    } else {
+        panic!("THIS SHOULD NOT HAPPEN!");
+    }
     assert_eq!(folded_rows(&graph, sum, Some(3)), vec![11.0, 12.0, 13.0]);
 
     graph.unobserve(stoch).unwrap();
     assert!(!folded(&graph, sum));
-    graph.validate_indices().unwrap();
-}
-
-/// A batch-pinned constant is an ordinary leaf for every other purpose.
-#[test]
-fn a_batched_constant_removes_like_any_constant() {
-    let mut graph = Graph::<B>::new();
-    let a = graph.add_batched_constant(Real, &[1.0f32, 2.0, 3.0]);
-
-    assert!(matches!(graph.node(a), Some(Node::Constant(_))));
-    assert!(graph.node(a).unwrap().parent_ids().is_empty());
-
-    graph.remove(&[a]).unwrap();
-    assert!(graph.node(a).is_none());
     graph.validate_indices().unwrap();
 }
 

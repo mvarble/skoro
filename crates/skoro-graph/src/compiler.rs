@@ -476,7 +476,7 @@ fn non_op_forward<B: Backend>(
             value,
             quantity_type,
         } => {
-            let input = value.materialize(options.batch_size, *id)?;
+            let input = value.materialize(options.batch_size)?;
             out.constants
                 .insert(*id, input.clone(), quantity_type.clone());
             point_seq[index] = Some(input);
@@ -554,7 +554,7 @@ fn forward_only_op<B: Backend>(
     out: &mut ForwardOutput<B>,
 ) -> SkoroResult<()> {
     if let Some(value) = value {
-        let input = value.materialize(options.batch_size, id)?;
+        let input = value.materialize(options.batch_size)?;
         out.evaluations
             .insert(id, input.clone(), quantity_type.clone());
         tensor_seq[index] = Some(input);
