@@ -24,9 +24,7 @@ pub type B = NdArrayBackend<f64, i32>;
 pub const DELTA: f64 = 1e-6;
 pub const EPSILON: f64 = 1e-5;
 
-// ---------------------------------------------------------------------------------------------
 // Tensor helpers
-// ---------------------------------------------------------------------------------------------
 
 pub fn tensor2(data: Vec<f64>, batch: usize, components: usize) -> Tensor<B, 2> {
     Tensor::from_data(
@@ -70,9 +68,7 @@ pub fn basis(dim: usize, i: usize, batch: usize) -> Tensor<B, 2> {
     tensor2(data, 1, dim).repeat_dim(0, batch)
 }
 
-// ---------------------------------------------------------------------------------------------
 // Mode accessors
-// ---------------------------------------------------------------------------------------------
 //
 // Each of these asserts the contract every `DiffOperation` owes: the variant it returns must
 // match the variant it was given. Routing that assertion through one place is what keeps a
@@ -144,9 +140,7 @@ fn stepped(inputs: &[Tensor<B, 2>], wrt: usize, i: usize, delta: f64) -> Vec<Ten
     out
 }
 
-// ---------------------------------------------------------------------------------------------
 // Numerical checks
-// ---------------------------------------------------------------------------------------------
 
 /// Check the pushforward with respect to input `wrt` against a forward difference.
 ///

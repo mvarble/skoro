@@ -58,7 +58,9 @@ fn stochastic(graph: &mut Graph<B>, parents: Vec<Id>) -> Id {
         .unwrap()
 }
 
-// =============================================================================================
+/// The shape of the arena: parents recorded on a node and inverted into its children, a
+/// topological order that puts ancestors first, and the quantity type each node kind reports.
+/// A parent that does not exist is rejected at the call that named it.
 mod topology {
     use super::*;
 
@@ -196,7 +198,10 @@ mod topology {
     }
 }
 
-// =============================================================================================
+/// `remove` is leaf-only and refuses a node any survivor still points into; `remove_closure` is the
+/// downward walk that takes the whole cone instead. What both must leave consistent is the density
+/// bookkeeping: removing a scored quantity retires its orphaned density, and removing a density
+/// clears both indices that named it.
 mod removal {
     use super::*;
 
@@ -386,7 +391,9 @@ mod removal {
     }
 }
 
-// =============================================================================================
+/// Marking a mapped node as a likelihood term, and as the density *of* a quantity. The two marks
+/// are distinct states, the transitions between them are idempotent, and the ones that would leave
+/// a quantity with two densities -- or a density bound to two quantities -- are rejected.
 mod density_marks {
     use super::*;
 
@@ -590,7 +597,9 @@ mod density_marks {
     }
 }
 
-// =============================================================================================
+/// `demote_to_parameter` re-roots a stochastic quantity in place: it keeps its identity and every
+/// dependent, and gives up its sampler, its parents and its own density. Demoting a parameter is a
+/// no-op and anything else is rejected, so a caller can demote without first asking what it holds.
 mod demotion {
     use super::*;
 
@@ -673,7 +682,10 @@ mod demotion {
     }
 }
 
-// =============================================================================================
+/// Binding a quantity to a value, and the fold that runs when one does. Observation is reversible
+/// for both node kinds and re-observing replaces rather than accumulates. The fold is the subtle
+/// half: it has to reach a descendant whose parents differ in depth, read a cousin from its cache,
+/// walk past a stochastic descendant, and stop at one with a free parent.
 mod observation {
     use super::*;
 
@@ -947,7 +959,10 @@ mod observation {
     }
 }
 
-// =============================================================================================
+/// A pinned batch propagates through a fold and is *checked* rather than broadcast: parents at
+/// different batches are rejected, an agnostic fold stays agnostic, and a mix runs at the pinned
+/// size. The pin is owned by the observation that set it, so unobserving releases it and
+/// re-observing the same quantity is not a self-conflict.
 mod batch_pinning {
     use super::*;
 
@@ -1169,7 +1184,9 @@ mod batch_pinning {
     }
 }
 
-// =============================================================================================
+/// A stacked tangent builds internal nodes no caller holds a handle for. Only those internals are
+/// private -- the members are not -- and retiring the stacked tangent reclaims them, to a fixpoint,
+/// while an unrelated removal reclaims nothing. Without this they would be a leak nothing reports.
 mod private_nodes {
     use super::*;
 
@@ -1316,7 +1333,6 @@ mod private_nodes {
     }
 }
 
-// =============================================================================================
 /// Paths that only a *likelihood factor* reaches.
 ///
 /// `Mapped` and `LogLikelihood` are the same shape and are matched together almost everywhere,
@@ -1373,7 +1389,6 @@ mod factors_in_the_walks {
     }
 }
 
-// =============================================================================================
 /// Degenerate shapes, where a walk has nothing to walk.
 mod degenerate {
     use super::*;

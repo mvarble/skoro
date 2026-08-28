@@ -12,7 +12,10 @@ use skoro_operation::{
     ops::{ScalarDivision, ScalarDivisionVjpState, ScalarMultiplication},
 };
 
-// =============================================================================================
+/// `(α, v) ↦ α v`: bilinear, so both inputs are differentiable and the second-order term is the
+/// cross term between them. Every gate combination is run, because which inputs are free decides
+/// which states the operation may return -- and the derivatives are checked against forward
+/// differences rather than against the closed form the implementation already used.
 mod scalar_multiplication {
     use super::*;
 
@@ -112,7 +115,10 @@ mod scalar_multiplication {
     }
 }
 
-// =============================================================================================
+/// `(α, v) ↦ v/α`: bilinear in the same slots but genuinely nonlinear in the scalar, so the scalar
+/// keeps its curvature even when the vector is constant. That asymmetry is what most of these
+/// cases pin -- a constant vector must not flatten the scalar, while a constant scalar leaves a
+/// linear map behind.
 mod scalar_division {
     use super::*;
 
@@ -378,7 +384,6 @@ mod scalar_division {
     }
 }
 
-// =============================================================================================
 /// `α ↦ c/α`: one differentiable input, but genuinely nonlinear, so it belongs here rather than
 /// with the literals.
 mod literal_scalar_division_left {

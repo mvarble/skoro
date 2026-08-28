@@ -91,9 +91,7 @@ fn t3(v: f64) -> skoro_backend::Tensor<B, 3> {
     tensor3(vec![v], [1, 1, 1])
 }
 
-// ---------------------------------------------------------------------------------------------
 // Running a hand-built sequence in each of the four modes.
-// ---------------------------------------------------------------------------------------------
 
 fn run_forward(
     ops: &[Box<dyn DynSequenceOperation<B>>],
@@ -165,7 +163,9 @@ fn run_hvp(
     [ord1_seeds, ord2_seeds]
 }
 
-// =============================================================================================
+/// Whole programs rather than single operations: a unary chain, a composition, and a fan-out whose
+/// pullback has to reach both branches. This is where a step that worked alone shows whether it
+/// composes.
 mod chains {
     use super::*;
 
@@ -357,7 +357,6 @@ mod chains {
     }
 }
 
-// =============================================================================================
 /// The adapter's own bookkeeping, separate from the mathematics it delegates.
 mod adapter {
     use super::*;
@@ -507,7 +506,6 @@ mod adapter {
     }
 }
 
-// =============================================================================================
 /// The `DiffOperationForward` constructors, which every operation returns through.
 mod forward_variants {
     use super::*;

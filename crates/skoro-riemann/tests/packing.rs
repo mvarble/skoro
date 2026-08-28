@@ -1,3 +1,11 @@
+//! `Packable` for the flat manifolds, and the container types a caller packs from.
+//!
+//! A manifold's `pack`/`unpack` pair is an offset calculation over a flat element slice, so the
+//! round trip is the whole claim: what comes back out at an offset is what went in, for every
+//! element type the backends use. The dynamic manifolds carry their dimension at runtime, which
+//! is the one place a shape can disagree with the data -- `shape_checks` is where that disagrees
+//! loudly instead of writing past the block.
+
 use skoro_backend::Element;
 use skoro_core::pack::Packable;
 use skoro_riemann::{
@@ -6,251 +14,260 @@ use skoro_riemann::{
     real::Real,
 };
 
-fn real_packing_impl<F>()
-where
-    F: Element + PartialEq,
-    Real: Packable<F, F>,
-{
-    let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
-    let ty = Real;
-    assert_eq!(ty.unpack(&packed, 0), F::from_elem(1.0));
-    assert_eq!(ty.unpack(&packed, 1), F::from_elem(2.0));
-    assert_eq!(ty.unpack(&packed, 2), F::from_elem(3.0));
-    assert_eq!(ty.unpack(&packed, 3), F::from_elem(4.0));
-    assert_eq!(ty.unpack(&packed, 4), F::from_elem(5.0));
-    assert_eq!(ty.unpack(&packed, 5), F::from_elem(6.0));
-    ty.pack(&F::from_elem(3.0), 0, &mut packed);
-    ty.pack(&F::from_elem(10.0), 1, &mut packed);
-    ty.pack(&F::from_elem(0.3), 2, &mut packed);
-    ty.pack(&F::from_elem(-8.1), 3, &mut packed);
-    ty.pack(&F::from_elem(0.0), 4, &mut packed);
-    ty.pack(&F::from_elem(-3.0), 5, &mut packed);
-    assert_eq!(
-        packed,
-        [
-            F::from_elem(3.0),
-            F::from_elem(10.0),
-            F::from_elem(0.3),
-            F::from_elem(-8.1),
-            F::from_elem(0.0),
-            F::from_elem(-3.0)
-        ]
-    );
+/// `pack`/`unpack` for each flat manifold, at an offset into a shared element slice. What comes
+/// back out is what went in, for every element type the backends use -- the packing is generic in
+/// it, and only running all four catches a conversion that is lossless in one and not the others.
+mod round_trips {
+    use super::*;
+
+    fn real_packing_impl<F>()
+    where
+        F: Element + PartialEq,
+        Real: Packable<F, F>,
+    {
+        let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
+        let ty = Real;
+        assert_eq!(ty.unpack(&packed, 0), F::from_elem(1.0));
+        assert_eq!(ty.unpack(&packed, 1), F::from_elem(2.0));
+        assert_eq!(ty.unpack(&packed, 2), F::from_elem(3.0));
+        assert_eq!(ty.unpack(&packed, 3), F::from_elem(4.0));
+        assert_eq!(ty.unpack(&packed, 4), F::from_elem(5.0));
+        assert_eq!(ty.unpack(&packed, 5), F::from_elem(6.0));
+        ty.pack(&F::from_elem(3.0), 0, &mut packed);
+        ty.pack(&F::from_elem(10.0), 1, &mut packed);
+        ty.pack(&F::from_elem(0.3), 2, &mut packed);
+        ty.pack(&F::from_elem(-8.1), 3, &mut packed);
+        ty.pack(&F::from_elem(0.0), 4, &mut packed);
+        ty.pack(&F::from_elem(-3.0), 5, &mut packed);
+        assert_eq!(
+            packed,
+            [
+                F::from_elem(3.0),
+                F::from_elem(10.0),
+                F::from_elem(0.3),
+                F::from_elem(-8.1),
+                F::from_elem(0.0),
+                F::from_elem(-3.0)
+            ]
+        );
+    }
+
+    fn dyn_euclidean_packing_impl<F>()
+    where
+        F: Element + PartialEq,
+        EuclideanD: Packable<F, VectorD<F>>,
+    {
+        let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
+        let ty = EuclideanD(2);
+        assert_eq!(
+            ty.unpack(&packed, 0),
+            VectorD::<F>::new(&[F::from_elem(1.0), F::from_elem(2.0)])
+        );
+        assert_eq!(
+            ty.unpack(&packed, 2),
+            VectorD::<F>::new(&[F::from_elem(3.0), F::from_elem(4.0)])
+        );
+        assert_eq!(
+            ty.unpack(&packed, 4),
+            VectorD::<F>::new(&[F::from_elem(5.0), F::from_elem(6.0)])
+        );
+        ty.pack(
+            &VectorD::<F>::new(&[F::from_elem(-5.0), F::from_elem(6.0)]),
+            0,
+            &mut packed,
+        );
+        ty.pack(
+            &VectorD::<F>::new(&[F::from_elem(0.0), F::from_elem(3.0)]),
+            2,
+            &mut packed,
+        );
+        ty.pack(
+            &VectorD::<F>::new(&[F::from_elem(1.0), F::from_elem(1.0)]),
+            4,
+            &mut packed,
+        );
+        assert_eq!(
+            packed,
+            [
+                F::from_elem(-5.0),
+                F::from_elem(6.0),
+                F::from_elem(0.0),
+                F::from_elem(3.0),
+                F::from_elem(1.0),
+                F::from_elem(1.0)
+            ]
+        );
+    }
+
+    fn euclidean_packing_impl<F>()
+    where
+        F: Element + PartialEq,
+        Euclidean<2>: Packable<F, Vector<2, F>>,
+    {
+        let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
+        let ty = Euclidean::<2>;
+        assert_eq!(
+            ty.unpack(&packed, 0),
+            Vector::<2, F>::new([F::from_elem(1.0), F::from_elem(2.0)])
+        );
+        assert_eq!(
+            ty.unpack(&packed, 2),
+            Vector::<2, F>::new([F::from_elem(3.0), F::from_elem(4.0)])
+        );
+        assert_eq!(
+            ty.unpack(&packed, 4),
+            Vector::<2, F>::new([F::from_elem(5.0), F::from_elem(6.0)])
+        );
+        ty.pack(
+            &Vector::<2, F>::new([F::from_elem(-5.0), F::from_elem(6.0)]),
+            0,
+            &mut packed,
+        );
+        ty.pack(
+            &Vector::<2, F>::new([F::from_elem(0.0), F::from_elem(3.0)]),
+            2,
+            &mut packed,
+        );
+        ty.pack(
+            &Vector::<2, F>::new([F::from_elem(1.0), F::from_elem(1.0)]),
+            4,
+            &mut packed,
+        );
+        assert_eq!(
+            packed,
+            [
+                F::from_elem(-5.0),
+                F::from_elem(6.0),
+                F::from_elem(0.0),
+                F::from_elem(3.0),
+                F::from_elem(1.0),
+                F::from_elem(1.0)
+            ]
+        );
+    }
+
+    fn dyn_euclidean_matrix_packing_impl<F>()
+    where
+        F: Element + PartialEq,
+        EuclideanMatrixD: Packable<F, MatrixD<F>>,
+    {
+        let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(F::from_elem);
+        let ty = EuclideanMatrixD(2, 2);
+        assert_eq!(
+            ty.unpack(&packed, 0),
+            MatrixD::<F>::new(2, 2, &[1.0, 2.0, 3.0, 4.0].map(F::from_elem))
+        );
+        assert_eq!(
+            ty.unpack(&packed, 4),
+            MatrixD::<F>::new(2, 2, &[5.0, 6.0, 7.0, 8.0].map(F::from_elem))
+        );
+        ty.pack(
+            &MatrixD::<F>::new(2, 2, &[-1.0, 3.0, 4.0, 5.0].map(F::from_elem)),
+            0,
+            &mut packed,
+        );
+        ty.pack(
+            &MatrixD::<F>::new(2, 2, &[1.0, -3.0, 0.0, 5.1].map(F::from_elem)),
+            4,
+            &mut packed,
+        );
+        assert_eq!(
+            packed,
+            [-1.0, 3.0, 4.0, 5.0, 1.0, -3.0, 0.0, 5.1].map(F::from_elem)
+        );
+    }
+
+    fn euclidean_matrix_packing_impl<F>()
+    where
+        F: Element + PartialEq,
+        EuclideanMatrix<2, 2>: Packable<F, Matrix<2, 2, F>>,
+    {
+        let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(F::from_elem);
+        let ty = EuclideanMatrix::<2, 2>;
+        assert_eq!(
+            ty.unpack(&packed, 0),
+            Matrix::<2, 2, F>::new(&[1.0, 2.0, 3.0, 4.0].map(F::from_elem))
+        );
+        assert_eq!(
+            ty.unpack(&packed, 4),
+            Matrix::<2, 2, F>::new(&[5.0, 6.0, 7.0, 8.0].map(F::from_elem))
+        );
+        ty.pack(
+            &Matrix::<2, 2, F>::new(&[-1.0, 3.0, 4.0, 5.0].map(F::from_elem)),
+            0,
+            &mut packed,
+        );
+        ty.pack(
+            &Matrix::<2, 2, F>::new(&[1.0, -3.0, 0.0, 5.1].map(F::from_elem)),
+            4,
+            &mut packed,
+        );
+        assert_eq!(
+            packed,
+            [-1.0, 3.0, 4.0, 5.0, 1.0, -3.0, 0.0, 5.1].map(F::from_elem)
+        );
+    }
+
+    #[test]
+    fn real_packing() {
+        real_packing_impl::<f32>();
+        real_packing_impl::<f64>();
+    }
+
+    #[test]
+    fn dyn_euclidean_packing() {
+        dyn_euclidean_packing_impl::<f32>();
+        dyn_euclidean_packing_impl::<f64>();
+    }
+
+    #[test]
+    fn euclidean_packing() {
+        euclidean_packing_impl::<f32>();
+        euclidean_packing_impl::<f64>();
+    }
+
+    #[test]
+    fn dyn_euclidean_matrix_packing() {
+        dyn_euclidean_matrix_packing_impl::<f32>();
+        dyn_euclidean_matrix_packing_impl::<f64>();
+    }
+
+    #[test]
+    fn euclidean_matrix_packing() {
+        euclidean_matrix_packing_impl::<f32>();
+        euclidean_matrix_packing_impl::<f64>();
+    }
 }
 
-fn dyn_euclidean_packing_impl<F>()
-where
-    F: Element + PartialEq,
-    EuclideanD: Packable<F, VectorD<F>>,
-{
-    let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
-    let ty = EuclideanD(2);
-    assert_eq!(
-        ty.unpack(&packed, 0),
-        VectorD::<F>::new(&[F::from_elem(1.0), F::from_elem(2.0)])
-    );
-    assert_eq!(
-        ty.unpack(&packed, 2),
-        VectorD::<F>::new(&[F::from_elem(3.0), F::from_elem(4.0)])
-    );
-    assert_eq!(
-        ty.unpack(&packed, 4),
-        VectorD::<F>::new(&[F::from_elem(5.0), F::from_elem(6.0)])
-    );
-    ty.pack(
-        &VectorD::<F>::new(&[F::from_elem(-5.0), F::from_elem(6.0)]),
-        0,
-        &mut packed,
-    );
-    ty.pack(
-        &VectorD::<F>::new(&[F::from_elem(0.0), F::from_elem(3.0)]),
-        2,
-        &mut packed,
-    );
-    ty.pack(
-        &VectorD::<F>::new(&[F::from_elem(1.0), F::from_elem(1.0)]),
-        4,
-        &mut packed,
-    );
-    assert_eq!(
-        packed,
-        [
-            F::from_elem(-5.0),
-            F::from_elem(6.0),
-            F::from_elem(0.0),
-            F::from_elem(3.0),
-            F::from_elem(1.0),
-            F::from_elem(1.0)
-        ]
-    );
+/// The dynamically dimensioned manifolds carry their dimension at runtime, which is the one place
+/// the shape can disagree with the data handed over. It panics naming both shapes rather than
+/// writing past the block it was given.
+mod shape_checks {
+    use super::*;
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot pack vector data of length 2 into a Euclidean space of dimension 4"
+    )]
+    fn failed_dyn_euclidean_packing() {
+        let mut packed = [0.0; 4];
+        EuclideanD(4).pack(&VectorD::<f32>::new(&[1.0, 2.0]), 0, &mut packed);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot pack matrix data of shape 2×1 into a Euclidean matrix space of shape 2×2"
+    )]
+    fn failed_dyn_euclidean_matrix_packing() {
+        let mut packed = [0.0; 4];
+        EuclideanMatrixD(2, 2).pack(&MatrixD::<f32>::new(2, 1, &[1.0, 2.0]), 0, &mut packed);
+    }
 }
 
-fn euclidean_packing_impl<F>()
-where
-    F: Element + PartialEq,
-    Euclidean<2>: Packable<F, Vector<2, F>>,
-{
-    let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].map(F::from_elem);
-    let ty = Euclidean::<2>;
-    assert_eq!(
-        ty.unpack(&packed, 0),
-        Vector::<2, F>::new([F::from_elem(1.0), F::from_elem(2.0)])
-    );
-    assert_eq!(
-        ty.unpack(&packed, 2),
-        Vector::<2, F>::new([F::from_elem(3.0), F::from_elem(4.0)])
-    );
-    assert_eq!(
-        ty.unpack(&packed, 4),
-        Vector::<2, F>::new([F::from_elem(5.0), F::from_elem(6.0)])
-    );
-    ty.pack(
-        &Vector::<2, F>::new([F::from_elem(-5.0), F::from_elem(6.0)]),
-        0,
-        &mut packed,
-    );
-    ty.pack(
-        &Vector::<2, F>::new([F::from_elem(0.0), F::from_elem(3.0)]),
-        2,
-        &mut packed,
-    );
-    ty.pack(
-        &Vector::<2, F>::new([F::from_elem(1.0), F::from_elem(1.0)]),
-        4,
-        &mut packed,
-    );
-    assert_eq!(
-        packed,
-        [
-            F::from_elem(-5.0),
-            F::from_elem(6.0),
-            F::from_elem(0.0),
-            F::from_elem(3.0),
-            F::from_elem(1.0),
-            F::from_elem(1.0)
-        ]
-    );
-}
-
-fn dyn_euclidean_matrix_packing_impl<F>()
-where
-    F: Element + PartialEq,
-    EuclideanMatrixD: Packable<F, MatrixD<F>>,
-{
-    let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(F::from_elem);
-    let ty = EuclideanMatrixD(2, 2);
-    assert_eq!(
-        ty.unpack(&packed, 0),
-        MatrixD::<F>::new(2, 2, &[1.0, 2.0, 3.0, 4.0].map(F::from_elem))
-    );
-    assert_eq!(
-        ty.unpack(&packed, 4),
-        MatrixD::<F>::new(2, 2, &[5.0, 6.0, 7.0, 8.0].map(F::from_elem))
-    );
-    ty.pack(
-        &MatrixD::<F>::new(2, 2, &[-1.0, 3.0, 4.0, 5.0].map(F::from_elem)),
-        0,
-        &mut packed,
-    );
-    ty.pack(
-        &MatrixD::<F>::new(2, 2, &[1.0, -3.0, 0.0, 5.1].map(F::from_elem)),
-        4,
-        &mut packed,
-    );
-    assert_eq!(
-        packed,
-        [-1.0, 3.0, 4.0, 5.0, 1.0, -3.0, 0.0, 5.1].map(F::from_elem)
-    );
-}
-
-fn euclidean_matrix_packing_impl<F>()
-where
-    F: Element + PartialEq,
-    EuclideanMatrix<2, 2>: Packable<F, Matrix<2, 2, F>>,
-{
-    let mut packed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(F::from_elem);
-    let ty = EuclideanMatrix::<2, 2>;
-    assert_eq!(
-        ty.unpack(&packed, 0),
-        Matrix::<2, 2, F>::new(&[1.0, 2.0, 3.0, 4.0].map(F::from_elem))
-    );
-    assert_eq!(
-        ty.unpack(&packed, 4),
-        Matrix::<2, 2, F>::new(&[5.0, 6.0, 7.0, 8.0].map(F::from_elem))
-    );
-    ty.pack(
-        &Matrix::<2, 2, F>::new(&[-1.0, 3.0, 4.0, 5.0].map(F::from_elem)),
-        0,
-        &mut packed,
-    );
-    ty.pack(
-        &Matrix::<2, 2, F>::new(&[1.0, -3.0, 0.0, 5.1].map(F::from_elem)),
-        4,
-        &mut packed,
-    );
-    assert_eq!(
-        packed,
-        [-1.0, 3.0, 4.0, 5.0, 1.0, -3.0, 0.0, 5.1].map(F::from_elem)
-    );
-}
-
-#[test]
-fn real_packing() {
-    real_packing_impl::<f32>();
-    real_packing_impl::<f64>();
-}
-
-#[test]
-fn dyn_euclidean_packing() {
-    dyn_euclidean_packing_impl::<f32>();
-    dyn_euclidean_packing_impl::<f64>();
-}
-
-#[test]
-fn euclidean_packing() {
-    euclidean_packing_impl::<f32>();
-    euclidean_packing_impl::<f64>();
-}
-
-#[test]
-fn dyn_euclidean_matrix_packing() {
-    dyn_euclidean_matrix_packing_impl::<f32>();
-    dyn_euclidean_matrix_packing_impl::<f64>();
-}
-
-#[test]
-fn euclidean_matrix_packing() {
-    euclidean_matrix_packing_impl::<f32>();
-    euclidean_matrix_packing_impl::<f64>();
-}
-
-#[test]
-#[should_panic(
-    expected = "Cannot pack vector data of length 2 into a Euclidean space of dimension 4"
-)]
-fn failed_dyn_euclidean_packing() {
-    let mut packed = [0.0; 4];
-    EuclideanD(4).pack(&VectorD::<f32>::new(&[1.0, 2.0]), 0, &mut packed);
-}
-
-#[test]
-#[should_panic(
-    expected = "Cannot pack matrix data of shape 2×1 into a Euclidean matrix space of shape 2×2"
-)]
-fn failed_dyn_euclidean_matrix_packing() {
-    let mut packed = [0.0; 4];
-    EuclideanMatrixD(2, 2).pack(&MatrixD::<f32>::new(2, 1, &[1.0, 2.0]), 0, &mut packed);
-}
-
-// ==============================================================================================
-// Container mechanics
-// ==============================================================================================
-//
-// `VectorD`/`Vector` and `MatrixD`/`Matrix` are the concrete data types a caller packs *from*.
-// Their fallible constructors are the boundary where a shape mistake becomes a `SkoroError`
-// rather than a panic; the infallible ones are for callers that already know the shape and would
-// rather have a stack trace than a `Result`.
-
+/// `VectorD`/`Vector` and `MatrixD`/`Matrix`, the concrete data types a caller packs *from*.
+/// Their fallible constructors are the boundary where a shape mistake becomes a `SkoroError`
+/// rather than a panic; the infallible ones are for callers that already know the shape and would
+/// rather have a stack trace than a `Result`.
 mod containers {
     use skoro_core::error::SkoroError;
     use skoro_riemann::{
@@ -396,6 +413,9 @@ mod containers {
         assert!(Matrix::<2, 2, f64>::try_new(&[1.0, 2.0, 3.0, 4.0]).is_ok());
     }
 
+    /// The other half of that trade, one case per infallible constructor: a length that disagrees with
+    /// the shape panics naming the constructor, so the stack trace points at the call site rather than
+    /// at the first operation to read a short buffer.
     mod infallible_constructors_panic {
         use super::*;
 

@@ -47,7 +47,9 @@ fn fixture() -> (Graph<B>, Id, Id, PointMap<B>) {
     (graph, r, v, map)
 }
 
-// =============================================================================================
+/// `PointMap` as a container: insertion, lookup, iteration and the accessors a caller reaches for
+/// before any geometry is involved. It behaves like a `HashMap` in these regards, and the tests
+/// say so explicitly so that a change to the storage cannot quietly alter them.
 mod map_mechanics {
     use super::*;
 
@@ -120,7 +122,9 @@ mod map_mechanics {
     }
 }
 
-// =============================================================================================
+/// Stepping a whole map by a map of tangent vectors, each quantity through its own manifold's
+/// retraction. `retract_mut` demands a tangent for every point it holds, which is why an optimizer
+/// cannot use it directly -- its map also holds constants it is not stepping.
 mod retraction {
     use super::*;
 
@@ -198,7 +202,9 @@ mod retraction {
     }
 }
 
-// =============================================================================================
+/// Stepping by one flat vector and a `TangentLayout` instead: this is the form an optimizer
+/// actually has, and it is *partial* by design, touching only the quantities the layout names and
+/// leaving the rest of the map alone.
 mod flat_retraction {
     use super::*;
 
@@ -282,7 +288,9 @@ mod flat_retraction {
     }
 }
 
-// =============================================================================================
+/// The other direction: two maps in, one tangent map out, `b ⊖ a` per quantity. The sign
+/// convention is fixed here -- `a.inverse_retract(b)` is the displacement *from* `a` -- and the
+/// opposite one negates every residual downstream while still minimizing to the same point.
 mod inverse_retraction {
     use super::*;
 

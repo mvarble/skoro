@@ -1,3 +1,10 @@
+//! `Normal` as a distribution: what it samples, and what it scores.
+//!
+//! The two halves of the `Distribution` contract, checked against the definition rather than
+//! against each other. The sampler is checked statistically -- a mean and a covariance recovered
+//! from many draws -- because a whitening applied in the wrong order still produces plausible
+//! numbers, and only the second moment tells the two apart.
+
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 

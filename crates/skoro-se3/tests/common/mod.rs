@@ -476,25 +476,45 @@ where
 #[macro_export]
 macro_rules! tests {
     ($B:ty, $delta:literal, $epsilon:literal) => {
-        #[test]
-        fn retract() {
-            common::retract_impl::<$B>($delta, $epsilon);
+        /// `retract` on `SE3`: the rotation through `SO3`'s own retraction and the translation added,
+        /// composed as one rigid-body step.
+        mod retraction {
+            #[test]
+            fn retract() {
+                super::common::retract_impl::<$B>($delta, $epsilon);
+            }
         }
-        #[test]
-        fn inverse_retract() {
-            common::inverse_retract_impl::<$B>($delta, $epsilon);
+
+        /// `b ⊖ a` on `SE3`, a genuine `Log(a⁻¹b)`. This is the residual a Gaussian factor over poses
+        /// whitens, and it is the only place in the workspace where the manifold dimension and the storage
+        /// size disagree by a factor a shape check would not catch.
+        mod inverse_retraction {
+            #[test]
+            fn inverse_retract() {
+                super::common::inverse_retract_impl::<$B>($delta, $epsilon);
+            }
         }
-        #[test]
-        fn layout_is_sized_by_dimension() {
-            common::layout_is_sized_by_dimension_impl::<$B>();
-        }
-        #[test]
-        fn mixed_layout_round_trip() {
-            common::mixed_layout_round_trip_impl::<$B>();
-        }
-        #[test]
-        fn retract_flat_is_partial() {
-            common::retract_flat_is_partial_impl::<$B>($delta, $epsilon);
+
+        /// Layout mechanics where dimension and storage genuinely diverge: `SE3` stores 12 components for
+        /// 6 degrees of freedom and `SO3` 9 for 3. A layout sized by `num_components` would build a 21-wide
+        /// vector where a 10-wide one belongs, and every Jacobian on it would be wrong in a way no
+        /// dimension check would catch. `retract_flat` steps only the quantities the layout names, and the
+        /// mixed round trip is the one place `Tril`, `SO3` and `SE3` appear in a single layout.
+        mod tangent_layout {
+            #[test]
+            fn layout_is_sized_by_dimension() {
+                super::common::layout_is_sized_by_dimension_impl::<$B>();
+            }
+
+            #[test]
+            fn mixed_layout_round_trip() {
+                super::common::mixed_layout_round_trip_impl::<$B>();
+            }
+
+            #[test]
+            fn retract_flat_is_partial() {
+                super::common::retract_flat_is_partial_impl::<$B>($delta, $epsilon);
+            }
         }
     };
 }

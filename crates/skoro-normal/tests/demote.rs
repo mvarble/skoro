@@ -53,197 +53,223 @@ fn log_density(model: &ModelClient<B>, pts: &HashMap<skoro_core::id::Id, Input<B
         .unwrap()[0]
 }
 
-#[test]
-fn demotion_drops_the_quantity_own_density() {
-    let (model, x) = unit_model(&[1.0, 2.0, 3.0]);
-    let pts = at(&x, [0.5, -1.0, 2.0]);
+/// What demotion does to the arena: the quantity drops its own density, becomes a parameter node
+/// with no parents, and keeps its identity and every dependent quantity. That last part is the
+/// point -- demotion re-roots a quantity, it does not replace it.
+mod topology {
+    use super::*;
 
-    let before = log_density(&model, &pts);
-    // A non-degenerate Gaussian density; the model has exactly this one term.
-    assert!(before.is_finite() && before != 0.0);
+    #[test]
+    fn demotion_drops_the_quantity_own_density() {
+        let (model, x) = unit_model(&[1.0, 2.0, 3.0]);
+        let pts = at(&x, [0.5, -1.0, 2.0]);
 
-    model.demote_to_parameter(&x).unwrap();
+        let before = log_density(&model, &pts);
+        // A non-degenerate Gaussian density; the model has exactly this one term.
+        assert!(before.is_finite() && before != 0.0);
 
-    // With its density unregistered and no factor supplied in its place, the model
-    // has no likelihood terms left.
-    let after = log_density(&model, &pts);
-    assert_eq!(after, 0.0);
+        model.demote_to_parameter(&x).unwrap();
+
+        // With its density unregistered and no factor supplied in its place, the model
+        // has no likelihood terms left.
+        let after = log_density(&model, &pts);
+        assert_eq!(after, 0.0);
+    }
+
+    #[test]
+    fn demotion_preserves_identity_and_dependents() {
+        let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
+        let y = (x.clone() * 2.0f32).unwrap();
+        let id_before = x.id();
+
+        let pts = at(&x, [1.0, 2.0, 3.0]);
+        let before = model
+            .evaluate_ids(&pts, &[y.id()])
+            .unwrap()
+            .evaluations
+            .get(&y.id())
+            .unwrap()
+            .0
+            .clone()
+            .unwrap_float()
+            .into_data()
+            .to_vec::<f32>()
+            .unwrap();
+
+        model.demote_to_parameter(&x).unwrap();
+
+        // Same `Id`, and the dependent still evaluates to the same thing.
+        assert_eq!(x.id(), id_before);
+        let after = model
+            .evaluate_ids(&pts, &[y.id()])
+            .unwrap()
+            .evaluations
+            .get(&y.id())
+            .unwrap()
+            .0
+            .clone()
+            .unwrap_float()
+            .into_data()
+            .to_vec::<f32>()
+            .unwrap();
+        assert_eq!(before, after);
+        assert_eq!(after, vec![2.0, 4.0, 6.0]);
+    }
+
+    #[test]
+    fn demoted_quantity_becomes_a_parameter_node_with_no_parents() {
+        let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
+
+        model.server_call(|server| {
+            assert!(matches!(
+                server.graph().node(x.id()),
+                Some(Node::Stochastic(_))
+            ));
+            // The distribution's mean and covariance are its parents.
+            assert_eq!(server.graph().node(x.id()).unwrap().parent_ids().len(), 2);
+        });
+
+        model.demote_to_parameter(&x).unwrap();
+
+        model.server_call(|server| {
+            assert!(matches!(
+                server.graph().node(x.id()),
+                Some(Node::Parameter(_))
+            ));
+            assert!(server.graph().node(x.id()).unwrap().parent_ids().is_empty());
+            // No likelihood terms remain, and the density back-reference is gone.
+            assert!(server.graph().log_likelihoods().is_empty());
+            assert!(server.graph().log_density_of(x.id()).is_none());
+        });
+    }
 }
 
-#[test]
-fn demotion_preserves_identity_and_dependents() {
-    let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
-    let y = (x.clone() * 2.0f32).unwrap();
-    let id_before = x.id();
+/// A demoted quantity is still a free variable, so it still owns a column of the VJP. A demotion
+/// that severed it from the differentiated path would leave an optimizer silently unable to move it.
+mod derivatives {
+    use super::*;
 
-    let pts = at(&x, [1.0, 2.0, 3.0]);
-    let before = model
-        .evaluate_ids(&pts, &[y.id()])
-        .unwrap()
-        .evaluations
-        .get(&y.id())
-        .unwrap()
-        .0
-        .clone()
-        .unwrap_float()
-        .into_data()
-        .to_vec::<f32>()
-        .unwrap();
+    #[test]
+    fn demoted_quantity_is_still_a_vjp_column() {
+        // The property the joint-factor design rests on: a demoted quantity carries no
+        // distribution of its own, yet gradients must still flow back to it so that a
+        // filter can differentiate a measurement with respect to a marginalized state.
+        let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
+        let y = (x.clone() * 3.0f32).unwrap();
+        model.demote_to_parameter(&x).unwrap();
 
-    model.demote_to_parameter(&x).unwrap();
-
-    // Same `Id`, and the dependent still evaluates to the same thing.
-    assert_eq!(x.id(), id_before);
-    let after = model
-        .evaluate_ids(&pts, &[y.id()])
-        .unwrap()
-        .evaluations
-        .get(&y.id())
-        .unwrap()
-        .0
-        .clone()
-        .unwrap_float()
-        .into_data()
-        .to_vec::<f32>()
-        .unwrap();
-    assert_eq!(before, after);
-    assert_eq!(after, vec![2.0, 4.0, 6.0]);
-}
-
-#[test]
-fn demoted_quantity_becomes_a_parameter_node_with_no_parents() {
-    let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
-
-    model.server_call(|server| {
-        assert!(matches!(
-            server.graph().node(x.id()),
-            Some(Node::Stochastic(_))
-        ));
-        // The distribution's mean and covariance are its parents.
-        assert_eq!(server.graph().node(x.id()).unwrap().parent_ids().len(), 2);
-    });
-
-    model.demote_to_parameter(&x).unwrap();
-
-    model.server_call(|server| {
-        assert!(matches!(
-            server.graph().node(x.id()),
-            Some(Node::Parameter(_))
-        ));
-        assert!(server.graph().node(x.id()).unwrap().parent_ids().is_empty());
-        // No likelihood terms remain, and the density back-reference is gone.
-        assert!(server.graph().log_likelihoods().is_empty());
-        assert!(server.graph().log_density_of(x.id()).is_none());
-    });
-}
-
-#[test]
-fn demoted_quantity_is_still_a_vjp_column() {
-    // The property the joint-factor design rests on: a demoted quantity carries no
-    // distribution of its own, yet gradients must still flow back to it so that a
-    // filter can differentiate a measurement with respect to a marginalized state.
-    let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
-    let y = (x.clone() * 3.0f32).unwrap();
-    model.demote_to_parameter(&x).unwrap();
-
-    let pts = at(&x, [1.0, 2.0, 3.0]);
-    let seed: HashMap<_, CotangentFrame<B>> = HashMap::from([(
-        y.id(),
-        CotangentFrame::<B>::from_data(
-            TensorData::new(vec![1.0f32, 0.0, 0.0], [1, DIM, 1]),
-            &Default::default(),
-        ),
-    )]);
-
-    let out = model.evaluate_ids_vjp(&pts, &seed, &[y.id()]).unwrap();
-    let grad = out
-        .cotangents
-        .get(&x.id())
-        .expect("a demoted quantity must receive a cotangent")
-        .clone()
-        .into_data()
-        .to_vec::<f32>()
-        .unwrap();
-    // d(3x)/dx applied to e_0 is 3 e_0.
-    assert_eq!(grad, vec![3.0, 0.0, 0.0]);
-}
-
-#[test]
-fn demotion_is_idempotent_and_rejects_non_stochastic() {
-    let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
-    model.demote_to_parameter(&x).unwrap();
-    // Already a parameter: a no-op, not an error.
-    model.demote_to_parameter(&x).unwrap();
-
-    let c = model.add_constant(EuclideanD(DIM), &VectorD::new(&[1.0, 1.0, 1.0]));
-    assert_eq!(
-        model.demote_to_parameter(&c),
-        Err(SkoroError::NotStochastic { id: c.id() })
-    );
-
-    let mapped = (c.clone() * 2.0f32).unwrap();
-    assert_eq!(
-        model.demote_to_parameter(&mapped),
-        Err(SkoroError::NotStochastic { id: mapped.id() })
-    );
-}
-
-#[test]
-fn a_joint_factor_over_demoted_quantities_scores_the_model() {
-    // The shape a marginalization leaves behind: two quantities with no distributions
-    // of their own, and one free-standing likelihood factor covering both.
-    let model = ModelClient::<B>::new(Default::default());
-    let mean = model.add_constant(EuclideanD(DIM), &VectorD::new(&[0.0, 0.0, 0.0]));
-    let cov = model.add_constant(Tril(DIM), &VectorD::new(&[1.0, 0.0, 1.0, 0.0, 0.0, 1.0]));
-    let a = model
-        .add_quantity(Normal::new(mean.clone(), cov.clone()))
-        .unwrap();
-    let b = model.add_quantity(Normal::new(mean, cov)).unwrap();
-
-    model.demote_to_parameter(&a).unwrap();
-    model.demote_to_parameter(&b).unwrap();
-    model.server_call(|server| assert!(server.graph().log_likelihoods().is_empty()));
-
-    // One factor over both, standing in for a correlated joint marginal.
-    let factor = (a.clone().norm_squared().unwrap() + b.clone().norm_squared().unwrap()).unwrap();
-    model.mark_likelihood(&factor).unwrap();
-
-    let pts = points()
-        .with_tensor(
-            a.id(),
-            Point::<B>::from_data(
-                TensorData::new(vec![1.0f32, 0.0, 0.0], [1, DIM]),
+        let pts = at(&x, [1.0, 2.0, 3.0]);
+        let seed: HashMap<_, CotangentFrame<B>> = HashMap::from([(
+            y.id(),
+            CotangentFrame::<B>::from_data(
+                TensorData::new(vec![1.0f32, 0.0, 0.0], [1, DIM, 1]),
                 &Default::default(),
             ),
-        )
-        .with_tensor(
-            b.id(),
-            Point::<B>::from_data(
-                TensorData::new(vec![0.0f32, 2.0, 0.0], [1, DIM]),
-                &Default::default(),
-            ),
-        )
-        .build();
+        )]);
 
-    // 1^2 + 2^2
-    assert_eq!(log_density(&model, &pts), 5.0);
-
-    // And gradients reach both demoted quantities through the shared factor.
-    let grad = model.evaluate_ord1(&pts, &factor).unwrap();
-    assert_eq!(
-        grad.cotangents[&a.id()]
+        let out = model.evaluate_ids_vjp(&pts, &seed, &[y.id()]).unwrap();
+        let grad = out
+            .cotangents
+            .get(&x.id())
+            .expect("a demoted quantity must receive a cotangent")
             .clone()
             .into_data()
             .to_vec::<f32>()
-            .unwrap(),
-        vec![2.0, 0.0, 0.0]
-    );
-    assert_eq!(
-        grad.cotangents[&b.id()]
-            .clone()
-            .into_data()
-            .to_vec::<f32>()
-            .unwrap(),
-        vec![0.0, 4.0, 0.0]
-    );
+            .unwrap();
+        // d(3x)/dx applied to e_0 is 3 e_0.
+        assert_eq!(grad, vec![3.0, 0.0, 0.0]);
+    }
+}
+
+/// Demoting a parameter twice is a no-op rather than an error, so a caller can demote without
+/// first asking what it holds; anything that is not stochastic is rejected outright.
+mod rejections {
+    use super::*;
+
+    #[test]
+    fn demotion_is_idempotent_and_rejects_non_stochastic() {
+        let (model, x) = unit_model(&[1.0, 1.0, 1.0]);
+        model.demote_to_parameter(&x).unwrap();
+        // Already a parameter: a no-op, not an error.
+        model.demote_to_parameter(&x).unwrap();
+
+        let c = model.add_constant(EuclideanD(DIM), &VectorD::new(&[1.0, 1.0, 1.0]));
+        assert_eq!(
+            model.demote_to_parameter(&c),
+            Err(SkoroError::NotStochastic { id: c.id() })
+        );
+
+        let mapped = (c.clone() * 2.0f32).unwrap();
+        assert_eq!(
+            model.demote_to_parameter(&mapped),
+            Err(SkoroError::NotStochastic { id: mapped.id() })
+        );
+    }
+}
+
+/// The reason to demote at all: once a quantity's marginal does not factorize, the joint arrives
+/// separately as a likelihood factor. This scores a real model through that route end to end.
+mod joint_factors {
+    use super::*;
+
+    #[test]
+    fn a_joint_factor_over_demoted_quantities_scores_the_model() {
+        // The shape a marginalization leaves behind: two quantities with no distributions
+        // of their own, and one free-standing likelihood factor covering both.
+        let model = ModelClient::<B>::new(Default::default());
+        let mean = model.add_constant(EuclideanD(DIM), &VectorD::new(&[0.0, 0.0, 0.0]));
+        let cov = model.add_constant(Tril(DIM), &VectorD::new(&[1.0, 0.0, 1.0, 0.0, 0.0, 1.0]));
+        let a = model
+            .add_quantity(Normal::new(mean.clone(), cov.clone()))
+            .unwrap();
+        let b = model.add_quantity(Normal::new(mean, cov)).unwrap();
+
+        model.demote_to_parameter(&a).unwrap();
+        model.demote_to_parameter(&b).unwrap();
+        model.server_call(|server| assert!(server.graph().log_likelihoods().is_empty()));
+
+        // One factor over both, standing in for a correlated joint marginal.
+        let factor =
+            (a.clone().norm_squared().unwrap() + b.clone().norm_squared().unwrap()).unwrap();
+        model.mark_likelihood(&factor).unwrap();
+
+        let pts = points()
+            .with_tensor(
+                a.id(),
+                Point::<B>::from_data(
+                    TensorData::new(vec![1.0f32, 0.0, 0.0], [1, DIM]),
+                    &Default::default(),
+                ),
+            )
+            .with_tensor(
+                b.id(),
+                Point::<B>::from_data(
+                    TensorData::new(vec![0.0f32, 2.0, 0.0], [1, DIM]),
+                    &Default::default(),
+                ),
+            )
+            .build();
+
+        // 1^2 + 2^2
+        assert_eq!(log_density(&model, &pts), 5.0);
+
+        // And gradients reach both demoted quantities through the shared factor.
+        let grad = model.evaluate_ord1(&pts, &factor).unwrap();
+        assert_eq!(
+            grad.cotangents[&a.id()]
+                .clone()
+                .into_data()
+                .to_vec::<f32>()
+                .unwrap(),
+            vec![2.0, 0.0, 0.0]
+        );
+        assert_eq!(
+            grad.cotangents[&b.id()]
+                .clone()
+                .into_data()
+                .to_vec::<f32>()
+                .unwrap(),
+            vec![0.0, 4.0, 0.0]
+        );
+    }
 }

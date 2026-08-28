@@ -12,7 +12,9 @@ use skoro_graph::test_utils::{
     test_hvp_cross_numerically, test_hvp_numerically, test_jvp_numerically, test_vjp_numerically,
 };
 
-// =============================================================================================
+/// The forward pass: a chain of mapped nodes evaluated to values, with every requested target
+/// reported back. The batch reconciliation lives here too -- an unbatched constant broadcasts to
+/// the running batch, and two points that disagree about it are rejected rather than reconciled.
 mod forward {
     use super::*;
 
@@ -93,7 +95,9 @@ mod forward {
     }
 }
 
-// =============================================================================================
+/// The pushforward, checked against a forward difference rather than a recorded constant.
+/// A rectangular Jacobian is included on purpose: a pass that confused its input and output widths
+/// is square-shaped and invisible until the two differ.
 mod jvp {
     use super::*;
 
@@ -129,7 +133,9 @@ mod jvp {
     }
 }
 
-// =============================================================================================
+/// The pullback, checked against a forward difference. A leaf the pass never reached gets a *zero*
+/// cotangent rather than none, because a caller assembling a Jacobian column needs a column there
+/// either way.
 mod vjp {
     use super::*;
 
@@ -193,7 +199,9 @@ mod vjp {
     }
 }
 
-// =============================================================================================
+/// The second-order pass, diagonal and mixed blocks alike, against forward differences. The two
+/// orders travel together by construction, so seeding one alone is rejected rather than quietly
+/// producing a first-order answer labelled as a second-order one.
 mod hvp {
     use super::*;
 
@@ -258,7 +266,9 @@ mod hvp {
     }
 }
 
-// =============================================================================================
+/// Scoring a model: one factor, several factors summed, and the first and second derivatives of
+/// that sum. A model with nothing marked scores zero rather than failing, since an unscored graph
+/// is a legal graph.
 mod log_density {
     use super::*;
 
@@ -316,7 +326,9 @@ mod log_density {
     }
 }
 
-// =============================================================================================
+/// Generating values through the model's samplers: a sampler sees its parents' realized values,
+/// supplied points are respected rather than resampled, and evaluation never samples on its own --
+/// a pass that did would make every evaluation of the same model give a different answer.
 mod sampling {
     use super::*;
     use skoro_riemann::real::Real;
@@ -416,7 +428,9 @@ mod sampling {
     }
 }
 
-// =============================================================================================
+/// What the compiler does before any pass runs: skipping discrete nodes, folding an all-constant
+/// subtree once and reusing it across passes, and letting a batch-pinned constant fix the running
+/// batch. A missing point is reported by every pass, not only the forward one.
 mod lowering {
     use super::*;
     use skoro_core::discrete::Integer;
@@ -633,7 +647,6 @@ mod lowering {
     }
 }
 
-// =============================================================================================
 /// Seeding paths that only a non-operation step reaches.
 ///
 /// `non_op_forward` threads tangents onto parameters *and* samplers, and `hvp_forward` seeds a
@@ -754,7 +767,9 @@ mod seeding {
     }
 }
 
-// =============================================================================================
+/// The conventions that hold when nothing was specified: an empty graph is the `Default`, an
+/// evaluation with no points runs at batch one, and a likelihood factor is an ordinary node that
+/// may be a parent like any other.
 mod defaults {
     use super::*;
     use skoro_graph::graph::Graph;

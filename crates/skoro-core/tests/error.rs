@@ -131,93 +131,107 @@ fn every_variant() -> Vec<(SkoroError, &'static str)> {
     ]
 }
 
-/// Every variant renders a non-empty message that names its own operands.
-#[test]
-fn every_variant_renders_its_operands() {
-    for (error, fragment) in every_variant() {
-        let rendered = error.to_string();
-        assert!(
-            rendered.contains(fragment),
-            "{error:?} rendered as {rendered:?}, which does not contain {fragment:?}"
-        );
-        // A message that is only its fragment is not a sentence.
-        assert!(
-            rendered.len() > fragment.len(),
-            "{error:?} rendered too tersely"
-        );
+/// Every variant renders a message that names its own operands. The fragments asserted are the
+/// parts a reader would search for -- the id, the two numbers -- never the boilerplate around
+/// them, so a variant that dropped its operand cannot pass on the wording alone.
+mod messages {
+    use super::*;
+
+    /// Every variant renders a non-empty message that names its own operands.
+    #[test]
+    fn every_variant_renders_its_operands() {
+        for (error, fragment) in every_variant() {
+            let rendered = error.to_string();
+            assert!(
+                rendered.contains(fragment),
+                "{error:?} rendered as {rendered:?}, which does not contain {fragment:?}"
+            );
+            // A message that is only its fragment is not a sentence.
+            assert!(
+                rendered.len() > fragment.len(),
+                "{error:?} rendered too tersely"
+            );
+        }
+    }
+
+    /// Variants carrying an id must print it, or a report cannot say *which* node failed.
+    #[test]
+    fn id_bearing_variants_print_the_id() {
+        let id = some_id();
+        for error in [
+            SkoroError::NodeNotFound { id },
+            SkoroError::QuantityTypeMismatch { id },
+            SkoroError::NotStochastic { id },
+            SkoroError::NotObservable { id },
+            SkoroError::NotLogLikelihood { id },
+            SkoroError::NotMapped { id },
+            SkoroError::NotReal { id },
+            SkoroError::NotContinuous { id },
+            SkoroError::DuplicateDensity { stochastic_id: id },
+            SkoroError::MustRemainDensity { id },
+            SkoroError::DanglingParent { parent_id: id },
+            SkoroError::Cycle { id },
+            SkoroError::NodeIsRecorded { id },
+            SkoroError::MissingPoint { id },
+            SkoroError::ManifoldMismatch { id },
+            SkoroError::DuplicateLayoutId { id },
+            SkoroError::IdNotInLayout { id },
+        ] {
+            let rendered = error.to_string();
+            assert!(
+                rendered.contains(&format!("{id:?}")),
+                "{error:?} does not name its id"
+            );
+        }
     }
 }
 
-/// Variants carrying an id must print it, or a report cannot say *which* node failed.
-#[test]
-fn id_bearing_variants_print_the_id() {
-    let id = some_id();
-    for error in [
-        SkoroError::NodeNotFound { id },
-        SkoroError::QuantityTypeMismatch { id },
-        SkoroError::NotStochastic { id },
-        SkoroError::NotObservable { id },
-        SkoroError::NotLogLikelihood { id },
-        SkoroError::NotMapped { id },
-        SkoroError::NotReal { id },
-        SkoroError::NotContinuous { id },
-        SkoroError::DuplicateDensity { stochastic_id: id },
-        SkoroError::MustRemainDensity { id },
-        SkoroError::DanglingParent { parent_id: id },
-        SkoroError::Cycle { id },
-        SkoroError::NodeIsRecorded { id },
-        SkoroError::MissingPoint { id },
-        SkoroError::ManifoldMismatch { id },
-        SkoroError::DuplicateLayoutId { id },
-        SkoroError::IdNotInLayout { id },
-    ] {
-        let rendered = error.to_string();
-        assert!(
-            rendered.contains(&format!("{id:?}")),
-            "{error:?} does not name its id"
-        );
+/// `SkoroError` as an ordinary error type: a real `std::error::Error`, comparable, cloneable, and
+/// carried by the `SkoroResult` alias. That is what lets it compose with `?` and lets a test say
+/// `assert_eq!(err, expected)` rather than matching on a shape.
+mod interop {
+    use super::*;
+
+    /// It is a real `std::error::Error`, so it composes with `?` and with error-reporting crates.
+    #[test]
+    fn it_is_a_standard_error() {
+        let error = SkoroError::InconsistentCotangents;
+        let boxed: Box<dyn std::error::Error> = Box::new(error.clone());
+        assert_eq!(boxed.to_string(), error.to_string());
+        assert!(std::error::Error::source(&error).is_none());
     }
-}
 
-/// It is a real `std::error::Error`, so it composes with `?` and with error-reporting crates.
-#[test]
-fn it_is_a_standard_error() {
-    let error = SkoroError::InconsistentCotangents;
-    let boxed: Box<dyn std::error::Error> = Box::new(error.clone());
-    assert_eq!(boxed.to_string(), error.to_string());
-    assert!(std::error::Error::source(&error).is_none());
-}
-
-/// Comparable and cloneable, which is what lets a test say `assert_eq!(err, expected)` rather
-/// than matching on a shape.
-#[test]
-fn errors_compare_and_clone() {
-    let a = SkoroError::BatchSizeMismatch {
-        expected: 1,
-        found: 2,
-    };
-    assert_eq!(a.clone(), a);
-    assert_ne!(
-        a,
-        SkoroError::BatchSizeMismatch {
+    /// Comparable and cloneable, which is what lets a test say `assert_eq!(err, expected)` rather
+    /// than matching on a shape.
+    #[test]
+    fn errors_compare_and_clone() {
+        let a = SkoroError::BatchSizeMismatch {
             expected: 1,
-            found: 3
-        }
-    );
-    assert_ne!(a, SkoroError::InconsistentCotangents);
-    assert!(format!("{a:?}").contains("BatchSizeMismatch"));
-}
-
-/// `SkoroResult` is the alias every fallible entry point returns.
-#[test]
-fn the_result_alias_carries_the_error() {
-    fn fallible(ok: bool) -> SkoroResult<u8> {
-        if ok {
-            Ok(1)
-        } else {
-            Err(SkoroError::InconsistentCotangents)
-        }
+            found: 2,
+        };
+        assert_eq!(a.clone(), a);
+        assert_ne!(
+            a,
+            SkoroError::BatchSizeMismatch {
+                expected: 1,
+                found: 3
+            }
+        );
+        assert_ne!(a, SkoroError::InconsistentCotangents);
+        assert!(format!("{a:?}").contains("BatchSizeMismatch"));
     }
-    assert_eq!(fallible(true), Ok(1));
-    assert_eq!(fallible(false), Err(SkoroError::InconsistentCotangents));
+
+    /// `SkoroResult` is the alias every fallible entry point returns.
+    #[test]
+    fn the_result_alias_carries_the_error() {
+        fn fallible(ok: bool) -> SkoroResult<u8> {
+            if ok {
+                Ok(1)
+            } else {
+                Err(SkoroError::InconsistentCotangents)
+            }
+        }
+        assert_eq!(fallible(true), Ok(1));
+        assert_eq!(fallible(false), Err(SkoroError::InconsistentCotangents));
+    }
 }

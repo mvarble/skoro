@@ -43,7 +43,9 @@ fn seed(n: usize, at: usize, value: f64) -> Vec<Option<CotangentFrame<B>>> {
     out
 }
 
-// =============================================================================================
+/// The tape as a container: empty until pushed to, growing as steps arrive, and each step
+/// reporting the slots it reads and writes. Nothing here runs a backward pass; a failure names the
+/// tape rather than an operation.
 mod bookkeeping {
     use super::*;
 
@@ -85,7 +87,10 @@ mod bookkeeping {
     }
 }
 
-// =============================================================================================
+/// The accumulation recurrence, against hand-built steps rather than through an operation.
+/// Fan-out has to reach every parent and fan-in has to *sum* into a shared one rather than
+/// overwrite it -- the second is the one that silently halves a gradient. `backward` leaves the
+/// tape intact and `consume_backward` must agree with it.
 mod first_order {
     use super::*;
 
@@ -212,7 +217,9 @@ mod first_order {
     }
 }
 
-// =============================================================================================
+/// Both orders travel down the tape together. A step with neither order seeded is skipped, one with
+/// only one of them panics rather than guessing, and a curved step contributes to the second order
+/// where a linear one does not. Two children accumulate at both orders, not just the first.
 mod second_order {
     use super::*;
 
@@ -374,7 +381,6 @@ mod second_order {
     }
 }
 
-// =============================================================================================
 /// `sum_opt_tensors`, the small fold every operation uses to combine optional tangent blocks.
 mod summing {
     use super::*;

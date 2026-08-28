@@ -24,7 +24,9 @@ use skoro_operation::{
 /// Every combination of differentiability flags for a two-input operation.
 const GATES: [[bool; 2]; 4] = [[true, true], [true, false], [false, true], [false, false]];
 
-// =============================================================================================
+/// `v ↦ -v`: one input, linear, so its second-order term is a *present* zero rather than an absent
+/// one. An operation that returned nothing there would look identical until something downstream
+/// tried to accumulate into the slot.
 mod negation {
     use super::*;
 
@@ -61,7 +63,9 @@ mod negation {
     }
 }
 
-// =============================================================================================
+/// Addition and subtraction over two inputs. Subtraction negates its right operand and nothing
+/// else, every gate combination is honoured, and a pushforward seeded on only one input uses only
+/// what it was given rather than assuming a zero tangent for the other.
 mod additive {
     use super::*;
 
@@ -179,7 +183,6 @@ mod additive {
     }
 }
 
-// =============================================================================================
 /// The literal-valued operations: one differentiable input and a baked-in constant.
 mod literals {
     use super::*;
@@ -275,7 +278,6 @@ mod literals {
     }
 }
 
-// =============================================================================================
 /// Batched inputs: every operation has to work row-wise, not just at batch 1.
 mod batching {
     use super::*;
@@ -290,7 +292,6 @@ mod batching {
     }
 }
 
-// =============================================================================================
 /// `Input` accessors, exercised through the operations that rely on them.
 mod inputs {
     use super::*;

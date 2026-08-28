@@ -20,7 +20,9 @@ use skoro_riemann::{
     real::Real,
 };
 
-// =============================================================================================
+/// Every manifold reports its dimension, its storage size agrees with it, and erasing it through
+/// `DynManifold` preserves both. On the flat manifolds the two numbers coincide, which is exactly
+/// why a downstream shape sized by the wrong one is invisible here and visible on `SO3`/`SE3`.
 mod dimensions {
     use super::*;
 
@@ -88,7 +90,9 @@ mod dimensions {
     }
 }
 
-// =============================================================================================
+/// `retract` then `inverse_retract` returns the tangent it was given, on every flat manifold.
+/// Retraction is row-wise over the batch and a zero step leaves the point where it was -- the two
+/// properties an optimizer relies on when it takes a step of length zero.
 mod round_trips {
     use super::*;
 
@@ -168,7 +172,6 @@ mod round_trips {
     }
 }
 
-// =============================================================================================
 /// `EuclideanInverseRetraction` is `(y, x) ↦ x - y`: subtraction with the operands reversed.
 ///
 /// The reversal is the point. `inverse_retract(point, other)` yields `other ⊖ point`, so the
@@ -312,7 +315,6 @@ mod inverse_retraction_operation {
     }
 }
 
-// =============================================================================================
 /// Retraction on a flat manifold *is* `Addition`, and it differentiates like it.
 mod retraction_operation {
     use super::*;

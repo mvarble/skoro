@@ -1,3 +1,11 @@
+//! The client-to-server plumbing: adding nodes, observing them, and dropping the model.
+//!
+//! Nothing here computes anything interesting. What it pins is that a `Q` handed back by the
+//! client names the node the server actually built, that observing and unobserving move a node
+//! between `Stochastic` and `Observed` without disturbing anything else, and that the two kinds
+//! coexist in one model. The `Dummy*` fixtures exist only to make a `Stochastic` node
+//! constructible -- they are never evaluated.
+
 use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
@@ -77,126 +85,140 @@ impl Distribution<B, Continuous> for DummyDistribution {
     }
 }
 
-#[test]
-fn construct_and_drop_releases_server() {
-    let client = ModelClient::<B>::new(Default::default());
-    let saved_id: Id = client.server_id;
+/// The client-to-server round trip: a `Q` handed back names the node the server actually built,
+/// dropping the model releases the server, and the two kinds coexist in one model. Nothing here
+/// computes anything -- the `Dummy*` fixtures exist only to make a `Stochastic` node constructible.
+mod nodes {
+    use super::*;
 
-    let clone = client.clone();
-    drop(clone);
-    // Original still alive — `from_id` must succeed.
-    assert!(ModelClient::<B>::from_id(saved_id).is_some());
+    #[test]
+    fn construct_and_drop_releases_server() {
+        let client = ModelClient::<B>::new(Default::default());
+        let saved_id: Id = client.server_id;
 
-    drop(client);
-    // All strong refs gone — `from_id` must now fail.
-    assert!(ModelClient::<B>::from_id(saved_id).is_none());
-}
+        let clone = client.clone();
+        drop(clone);
+        // Original still alive — `from_id` must succeed.
+        assert!(ModelClient::<B>::from_id(saved_id).is_some());
 
-#[test]
-fn add_constant_and_parameter_round_trip() {
-    let client = ModelClient::<B>::new(Default::default());
+        drop(client);
+        // All strong refs gone — `from_id` must now fail.
+        assert!(ModelClient::<B>::from_id(saved_id).is_none());
+    }
 
-    let c: Q<B, Real> = client.add_constant(Real, &1.0);
-    let p: Q<B, Real> = client.add_parameter(Real);
+    #[test]
+    fn add_constant_and_parameter_round_trip() {
+        let client = ModelClient::<B>::new(Default::default());
 
-    assert_ne!(c.id(), p.id());
-}
+        let c: Q<B, Real> = client.add_constant(Real, &1.0);
+        let p: Q<B, Real> = client.add_parameter(Real);
 
-fn assert_observed(client: &ModelClient<B>, id: Id, expected: f32) {
-    client.server_call(|server| match server.graph().node(id).unwrap() {
-        Node::Observed(ObservedNode { value, .. }) => {
-            let d = value
-                .as_unbatched()
-                .expect("observe stores an unbatched value")
-                .clone()
-                .unwrap_float()
-                .into_data()
-                .to_vec::<f32>()
-                .unwrap();
-            assert_eq!(d, vec![expected]);
-        }
-        _ => panic!("expected Observed node after observe()"),
-    })
-}
+        assert_ne!(c.id(), p.id());
+    }
 
-#[test]
-fn q_observe_transitions_node_to_observed() {
-    let client = ModelClient::<B>::new(Default::default());
-    let q = client.add_quantity(DummyDistribution).unwrap();
-    // `Q::observe` — compiler infers `M` from `self: &Q<B, M>`.
-    q.observe(&5.0).unwrap();
-    assert_observed(&client, q.id(), 5.0);
-    q.observe(&10.0).unwrap();
-    assert_observed(&client, q.id(), 10.0);
-}
+    #[test]
+    fn discrete_quantities_coexist_with_continuous() {
+        let client = ModelClient::<B>::new(Default::default());
 
-#[test]
-fn q_unobserve_returns_node_to_stochastic() {
-    let client = ModelClient::<B>::new(Default::default());
-    let q = client.add_quantity(DummyDistribution).unwrap();
-    q.observe(&5.0).unwrap();
-    assert_observed(&client, q.id(), 5.0);
+        // Discrete leaves (non-differentiable) alongside a continuous parameter.
+        let _cat = client.add_constant(Categorical(3), &1usize);
+        let _flag = client.add_parameter(Boolean);
+        let theta: Q<B, Real> = client.add_parameter(Real);
 
-    q.unobserve().unwrap();
-    client.server_call(|server| {
-        assert!(
-            matches!(server.graph().node(q.id()), Some(Node::Stochastic(_))),
-            "unobserve must return the node to Stochastic"
+        // A continuous mapped quantity over the continuous parameter (y = 2 * theta),
+        // built through the operator sugar (which has a real VJP).
+        let y = (theta.clone() * 2.0f32).unwrap();
+
+        // First-order evaluation of the continuous sub-graph must still work and
+        // produce a gradient for the continuous parameter, undisturbed by the
+        // presence of discrete nodes in the model.
+        let mut points = HashMap::new();
+        points.insert(
+            theta.id(),
+            Input::float(Point::<B>::from_data(
+                TensorData::new(vec![4.0f32], [1, 1]),
+                &Default::default(),
+            )),
         );
-    });
 
-    // Unobserving an already-stochastic quantity is reported, not silently accepted.
-    //
-    // `unobserve` reverses an observation, and a quantity that carries none has nothing to
-    // reverse — `Graph::unobserve` answers `NotObservable` for every node kind that is
-    // neither `Observed` nor `Constant`. Note the asymmetry with `demote_to_parameter`,
-    // which *is* idempotent: demotion asks for a state ("be a free variable") while this
-    // asks for a transition, and only the first is meaningful when it has already happened.
-    assert!(matches!(
-        q.unobserve(),
-        Err(SkoroError::NotObservable { id }) if id == q.id()
-    ));
-    client.server_call(|server| {
-        assert!(matches!(
-            server.graph().node(q.id()),
-            Some(Node::Stochastic(_))
-        ));
-    });
+        let eval = y.evaluate_ord1(&points).unwrap();
+        let value = eval.value.into_data().to_vec::<f32>().unwrap();
+        assert_eq!(value, vec![8.0]); // 2 * 4
+
+        let grad = eval.cotangents[&theta.id()]
+            .clone()
+            .into_data()
+            .to_vec::<f32>()
+            .unwrap();
+        assert_eq!(grad, vec![2.0]); // d(2*theta)/d(theta)
+    }
 }
 
-#[test]
-fn discrete_quantities_coexist_with_continuous() {
-    let client = ModelClient::<B>::new(Default::default());
+/// `Q::observe` moves a node to `Observed` and `unobserve` returns it to `Stochastic`, leaving
+/// everything else untouched. Both directions are checked, because a transition that only worked
+/// one way would strand a quantity the first time a window retired it.
+mod observation {
+    use super::*;
 
-    // Discrete leaves (non-differentiable) alongside a continuous parameter.
-    let _cat = client.add_constant(Categorical(3), &1usize);
-    let _flag = client.add_parameter(Boolean);
-    let theta: Q<B, Real> = client.add_parameter(Real);
+    fn assert_observed(client: &ModelClient<B>, id: Id, expected: f32) {
+        client.server_call(|server| match server.graph().node(id).unwrap() {
+            Node::Observed(ObservedNode { value, .. }) => {
+                let d = value
+                    .as_unbatched()
+                    .expect("observe stores an unbatched value")
+                    .clone()
+                    .unwrap_float()
+                    .into_data()
+                    .to_vec::<f32>()
+                    .unwrap();
+                assert_eq!(d, vec![expected]);
+            }
+            _ => panic!("expected Observed node after observe()"),
+        })
+    }
 
-    // A continuous mapped quantity over the continuous parameter (y = 2 * theta),
-    // built through the operator sugar (which has a real VJP).
-    let y = (theta.clone() * 2.0f32).unwrap();
+    #[test]
+    fn q_observe_transitions_node_to_observed() {
+        let client = ModelClient::<B>::new(Default::default());
+        let q = client.add_quantity(DummyDistribution).unwrap();
+        // `Q::observe` — compiler infers `M` from `self: &Q<B, M>`.
+        q.observe(&5.0).unwrap();
+        assert_observed(&client, q.id(), 5.0);
+        q.observe(&10.0).unwrap();
+        assert_observed(&client, q.id(), 10.0);
+    }
 
-    // First-order evaluation of the continuous sub-graph must still work and
-    // produce a gradient for the continuous parameter, undisturbed by the
-    // presence of discrete nodes in the model.
-    let mut points = HashMap::new();
-    points.insert(
-        theta.id(),
-        Input::float(Point::<B>::from_data(
-            TensorData::new(vec![4.0f32], [1, 1]),
-            &Default::default(),
-        )),
-    );
+    #[test]
+    fn q_unobserve_returns_node_to_stochastic() {
+        let client = ModelClient::<B>::new(Default::default());
+        let q = client.add_quantity(DummyDistribution).unwrap();
+        q.observe(&5.0).unwrap();
+        assert_observed(&client, q.id(), 5.0);
 
-    let eval = y.evaluate_ord1(&points).unwrap();
-    let value = eval.value.into_data().to_vec::<f32>().unwrap();
-    assert_eq!(value, vec![8.0]); // 2 * 4
+        q.unobserve().unwrap();
+        client.server_call(|server| {
+            assert!(
+                matches!(server.graph().node(q.id()), Some(Node::Stochastic(_))),
+                "unobserve must return the node to Stochastic"
+            );
+        });
 
-    let grad = eval.cotangents[&theta.id()]
-        .clone()
-        .into_data()
-        .to_vec::<f32>()
-        .unwrap();
-    assert_eq!(grad, vec![2.0]); // d(2*theta)/d(theta)
+        // Unobserving an already-stochastic quantity is reported, not silently accepted.
+        //
+        // `unobserve` reverses an observation, and a quantity that carries none has nothing to
+        // reverse — `Graph::unobserve` answers `NotObservable` for every node kind that is
+        // neither `Observed` nor `Constant`. Note the asymmetry with `demote_to_parameter`,
+        // which *is* idempotent: demotion asks for a state ("be a free variable") while this
+        // asks for a transition, and only the first is meaningful when it has already happened.
+        assert!(matches!(
+            q.unobserve(),
+            Err(SkoroError::NotObservable { id }) if id == q.id()
+        ));
+        client.server_call(|server| {
+            assert!(matches!(
+                server.graph().node(q.id()),
+                Some(Node::Stochastic(_))
+            ));
+        });
+    }
 }

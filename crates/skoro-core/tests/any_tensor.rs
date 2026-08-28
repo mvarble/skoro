@@ -31,7 +31,9 @@ fn int2(data: Vec<i32>, batch: usize, components: usize) -> AnyTensor<B, 2> {
     AnyTensor::int(ints(data, [batch, components]))
 }
 
-// =============================================================================================
+/// The continuous/discrete boundary: a value knowing its own kind, and refusing the other one
+/// rather than reinterpreting its bytes. The two accessor families are the point -- `as_*_opt`
+/// answers, `unwrap_*` asserts -- so each is checked in both directions.
 mod discrimination {
     use super::*;
 
@@ -146,7 +148,9 @@ mod discrimination {
     }
 }
 
-// =============================================================================================
+/// The batch axis of an `AnyTensor`: what its dims report, and what stacking a rank-1 value up
+/// to a batch does to them. A tensor that lost its batch axis here still has a plausible shape,
+/// so the dims are asserted rather than only the values.
 mod batching {
     use super::*;
 
@@ -228,7 +232,9 @@ mod batching {
     }
 }
 
-// =============================================================================================
+/// `QuantityValue`, the batch-agnostic/batch-pinned distinction layered over `AnyTensor`.
+/// Which half a value falls in is a property of the value, not of the call site: an `Unbatched`
+/// is rank-1 storage the compiler will expand, a `Batched` is rank-2 storage it will check.
 mod quantity_values {
     use super::*;
 

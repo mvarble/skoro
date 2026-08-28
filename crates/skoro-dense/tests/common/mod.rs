@@ -67,29 +67,44 @@ pub fn a_batched_input_is_rejected_impl<B: Backend>() {
 #[macro_export]
 macro_rules! tests {
     ($B:ty, $epsilon:literal) => {
-        #[test]
-        fn matrix_round_trip() {
-            common::matrix_round_trip_impl::<$B>($epsilon);
+        /// Moving a matrix or vector between a backend `Tensor` and host `Dense` storage, and the
+        /// `split`/`stack` pair that turns a batch into one `Dense` per row. Row-major order is the claim:
+        /// a transposed round trip is square-shaped and silently wrong.
+        mod round_trips {
+            #[test]
+            fn matrix_round_trip() {
+                super::common::matrix_round_trip_impl::<$B>($epsilon);
+            }
+
+            #[test]
+            fn vector_round_trip() {
+                super::common::vector_round_trip_impl::<$B>($epsilon);
+            }
+
+            #[test]
+            fn split_and_stack_round_trip() {
+                super::common::split_and_stack_round_trip_impl::<$B>($epsilon);
+            }
+
+            #[test]
+            fn splitting_a_single_row_agrees_with_from_tensor() {
+                super::common::splitting_a_single_row_agrees_with_from_tensor_impl::<$B>();
+            }
         }
-        #[test]
-        fn vector_round_trip() {
-            common::vector_round_trip_impl::<$B>($epsilon);
-        }
-        #[test]
-        fn a_batched_input_is_rejected() {
-            common::a_batched_input_is_rejected_impl::<$B>();
-        }
-        #[test]
-        fn split_and_stack_round_trip() {
-            common::split_and_stack_round_trip_impl::<$B>($epsilon);
-        }
-        #[test]
-        fn splitting_a_single_row_agrees_with_from_tensor() {
-            common::splitting_a_single_row_agrees_with_from_tensor_impl::<$B>();
-        }
-        #[test]
-        fn stack_vector_rejects_a_ragged_batch() {
-            common::stack_vector_rejects_a_ragged_batch_impl::<$B>();
+
+        /// `Dense` is one matrix at a time, so a batched input is refused rather than silently taking its
+        /// first row, and stacking refuses a ragged batch rather than producing a matrix with an
+        /// implied shape nobody asked for.
+        mod rejections {
+            #[test]
+            fn a_batched_input_is_rejected() {
+                super::common::a_batched_input_is_rejected_impl::<$B>();
+            }
+
+            #[test]
+            fn stack_vector_rejects_a_ragged_batch() {
+                super::common::stack_vector_rejects_a_ragged_batch_impl::<$B>();
+            }
         }
     };
 }

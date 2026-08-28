@@ -34,7 +34,10 @@ fn erase_discrete<T: QuantityType<B, Discrete>>(t: T) -> std::sync::Arc<dyn DynQ
     t.into_dyn()
 }
 
-// =============================================================================================
+/// `QuantityType` behind its erasure boundary: a continuous type reports a manifold and no
+/// cardinality, a discrete one the reverse, and comparison discriminates by concrete type *and*
+/// value rather than by the discriminant alone. Each kind unwraps its own `Input` variant and
+/// refuses the other's.
 mod quantity_types {
     use super::*;
 
@@ -146,7 +149,9 @@ mod quantity_types {
     }
 }
 
-// =============================================================================================
+/// The `Node` enum's common accessors, answered by every variant: its parents, its quantity type,
+/// and which kind it holds. These are the questions the compiler asks without knowing which
+/// variant it has, so a variant that answered one of them wrongly would mislower silently.
 mod nodes {
     use super::*;
 
@@ -239,8 +244,10 @@ mod nodes {
     }
 }
 
-// =============================================================================================
-mod adapters {
+/// The boxed adapters that carry an operation or a sampler into a compiled sequence: which
+/// adapter differentiability chose, cloning through the box, the name they print, and where
+/// lowering positions them. An unrealized parent is a sequencing bug, so it panics.
+mod adapter {
     use super::*;
 
     /// The two operation adapters differ in exactly one externally visible way, and it is the
@@ -348,7 +355,9 @@ mod adapters {
     }
 }
 
-// =============================================================================================
+/// A `CompiledSequence` as a finished artifact: the steps it reports, and that every node kind
+/// lowered to its own step. An observed quantity lowers to a `Constant` -- the point of observing
+/// it -- and forward options default to a single unsampled batch.
 mod compiled {
     use super::*;
 

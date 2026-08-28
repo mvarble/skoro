@@ -26,9 +26,7 @@ pub type B = NdArrayBackend<f64, i32>;
 pub const DELTA: f64 = 1e-6;
 pub const EPSILON: f64 = 1e-5;
 
-// ---------------------------------------------------------------------------------------------
 // Tensor helpers
-// ---------------------------------------------------------------------------------------------
 
 /// A `[batch, components]` float tensor from row-major data.
 pub fn tensor2(data: Vec<f64>, batch: usize, components: usize) -> Tensor<B, 2> {
@@ -80,9 +78,7 @@ pub fn real_dyn() -> std::sync::Arc<dyn skoro_graph::quantity::DynQuantityType<B
     <Real as QuantityType<B, Continuous>>::into_dyn(Real)
 }
 
-// ---------------------------------------------------------------------------------------------
 // Operations
-// ---------------------------------------------------------------------------------------------
 
 /// A sampler that ignores its parents and returns a fixed value.
 ///
@@ -239,9 +235,7 @@ impl skoro_operation::diff::DiffOperation<B> for SumOperation {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Models
-// ---------------------------------------------------------------------------------------------
 
 /// `a`, `b` free; `sum = a + b`; `prod = a * b`; `sq = sum * sum`.
 ///
