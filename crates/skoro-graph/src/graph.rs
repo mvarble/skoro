@@ -286,11 +286,9 @@ impl<B: Backend> Graph<B> {
     /// - `stochastic_to_log_density` is the exact inverse of the density nodes'
     ///   [`stochastic_id`](LogLikelihoodNode::stochastic_id);
     /// - a density that scores a quantity is among the likelihood terms but a free-standing
-    ///   likelihood factor may not score a particular quantity (as it may depend on multiple)
-    /// - every id in `private_nodes` still names a node. That set is *captured* rather than
-    ///   derived, so nothing recomputes it — but a stale id in it would make
-    ///   `reclaim_private_nodes` reach for a node that is gone, and, worse, would claim a
-    ///   reissued id as the graph's to delete.
+    ///   likelihood factor may not score a particular quantity
+    /// - every id in `private_nodes` names a node.
+    /// - `pinnable` is the exact collection of nodes of type `Constant` and `Observed`.
     ///
     /// Runs after every mutation in debug builds, and is public so a test can assert it
     /// directly after a sequence the mutators do not cover.
@@ -376,6 +374,22 @@ impl<B: Backend> Graph<B> {
         for id in &self.private_nodes {
             if !self.nodes.contains_key(id) {
                 return Err(format!("private_nodes names {id:?}, which is not a node"));
+            }
+        }
+
+        for id in &self.pinnable {
+            match self.nodes.get(id) {
+                Some(Node::Constant(_)) | Some(Node::Observed(_)) => {}
+                Some(_) => {
+                    return Err(format!(
+                        "{id:?} is marked a pinnable node, but it is not constant/observed."
+                    ));
+                }
+                None => {
+                    return Err(format!(
+                        "{id:?} is marked a pinnable node, but it does not exist."
+                    ));
+                }
             }
         }
 
@@ -696,19 +710,24 @@ impl<B: Backend> Graph<B> {
 
         // Remove the node so that we may reinsert it as a new node type (be sure to add node back
         // in when errors are raised so graph doesn't break).
-        match self.nodes.remove(&id) {
+        let out = match self.nodes.remove(&id) {
             // Error if quantity not found.
             None => Err(SkoroError::NodeNotFound { id }),
-            // No-op if already a log-likelihood.
+            // Promote a bare likelihood factor to the density of `stochastic_id`.
             Some(Node::LogLikelihood(mut node)) => {
-                #[cfg(debug_assertions)]
+                // Rebinding a density to a second quantity would strand the first's
+                // `stochastic_to_log_density` entry. The guard is unconditional: in release the
+                // silent rebind is exactly the corruption `validate_indices` exists to catch,
+                // and there is no debug assertion left to catch it.
                 if node.stochastic_id.is_some() {
                     self.nodes.insert(id, Node::LogLikelihood(node));
                     return Err(SkoroError::DuplicateDensity { stochastic_id });
                 }
                 node.stochastic_id = Some(stochastic_id);
                 self.stochastic_to_log_density.insert(stochastic_id, id);
-                self.log_likelihoods.push(id);
+                // No `log_likelihoods.push` here: the node was already a likelihood term, so it
+                // is already named in the arena. Promoting it to a density does not add a factor,
+                // it only gives the existing one a stochastic quantity to score.
                 self.nodes.insert(id, Node::LogLikelihood(node));
                 Ok(())
             }
@@ -741,7 +760,9 @@ impl<B: Backend> Graph<B> {
                 self.nodes.insert(id, node);
                 Err(SkoroError::NotMapped { id })
             }
-        }
+        };
+        self.debug_validate_indices();
+        out
     }
 
     /// Mark a mapped quantity as a likelihood.
@@ -750,7 +771,7 @@ impl<B: Backend> Graph<B> {
     pub fn mark_log_likelihood(&mut self, id: Id) -> SkoroResult<()> {
         // Remove the node so that we may reinsert it as a new node type (be sure to add node back
         // in when errors are raised so graph doesn't break).
-        match self.nodes.remove(&id) {
+        let out = match self.nodes.remove(&id) {
             // Error if quantity not found.
             None => Err(SkoroError::NodeNotFound { id }),
             // No-op if already a log-likelihood; error if a log-density.
@@ -791,11 +812,13 @@ impl<B: Backend> Graph<B> {
                 self.nodes.insert(id, node);
                 Err(SkoroError::NotMapped { id })
             }
-        }
+        };
+        self.debug_validate_indices();
+        out
     }
 
     pub fn unmark_log_likelihood(&mut self, id: Id) -> SkoroResult<()> {
-        match self.nodes.remove(&id) {
+        let out = match self.nodes.remove(&id) {
             None => Err(SkoroError::NodeNotFound { id }),
             Some(Node::LogLikelihood(node)) => {
                 if let Some(stochastic_id) = node.stochastic_id {
@@ -820,7 +843,9 @@ impl<B: Backend> Graph<B> {
                 self.nodes.insert(id, node);
                 Err(SkoroError::NotLogLikelihood { id })
             }
-        }
+        };
+        self.debug_validate_indices();
+        out
     }
 
     // Render a quantity in our probabilistic model fixed.
@@ -981,7 +1006,11 @@ impl<B: Backend> Graph<B> {
             _ => unreachable!(),
         };
 
-        // get any cousin value
+        // Two walks over the same dependency order, and they cannot be merged. The first gathers
+        // the values of every *cousin* -- a parent of a descendant that is not itself downstream
+        // of `id` -- because folding a node needs all of its parents at once, and a cousin can be
+        // any node in the graph, including one that sorts after the descendant that reads it. The
+        // second walk then folds, relying on `ancestor_values` being complete before it starts.
         let descendants = self.descendants_in_dependency_order(id);
         let mut ancestor_values = HashMap::new();
         ancestor_values.insert(id, value);
@@ -1076,6 +1105,7 @@ impl<B: Backend> Graph<B> {
                 _ => {}
             };
         }
+        self.debug_validate_indices();
         Ok(())
     }
 
@@ -1220,37 +1250,11 @@ impl<B: Backend> Graph<B> {
         // Drop the edges from the old distribution's parameters into this node.
         self.unregister_children(id, &parent_ids);
 
-        // If the stochastic node had log-likelihood, remove it
+        // A parameter has no marginal distribution, so it has no density either.
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
         let mut orphaned = parent_ids;
-        if let Some(dens_id) = self.stochastic_to_log_density.remove(&id) {
-            match self.nodes.remove(&dens_id) {
-                Some(Node::LogLikelihood(LogLikelihoodNode {
-                    id,
-                    op,
-                    parent_ids,
-                    quantity_type,
-                    value,
-                    ..
-                })) => {
-                    self.nodes.insert(
-                        id,
-                        Node::Mapped(MappedNode {
-                            id,
-                            op,
-                            parent_ids,
-                            quantity_type,
-                            value,
-                        }),
-                    );
-                }
-                Some(node) => {
-                    self.nodes.insert(dens_id, node);
-                    return Err(SkoroError::NotLogLikelihood { id: dens_id });
-                }
-                None => return Err(SkoroError::NodeNotFound { id }),
-            };
+        if let Some(dens_id) = self.retire_density_of(id)? {
             orphaned.push(dens_id);
         }
         self.clear_cached_descendants(id);
@@ -1292,12 +1296,28 @@ impl<B: Backend> Graph<B> {
                     self.pinnable.remove(id);
                 }
                 &Node::Stochastic(StochasticNode { id, .. }) => {
-                    self.stochastic_to_log_density.remove(&id);
+                    // A density need not be a *child* of the quantity it scores, so it can
+                    // easily survive this removal. Retire it rather than merely forgetting the
+                    // reverse index, or it is left claiming a node that no longer exists.
+                    // A density inside this same batch is about to go anyway, and rewriting it
+                    // first would change the node kind reported back to the caller.
+                    match self.stochastic_to_log_density.get(&id) {
+                        Some(dens_id) if ids.contains(dens_id) => {
+                            self.stochastic_to_log_density.remove(&id);
+                        }
+                        Some(_) => {
+                            self.retire_density_of(id)?;
+                        }
+                        None => {}
+                    }
                 }
                 #[allow(clippy::collapsible_match)]
                 &Node::LogLikelihood(LogLikelihoodNode { stochastic_id, .. }) => {
                     if let Some(stochastic_id) = stochastic_id {
                         self.stochastic_to_log_density.remove(&stochastic_id);
+                    }
+                    if let Some(index) = self.log_likelihoods.iter().position(|lid| *lid == *id) {
+                        self.log_likelihoods.remove(index);
                     }
                 }
                 _ => {}
@@ -1853,6 +1873,54 @@ impl<B: Backend> Graph<B> {
         }
     }
 
+    /// Strip the scoring role from the density of `stochastic_id`, returning its [`Id`].
+    ///
+    /// A density is a likelihood factor *plus* a claim to score one particular quantity. When the
+    /// quantity stops being stochastic -- demoted to a free variable, or removed outright -- that
+    /// claim has to go with it, and going means all three of: the reverse index entry, the
+    /// `stochastic_id` on the node, and the node's membership in `log_likelihoods`. Dropping only
+    /// the first two leaves the arena naming a node that is no longer a factor, which is what
+    /// `validate_indices` reports.
+    ///
+    /// The node survives as an ordinary [`Mapped`](Node::Mapped) one: it is still a perfectly
+    /// good real-valued transformation, and the caller may want to keep it. Retiring the factor
+    /// is not the same as deleting it.
+    fn retire_density_of(&mut self, stochastic_id: Id) -> SkoroResult<Option<Id>> {
+        let Some(dens_id) = self.stochastic_to_log_density.remove(&stochastic_id) else {
+            return Ok(None);
+        };
+        match self.nodes.remove(&dens_id) {
+            Some(Node::LogLikelihood(LogLikelihoodNode {
+                id,
+                op,
+                parent_ids,
+                quantity_type,
+                value,
+                ..
+            })) => {
+                self.nodes.insert(
+                    id,
+                    Node::Mapped(MappedNode {
+                        id,
+                        op,
+                        parent_ids,
+                        quantity_type,
+                        value,
+                    }),
+                );
+            }
+            Some(node) => {
+                self.nodes.insert(dens_id, node);
+                return Err(SkoroError::NotLogLikelihood { id: dens_id });
+            }
+            None => return Err(SkoroError::NodeNotFound { id: dens_id }),
+        };
+        if let Some(index) = self.log_likelihoods.iter().position(|lid| *lid == dens_id) {
+            self.log_likelihoods.remove(index);
+        }
+        Ok(Some(dens_id))
+    }
+
     /// The constant-folded value of an operation over `parent_ids`, if every parent is
     /// already concrete.
     ///
@@ -1919,6 +1987,10 @@ impl<B: Backend> Graph<B> {
         points.push(None);
         op.lower((0..n).collect(), parent_diffs, n)
             .forward(&mut points);
+        // `QuantityValue::materialize` read backwards: an unbatched value broadcasts to whatever
+        // batch it is later asked for, a batched one is fixed at the batch it was folded at. So a
+        // fold that ran at a pinned batch has to be stored `Batched`, and only a fold at the
+        // default batch of 1 may be collapsed back to a broadcastable row.
         Ok(points[n].take().map(|out| match pinned {
             None => QuantityValue::Unbatched(out.unbatch()),
             Some(_) => QuantityValue::Batched(out),

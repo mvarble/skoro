@@ -10,3 +10,6 @@ ndarray.workspace = true
 skoro-backend.workspace = true
 skoro-core.workspace = true
 skoro-operation.workspace = true
+
+[dev-dependencies]
+approx.workspace = true

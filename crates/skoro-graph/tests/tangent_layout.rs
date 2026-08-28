@@ -234,6 +234,111 @@ fn same_shape_compares_dimensions_not_ids() {
     assert!(!state.same_shape(&regrouped));
 }
 
+/// Each axis of a supplied tangent is checked on its own, and reported as itself.
+///
+/// Testing the whole shape and then reporting `dims[0]` turns a *width* disagreement into
+/// `BatchSizeMismatch { expected: 2, found: 2 }`, which names neither the axis that disagrees nor
+/// a value that differs.
+#[test]
+fn each_axis_of_a_supplied_vector_is_reported_separately() {
+    let (graph, [a, b, _]) = fixture();
+    let layout = TangentLayout::from_ids(&graph, &[a, b]).unwrap();
+
+    // Right width, wrong batch.
+    let mut map = HashMap::new();
+    map.insert(a, Tensor::<B, 2>::zeros([2, 1], &Default::default()));
+    assert!(matches!(
+        layout.flatten_vectors(&map, 1, &Default::default()),
+        Err(SkoroError::BatchSizeMismatch {
+            expected: 1,
+            found: 2
+        })
+    ));
+
+    // Right batch, wrong width.
+    let mut map = HashMap::new();
+    map.insert(b, Tensor::<B, 2>::zeros([1, 2], &Default::default()));
+    assert!(matches!(
+        layout.flatten_vectors(&map, 1, &Default::default()),
+        Err(SkoroError::ShapeMismatch {
+            expected: 3,
+            found: 2
+        })
+    ));
+}
+
+/// The same, for the three axes of a cotangent frame.
+#[test]
+fn each_axis_of_a_supplied_frame_is_reported_separately() {
+    let (graph, [a, b, _]) = fixture();
+    let layout = TangentLayout::from_ids(&graph, &[a, b]).unwrap();
+
+    let cases: [(Id, [usize; 3], SkoroError); 3] = [
+        (
+            a,
+            [2, 1, 5],
+            SkoroError::BatchSizeMismatch {
+                expected: 1,
+                found: 2,
+            },
+        ),
+        (
+            b,
+            [1, 2, 5],
+            SkoroError::ShapeMismatch {
+                expected: 3,
+                found: 2,
+            },
+        ),
+        (
+            a,
+            [1, 1, 4],
+            SkoroError::InconsistentFrameCount {
+                expected: 5,
+                found: 4,
+            },
+        ),
+    ];
+    for (id, dims, expected) in cases {
+        let mut map = HashMap::new();
+        map.insert(id, Tensor::<B, 3>::zeros(dims, &Default::default()));
+        assert_eq!(
+            layout.flatten_frames(&map, 1, 5, &Default::default()).err(),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn a_wrong_width_is_rejected_on_frame_unflatten() {
+    let (graph, [a, b, c]) = fixture();
+    let layout = TangentLayout::from_ids(&graph, &[a, b, c]).unwrap();
+    let wrong = Tensor::<B, 3>::zeros([1, 5, 2], &Default::default());
+    assert!(matches!(
+        layout.unflatten_frame(wrong),
+        Err(SkoroError::LayoutDimensionMismatch {
+            expected: 6,
+            found: 5
+        })
+    ));
+}
+
+/// A layout is cheap to clone and compares structurally, so it can be cached beside a covariance.
+#[test]
+fn layouts_clone_and_compare() {
+    let (graph, [a, b, _]) = fixture();
+    let layout = TangentLayout::from_ids(&graph, &[a, b]).unwrap();
+    assert_eq!(layout.clone(), layout);
+    assert_ne!(TangentLayout::from_ids(&graph, &[a]).unwrap(), layout);
+
+    assert!(format!("{layout:?}").contains("TangentLayout"));
+    assert!(format!("{:?}", layout.blocks()[0]).contains("TangentBlock"));
+    // An id outside the layout has no block.
+    let mut other = Graph::<B>::new();
+    let stranger = other.add_parameter(Real);
+    assert!(!layout.contains(stranger) || layout.block(stranger).is_some());
+}
+
 #[test]
 fn an_empty_layout_is_legal() {
     let (graph, _) = fixture();

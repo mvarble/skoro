@@ -393,60 +393,67 @@ impl<B: Backend> DiffOperation<B> for ScalarDivision {
         hvp_state: &Self::HvpState,
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
-        match (hvp_state, vjp_state) {
-            ([Some(dalpha), Some(dx)], ScalarDivisionVjpState::Both([alpha, x])) => {
-                let alpha2 = alpha.clone().square();
+        let [dalpha, dx] = hvp_state;
+        // Which slots owe a second-order cotangent is fixed by the *first-order* gating: a slot
+        // with no `vjp` term cannot have a sensitivity either. Which slots are non-zero is a
+        // separate question, decided by the seeded tangents.
+        match vjp_state {
+            ScalarDivisionVjpState::Neither => vec![None, None],
+            // `α` constant, so only `x`'s slot survives -- and `x ↦ x/α` is linear in `x`, so it
+            // is flat.
+            ScalarDivisionVjpState::Right(_) => vec![None, Some(omega.zeros_like())],
+            // `α` is free. Its sensitivity is
+            //     ∂²/∂α² · dα  +  ∂²/∂α∂x · dx  =  2x·dα/α³  -  dx/α²,
+            // and the first term does not vanish just because `x` happens to be constant --
+            // which is the whole difference between the two arms below.
+            ScalarDivisionVjpState::Left([alpha, x]) => {
                 vec![
-                    Some(
-                        (dalpha.clone().mul_scalar(2.0) * x.clone()
-                            / (alpha.clone() * alpha2.clone())
-                            - dx.clone() / alpha.clone().square())
-                        .unsqueeze_dim(1)
-                        .matmul(omega.clone()),
-                    ),
-                    Some(-(dalpha.clone() / alpha2).unsqueeze_dim(2) * omega),
-                ]
-            }
-            ([Some(dalpha), None], ScalarDivisionVjpState::Both([alpha, x])) => {
-                let alpha2 = alpha.clone().square();
-                vec![
-                    Some(
-                        (dalpha.clone().mul_scalar(2.0) * x.clone()
-                            / (alpha.clone() * alpha2.clone()))
-                        .unsqueeze_dim(1)
-                        .matmul(omega.clone()),
-                    ),
-                    Some(-(dalpha.clone() / alpha2).unsqueeze_dim(2) * omega),
-                ]
-            }
-            ([None, Some(dx)], ScalarDivisionVjpState::Both([alpha, _])) => {
-                vec![
-                    Some(
-                        (-dx.clone() / alpha.clone().square())
-                            .unsqueeze_dim(1)
-                            .matmul(omega.clone()),
-                    ),
-                    Some(omega.zeros_like()),
-                ]
-            }
-            (_, ScalarDivisionVjpState::Both(_)) => {
-                let [batches, _, frames] = omega.dims();
-                vec![
-                    Some(Tensor::<B, 3>::zeros([batches, 1, frames], &omega.device())),
-                    Some(omega.zeros_like()),
-                ]
-            }
-            (_, ScalarDivisionVjpState::Left(_)) => {
-                let [batches, _, frames] = omega.dims();
-                vec![
-                    Some(Tensor::<B, 3>::zeros([batches, 1, frames], &omega.device())),
+                    Some(self.alpha_sensitivity(alpha, x, dalpha, dx, omega)),
                     None,
                 ]
             }
-            (_, ScalarDivisionVjpState::Right(_)) => {
-                vec![None, Some(omega.zeros_like())]
+            ScalarDivisionVjpState::Both([alpha, x]) => {
+                let alpha2 = alpha.clone().square();
+                let first = self.alpha_sensitivity(alpha, x, dalpha, dx, omega.clone());
+                // `x`'s slot sees only how `1/α` moves, so it is driven by `dα` alone.
+                let second = match dalpha {
+                    Some(dalpha) => -(dalpha.clone() / alpha2).unsqueeze_dim(2) * omega,
+                    None => omega.zeros_like(),
+                };
+                vec![Some(first), Some(second)]
             }
-            (_, ScalarDivisionVjpState::Neither) => vec![None, None],
+        }
+    }
+}
+
+impl ScalarDivision {
+    /// `∇_v (∂(x/α)/∂α)ᵀ ω = (2x·dα/α³ - dx/α²)ᵀ ω`, shaped `[batch, 1, frames]`.
+    ///
+    /// Shared by the `Left` and `Both` states, which differ in whether `x` also receives a
+    /// cotangent -- not in what `α` receives.
+    fn alpha_sensitivity<B: Backend>(
+        &self,
+        alpha: &Tensor<B, 2>,
+        x: &Tensor<B, 2>,
+        dalpha: &Option<Tensor<B, 2>>,
+        dx: &Option<Tensor<B, 2>>,
+        omega: CotangentFrame<B>,
+    ) -> CotangentFrame<B> {
+        let alpha2 = alpha.clone().square();
+        let terms = sum_opt_tensors([
+            dalpha
+                .as_ref()
+                .map(|d| d.clone().mul_scalar(2.0) * x.clone() / (alpha.clone() * alpha2.clone())),
+            dx.as_ref().map(|d| -d.clone() / alpha2),
+        ]);
+        match terms {
+            Some(terms) => terms.unsqueeze_dim(1).matmul(omega),
+            // Nothing seeded, so the sensitivity is zero -- but still present, since the
+            // first-order cotangent for this slot is.
+            None => {
+                let [batches, _, frames] = omega.dims();
+                Tensor::<B, 3>::zeros([batches, 1, frames], &omega.device())
+            }
         }
     }
 }
@@ -844,12 +851,19 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         match (hvp_state, vjp_state) {
+            // `f(a) = c/a`, so the sensitivity is `f''(a) * da = 2c * da / a^3`. The state here
+            // holds `1/a`, not `a` -- unlike `ScalarDivision`, whose formula this otherwise
+            // mirrors -- so the cube is a factor, not a divisor. Reversing that is wrong by
+            // `a^6`.
             (Some(dalpha), Some(invalpha)) => vec![Some(
-                (dalpha.clone().mul_scalar(2.0) * self.0
-                    / (invalpha.clone() * invalpha.clone().square()))
+                (dalpha.clone().mul_scalar(2.0)
+                    * self.0
+                    * (invalpha.clone() * invalpha.clone().square()))
                 .unsqueeze_dim(2)
                     * omega,
             )],
+            // Differentiable but unseeded: no sensitivity, but the slot is still owed a value,
+            // because its first-order cotangent exists.
             (None, Some(_)) => vec![Some(omega.zeros_like())],
             (_, None) => vec![None],
         }

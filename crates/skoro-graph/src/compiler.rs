@@ -33,9 +33,30 @@ pub enum CompiledStep<B: Backend> {
         op: Box<dyn DynSequenceOperation<B>>,
         value: Option<QuantityValue<B>>,
         quantity_type: Arc<dyn DynQuantityType<B>>,
+        /// The operation has no derivatives at all -- a discrete operation.
+        ///
+        /// No pass branches on this: `constant_inputs` is implied by it and is what the three
+        /// differentiating passes actually gate on. It is kept because it says something
+        /// `constant_inputs` does not, and that a reader of a compiled sequence wants: whether
+        /// the derivative is *undefined* here or merely *unneeded*.
         forward_only: bool,
+        /// No input of the operation is differentiable, so the pass reads its fold instead of
+        /// re-entering it. Implied by `forward_only`, and true besides whenever every input is
+        /// constant.
         constant_inputs: bool,
     },
+}
+
+impl<B: Backend> CompiledStep<B> {
+    /// The graph node this step evaluates.
+    pub fn id(&self) -> Id {
+        match self {
+            Self::Constant { id, .. }
+            | Self::Parameter { id, .. }
+            | Self::Sampler { id, .. }
+            | Self::Operation { id, .. } => *id,
+        }
+    }
 }
 
 pub struct CompiledSequence<B: Backend> {
@@ -213,10 +234,14 @@ impl<B: Backend> CompiledSequence<B> {
                     op,
                     value,
                     quantity_type,
-                    forward_only,
+                    constant_inputs,
                     ..
                 } => {
-                    if *forward_only {
+                    // Gated on `constant_inputs` rather than `forward_only`, matching
+                    // `vjp_forward` and `hvp_forward`. A node whose every input is constant has
+                    // already folded, and re-entering its operation in JVP mode would demand a
+                    // pushforward from an operation the graph never has to ask one of.
+                    if *constant_inputs {
                         forward_only_op(
                             *id,
                             op,
@@ -227,6 +252,12 @@ impl<B: Backend> CompiledSequence<B> {
                             &mut point_seq,
                             &mut out.primal,
                         )?;
+                        if tangent_seq[index].is_none()
+                            && let Some(frame) = input.tangents.get(id)
+                        {
+                            tangent_seq[index] = Some(frame.clone());
+                            out.tangents.insert(*id, frame.clone());
+                        }
                     } else {
                         op.jvp_forward(&mut point_seq, &mut tangent_seq);
                         out.primal.evaluations.insert(
@@ -241,6 +272,11 @@ impl<B: Backend> CompiledSequence<B> {
                     check_tensor_frames(&mut frame_count, tangent_seq[index].as_ref())?;
                 }
                 _ => {
+                    // Seeds are checked here, before any kernel sees them, for the same reason
+                    // `vjp_forward` checks its supplied cotangents: two seeds of differing width
+                    // is a caller error with a name, and letting it reach the operation turns it
+                    // into a broadcast panic from inside burn that names neither quantity.
+                    check_tensor_frames(&mut frame_count, input.tangents.get(&step.id()))?;
                     non_op_forward(
                         index,
                         step,
@@ -456,6 +492,14 @@ impl<B: Backend> CompiledSequence<B> {
     }
 }
 
+/// Realize a leaf step -- constant, parameter, or sampler -- into the sequence slots.
+///
+/// The four trailing `Option`s are the seeding channels, and they are separate because the
+/// passes carry different ranks: JVP threads rank-3 tangent *frames* (`tensors`), HVP threads a
+/// single rank-2 tangent vector per quantity (`vectors`), and a plain forward pass threads
+/// neither. Each pass hands in only the pair it has, so a `None` here means "this pass has no
+/// such channel", not "nothing was seeded for this node" -- the latter is the inner
+/// `get(id)` miss, which leaves the slot empty and lets the operation treat it as zero.
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn non_op_forward<B: Backend>(

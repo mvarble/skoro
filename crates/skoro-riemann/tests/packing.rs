@@ -241,3 +241,186 @@ fn failed_dyn_euclidean_matrix_packing() {
     let mut packed = [0.0; 4];
     EuclideanMatrixD(2, 2).pack(&MatrixD::<f32>::new(2, 1, &[1.0, 2.0]), 0, &mut packed);
 }
+
+// ==============================================================================================
+// Container mechanics
+// ==============================================================================================
+//
+// `VectorD`/`Vector` and `MatrixD`/`Matrix` are the concrete data types a caller packs *from*.
+// Their fallible constructors are the boundary where a shape mistake becomes a `SkoroError`
+// rather than a panic; the infallible ones are for callers that already know the shape and would
+// rather have a stack trace than a `Result`.
+
+mod containers {
+    use skoro_core::error::SkoroError;
+    use skoro_riemann::{
+        euclidean::{Vector, Vector3, VectorD},
+        matrix::{Matrix, MatrixD},
+    };
+
+    #[test]
+    fn runtime_vectors_expose_their_contents() {
+        let mut v = VectorD::<f64>::new(&[1.0, 2.0, 3.0]);
+        assert_eq!(v.len(), 3);
+        assert!(!v.is_empty());
+        assert_eq!(v.slice(), &[1.0, 2.0, 3.0]);
+
+        v.slice_mut()[1] = 20.0;
+        assert_eq!(v.slice(), &[1.0, 20.0, 3.0]);
+
+        assert_eq!(VectorD::<f64>::from_vec(vec![7.0]).slice(), &[7.0]);
+        assert!(VectorD::<f64>::from_vec(vec![]).is_empty());
+
+        // Buildable from an iterator, which is how a packed row is turned back into data.
+        let collected: VectorD<f64> = (0..3).map(|i| i as f64).collect();
+        assert_eq!(collected.slice(), &[0.0, 1.0, 2.0]);
+
+        assert_eq!(v, VectorD::<f64>::new(&[1.0, 20.0, 3.0]));
+        assert_ne!(v, VectorD::<f64>::new(&[1.0, 2.0, 3.0]));
+        assert_eq!(v.clone().slice(), v.slice());
+        assert!(format!("{v:?}").contains("VectorD(3)"));
+    }
+
+    #[test]
+    fn static_vectors_expose_their_contents() {
+        let mut v = Vector3::<f64>::new([1.0, 2.0, 3.0]);
+        assert_eq!(v.len(), 3);
+        // A statically-sized vector of dimension 3 is never empty, by construction.
+        assert!(!v.is_empty());
+        assert_eq!(v.slice(), &[1.0, 2.0, 3.0]);
+
+        v.slice_mut()[0] = -1.0;
+        assert_eq!(v.slice(), &[-1.0, 2.0, 3.0]);
+
+        assert_eq!(v, Vector::<3, f64>::new([-1.0, 2.0, 3.0]));
+        assert_ne!(v, Vector3::<f64>::new([0.0, 0.0, 0.0]));
+        let copy = v;
+        assert_eq!(copy.slice(), v.slice());
+        assert!(format!("{v:?}").contains("Vector<3>"));
+    }
+
+    #[test]
+    fn runtime_matrices_expose_their_shape_and_contents() {
+        let mut m = MatrixD::<f64>::new(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert_eq!((m.rows(), m.cols()), (2, 3));
+        assert_eq!(m.len(), 6);
+        assert!(!m.is_empty());
+        assert_eq!(m.slice(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+
+        m.slice_mut()[5] = 60.0;
+        assert_eq!(m.slice()[5], 60.0);
+
+        assert_eq!(
+            MatrixD::<f64>::from_vec(2, 1, vec![1.0, 2.0]).slice(),
+            &[1.0, 2.0]
+        );
+        assert_eq!(
+            m,
+            MatrixD::<f64>::new(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 60.0])
+        );
+        assert_ne!(m, MatrixD::<f64>::new(2, 3, &[0.0; 6]));
+        assert_eq!(m.clone().slice(), m.slice());
+
+        // Row-major `Debug`, one field per row.
+        let text = format!("{m:?}");
+        assert!(text.contains("MatrixD(2, 3)"));
+        assert!(text.contains("1.0"));
+    }
+
+    /// A degenerate shape prints without indexing into nothing.
+    #[test]
+    fn an_empty_matrix_prints_without_panicking() {
+        let m = MatrixD::<f64>::new(0, 0, &[]);
+        assert!(m.is_empty());
+        assert_eq!(m.len(), 0);
+        assert_eq!(format!("{m:?}"), "MatrixD(0, 0)([[]])");
+
+        let m = Matrix::<0, 0, f64>::new(&[]);
+        assert_eq!(format!("{m:?}"), "MatrixD(0, 0)([[]])");
+    }
+
+    #[test]
+    fn static_matrices_expose_their_contents() {
+        let mut m = Matrix::<2, 2, f64>::new(&[1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(m.len(), 4);
+        assert!(!m.is_empty());
+        assert_eq!(m.slice(), &[1.0, 2.0, 3.0, 4.0]);
+
+        m.slice_mut()[0] = 10.0;
+        assert_eq!(m.slice()[0], 10.0);
+
+        assert_eq!(Matrix::<2, 2, f64>::from_vec(vec![10.0, 2.0, 3.0, 4.0]), m);
+        assert_ne!(m, Matrix::<2, 2, f64>::new(&[0.0; 4]));
+        assert_eq!(m.clone().slice(), m.slice());
+        assert!(format!("{m:?}").contains("MatrixD(2, 2)"));
+    }
+
+    /// The fallible constructors report a shape mismatch instead of unwinding.
+    ///
+    /// Which of the two a caller wants depends on where the data came from: a literal in the
+    /// source is a programming error and should panic, while a length read from a file is a
+    /// recoverable one.
+    #[test]
+    fn fallible_constructors_report_shape_mismatches() {
+        assert_eq!(
+            MatrixD::<f64>::try_new(2, 3, &[1.0, 2.0]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 6,
+                found: 2
+            })
+        );
+        assert_eq!(
+            MatrixD::<f64>::try_from_vec(2, 3, vec![1.0, 2.0]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 6,
+                found: 2
+            })
+        );
+        assert_eq!(
+            Matrix::<2, 2, f64>::try_new(&[1.0]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 4,
+                found: 1
+            })
+        );
+        assert_eq!(
+            Matrix::<2, 2, f64>::try_from_vec(vec![1.0]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 4,
+                found: 1
+            })
+        );
+
+        // And they succeed on the right shape, so the test is not vacuous.
+        assert!(MatrixD::<f64>::try_new(2, 1, &[1.0, 2.0]).is_ok());
+        assert!(Matrix::<2, 2, f64>::try_new(&[1.0, 2.0, 3.0, 4.0]).is_ok());
+    }
+
+    mod infallible_constructors_panic {
+        use super::*;
+
+        #[test]
+        #[should_panic(expected = "MatrixD::new: data length does not match shape")]
+        fn matrix_d_new() {
+            let _ = MatrixD::<f64>::new(2, 3, &[1.0]);
+        }
+
+        #[test]
+        #[should_panic(expected = "MatrixD::from_vec: data length does not match shape")]
+        fn matrix_d_from_vec() {
+            let _ = MatrixD::<f64>::from_vec(2, 3, vec![1.0]);
+        }
+
+        #[test]
+        #[should_panic(expected = "Matrix::new: data length does not match shape")]
+        fn matrix_new() {
+            let _ = Matrix::<2, 2, f64>::new(&[1.0]);
+        }
+
+        #[test]
+        #[should_panic(expected = "Matrix::from_vec: data length does not match shape")]
+        fn matrix_from_vec() {
+            let _ = Matrix::<2, 2, f64>::from_vec(vec![1.0]);
+        }
+    }
+}

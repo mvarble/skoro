@@ -17,3 +17,6 @@ pub mod point_map;
 pub mod quantity;
 pub mod sampler;
 pub mod tangent_layout;
+
+#[cfg(feature = "test-utils")]
+pub mod test_utils;

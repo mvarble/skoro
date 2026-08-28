@@ -6,10 +6,18 @@ edition.workspace = true
 version.workspace = true
 
 [features]
-test-utils = []
+# The numerical-derivative harness in `src/test_utils.rs`. Downstream crates enable this to
+# reuse the same forward-difference convention rather than reimplementing it.
+test-utils = ["dep:approx"]
 
 [dependencies]
 skoro-backend.workspace = true
 skoro-core.workspace = true
 skoro-operation.workspace = true
 skoro-riemann.workspace = true
+approx = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx.workspace = true
+# Self-dependency so this crate's own integration tests see `test_utils`.
+skoro-graph = { path = ".", features = ["test-utils"] }

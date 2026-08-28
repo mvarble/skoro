@@ -3,7 +3,6 @@ use skoro_backend::{
     Tensor, UnbatchedDiscretePoint, UnbatchedPoint,
 };
 
-#[allow(unused)]
 pub fn exercise_api<B: Backend>() {
     let _ = Tensor::<B, 1>::from_floats([1.0, 2.0, 3.0], &Default::default());
     let _ = UnbatchedPoint::<B>::from_floats([1.0, 2.0, 3.0], &Default::default());

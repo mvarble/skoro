@@ -1,34 +1,8 @@
-use skoro_backend::{Backend, Element, Int, Tensor};
+use skoro_backend::Element;
 use skoro_core::{
-    any_tensor::AnyTensor,
     discrete::{Boolean, Categorical, Integer},
     pack::{Cardinality, Packable},
 };
-
-pub fn constant_int<B: Backend>() -> AnyTensor<B, 1> {
-    Tensor::<B, 1, Int>::from_ints([0], &Default::default()).into()
-}
-
-pub fn constant_float<B: Backend>() -> AnyTensor<B, 1> {
-    Tensor::<B, 1>::from_floats([0.0], &Default::default()).into()
-}
-
-pub fn constant_values<B: Backend>() {
-    let value = constant_int::<B>();
-    assert!(value.is_discrete());
-    let _ = value.unwrap_int();
-    let value = constant_float::<B>();
-    assert!(!value.is_discrete());
-    let _ = value.unwrap_float();
-}
-
-pub fn poorly_unwrap_float<B: Backend>() {
-    constant_int::<B>().unwrap_float();
-}
-
-pub fn poorly_unwrap_int<B: Backend>() {
-    constant_float::<B>().unwrap_int();
-}
 
 fn bool_packing_impl<I>()
 where
@@ -50,6 +24,14 @@ where
     ty.pack(&false, 4, &mut data);
     ty.pack(&false, 5, &mut data);
     assert_eq!(data, [1, 0, 1, 0, 0, 0].map(I::from_elem));
+}
+
+#[test]
+fn bool_packing() {
+    bool_packing_impl::<i8>();
+    bool_packing_impl::<i16>();
+    bool_packing_impl::<i32>();
+    bool_packing_impl::<i64>();
 }
 
 #[test]
@@ -78,6 +60,14 @@ where
     ty.pack(&2, 4, &mut data);
     ty.pack(&1, 5, &mut data);
     assert_eq!(data, [3, 3, 0, 0, 2, 1].map(I::from_elem));
+}
+
+#[test]
+fn categorical_packing() {
+    categorical_packing_impl::<i8>();
+    categorical_packing_impl::<i16>();
+    categorical_packing_impl::<i32>();
+    categorical_packing_impl::<i64>();
 }
 
 #[test]
@@ -127,29 +117,6 @@ where
 }
 
 #[test]
-fn cardinalities() {
-    assert_eq!(Boolean.cardinality(), Some(2));
-    assert_eq!(Categorical(5).cardinality(), Some(5));
-    assert_eq!(Integer.cardinality(), None);
-}
-
-#[test]
-fn bool_packing() {
-    bool_packing_impl::<i8>();
-    bool_packing_impl::<i16>();
-    bool_packing_impl::<i32>();
-    bool_packing_impl::<i64>();
-}
-
-#[test]
-fn categorical_packing() {
-    categorical_packing_impl::<i8>();
-    categorical_packing_impl::<i16>();
-    categorical_packing_impl::<i32>();
-    categorical_packing_impl::<i64>();
-}
-
-#[test]
 fn integer_packing() {
     integer_packing_impl::<i8>();
     integer_packing_impl::<i16>();
@@ -157,24 +124,9 @@ fn integer_packing() {
     integer_packing_impl::<i64>();
 }
 
-#[macro_export]
-macro_rules! tests {
-    ($B:ident) => {
-        #[test]
-        fn constant_values() {
-            common::constant_values::<B>();
-        }
-
-        #[test]
-        #[should_panic(expected = "expected a continuous (float) tensor, found a discrete one")]
-        fn unwrap_float_fails() {
-            common::poorly_unwrap_float::<B>();
-        }
-
-        #[test]
-        #[should_panic(expected = "expected a discrete (int) tensor, found a continuous one")]
-        fn unwrap_int_fails() {
-            common::poorly_unwrap_int::<B>();
-        }
-    };
+#[test]
+fn cardinalities() {
+    assert_eq!(Boolean.cardinality(), Some(2));
+    assert_eq!(Categorical(5).cardinality(), Some(5));
+    assert_eq!(Integer.cardinality(), None);
 }

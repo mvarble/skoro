@@ -5877,8 +5877,10 @@ dependencies = [
 name = "skoro-graph"
 version = "0.0.0"
 dependencies = [
+ "approx",
  "skoro-backend",
  "skoro-core",
+ "skoro-graph",
  "skoro-operation",
  "skoro-riemann",
 ]
@@ -5965,6 +5967,7 @@ dependencies = [
 name = "skoro-riemann"
 version = "0.0.0"
 dependencies = [
+ "approx",
  "ndarray 0.17.2",
  "skoro-backend",
  "skoro-core",
