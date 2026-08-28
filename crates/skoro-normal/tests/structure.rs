@@ -1,9 +1,13 @@
-//! The Gaussian structure claims, checked against what the density actually computes.
+//! What a Gaussian factor computes, and what its builder writes down about it.
 //!
 //! Two things are at stake. First, that `whitened_residual` is really the `r` in
 //! `−log p = ½‖r‖² + n(θ)` — if it is not, a least-squares optimizer minimizes something
-//! unrelated to the model, silently. Second, that the builders record honestly: the
-//! certificate names the density and residual nodes that the graph actually holds.
+//! unrelated to the model, silently. Second, that the builders record honestly: the record
+//! names the density and residual nodes that the graph actually holds.
+//!
+//! The recording is bookkeeping now rather than a trait bound, so the second half is the
+//! part that carries the weight: nothing but these tests checks that `add_gaussian_quantity`
+//! writes down the ids it really built.
 //!
 //! `SE3` is exercised deliberately. Its manifold dimension is 6 and its storage is 12, so a
 //! residual sized by storage rather than by dimension is visible here and invisible on
@@ -13,14 +17,10 @@ use skoro_backend::{NdArrayBackend, Point, TensorData};
 use skoro_core::id::Id;
 use skoro_linalg::tril::{Tril, TrilOps};
 use skoro_linalg::vector::LinalgVectorOps;
-use skoro_model::{
-    ModelBuilderOps, ModelClientOps, NlsModelClient, NlsStructure, WhitenedResidual,
-    hash_map_builders::points, model::ModelClient, q::Q,
-};
+use skoro_model::{ModelBuilderOps, hash_map_builders::points, model::ModelClient, q::Q};
 use skoro_normal::{
     distribution::Normal,
-    facade::{GaussianModelClient, GaussianModelClientOps, constant_covariance_diagonal},
-    structure::{GaussianFactor, GaussianStructure},
+    facade::{add_gaussian_quantity, constant_covariance_diagonal, gaussian_blocks},
 };
 use skoro_operation::{Input, ValueMap};
 use skoro_pointwise::PointwiseOps;
@@ -62,9 +62,9 @@ fn assert_density_is_the_sum_of_squares<M>(
 ) where
     M: skoro_graph::quantity::ContinuousQuantity<B>,
 {
-    let residual = WhitenedResidual::whitened_residual(distr, x).unwrap();
+    let residual = distr.whitened_residual(x).unwrap();
     let log_det = distr
-        .whitening()
+        .std_dev()
         .invert()
         .unwrap()
         .diag()
@@ -121,7 +121,7 @@ fn a_euclidean_density_is_its_squared_residual() {
 
     // And the residual really is `L⁻¹ (x − μ)`: check `L r = x − μ` by hand, which needs
     // no inverse and no library.
-    let residual = WhitenedResidual::whitened_residual(&distr, &x).unwrap();
+    let residual = distr.whitened_residual(&x).unwrap();
     let r = vector(client.evaluate(&values, &residual).unwrap());
     assert_eq!(r.len(), 3, "the residual is sized by manifold dimension");
 
@@ -160,7 +160,7 @@ fn an_se3_density_is_its_squared_residual() {
         )
         .build();
 
-    let residual = WhitenedResidual::whitened_residual(&distr, &x).unwrap();
+    let residual = distr.whitened_residual(&x).unwrap();
     assert_eq!(
         vector(client.evaluate(&values, &residual).unwrap()).len(),
         6,
@@ -169,47 +169,54 @@ fn an_se3_density_is_its_squared_residual() {
     assert_density_is_the_sum_of_squares(&client, &distr, &x, values);
 }
 
-/// `Normal`'s normalizer depends on the covariance factor and on nothing else, which is
-/// what makes the least-squares precondition checkable without inspecting an operation.
+/// `Normal`'s normalizer depends on the covariance factor and on nothing else, and the
+/// record says so.
+///
+/// This is what makes the least-squares precondition checkable without inspecting an
+/// operation: minimizing `½Σ‖rᵢ‖²` is minimizing `−log p` exactly when nothing in
+/// `normalizer_parents` is being optimized. Recording the mean there would make every
+/// Gaussian model look ineligible.
 #[test]
 fn only_the_covariance_reaches_the_normalizer() {
-    let client = ModelClient::<B>::default();
-    let mean = client.add_parameter(EuclideanD(2));
-    let std_dev = constant_covariance_diagonal(&client, &[1.0, 2.0]);
-    let distr = Normal::new(mean.clone(), std_dev.clone());
+    let model = ModelClient::<B>::default();
+    let mean = model.add_parameter(EuclideanD(2));
+    let std_dev = constant_covariance_diagonal(&model, &[1.0, 2.0]);
+    add_gaussian_quantity(&model, &mean, &std_dev).unwrap();
 
+    let factors = model.factors();
     assert_eq!(
-        WhitenedResidual::normalizer_parents(&distr),
-        &[std_dev.id()],
+        factors[0].normalizer_parents,
+        vec![std_dev.id()],
         "the mean must not be reported: it does not appear in the normalizer"
     );
-    assert_eq!(GaussianFactor::mean(&distr).id(), mean.id());
-    assert_eq!(GaussianFactor::whitening(&distr).id(), std_dev.id());
+    // The refinement is the other half: `μ` and `L` reachable apart, which is what a filter
+    // needs since `H = ∂μ/∂x` and `R = L Lᵀ` are different objects.
+    assert_eq!(factors[0].location, Some(mean.id()));
+    assert_eq!(factors[0].whitening, Some(std_dev.id()));
 }
 
-/// The Gaussian facade records every factor it builds, and the ids it records are the ones
-/// the graph holds.
+/// `add_gaussian_quantity` records every factor it builds, and the ids it records are the
+/// ones the graph holds.
 #[test]
-fn the_gaussian_facade_records_what_it_built() {
-    let mut model = GaussianModelClient::<B>::default();
+fn the_gaussian_builder_records_what_it_built() {
+    let model = ModelClient::<B>::default();
     let mean_a = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
     let cov_a = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-    let a = model.add_gaussian_quantity(&mean_a, &cov_a).unwrap();
+    let a = add_gaussian_quantity(&model, &mean_a, &cov_a).unwrap();
 
     let mean_b = model.add_constant(Real, &1.0f64);
     let cov_b = constant_covariance_diagonal(&model, &[0.5]);
-    let b = model.add_gaussian_quantity(&mean_b, &cov_b).unwrap();
+    let b = add_gaussian_quantity(&model, &mean_b, &cov_b).unwrap();
 
-    let blocks: Vec<_> = GaussianStructure::blocks(&model);
+    let blocks: Vec<_> = gaussian_blocks(&model);
     assert_eq!(blocks.len(), 2);
     assert_eq!(blocks[0].mean, mean_a.id());
     assert_eq!(blocks[0].whitening, cov_a.id());
     assert_eq!(blocks[1].mean, mean_b.id());
     assert_eq!(blocks[1].whitening, cov_b.id());
 
-    // The certificate agrees with the blocks, factor for factor and in order.
-    let certificate = NlsStructure::certificate(&model);
-    let factors = certificate.factors();
+    // The records agree with the blocks, factor for factor and in order.
+    let factors = model.factors();
     assert_eq!(factors.len(), 2);
     for (factor, block) in factors.iter().zip(&blocks) {
         assert_eq!(factor.density, block.density);
@@ -240,7 +247,7 @@ fn the_gaussian_facade_records_what_it_built() {
     );
 
     // The row layout of `J` is the residuals, sized by dimension: 2 then 1.
-    let layout = NlsStructure::residual_layout(&model).unwrap();
+    let layout = model.residual_layout().unwrap();
     assert_eq!(layout.total(), 3);
     assert_eq!(
         layout
@@ -252,19 +259,19 @@ fn the_gaussian_facade_records_what_it_built() {
     );
 }
 
-/// The distribution-generic builder records the same way. It accepts any
-/// `WhitenedResidual`, not only `Normal` — the bound is what it enforces, not the family.
+/// The recorded density really is the term the objective sums.
+///
+/// The id in a record is only worth having if it names the node the graph actually scores;
+/// an id that named something else — the outermost `+` of the sugar, say — would evaluate to
+/// a number that does not add up to the model's log-density.
 #[test]
-fn the_least_squares_builder_records_what_it_built() {
-    let mut model = NlsModelClient::<B>::default();
+fn the_recorded_density_is_the_models_own() {
+    let model = ModelClient::<B>::default();
     let mean = model.add_constant(EuclideanD(2), &VectorD::new(&[3.0, -1.0]));
     let cov = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-    let x = model
-        .add_residual_quantity(Normal::new(mean, cov.clone()))
-        .unwrap();
+    let x = add_gaussian_quantity(&model, &mean, &cov).unwrap();
 
-    let certificate = NlsStructure::certificate(&model);
-    let factors = certificate.factors();
+    let factors = model.factors();
     assert_eq!(factors.len(), 1);
     assert_eq!(factors[0].normalizer_parents, vec![cov.id()]);
 
@@ -281,39 +288,38 @@ fn the_least_squares_builder_records_what_it_built() {
         epsilon = 1e-9
     );
 
-    let layout = NlsStructure::residual_layout(&model).unwrap();
+    let layout = model.residual_layout().unwrap();
     assert_eq!(layout.total(), 2);
 }
 
-/// A certificate obtained from a builder that built nothing is empty — the same certificate
-/// anyone could construct by hand.
+/// A model nobody told anything has no factors and no rows.
 #[test]
-fn an_empty_builder_certifies_nothing() {
-    let model = GaussianModelClient::<B>::default();
-    assert!(NlsStructure::certificate(&model).factors().is_empty());
-    assert_eq!(NlsStructure::residual_layout(&model).unwrap().total(), 0);
+fn an_untouched_model_records_nothing() {
+    let model = ModelClient::<B>::default();
+    assert!(model.factors().is_empty());
+    assert_eq!(model.residual_layout().unwrap().total(), 0);
 }
 
 /// The recorded nodes survive garbage collection.
 ///
-/// A residual is a `Mapped` node with no children, so the last `Q` naming it queues it for
-/// cleanup on drop — which would leave the certificate holding ids the graph no longer has.
-/// The builders keep those handles alive for exactly this reason, and `cleanup()` is a
-/// public method, so this is reachable rather than theoretical.
+/// A residual is a `Mapped` node with no children, and `add_gaussian_quantity` does not keep
+/// its handle — so without the record pinning it, the collector would take it and leave the
+/// registry holding ids the graph no longer has. `cleanup()` is a public method, so this is
+/// reachable rather than theoretical.
 #[test]
 fn cleanup_does_not_collect_the_recorded_residuals() {
-    let mut model = GaussianModelClient::<B>::default();
+    let model = ModelClient::<B>::default();
     let mean_a = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
     let cov_a = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-    let a = model.add_gaussian_quantity(&mean_a, &cov_a).unwrap();
+    let a = add_gaussian_quantity(&model, &mean_a, &cov_a).unwrap();
 
     let mean_b = model.add_constant(Real, &1.0f64);
     let cov_b = constant_covariance_diagonal(&model, &[0.5]);
-    let b = model.add_gaussian_quantity(&mean_b, &cov_b).unwrap();
+    let b = add_gaussian_quantity(&model, &mean_b, &cov_b).unwrap();
 
-    let before = NlsStructure::residual_layout(&model).unwrap();
+    let before = model.residual_layout().unwrap();
     model.cleanup();
-    let after = NlsStructure::residual_layout(&model).unwrap();
+    let after = model.residual_layout().unwrap();
     assert_eq!(
         before, after,
         "cleanup must not collect a recorded residual"
@@ -325,7 +331,7 @@ fn cleanup_does_not_collect_the_recorded_residuals() {
         .with_quantity(&a, point(&[0.5, -1.25]))
         .with_quantity(&b, point(&[2.25]))
         .build();
-    let ids: Vec<Id> = NlsStructure::certificate(&model).residual_ids().collect();
+    let ids: Vec<Id> = model.factors().iter().map(|f| f.residual).collect();
     let evaluated = model.evaluate_ids(&values, &ids).unwrap();
     for id in ids {
         assert!(evaluated.evaluations.get(&id).is_some());
@@ -339,49 +345,49 @@ fn cleanup_does_not_collect_the_recorded_residuals() {
 /// a prune that reordered the survivors would hand an optimizer one factor's rows labelled with
 /// another's, which no shape check downstream would reject.
 ///
-/// The two caches are pruned against the same liveness question for the same reason: two lists
-/// over one graph that disagreed about which factors exist would be worse than either alone.
+/// The block list is *derived* from the records rather than kept beside them, so the two
+/// cannot come to disagree about which factors exist — but the derivation still has to
+/// preserve order, which is what this pins.
 #[test]
-fn retiring_a_factor_prunes_both_caches_and_keeps_the_order() {
-    let mut model = GaussianModelClient::<B>::default();
+fn retiring_a_factor_prunes_the_records_and_keeps_the_order() {
+    let model = ModelClient::<B>::default();
 
-    let mut add = |dims: &[f64]| {
+    let add = |dims: &[f64]| {
         let mean = model.add_constant(
             EuclideanD(dims.len()),
             &VectorD::new(&vec![0.0; dims.len()]),
         );
         let cov = constant_covariance_diagonal(&model, dims);
-        model.add_gaussian_quantity(&mean, &cov).unwrap()
+        add_gaussian_quantity(&model, &mean, &cov).unwrap()
     };
     let a = add(&[1.0, 2.0]);
     let b = add(&[1.0, 2.0, 3.0]);
     let c = add(&[0.5]);
 
-    let before: Vec<_> = NlsStructure::certificate(&model).factors().to_vec();
+    let before: Vec<_> = model.factors();
     assert_eq!(before.len(), 3);
-    assert_eq!(NlsStructure::residual_layout(&model).unwrap().total(), 6);
+    assert_eq!(model.residual_layout().unwrap().total(), 6);
 
     model.remove_closure(&[b.id()]).unwrap();
     model.cleanup();
 
-    let certificate = NlsStructure::certificate(&model);
-    let after = certificate.factors();
+    let after = model.factors();
     assert_eq!(
         after,
         [before[0].clone(), before[2].clone()],
         "the survivors keep their identity and their order"
     );
     assert_eq!(
-        GaussianStructure::blocks(&model)
+        gaussian_blocks(&model)
             .iter()
             .map(|block| block.residual)
             .collect::<Vec<_>>(),
         vec![before[0].residual, before[2].residual],
-        "the block list is pruned in step with the certificate"
+        "the block list follows the records by derivation"
     );
 
     // The rows of `J` are now `a` then `c`: 2 then 1, and never 2 then 3.
-    let layout = NlsStructure::residual_layout(&model).unwrap();
+    let layout = model.residual_layout().unwrap();
     assert_eq!(
         layout
             .blocks()
@@ -396,7 +402,7 @@ fn retiring_a_factor_prunes_both_caches_and_keeps_the_order() {
         .with_quantity(&a, point(&[0.5, -1.25]))
         .with_quantity(&c, point(&[2.25]))
         .build();
-    let ids: Vec<Id> = NlsStructure::certificate(&model).residual_ids().collect();
+    let ids: Vec<Id> = model.factors().iter().map(|f| f.residual).collect();
     let evaluated = model.evaluate_ids(&values, &ids).unwrap();
     for id in ids {
         assert!(evaluated.evaluations.get(&id).is_some());

@@ -57,7 +57,10 @@ fn every_variant() -> Vec<(SkoroError, &'static str)> {
             SkoroError::NodeStillReferenced { id, child_id: id },
             "still a parent",
         ),
-        (SkoroError::NodeIsCertified { id }, "residual certificate"),
+        (
+            SkoroError::NodeIsRecorded { id },
+            "a recorded factor names it",
+        ),
         (
             SkoroError::BatchSizeMismatch {
                 expected: 3,
@@ -162,7 +165,7 @@ fn id_bearing_variants_print_the_id() {
         SkoroError::MustRemainDensity { id },
         SkoroError::DanglingParent { parent_id: id },
         SkoroError::Cycle { id },
-        SkoroError::NodeIsCertified { id },
+        SkoroError::NodeIsRecorded { id },
         SkoroError::MissingPoint { id },
         SkoroError::ManifoldMismatch { id },
         SkoroError::DuplicateLayoutId { id },

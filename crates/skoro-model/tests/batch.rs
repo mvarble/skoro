@@ -159,7 +159,6 @@ fn retract_flat_rejects_a_delta_at_the_wrong_batch() {
     assert_eq!(
         points.retract_flat(&layout, single).map(|p| p.len()),
         Err(SkoroError::BatchSizeMismatch {
-            id: x.id(),
             expected: 1,
             found: BATCH,
         })
@@ -183,14 +182,16 @@ fn retract_flat_rejects_a_delta_at_the_wrong_batch() {
 #[test]
 fn a_batched_constant_gives_each_row_its_own_value() {
     let model = ModelClient::<B>::default();
-    let offsets = model.add_batched_constant(
-        EuclideanD(2),
-        &[
-            VectorD::new(&[10.0, -20.0]),
-            VectorD::new(&[0.0, 0.0]),
-            VectorD::new(&[-1.0, 1.0]),
-        ],
-    );
+    let offsets = model
+        .add_batched_constant(
+            EuclideanD(2),
+            &[
+                VectorD::new(&[10.0, -20.0]),
+                VectorD::new(&[0.0, 0.0]),
+                VectorD::new(&[-1.0, 1.0]),
+            ],
+        )
+        .unwrap();
     let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
     let y = (x.clone() - offsets).unwrap();
 
@@ -220,14 +221,16 @@ fn a_batched_constant_gives_each_row_its_own_value() {
 #[test]
 fn a_batched_constant_at_the_wrong_batch_is_rejected() {
     let model = ModelClient::<B>::default();
-    let offsets = model.add_batched_constant(
-        EuclideanD(2),
-        &[
-            VectorD::new(&[10.0, -20.0]),
-            VectorD::new(&[0.0, 0.0]),
-            VectorD::new(&[-1.0, 1.0]),
-        ],
-    );
+    let offsets = model
+        .add_batched_constant(
+            EuclideanD(2),
+            &[
+                VectorD::new(&[10.0, -20.0]),
+                VectorD::new(&[0.0, 0.0]),
+                VectorD::new(&[-1.0, 1.0]),
+            ],
+        )
+        .unwrap();
     let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
     let y = (x.clone() - offsets.clone()).unwrap();
 
@@ -238,7 +241,6 @@ fn a_batched_constant_at_the_wrong_batch_is_rejected() {
             .evaluate(&points().with_quantity(&x, single).build(), &y)
             .err(),
         Some(SkoroError::BatchSizeMismatch {
-            id: offsets.id(),
             expected: 1,
             found: BATCH,
         })
@@ -254,7 +256,6 @@ fn a_batched_constant_at_the_wrong_batch_is_rejected() {
             .evaluate(&points().with_quantity(&x, five).build(), &y)
             .err(),
         Some(SkoroError::BatchSizeMismatch {
-            id: offsets.id(),
             expected: 5,
             found: BATCH,
         })
@@ -269,14 +270,16 @@ fn a_batched_constant_at_the_wrong_batch_is_rejected() {
 #[test]
 fn a_batched_constant_carries_no_derivative() {
     let model = ModelClient::<B>::default();
-    let offsets = model.add_batched_constant(
-        EuclideanD(2),
-        &[
-            VectorD::new(&[10.0, -20.0]),
-            VectorD::new(&[0.0, 0.0]),
-            VectorD::new(&[-1.0, 1.0]),
-        ],
-    );
+    let offsets = model
+        .add_batched_constant(
+            EuclideanD(2),
+            &[
+                VectorD::new(&[10.0, -20.0]),
+                VectorD::new(&[0.0, 0.0]),
+                VectorD::new(&[-1.0, 1.0]),
+            ],
+        )
+        .unwrap();
     let x: Q<B, EuclideanD> = model.add_parameter(EuclideanD(2));
     let y = (x.clone() - offsets).unwrap();
 

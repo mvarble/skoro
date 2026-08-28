@@ -18,15 +18,10 @@ use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps, NlsStructure,
-    hash_map_builders::point_map,
-    jacobian::jacobian_vjp,
-    model::ModelClient,
-    q::Q,
-    structure::{JointWhitenedResidual, NlsModelClient},
-    test_utils::into_vec,
+    ModelBuilderOps, ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp,
+    model::ModelClient, q::Q, test_utils::into_vec,
 };
-use skoro_normal::joint::JointNormal;
+use skoro_normal::joint::{JointNormal, add_joint_factor};
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
 use skoro_se3::quantity::{SE3, SE3Pose};
 use skoro_so3::quantity::SO3Matrix;
@@ -287,7 +282,7 @@ fn the_joint_jacobian_matches_central_differences() {
 }
 
 // -------------------------------------------------------------------------------------------
-// The whole factor: residual, density, and certificate
+// The whole factor: residual, density, and record
 // -------------------------------------------------------------------------------------------
 
 /// A 9x9 precision genuinely coupled across the `SE3`/Euclidean boundary.
@@ -354,7 +349,7 @@ fn a_joint_factor_scores_the_quadratic_form_it_was_given() {
 
 /// The factor's two trait methods agree: the density is `−½‖r‖² + n` for the residual it reports.
 ///
-/// `JointWhitenedResidual` cannot check this — it is the same obligation `Distribution` and
+/// `JointNormal` cannot check this — it is the same obligation `Distribution` and
 /// `WhitenedResidual` already place on `Normal`. `JointNormal` discharges it by building both from
 /// one expression; this is what pins that it actually did.
 #[test]
@@ -388,10 +383,10 @@ fn the_residual_and_the_density_agree() {
 ///
 /// `residual_layout` is what an optimizer takes as the rows of `J`, so a 9-member joint has to
 /// arrive as 9 rows — and the residual node has to survive `cleanup()`, which is the hazard
-/// `NlsModelClient::residuals` exists for and which a joint factor reaches by a new route.
+/// `residual_layout` exists for and which a joint factor reaches by a new route.
 #[test]
 fn the_builder_records_a_joint_factor_as_one_row_block() {
-    let mut model = NlsModelClient::<B>::default();
+    let model = ModelClient::<B>::default();
     let pose_q: Q<B, SE3> = model.add_parameter(SE3);
     let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
 
@@ -408,12 +403,12 @@ fn the_builder_records_a_joint_factor_as_one_row_block() {
         whitening.clone(),
         normalizer,
     );
-    let density = model.add_joint_factor(factor).unwrap();
+    let density = add_joint_factor(&model, &factor).unwrap();
 
-    assert_eq!(model.certificate().factors().len(), 1);
-    assert_eq!(model.certificate().factors()[0].density, density.id());
+    assert_eq!(model.factors().len(), 1);
+    assert_eq!(model.factors()[0].density, density.id());
     assert_eq!(
-        model.certificate().factors()[0].normalizer_parents,
+        model.factors()[0].normalizer_parents,
         vec![whitening.id()],
         "the whitening is the normalizer's only parent"
     );
@@ -438,7 +433,7 @@ fn the_builder_records_a_joint_factor_as_one_row_block() {
 /// `Q`, and would be stranded once per tick forever.
 ///
 /// Both halves are asserted here, because each fails silently on its own. A stranded anchor is a
-/// leak nothing reports, and a dangling certificate entry is a `NodeNotFound` at the *next* solve
+/// leak nothing reports, and a dangling record is a `NodeNotFound` at the *next* solve
 /// rather than at the removal that caused it.
 #[test]
 fn retiring_a_scored_quantity_takes_the_whole_joint_factor() {
@@ -483,15 +478,15 @@ fn retiring_a_scored_quantity_takes_the_whole_joint_factor() {
     assert!(contains(whitening.id()), "so is the whitening");
 }
 
-/// A retirement that deletes a recorded factor drops its certificate entry with it.
+/// A retirement that deletes a recorded factor drops its record with it.
 ///
 /// The record is not merely stale afterwards, it is unusable: `residual_layout` resolves every
 /// recorded id through `TangentLayout::from_ids`, so one naming a deleted node fails the *next*
-/// solve rather than the removal that caused it. Pruning can only ever shrink a certificate, so
+/// solve rather than the removal that caused it. Pruning can only ever shrink the registry, so
 /// none of what makes one unforgeable is touched.
 #[test]
-fn retiring_a_scored_quantity_prunes_the_certificate() {
-    let mut model = NlsModelClient::<B>::default();
+fn retiring_a_scored_quantity_prunes_the_registry() {
+    let model = ModelClient::<B>::default();
     let pose_q: Q<B, SE3> = model.add_parameter(SE3);
     let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
 
@@ -503,14 +498,14 @@ fn retiring_a_scored_quantity_prunes_the_certificate() {
     let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
 
     let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
-    model.add_joint_factor(factor).unwrap();
+    add_joint_factor(&model, &factor).unwrap();
     assert_eq!(model.residual_layout().unwrap().total(), 9);
 
     model.remove_closure(&[pose_q.id()]).unwrap();
     model.cleanup();
 
     assert!(
-        model.certificate().factors().is_empty(),
+        model.factors().is_empty(),
         "a record naming a deleted node is not evidence"
     );
     assert_eq!(model.residual_layout().unwrap().total(), 0);
@@ -527,7 +522,7 @@ fn retiring_a_scored_quantity_prunes_the_certificate() {
 /// keep a *certified* residual alive, so an uncertified one becomes collectable again.
 #[test]
 fn a_factor_whose_density_was_removed_is_uncertified() {
-    let mut model = NlsModelClient::<B>::default();
+    let model = ModelClient::<B>::default();
     let pose_q: Q<B, SE3> = model.add_parameter(SE3);
     let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
 
@@ -539,14 +534,14 @@ fn a_factor_whose_density_was_removed_is_uncertified() {
     let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
 
     let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
-    let density = model.add_joint_factor(factor).unwrap();
-    let residual = model.certificate().factors()[0].residual;
+    let density = add_joint_factor(&model, &factor).unwrap();
+    let residual = model.factors()[0].residual;
 
     // Rooted at the density: `ℓ` alone goes, and with the record pruned the residual is
     // unpinned — so the same call's cascade reclaims it too.
     assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
-    assert!(model.certificate().factors().is_empty());
+    assert!(model.factors().is_empty());
     assert_eq!(model.residual_layout().unwrap().total(), 0);
     assert!(
         model.tangent_layout(&[residual]).is_err(),

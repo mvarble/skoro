@@ -4,19 +4,21 @@
 //! What is asserted is the bookkeeping, not the statistics (nothing marginalizes yet —
 //! that is GAP 2): each tick demotes the blanket member, replaces its conditional with a
 //! joint factor over it, and retires the oldest state-measurement pair with everything
-//! below it. The certificate, the row count of `J`, and the graph's size must all hold
+//! below it. The records, the row count of `J`, and the graph's size must all hold
 //! exactly steady afterwards — a leak or a dangling record is invisible in one tick and
 //! unmissable over twelve.
 
 use skoro_backend::{NdArrayBackend, Point, TensorData};
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
-    ModelClientOps, NlsModelClient, NlsStructure,
+    ModelBuilderOps, ModelClientOps,
     hash_map_builders::{point_map, points},
+    model::ModelClient,
     q::Q,
 };
 use skoro_normal::{
-    distribution::Normal, facade::constant_covariance_identity, joint::JointNormal,
+    facade::{add_gaussian_quantity, constant_covariance_identity},
+    joint::{JointNormal, add_joint_factor},
 };
 use skoro_operation::{Input, ValueMap};
 use skoro_riemann::{
@@ -62,7 +64,7 @@ fn live_points(window: &[Tick]) -> ValueMap<B> {
 
 #[test]
 fn a_sliding_window_grows_and_retires_without_leaking() {
-    let mut model = NlsModelClient::<B>::default();
+    let model = ModelClient::<B>::default();
     let prior_mean = model.add_constant(EuclideanD(N), &VectorD::new(&[0.0; N]));
     let dyn_cov = constant_covariance_identity(&model, N);
     let z_cov = constant_covariance_identity(&model, M);
@@ -82,27 +84,18 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
     );
 
     // t = 0: the prior and its first measurement.
-    let x = model
-        .add_residual_quantity(Normal::new(prior_mean, dyn_cov.clone()))
-        .unwrap();
-    let z = model
-        .add_residual_quantity(Normal::new(matmul(&h_mat, &x).unwrap(), z_cov.clone()))
-        .unwrap();
+    let x = add_gaussian_quantity(&model, &prior_mean, &dyn_cov).unwrap();
+    let z_mean = matmul(&h_mat, &x).unwrap();
+    let z = add_gaussian_quantity(&model, &z_mean, &z_cov).unwrap();
     model.observe(&z, &VectorD::new(&[0.0; M])).unwrap();
     let mut window = vec![(x, z)];
 
     let mut last_node_count = None;
     for _ in 1..TICKS {
-        let x = model
-            .add_residual_quantity(Normal::new(
-                matmul(&f_mat, &window.last().unwrap().0).unwrap(),
-                dyn_cov.clone(),
-            ))
-            .unwrap();
+        let x_mean = matmul(&f_mat, &window.last().unwrap().0).unwrap();
+        let x = add_gaussian_quantity(&model, &x_mean, &dyn_cov).unwrap();
         let z_mean = matmul(&h_mat, &x).unwrap();
-        let z = model
-            .add_residual_quantity(Normal::new(z_mean, z_cov.clone()))
-            .unwrap();
+        let z = add_gaussian_quantity(&model, &z_mean, &z_cov).unwrap();
         model.observe(&z, &VectorD::new(&[0.0; M])).unwrap();
         window.push((x, z));
 
@@ -116,7 +109,7 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         //    `oldest` takes everything downstream of it, and the blanket is downstream
         //    of it (its mean was built from `oldest`); the demotion is what severs that
         //    edge while keeping the blanket's identity, its measurement, and the rest
-        //    of the chain intact. Its conditional's record leaves the certificate in
+        //    of the chain intact. Its conditional's record leaves the registry in
         //    the same call.
         let blanket = window[1].0.clone();
         model.demote_to_parameter(&blanket).unwrap();
@@ -126,14 +119,11 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         let at = point_map()
             .with_quantity(&blanket, point(&[0.0; N]))
             .build();
-        model
-            .add_joint_factor(JointNormal::new(
-                vec![blanket.id()],
-                at,
-                whitening.clone(),
-                0.0,
-            ))
-            .unwrap();
+        add_joint_factor(
+            &model,
+            &JointNormal::new(vec![blanket.id()], at, whitening.clone(), 0.0),
+        )
+        .unwrap();
 
         // 3. Retire the oldest pair with everything below it — including last tick's
         //    joint factor, whose whole body is downstream of the state it scored.
@@ -141,12 +131,12 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         model.remove_closure(&[old_x.id(), old_z.id()]).unwrap();
 
         assert_eq!(
-            NlsStructure::certificate(&model).factors().len(),
+            model.factors().len(),
             FACTORS,
-            "the certificate holds exactly the live factors"
+            "the registry holds exactly the live factors"
         );
         assert_eq!(
-            NlsStructure::residual_layout(&model).unwrap().total(),
+            model.residual_layout().unwrap().total(),
             ROWS,
             "the rows of `J` are exactly the live factors'"
         );

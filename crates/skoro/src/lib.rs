@@ -11,9 +11,10 @@
 //!
 //! ## Quick orientation
 //!
-//! - Build a model through a [`ModelClient`](skoro_model::model::ModelClient)
-//!   (or the Gaussian-restricted
-//!   [`GaussianModelClient`](skoro_normal::facade::GaussianModelClient)).
+//! - Build a model through a [`ModelClient`](skoro_model::model::ModelClient);
+//!   Gaussian conditionals go in through
+//!   [`add_gaussian_quantity`](skoro_normal::facade::add_gaussian_quantity),
+//!   which records the factor it built.
 //! - Quantities are typed proxies [`Q<B, M>`](skoro_model::q::Q) over a manifold
 //!   `M` (e.g. [`Real`](skoro_riemann::real::Real),
 //!   [`Euclidean`](skoro_riemann::euclidean::Euclidean),
@@ -70,34 +71,35 @@ pub mod prelude {
     pub use skoro_operation::{Input, ValueMap};
 
     // ----- the model interface -----
-    pub use skoro_model::ModelClientOps;
+    pub use skoro_model::{ModelBuilderOps, ModelClientOps};
 
-    // ----- structural claims an inference algorithm bounds on -----
+    // ----- what a builder records about its least-squares factors -----
     pub use skoro_model::model::{ModelClient, ModelServer};
     pub use skoro_model::q::Q;
-    pub use skoro_model::{NlsModelClient, NlsStructure, ResidualCertificate, WhitenedResidual};
-    pub use skoro_normal::structure::{GaussianBlock, GaussianFactor, GaussianStructure};
+    pub use skoro_model::{FactorRecord, ResidualRegistry};
+    pub use skoro_normal::structure::GaussianBlock;
 
     // ----- distributions -----
     pub use skoro_core::sampler::Sampler;
     pub use skoro_model::distribution::Distribution;
     pub use skoro_normal::distribution::{Normal, NormalSampler};
 
-    // ----- Gaussian facades -----
+    // ----- Gaussian factor builders -----
     pub use skoro_normal::facade::{
-        constant_covariance_diagonal, constant_covariance_identity, GaussianModelClient,
-        GaussianModelClientOps, GaussianModelServer,
+        add_gaussian_quantity, constant_covariance_diagonal, constant_covariance_identity,
+        constant_covariance_isotropic, gaussian_blocks,
     };
+    pub use skoro_normal::joint::add_joint_factor;
 
     // ----- manifolds / quantity types -----
     pub use skoro_graph::quantity::{ContinuousQuantity, DiscreteQuantity, QuantityType};
+    pub use skoro_riemann::Manifold;
     pub use skoro_riemann::euclidean::{
         Euclidean, Euclidean1, Euclidean2, Euclidean3, Euclidean4, Euclidean5, Euclidean6,
         EuclideanD, VectorD,
     };
     pub use skoro_riemann::matrix::{EuclideanMatrix, EuclideanMatrixD};
     pub use skoro_riemann::real::Real;
-    pub use skoro_riemann::Manifold;
 
     // discrete quantity types
     pub use skoro_core::discrete::{Boolean, Categorical, Integer};
@@ -113,8 +115,8 @@ pub mod prelude {
     pub use skoro_pointwise::PointwiseOps;
 
     // ----- discrete op traits / bridges -----
-    pub use skoro_model::discrete::bridge::{DiscreteEmbed, Discretize};
     pub use skoro_model::discrete::DiscreteCompare;
+    pub use skoro_model::discrete::bridge::{DiscreteEmbed, Discretize};
 
     // ----- SO(3) / SE(3) -----
     pub use skoro_se3::quantity::SE3;

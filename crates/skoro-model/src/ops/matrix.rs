@@ -55,12 +55,8 @@ impl<B: Backend> QNeg<B> for EuclideanMatrixD {
 
 impl<B: Backend> QAdd<B, EuclideanMatrixD> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = Addition;
     fn quantity_type(&self, _: &EuclideanMatrixD) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &EuclideanMatrixD) -> Self::OpType {
-        Addition
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -69,19 +65,15 @@ impl<B: Backend> QAdd<B, EuclideanMatrixD> for EuclideanMatrixD {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, EuclideanMatrixD>>::quantity_type(&t0, &t1);
-        let op = <Self as QAdd<B, EuclideanMatrixD>>::op_type(&t0, &t1);
+        let op = Addition;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend> QSub<B, EuclideanMatrixD> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = Subtraction;
     fn quantity_type(&self, _: &EuclideanMatrixD) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &EuclideanMatrixD) -> Self::OpType {
-        Subtraction
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -90,37 +82,29 @@ impl<B: Backend> QSub<B, EuclideanMatrixD> for EuclideanMatrixD {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, EuclideanMatrixD>>::quantity_type(&t0, &t1);
-        let op = <Self as QSub<B, EuclideanMatrixD>>::op_type(&t0, &t1);
+        let op = Subtraction;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend> QMul<B, Real> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QMul<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarMultiplication;
         crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend> QMul<B, EuclideanMatrixD> for Real {
     type OutputType = EuclideanMatrixD;
-    type OpType = ScalarMultiplication;
     fn quantity_type(&self, other: &EuclideanMatrixD) -> Self::OutputType {
         *other
-    }
-    fn op_type(&self, _: &EuclideanMatrixD) -> Self::OpType {
-        ScalarMultiplication
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -129,25 +113,21 @@ impl<B: Backend> QMul<B, EuclideanMatrixD> for Real {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, EuclideanMatrixD>>::quantity_type(&t0, &t1);
-        let op = <Self as QMul<B, EuclideanMatrixD>>::op_type(&t0, &t1);
+        let op = ScalarMultiplication;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend> QDiv<B, Real> for EuclideanMatrixD {
     type OutputType = EuclideanMatrixD;
-    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QDiv<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarDivision;
         crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
@@ -195,12 +175,8 @@ impl<B: Backend, const M: usize, const N: usize> QAdd<B, EuclideanMatrix<M, N>>
     for EuclideanMatrix<M, N>
 {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = Addition;
     fn quantity_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OpType {
-        Addition
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -209,7 +185,7 @@ impl<B: Backend, const M: usize, const N: usize> QAdd<B, EuclideanMatrix<M, N>>
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, EuclideanMatrix<M, N>>>::quantity_type(&t0, &t1);
-        let op = <Self as QAdd<B, EuclideanMatrix<M, N>>>::op_type(&t0, &t1);
+        let op = Addition;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
@@ -218,12 +194,8 @@ impl<B: Backend, const M: usize, const N: usize> QSub<B, EuclideanMatrix<M, N>>
     for EuclideanMatrix<M, N>
 {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = Subtraction;
     fn quantity_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OpType {
-        Subtraction
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -232,37 +204,29 @@ impl<B: Backend, const M: usize, const N: usize> QSub<B, EuclideanMatrix<M, N>>
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, EuclideanMatrix<M, N>>>::quantity_type(&t0, &t1);
-        let op = <Self as QSub<B, EuclideanMatrix<M, N>>>::op_type(&t0, &t1);
+        let op = Subtraction;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend, const M: usize, const N: usize> QMul<B, Real> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QMul<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarMultiplication;
         crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend, const M: usize, const N: usize> QMul<B, EuclideanMatrix<M, N>> for Real {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = ScalarMultiplication;
     fn quantity_type(&self, other: &EuclideanMatrix<M, N>) -> Self::OutputType {
         *other
-    }
-    fn op_type(&self, _: &EuclideanMatrix<M, N>) -> Self::OpType {
-        ScalarMultiplication
     }
     fn register(
         lhs: &Q<B, Self>,
@@ -271,25 +235,21 @@ impl<B: Backend, const M: usize, const N: usize> QMul<B, EuclideanMatrix<M, N>> 
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, EuclideanMatrix<M, N>>>::quantity_type(&t0, &t1);
-        let op = <Self as QMul<B, EuclideanMatrix<M, N>>>::op_type(&t0, &t1);
+        let op = ScalarMultiplication;
         crate::ops::base::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend, const M: usize, const N: usize> QDiv<B, Real> for EuclideanMatrix<M, N> {
     type OutputType = EuclideanMatrix<M, N>;
-    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QDiv<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarDivision;
         crate::ops::base::continuous_binop(rhs, lhs, t, op)
     }
 }

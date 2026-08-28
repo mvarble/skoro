@@ -1,4 +1,4 @@
-use skoro_core::error::SkoroResult;
+use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
@@ -145,8 +145,17 @@ fn q_unobserve_returns_node_to_stochastic() {
         );
     });
 
-    // Unobserving an already-stochastic quantity is a no-op, not a panic.
-    q.unobserve().unwrap();
+    // Unobserving an already-stochastic quantity is reported, not silently accepted.
+    //
+    // `unobserve` reverses an observation, and a quantity that carries none has nothing to
+    // reverse — `Graph::unobserve` answers `NotObservable` for every node kind that is
+    // neither `Observed` nor `Constant`. Note the asymmetry with `demote_to_parameter`,
+    // which *is* idempotent: demotion asks for a state ("be a free variable") while this
+    // asks for a transition, and only the first is meaningful when it has already happened.
+    assert!(matches!(
+        q.unobserve(),
+        Err(SkoroError::NotObservable { id }) if id == q.id()
+    ));
     client.server_call(|server| {
         assert!(matches!(
             server.graph().node(q.id()),

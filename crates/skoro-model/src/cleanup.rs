@@ -1,17 +1,21 @@
-//! The garbage collector's bookkeeping: which ids are still named by a live [`Q`], and
-//! which dropped handles are waiting to be examined.
+//! The garbage collector's root set: which ids are still named by a live [`Q`].
 //!
-//! The collector this feeds is deliberately dumb about the past. A guard registers its id
-//! when it is created and reports its drop, and [`ModelServer::cleanup`] re-derives
-//! eligibility from the graph's *current* state — kind, children, pins, model ownership —
-//! rather than trusting anything that was true when the handle died. That is what makes
-//! collecting an already-collected node, or skipping a node that has since gained a child,
-//! ordinary rather than an internal error.
+//! The collector this feeds is a mark-and-sweep over the graph's *current* shape. It asks
+//! one question — what is reachable from a root — and everything else follows, so there is
+//! nothing here but the roots and a flag saying whether anything has changed since the last
+//! sweep.
+//!
+//! **This is deliberately less machinery than it replaces.** The previous collector kept a
+//! queue of candidate ids and popped them destructively, which made a "not yet" verdict
+//! final: every mutation that reduced a node's reachability had to *offer* what it orphaned,
+//! or the node was unreachable and uncollected forever. That obligation was documented,
+//! spread across five call sites, and enforced by nothing. Reachability is not an event, so
+//! nothing has to report it.
 //!
 //! [`Q`]: crate::q::Q
-//! [`ModelServer::cleanup`]: crate::model::ModelServer::cleanup
 
-use crossbeam_queue::SegQueue;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use dashmap::DashSet;
 use skoro_core::id::Id;
 
@@ -20,55 +24,47 @@ use skoro_core::id::Id;
 /// One per server, cloned into every `NodeDropGuard` so a guard can outlive its server
 /// without consequence — deregistering into a dead registry is harmless.
 #[derive(Debug, Default)]
-pub(crate) struct CleanupRegistry {
-    /// Ids whose last handle dropped since the last collection, plus ids a mutation may
-    /// have orphaned. Candidates only: each *may* be collectable, decided fresh at
-    /// collection time, so a stale or duplicated entry costs one failed check.
-    ///
-    /// **Popping is destructive, so a "not yet" verdict is final.** A candidate the
-    /// collector declines — because it still has a child, or a certificate still names it
-    /// — is gone from here, and nothing re-derives it. Every mutation that reduces a
-    /// node's reachability must therefore [`offer`](Self::offer) what it orphaned; a
-    /// severed edge or a dropped record that stays silent is a permanent leak, not a
-    /// delayed collection.
-    candidates: SegQueue<Id>,
-    /// The ids a live handle names.
+pub(crate) struct HandleRegistry {
+    /// The ids a live handle names — the collector's roots, beside the model's own.
     ///
     /// A set rather than a count, because a guard is 1:1 with a node: `NodeDropGuard::new`
     /// runs once per id, beside the node it names, and `Q` clones share the one `Arc`. A
     /// counter here would describe a shape — several guards for one id — that cannot occur.
     live: DashSet<Id>,
+    /// Whether anything has happened that could make a node unreachable.
+    ///
+    /// Purely an optimization, and one that can only ever cause *extra* work: a sweep it
+    /// skips is a sweep that would have found nothing. It is set by a dropped handle and by
+    /// every mutation that reaches [`ModelServer::cleanup`](crate::model::ModelServer::cleanup),
+    /// and cleared by the sweep itself.
+    dirty: AtomicBool,
 }
 
-impl CleanupRegistry {
+impl HandleRegistry {
     /// A new handle names `id`.
     pub(crate) fn track(&self, id: Id) {
         self.live.insert(id);
     }
 
-    /// The guard for `id` is gone; offer the id for collection.
+    /// The guard for `id` is gone. The node may now be unreachable — the next sweep decides,
+    /// from the graph rather than from this.
     pub(crate) fn untrack(&self, id: Id) {
         self.live.remove(&id);
-        self.candidates.push(id);
+        self.mark_dirty();
     }
 
-    /// Whether a handle still names `id`.
-    pub(crate) fn is_tracked(&self, id: Id) -> bool {
-        self.live.contains(&id)
+    /// Note that something may have become unreachable.
+    pub(crate) fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Release);
     }
 
-    /// The next candidate awaiting examination, if any.
-    pub(crate) fn pop(&self) -> Option<Id> {
-        self.candidates.pop()
+    /// Whether a sweep is worth running, clearing the flag if so.
+    pub(crate) fn take_dirty(&self) -> bool {
+        self.dirty.swap(false, Ordering::AcqRel)
     }
 
-    /// Offer `ids` as candidates — for nodes a mutation may have orphaned, whose handles
-    /// are long gone and which would otherwise never be examined again. See the note on
-    /// [`candidates`](Self::candidates) for why this is obligatory rather than an
-    /// optimization.
-    pub(crate) fn offer(&self, ids: impl IntoIterator<Item = Id>) {
-        for id in ids {
-            self.candidates.push(id);
-        }
+    /// The ids a live handle names, as a snapshot.
+    pub(crate) fn roots(&self) -> Vec<Id> {
+        self.live.iter().map(|id| *id).collect()
     }
 }

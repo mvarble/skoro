@@ -56,10 +56,10 @@ pub enum SkoroError {
     /// The node cannot be removed because it is still referenced as a parent of
     /// another node.
     NodeStillReferenced { id: Id, child_id: Id },
-    /// The node cannot be removed because a `ResidualCertificate` names it — deleting it
-    /// would take a factor out of the objective without the evidence noticing. Retire the
-    /// factor with a closure removal instead.
-    NodeIsCertified { id: Id },
+    /// The node cannot be removed because a recorded factor names it — deleting it would
+    /// take a term out of the objective, and leave the record naming a node that is gone.
+    /// Retire the factor with a closure removal instead, which takes the referents.
+    NodeIsRecorded { id: Id },
     /// A supplied point has a batch size inconsistent with the rest of the
     /// evaluation.
     BatchSizeMismatch { expected: usize, found: usize },
@@ -163,10 +163,10 @@ impl fmt::Display for SkoroError {
                     "cannot remove node {id:?}; it is still a parent of node {child_id:?}"
                 )
             }
-            SkoroError::NodeIsCertified { id } => {
+            SkoroError::NodeIsRecorded { id } => {
                 write!(
                     f,
-                    "cannot remove node {id:?}; a residual certificate names it \
+                    "cannot remove node {id:?}; a recorded factor names it \
                      (retire the factor with a closure removal instead)"
                 )
             }

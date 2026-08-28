@@ -18,7 +18,7 @@ use skoro_linalg::{
     tril::{Tril, TrilOps},
     vector::LinalgVectorOps,
 };
-use skoro_model::{model::ModelClient, q::Q, structure::JointWhitenedResidual};
+use skoro_model::{FactorRecord, ModelBuilderOps, q::Q};
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
 /// A Gaussian factor `−½ δᵀ Λ δ + n` over a set of quantities, where `δ` stacks their tangents
@@ -111,16 +111,61 @@ where
 {
     /// `r = W · [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]`.
     ///
-    /// The single expression both trait methods are built from, so the residual and the density
-    /// cannot come to disagree about what this factor scores.
-    fn residual(&self, client: &ModelClient<B>) -> SkoroResult<Q<B, EuclideanD>> {
+    /// The single expression both public methods are built from, so the residual and the
+    /// density cannot come to disagree about what this factor scores.
+    fn residual<C: ModelBuilderOps<B>>(&self, client: &C) -> SkoroResult<Q<B, EuclideanD>> {
         let delta = client.stacked_tangent(&self.at, &self.ids)?;
         self.whitening.vector_product(&delta)
     }
+
+    /// The residual node `r`, built over quantities the model already holds.
+    ///
+    /// This *builds a graph node* rather than computing a number, and the node is what a
+    /// Jacobian's rows are taken over.
+    pub fn whitened_residual<C: ModelBuilderOps<B>>(
+        &self,
+        client: &C,
+    ) -> SkoroResult<Q<B, EuclideanD>> {
+        self.residual(client)
+    }
+
+    /// The factor's contribution to the model's log-density, `−½‖r‖² + n`.
+    ///
+    /// Derived from the same [`residual`](Self::residual) as
+    /// [`whitened_residual`](Self::whitened_residual), so the obligation that the two agree
+    /// is discharged by construction rather than left to a caller.
+    pub fn log_density<C: ModelBuilderOps<B>>(&self, client: &C) -> SkoroResult<Q<B, Real>> {
+        let quadratic = (self.residual(client)?.norm_squared()? * -0.5)?;
+        quadratic + self.normalizer
+    }
+
+    /// The quantities the normalizer `n` depends on: the whitening constant, and nothing
+    /// else.
+    ///
+    /// Unlike [`Normal`](crate::distribution::Normal), whose normalizer carries a `log|L⁻¹|`
+    /// term that moves with its covariance node, this factor's `W` is a frozen constant and
+    /// its normalizer is a genuine constant. Reporting the id anyway is not decoration: it
+    /// means the least-squares precondition still bites if anyone ever makes the whitening
+    /// free.
+    pub fn normalizer_parents(&self) -> &[Id] {
+        &self.normalizer_parents
+    }
 }
 
-impl<B: Backend> JointWhitenedResidual<B> for JointNormal<B>
+/// Add a joint Gaussian factor over quantities the model **already holds**, and record it.
+///
+/// This is what a marginalized-out quantity leaves behind: a joint over its Markov blanket,
+/// which is not a distribution over any new quantity. It adds no stochastic node — the
+/// factor is attached with [`ModelBuilderOps::mark_likelihood`], and the quantities it scores
+/// are untouched.
+///
+/// The returned handle is the log-density node, for a caller that wants to inspect or retire
+/// the factor later. The record carries no `μ`/`L` refinement: a joint factor has no single
+/// mean node, which is the whole reason it is not a [`Normal`](crate::distribution::Normal).
+pub fn add_joint_factor<B, C>(client: &C, factor: &JointNormal<B>) -> SkoroResult<Q<B, Real>>
 where
+    B: Backend,
+    C: ModelBuilderOps<B>,
     B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
         + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
         + std::ops::Add<B::FloatElem, Output = B::FloatElem>
@@ -128,22 +173,13 @@ where
         + std::ops::Neg<Output = B::FloatElem>
         + std::ops::AddAssign<B::FloatElem>,
 {
-    fn whitened_residual(&self, client: &ModelClient<B>) -> SkoroResult<Q<B, EuclideanD>> {
-        self.residual(client)
-    }
-
-    fn log_density(&self, client: &ModelClient<B>) -> SkoroResult<Q<B, Real>> {
-        let quadratic = (self.residual(client)?.norm_squared()? * -0.5)?;
-        quadratic + self.normalizer
-    }
-
-    /// The whitening constant, and nothing else.
-    ///
-    /// Unlike [`Normal`](crate::distribution::Normal), whose normalizer carries a `log|L⁻¹|` term
-    /// that moves with its covariance node, this factor's `W` is a frozen constant and its
-    /// normalizer is a genuine constant. Reporting the id anyway is not decoration: it means the
-    /// least-squares precondition still bites if anyone ever makes the whitening free.
-    fn normalizer_parents(&self) -> &[Id] {
-        &self.normalizer_parents
-    }
+    let residual = factor.whitened_residual(client)?;
+    let density = factor.log_density(client)?;
+    client.mark_likelihood(&density)?;
+    client.record_factor(FactorRecord::new(
+        density.id(),
+        residual.id(),
+        factor.normalizer_parents().to_vec(),
+    ))?;
+    Ok(density)
 }

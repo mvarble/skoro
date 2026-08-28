@@ -9,7 +9,6 @@
 use skoro_backend::{Backend, CotangentFrame, DiscretePoint, Point};
 use skoro_core::discrete::{Boolean, Integer};
 use skoro_core::error::SkoroResult;
-use skoro_graph::operation::ForwardOnly;
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -17,7 +16,7 @@ use skoro_operation::{
 };
 use skoro_riemann::real::Real;
 
-use crate::map::register_map1;
+use crate::map::{register_discrete_map1, register_map1};
 use crate::q::Q;
 
 // ----- Embedding: discrete -> continuous (DiffOperation reading an Int input) -----
@@ -97,6 +96,6 @@ pub trait Discretize<B: Backend> {
 
 impl<B: Backend> Discretize<B> for Q<B, Real> {
     fn is_non_negative(&self) -> SkoroResult<Q<B, Boolean>> {
-        register_map1(Boolean, ForwardOnly(Threshold), self)
+        register_discrete_map1(Boolean, Threshold, self)
     }
 }

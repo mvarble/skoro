@@ -45,7 +45,7 @@
 //!
 //! The `Q*` operator traits are unified over unbounded operand types: a
 //! discrete output type implements e.g. `QAdd` with a `register` that calls
-//! `register_map2` with a [`ForwardOnly`](skoro_graph::operation::ForwardOnly)-wrapped
+//! [`register_discrete_map2`](crate::map::register_discrete_map2) with a discrete
 //! kernel, so `Q<Integer> + Q<Integer>` uses the same single `std::ops::Add`
 //! impl as continuous quantities.
 

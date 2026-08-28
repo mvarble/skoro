@@ -75,74 +75,58 @@ impl<B: Backend> QNeg<B> for Tril {
 
 impl<B: Backend> QAdd<B, Tril> for Tril {
     type OutputType = Tril;
-    type OpType = Addition;
     fn quantity_type(&self, other: &Tril) -> Self::OutputType {
         assert_eq!(self, other);
         *self
-    }
-    fn op_type(&self, _: &Tril) -> Self::OpType {
-        Addition
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Tril>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QAdd<B, Tril>>::quantity_type(&t0, &t1);
-        let op = <Self as QAdd<B, Tril>>::op_type(&t0, &t1);
+        let op = Addition;
         skoro_model::ops::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend> QSub<B, Tril> for Tril {
     type OutputType = Tril;
-    type OpType = Subtraction;
     fn quantity_type(&self, other: &Tril) -> Self::OutputType {
         assert_eq!(self, other);
         *self
-    }
-    fn op_type(&self, _: &Tril) -> Self::OpType {
-        Subtraction
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Tril>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QSub<B, Tril>>::quantity_type(&t0, &t1);
-        let op = <Self as QSub<B, Tril>>::op_type(&t0, &t1);
+        let op = Subtraction;
         skoro_model::ops::continuous_binop(lhs, rhs, t, op)
     }
 }
 
 impl<B: Backend> QMul<B, Real> for Tril {
     type OutputType = Tril;
-    type OpType = ScalarMultiplication;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarMultiplication
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QMul<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QMul<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarMultiplication;
         skoro_model::ops::continuous_binop(rhs, lhs, t, op)
     }
 }
 
 impl<B: Backend> QDiv<B, Real> for Tril {
     type OutputType = Tril;
-    type OpType = ScalarDivision;
     fn quantity_type(&self, _: &Real) -> Self::OutputType {
         *self
-    }
-    fn op_type(&self, _: &Real) -> Self::OpType {
-        ScalarDivision
     }
     fn register(lhs: &Q<B, Self>, rhs: &Q<B, Real>) -> SkoroResult<Q<B, Self::OutputType>> {
         let t0 = lhs.get_quantity_type();
         let t1 = rhs.get_quantity_type();
         let t = <Self as QDiv<B, Real>>::quantity_type(&t0, &t1);
-        let op = <Self as QDiv<B, Real>>::op_type(&t0, &t1);
+        let op = ScalarDivision;
         skoro_model::ops::continuous_binop(rhs, lhs, t, op)
     }
 }

@@ -2,9 +2,8 @@
 //!
 //! [`ModelClientOps`] factors out the model-interface surface that has nothing
 //! to do with which conditional distributions a model supports: adding
-//! deterministic/free quantities, observing, evaluation, and generation. It is
-//! the base trait that distribution-specific capability traits (e.g.
-//! `GaussianModelClientOps` in `skoro-normal`) build on.
+//! deterministic/free quantities, observing, evaluation, and generation.
+//! [`ModelBuilderOps`] adds the calls that *grow* a model.
 //!
 //! All quantity-construction methods are *kind-generic*: the same
 //! [`add_constant`](ModelClientOps::add_constant),
@@ -15,9 +14,10 @@
 //! require [`ContinuousQuantity`].
 //!
 //! Code that is generic over "some client one can drive a model through" should
-//! bound on `ModelClientOps`. Code that needs a *structural* guarantee about the
-//! model (e.g. "all conditionals are Gaussian") should instead take the concrete
-//! facade type (e.g. `GaussianModelClient`), not this trait.
+//! bound on `ModelClientOps`; code that also builds should bound on
+//! [`ModelBuilderOps`]. Neither says anything about what a model *contains* —
+//! for that, read the factors a builder recorded, through
+//! [`ModelBuilderOps::factors`].
 
 use std::collections::HashMap;
 
@@ -30,16 +30,18 @@ use skoro_graph::{
         PointVjpEval,
     },
     node::Node,
+    point_map::PointMap,
     quantity::{ContinuousQuantity, QuantityType},
     tangent_layout::TangentLayout,
 };
 use skoro_operation::ValueMap;
 
-use skoro_riemann::real::Real;
+use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
 use crate::distribution::Distribution;
 use crate::model::ModelClient;
 use crate::q::Q;
+use crate::residual::FactorRecord;
 
 /// Distribution-agnostic operations available on any model client.
 ///
@@ -65,7 +67,7 @@ pub trait ModelClientOps<B: Backend> {
     /// pins the batch: a model holding a batch-`n` constant can only be evaluated at batch `n`,
     /// and any other batch size is an error rather than a broadcast. Use
     /// [`add_constant`](Self::add_constant) for a value shared by every row.
-    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
     where
         K: Kind<B>,
         T: QuantityType<B, K> + Packable<K::Elem, D>,
@@ -114,6 +116,20 @@ pub trait ModelClientOps<B: Backend> {
     /// Ordering is the caller's, because a block structure they chose is one they can
     /// reason about when reading a covariance or a Jacobian.
     fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout>;
+
+    /// The number of nodes in the underlying graph — the bound a retention policy watches.
+    ///
+    /// A sliding window retires by policy rather than by bookkeeping, and "how big has this
+    /// got" is the question the policy asks. It is a count, not a handle, so it sits on the
+    /// client tier.
+    fn graph_node_count(&self) -> usize;
+
+    /// The log-density node scoring a stochastic quantity, if it has one.
+    ///
+    /// A builder that has just added a quantity needs this to name the term it created:
+    /// `add_quantity` returns the quantity, and the density it built is reachable only
+    /// through the graph. Read-only, so it sits on the client tier.
+    fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id>;
 
     /// Fetch the quantity type associated with a quantity.
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
@@ -243,15 +259,15 @@ pub trait ModelClientOps<B: Backend> {
 /// Capability: this client can grow the model with stochastic quantities and
 /// free-standing likelihood factors.
 ///
-/// Deliberately separate from [`ModelClientOps`] rather than folded into it. A
-/// restricting facade such as `GaussianModelClient` implements that trait *precisely
-/// in order to withhold this surface* — if the two were one trait, "a client that can
-/// evaluate a model" and "a client that can add anything to a model" would be the same
-/// bound, and no facade could offer the first without the second.
+/// Deliberately separate from [`ModelClientOps`] rather than folded into it. If the two
+/// were one trait, "a client that can evaluate a model" and "a client that can add
+/// anything to a model" would be the same bound — so an estimator, which needs only the
+/// first, could not be given the first without the second. That split is what
+/// `remove` / `remove_closure` sit on either side of.
 ///
 /// Note what this trait is not: implementing it says nothing about what a model
-/// *contains*. That is a structural claim, and it belongs on the builder that
-/// accumulated the model, not on a capability trait anyone may implement.
+/// *contains*. What a model contains is read from the factors its builder recorded, via
+/// [`factors`](Self::factors).
 pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// Add a stochastic quantity with the given conditional distribution.
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
@@ -259,14 +275,31 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
         K: Kind<B>,
         D: Distribution<B, K>;
 
-    /// Replace the conditional distribution of an existing stochastic quantity.
-    fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>;
-
     /// Attach a free-standing likelihood factor to a real-valued quantity.
     fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()>;
+
+    /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
+    /// quantities, as one `Q<B, EuclideanD>` of width `Σ dᵢ`.
+    ///
+    /// This is how a factor scores several quantities at once without a product manifold;
+    /// see [`Graph::stacked_tangent`](skoro_graph::graph::Graph::stacked_tangent) for what it
+    /// builds and why the anchors are frozen. It sits on the *builder* tier because it grows
+    /// the model — it adds `2k + 1` nodes — and for no other reason.
+    fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>>;
+
+    /// Record a least-squares factor this builder just assembled.
+    ///
+    /// The claim is the recorder's, and it is checked only as far as the graph can check it;
+    /// see [`ModelServer::record_factor`](crate::model::ModelServer::record_factor) for
+    /// exactly what is validated and what is not. On the builder tier rather than the client
+    /// one because recording *pins* nodes, which is a change to the model's shape.
+    fn record_factor(&self, record: FactorRecord) -> SkoroResult<()>;
+
+    /// The factors this model has been told about, in the order they were recorded.
+    fn factors(&self) -> Vec<FactorRecord>;
+
+    /// The rows of `J`: a layout over the recorded residuals, in record order.
+    fn residual_layout(&self) -> SkoroResult<TangentLayout>;
 
     /// Remove `roots` together with everything downstream of them.
     ///
@@ -275,17 +308,15 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// means computing the downward closure by hand at every call site. This is that walk.
     ///
     /// **Why this is a builder capability and `remove` is not.** `remove` refuses to break a
-    /// reference, so an algorithm holding it cannot silently delete a factor it was handed —
-    /// which is what makes it safe at the [`ModelClientOps`] tier that
-    /// [`NlsStructure`](crate::structure::NlsStructure) sits on. This one deliberately does the
-    /// opposite: it takes the referents too, and cannot fail on a live child. Deciding that a
-    /// whole cone of the model is finished is the same order of authority as adding a factor,
-    /// so it sits with the other calls that shape the model rather than with the ones that only
-    /// read it.
+    /// reference, so an estimator holding only [`ModelClientOps`] cannot silently delete a
+    /// factor it was handed. This one deliberately does the opposite: it takes the referents
+    /// too, and cannot fail on a live child. Deciding that a whole cone of the model is
+    /// finished is the same order of authority as adding a factor, so it sits with the other
+    /// calls that shape the model rather than with the ones that only read it.
     ///
-    /// The server's certificate is pruned in the same call, and anything the removal orphaned
-    /// upstream — a retired factor's body, the anchors of a stacked tangent — unwinds in the
-    /// cleanup cascade before it returns.
+    /// The server's factor records are pruned in the same call, and anything the removal
+    /// orphaned upstream — a retired factor's body, the anchors of a stacked tangent — is
+    /// swept before it returns.
     fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>>;
 }
 
@@ -301,7 +332,7 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
     }
 
     #[inline(always)]
-    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> Q<B, T>
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
     where
         K: Kind<B>,
         T: QuantityType<B, K> + Packable<K::Elem, D>,
@@ -360,6 +391,16 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         T: QuantityType<B, K>,
     {
         ModelClient::get_quantity_type(self, tag)
+    }
+
+    #[inline(always)]
+    fn graph_node_count(&self) -> usize {
+        self.server_call(|server| server.graph().node_count())
+    }
+
+    #[inline(always)]
+    fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id> {
+        self.server_call(|server| server.graph().log_density_of(q.id()))
     }
 
     #[inline(always)]
@@ -533,12 +574,23 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     }
 
     #[inline(always)]
-    fn update_quantity<K, D>(&self, tag: &Q<B, D::Qty>, distr: D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>,
-    {
-        ModelClient::update_quantity(self, tag, distr)
+    fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>> {
+        ModelClient::stacked_tangent(self, at, ids)
+    }
+
+    #[inline(always)]
+    fn record_factor(&self, record: FactorRecord) -> SkoroResult<()> {
+        self.server_call_mut(|server| server.record_factor(record))
+    }
+
+    #[inline(always)]
+    fn factors(&self) -> Vec<FactorRecord> {
+        self.server_call(|server| server.registry().factors().to_vec())
+    }
+
+    #[inline(always)]
+    fn residual_layout(&self) -> SkoroResult<TangentLayout> {
+        self.server_call(|server| server.residual_layout())
     }
 
     #[inline(always)]

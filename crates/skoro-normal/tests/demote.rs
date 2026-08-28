@@ -133,7 +133,7 @@ fn demoted_quantity_becomes_a_parameter_node_with_no_parents() {
         assert!(server.graph().node(x.id()).unwrap().parent_ids().is_empty());
         // No likelihood terms remain, and the density back-reference is gone.
         assert!(server.graph().log_likelihoods().is_empty());
-        assert!(server.graph().density_of(x.id()).is_none());
+        assert!(server.graph().log_density_of(x.id()).is_none());
     });
 }
 

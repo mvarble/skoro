@@ -2,7 +2,8 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use skoro_backend::{Backend, ElementConversion, ToElement};
 use skoro_core::error::SkoroResult;
-use skoro_graph::{operation::GraphOperation, quantity::ContinuousQuantity};
+use skoro_graph::quantity::ContinuousQuantity;
+use skoro_operation::diff::DiffOperation;
 use skoro_riemann::euclidean::{Euclidean, EuclideanD};
 
 use crate::{
@@ -32,7 +33,7 @@ impl<B: Backend, const D: usize> AssociatedTangentVectorBuilder<Euclidean<D>, B>
 /// Negation operator trait for `Q`.
 pub trait QNeg<B: Backend> {
     type OutputType;
-    type OpType: GraphOperation<B>;
+    type OpType: DiffOperation<B>;
     fn quantity_type(&self) -> Self::OutputType;
     fn op_type(&self) -> Self::OpType;
     fn register(node: &Q<B, Self>) -> Q<B, Self::OutputType>
@@ -55,22 +56,25 @@ where
 ///
 /// The trait is generalized over unbounded operand types (so it covers both
 /// continuous and discrete operands — the "β" unification). Each implementor
-/// supplies `quantity_type`/`op_type` to describe the output type and graph
-/// operation, plus a `register` method that builds the resulting node. A
-/// default `register` is provided for *continuous* outputs (via
-/// [`continuous_binop`]); discrete-output implementors call [`register_map2`]
-/// with a [`ForwardOnly`](skoro_graph::operation::ForwardOnly)-wrapped kernel.
+/// supplies `quantity_type` to describe the output type, plus a `register`
+/// method that builds the resulting node: continuous implementors go through
+/// [`continuous_binop`], discrete-output implementors through
+/// [`register_discrete_map2`](crate::map::register_discrete_map2).
 macro_rules! impl_q_binop {
     ($trait:ident, $std_trait:ident, $method:ident) => {
         pub trait $trait<B: Backend, T> {
             type OutputType;
-            type OpType: GraphOperation<B>;
             fn quantity_type(&self, other: &T) -> Self::OutputType;
-            fn op_type(&self, other: &T) -> Self::OpType;
 
             /// Build the resulting node from the two operand proxies. Continuous
             /// implementors use [`continuous_binop`]; discrete implementors use
-            /// [`register_map2`] with a forward-only kernel.
+            /// [`register_discrete_map2`](crate::map::register_discrete_map2).
+            ///
+            /// The kernel is named here rather than behind an associated type: nothing
+            /// reads it generically -- `register` is the implementor's own -- and the
+            /// two families of kernel, [`DiffOperation`] and
+            /// [`DiscreteOperation`](skoro_operation::discrete::DiscreteOperation), have
+            /// no common bound this trait could carry.
             fn register(lhs: &Q<B, Self>, rhs: &Q<B, T>) -> SkoroResult<Q<B, Self::OutputType>>
             where
                 Self: Sized;
@@ -127,7 +131,7 @@ pub fn continuous_binop<B, T0, T1, O, K>(
 where
     B: Backend,
     O: ContinuousQuantity<B>,
-    K: GraphOperation<B>,
+    K: DiffOperation<B>,
 {
     register_map2(out_type, op, (lhs, rhs))
 }
@@ -150,7 +154,7 @@ macro_rules! impl_q_literal_binop {
     (declare_trait: @lit $trait:ident) => {
         pub trait $trait<B: Backend>: ContinuousQuantity<B> {
             type OutputType: ContinuousQuantity<B>;
-            type OpType: GraphOperation<B>;
+            type OpType: DiffOperation<B>;
             fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
             fn op_type(&self, float: B::FloatElem) -> Self::OpType;
         }
