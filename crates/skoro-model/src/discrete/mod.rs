@@ -25,7 +25,7 @@ use skoro_core::discrete::{Boolean, Integer};
 
 use ops::{BoolLogic, BoolNot, Comparison, IntAdd, IntCompare, IntMul, IntSub, Logic};
 
-// ----- Discrete arithmetic: operators via the unified `Q*` traits (β) -----
+// ----- Discrete arithmetic: operators via the unified `Q*` traits -----
 
 impl<B: Backend> QAdd<B, Integer> for Integer {
     type OutputType = Integer;

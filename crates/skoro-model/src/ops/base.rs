@@ -54,25 +54,22 @@ where
 
 /// Generate a binary `Q op Q` operator trait + a single `std::ops` impl on `Q`.
 ///
-/// The trait is generalized over unbounded operand types (so it covers both
-/// continuous and discrete operands — the "β" unification). Each implementor
-/// supplies `quantity_type` to describe the output type, plus a `register`
-/// method that builds the resulting node: continuous implementors go through
-/// [`continuous_binop`], discrete-output implementors through
-/// [`register_discrete_map2`](crate::map::register_discrete_map2).
+/// The trait is generalized over unbounded operand types (so it covers both continuous and discrete
+/// operands). Each implementor supplies `quantity_type` to describe the output type, plus a
+/// `register` method that builds the resulting node: continuous implementors go through
+/// [`register_map2`](crate::map::register_map2), discrete-output implementors
+/// through [`register_discrete_map2`](crate::map::register_discrete_map2).
 macro_rules! impl_q_binop {
     ($trait:ident, $std_trait:ident, $method:ident) => {
         pub trait $trait<B: Backend, T> {
             type OutputType;
             fn quantity_type(&self, other: &T) -> Self::OutputType;
 
-            /// Build the resulting node from the two operand proxies. Continuous
-            /// implementors use [`continuous_binop`]; discrete implementors use
-            /// [`register_discrete_map2`](crate::map::register_discrete_map2).
+            /// Build the resulting node from the two operand proxies.
             ///
-            /// The kernel is named here rather than behind an associated type: nothing
-            /// reads it generically -- `register` is the implementor's own -- and the
-            /// two families of kernel, [`DiffOperation`] and
+            /// The kernel is named here rather than behind an associated type: nothing reads it
+            /// generically -- `register` is the implementor's own -- and the two families of
+            /// operation, [`DiffOperation`](skoro_operation::diff::DiffOperation) and
             /// [`DiscreteOperation`](skoro_operation::discrete::DiscreteOperation), have
             /// no common bound this trait could carry.
             fn register(lhs: &Q<B, Self>, rhs: &Q<B, T>) -> SkoroResult<Q<B, Self::OutputType>>

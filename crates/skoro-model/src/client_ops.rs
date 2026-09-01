@@ -45,10 +45,9 @@ use crate::residual::FactorRecord;
 
 /// Distribution-agnostic operations available on any model client.
 ///
-/// This is intentionally "pragmatic and broad": it mirrors the common
-/// model-building and evaluation surface of [`ModelClient`] (excluding the
-/// lower-level `_jvp`/`_vjp`/`_hvp` directional primitives, which remain inherent
-/// methods for now).
+/// This is intentionally "pragmatic and broad": it mirrors the common model-building and evaluation
+/// surface of [`ModelClient`] (excluding the lower-level `_jvp`/`_vjp`/`_hvp` directional
+/// primitives, which remain inherent methods for now).
 pub trait ModelClientOps<B: Backend> {
     // ----- quantity construction -----
 
@@ -93,11 +92,10 @@ pub trait ModelClientOps<B: Backend> {
 
     /// Demote a stochastic quantity to a free parameter, keeping its identity.
     ///
-    /// The quantity loses its sampler, its parents, and its own log-density, but
-    /// keeps its `Id` and quantity type, so every quantity depending on it stays
-    /// valid. This is how a quantity is re-rooted when its marginal does not
-    /// factorize and the joint is supplied instead as a likelihood factor over
-    /// several quantities.
+    /// The quantity loses its sampler, its parents, and its own log-density, but keeps its `Id`
+    /// and quantity type, so every quantity depending on it stays valid. This is how a quantity
+    /// is re-rooted when its marginal does not factorize and the joint is supplied instead as a
+    /// likelihood factor over several quantities.
     fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
 
     /// Remove quantities (which must have no retained children).
@@ -127,8 +125,8 @@ pub trait ModelClientOps<B: Backend> {
     /// The log-density node scoring a stochastic quantity, if it has one.
     ///
     /// A builder that has just added a quantity needs this to name the term it created:
-    /// `add_quantity` returns the quantity, and the density it built is reachable only
-    /// through the graph. Read-only, so it sits on the client tier.
+    /// `add_quantity` returns the quantity, and the density it built is reachable only through the
+    /// graph. Read-only, so it sits on the client tier.
     fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id>;
 
     /// Fetch the quantity type associated with a quantity.
@@ -256,18 +254,17 @@ pub trait ModelClientOps<B: Backend> {
     ) -> SkoroResult<HvpForwardOutput<B>>;
 }
 
-/// Capability: this client can grow the model with stochastic quantities and
-/// free-standing likelihood factors.
+/// Capability: this client can grow the model with stochastic quantities and free-standing
+/// likelihood factors.
 ///
-/// Deliberately separate from [`ModelClientOps`] rather than folded into it. If the two
-/// were one trait, "a client that can evaluate a model" and "a client that can add
-/// anything to a model" would be the same bound — so an estimator, which needs only the
-/// first, could not be given the first without the second. That split is what
-/// `remove` / `remove_closure` sit on either side of.
+/// Deliberately separate from [`ModelClientOps`] rather than folded into it. If the two were one
+/// trait, "a client that can evaluate a model" and "a client that can add anything to a model"
+/// would be the same bound — so an estimator, which needs only the first, could not be given
+/// the first without the second. That split is what `remove` / `remove_closure` sit on either side
+/// of.
 ///
-/// Note what this trait is not: implementing it says nothing about what a model
-/// *contains*. What a model contains is read from the factors its builder recorded, via
-/// [`factors`](Self::factors).
+/// Note what this trait is not: implementing it says nothing about what a model *contains*. What a
+/// model contains is read from the factors its builder recorded, via [`factors`](Self::factors).
 pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// Add a stochastic quantity with the given conditional distribution.
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
