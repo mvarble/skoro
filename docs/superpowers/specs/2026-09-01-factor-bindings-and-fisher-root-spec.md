@@ -188,8 +188,9 @@ pub fn linear_map<B, I, O>(x: &Q<B, I>, out: O, map: FixedLinearMap<B>) -> Skoro
 where I: ContinuousQuantity<B>, O: ContinuousQuantity<B>
 ```
 
-It must check `map.matrix.dims() == [out.dimension(), x.get_quantity_type().dimension()]` and
-return `SkoroError::ShapeMismatch { expected, found }` otherwise, then call `register_map1`.
+It must check the rows first (`expected: out.dimension(), found: rows`) and then the columns
+(`expected: x`'s manifold dimension, `found: cols`), returning
+`SkoroError::ShapeMismatch { expected, found }` at the first disagreement, then call `register_map1`.
 
 ### 3.3 skoro-graph: bindings and terms
 
@@ -434,7 +435,7 @@ Batch and device are taken from the first entry of `points` exactly as `jacobian
 ```rust
 /// K with vec(C) = K · vec(W), W = L⁻¹ packed (Tril), C the Gaussian Fisher root over [x, μ, L].
 pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>);   // (rows, cols, row-major data)
-pub fn information_root<B, M>(w: &Q<B, Tril>, d: usize) -> SkoroResult<Q<B, EuclideanMatrixD>>;
+pub fn information_root<B: Backend>(w: &Q<B, Tril>, d: usize) -> SkoroResult<Q<B, EuclideanMatrixD>>;
 ```
 
 `gaussian_root_matrix(d)` implements §4.1 exactly. `information_root` builds
@@ -573,7 +574,7 @@ tensors from `TensorData`, not `Tensor::from_floats`. Tolerances are absolute un
 | `forward_matches_the_host_product` | for a random `K: 3×2` and `x: [batch 2, 2]`, output equals `x Kᵀ` within `1e-12` |
 | `jacobian_is_the_matrix` | `jacobian_vjp(inputs=[x], outputs=[y])` equals `K` for every batch row, and equals `jacobian_jvp` |
 | `hvp_is_zero` | `evaluate_hvp` along any tangent returns second-order cotangents all zero |
-| `shape_mismatch_is_reported` | `linear_map` with `out` of the wrong dimension is `Err(ShapeMismatch)` |
+| `shape_mismatch_is_reported` | for a `3×2` map, `linear_map(&x, EuclideanD(4), ..)` is `Err(ShapeMismatch { expected: 4, found: 3 })` |
 
 ### 5.3 `crates/skoro-model/tests/bindings.rs` (replaces `tests/residual.rs`)
 
