@@ -2,7 +2,7 @@
 //!
 //! `ModelClientOps::remove` is safe at the client tier because it refuses to break a reference:
 //! an estimator holding it cannot delete a factor out from under the records it was handed —
-//! `remove` returns `SkoroError::NodeIsRecorded` for a node a record names. `remove_closure`
+//! `remove` returns `SkoroError::NodeStillBound` for a node a record names. `remove_closure`
 //! deliberately does the opposite: it takes the referents too. So it belongs with the calls that
 //! shape the model, not with the ones that only read it.
 //!

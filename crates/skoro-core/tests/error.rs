@@ -58,8 +58,8 @@ fn every_variant() -> Vec<(SkoroError, &'static str)> {
             "still a parent",
         ),
         (
-            SkoroError::NodeIsRecorded { id },
-            "a recorded factor names it",
+            SkoroError::NodeStillBound { id, by: id },
+            "still bound by",
         ),
         (
             SkoroError::BatchSizeMismatch {
@@ -171,7 +171,7 @@ mod messages {
             SkoroError::MustRemainDensity { id },
             SkoroError::DanglingParent { parent_id: id },
             SkoroError::Cycle { id },
-            SkoroError::NodeIsRecorded { id },
+            SkoroError::NodeStillBound { id, by: id },
             SkoroError::MissingPoint { id },
             SkoroError::ManifoldMismatch { id },
             SkoroError::DuplicateLayoutId { id },

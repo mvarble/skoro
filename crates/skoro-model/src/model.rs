@@ -237,7 +237,7 @@ impl<B: Backend> ModelServer<B> {
     /// returning, so the model is clean after every retire.
     pub fn remove(&mut self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         if let Some(id) = ids.iter().find(|id| self.registry.names(**id)) {
-            return Err(SkoroError::NodeIsRecorded { id: *id });
+            return Err(SkoroError::NodeStillBound { id: *id, by: *id });
         }
         let removed = self.graph.remove(ids)?;
         self.prune_registry();

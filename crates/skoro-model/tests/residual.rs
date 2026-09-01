@@ -177,7 +177,7 @@ mod rejections {
             assert!(
                 matches!(
                     ModelClientOps::remove(&model, &[id]),
-                    Err(SkoroError::NodeIsRecorded { .. })
+                    Err(SkoroError::NodeStillBound { .. })
                 ),
                 "recorded node {id:?} must be refused, not silently taken"
             );
