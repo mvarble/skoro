@@ -17,6 +17,7 @@ pub mod discrete;
 pub mod distribution;
 pub mod hash_map_builders;
 pub mod jacobian;
+pub mod least_squares;
 pub mod map;
 pub mod model;
 pub mod ops;

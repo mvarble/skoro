@@ -279,6 +279,28 @@ mod bindings_via_add_factor {
         model.cleanup();
         assert!(model.server_call(|s| s.graph().contains(r_id)));
     }
+
+    #[test]
+    fn residual_layout_follows_term_order_and_dimension() {
+        let model = ModelClient::<B>::default();
+        let a = model.add_parameter(Real);
+        let term_a = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &a).unwrap();
+        let r2 = model.add_parameter(EuclideanD(2));
+        model
+            .add_factor(Factor::new(term_a).bind(RESIDUAL, &r2), &[a.id()])
+            .unwrap();
+
+        let b = model.add_parameter(Real);
+        let term_b = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &b).unwrap();
+        let r3 = model.add_parameter(EuclideanD(3));
+        model
+            .add_factor(Factor::new(term_b).bind(RESIDUAL, &r3), &[b.id()])
+            .unwrap();
+
+        let layout = skoro_model::least_squares::residual_layout(&model).unwrap();
+        assert_eq!(layout.total(), 5);
+        assert_eq!(layout.ids().collect::<Vec<_>>(), vec![r2.id(), r3.id()]);
+    }
 }
 
 /// Every negative claim in the design, as a `trybuild` case that must fail to compile -- a test
