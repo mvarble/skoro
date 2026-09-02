@@ -67,7 +67,7 @@ mod records {
             ))
             .unwrap();
 
-        let factors = model.factors();
+        let factors = ModelBuilderOps::factors(&model);
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, density.id());
         assert_eq!(factors[0].residual, residual.id());
@@ -84,7 +84,7 @@ mod records {
     #[test]
     fn an_unused_model_records_nothing() {
         let model = ModelClient::<B>::default();
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
     }
 }
@@ -111,7 +111,7 @@ mod rejections {
             model.record_factor(FactorRecord::new(not_a_density.id(), residual.id(), vec![],)),
             Err(SkoroError::NotLogLikelihood { .. })
         ));
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
     }
 
     /// An id naming nothing is refused rather than stored to fail later.
@@ -141,7 +141,7 @@ mod rejections {
             )),
             Err(SkoroError::DanglingParent { .. })
         ));
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
     }
 
     /// A discrete residual has no tangent space, so it can contribute no rows to `J`.
@@ -184,7 +184,7 @@ mod rejections {
         }
 
         // Refused means refused: the record, the rows of `J`, and the objective are untouched.
-        assert_eq!(model.factors().len(), 1);
+        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
         assert_eq!(model.residual_layout().unwrap().total(), 2);
         let values = points().with_quantity(&theta, point(&[3.0])).build();
         approx::assert_abs_diff_eq!(
@@ -197,6 +197,87 @@ mod rejections {
             -1.5,
             epsilon = 1e-12
         );
+    }
+}
+
+/// Attaching a factor through `add_factor`, and what the bindings make readable: the
+/// arguments a term was marked over, the roles it bound, and that a bound target survives
+/// `cleanup()` even after every `Q` naming it directly is dropped.
+mod bindings_via_add_factor {
+    use super::*;
+    use skoro_model::{distribution::Factor, roles::RESIDUAL};
+
+    #[test]
+    fn add_factor_marks_and_binds() {
+        let model = ModelClient::<B>::default();
+        let a = model.add_parameter(Real);
+        let b = model.add_parameter(Real);
+        let term = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &a).unwrap();
+        let r = model.add_parameter(EuclideanD(2));
+
+        let factor = Factor::new(term.clone()).bind(RESIDUAL, &r);
+        model.add_factor(factor, &[a.id(), b.id()]).unwrap();
+
+        let info = ModelClientOps::factors(&model);
+        assert_eq!(info.len(), 1);
+        assert_eq!(info[0].scored, None);
+        assert_eq!(info[0].kind, skoro_graph::graph::TermKind::Weight);
+        assert_eq!(info[0].arguments, vec![a.id(), b.id()]);
+        assert_eq!(
+            ModelClientOps::bound(&model, term.id(), RESIDUAL),
+            vec![r.id()]
+        );
+    }
+
+    #[test]
+    fn add_factor_needs_an_argument() {
+        let model = ModelClient::<B>::default();
+        let a = model.add_parameter(Real);
+        let term = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &a).unwrap();
+
+        assert!(matches!(
+            model.add_factor(Factor::new(term), &[]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 1,
+                found: 0
+            })
+        ));
+    }
+
+    #[test]
+    fn factors_are_in_term_order() {
+        let model = ModelClient::<B>::default();
+        let mut densities = Vec::new();
+        for i in 0..3 {
+            let a = model.add_parameter(Real);
+            let term =
+                register_map1(Real, LiteralScalarMultiplication::new(-0.5 - i as f64), &a).unwrap();
+            model
+                .add_factor(Factor::new(term.clone()), &[a.id()])
+                .unwrap();
+            densities.push(term.id());
+        }
+        let info = ModelClientOps::factors(&model);
+        assert_eq!(
+            info.iter().map(|f| f.density).collect::<Vec<_>>(),
+            densities
+        );
+    }
+
+    #[test]
+    fn a_bound_node_survives_cleanup() {
+        let model = ModelClient::<B>::default();
+        let a = model.add_parameter(Real);
+        let term = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &a).unwrap();
+        let r = model.add_parameter(EuclideanD(2));
+        let r_id = r.id();
+
+        let factor = Factor::new(term).bind(RESIDUAL, &r);
+        model.add_factor(factor, &[a.id()]).unwrap();
+        drop(r);
+
+        model.cleanup();
+        assert!(model.server_call(|s| s.graph().contains(r_id)));
     }
 }
 

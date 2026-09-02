@@ -433,10 +433,10 @@ mod records {
         );
         let density = add_joint_factor(&model, &factor).unwrap();
 
-        assert_eq!(model.factors().len(), 1);
-        assert_eq!(model.factors()[0].density, density.id());
+        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
+        assert_eq!(ModelBuilderOps::factors(&model)[0].density, density.id());
         assert_eq!(
-            model.factors()[0].normalizer_parents,
+            ModelBuilderOps::factors(&model)[0].normalizer_parents,
             vec![whitening.id()],
             "the whitening is the normalizer's only parent"
         );
@@ -542,7 +542,7 @@ mod retirement {
         model.cleanup();
 
         assert!(
-            model.factors().is_empty(),
+            ModelBuilderOps::factors(&model).is_empty(),
             "a record naming a deleted node is not evidence"
         );
         assert_eq!(model.residual_layout().unwrap().total(), 0);
@@ -572,13 +572,13 @@ mod retirement {
 
         let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
         let density = add_joint_factor(&model, &factor).unwrap();
-        let residual = model.factors()[0].residual;
+        let residual = ModelBuilderOps::factors(&model)[0].residual;
 
         // Rooted at the density: `ℓ` alone goes, and with the record pruned the residual is
         // unpinned — so the same call's cascade reclaims it too.
         assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
         assert!(
             model.tangent_layout(&[residual]).is_err(),

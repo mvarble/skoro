@@ -27,7 +27,7 @@ use skoro_graph::{
     compiler::{ForwardOutput, HvpForwardOutput, JvpForwardOutput, VjpForwardOutput},
     graph::{
         EvalOrder1, EvalOrder2, PointEvalOrder1, PointEvalOrder2, PointHvpEval, PointJvpEval,
-        PointVjpEval,
+        PointVjpEval, Term, TermKind,
     },
     node::Node,
     point_map::PointMap,
@@ -39,9 +39,20 @@ use skoro_operation::ValueMap;
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
 use crate::distribution::Distribution;
+use crate::distribution::Factor;
 use crate::model::ModelClient;
 use crate::q::Q;
 use crate::residual::FactorRecord;
+use crate::roles::{ARGUMENT, Role};
+
+/// One term of the model's objective, as read back through [`ModelClientOps::factors`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FactorInfo {
+    pub density: Id,
+    pub scored: Option<Id>,
+    pub kind: TermKind,
+    pub arguments: Vec<Id>,
+}
 
 /// Distribution-agnostic operations available on any model client.
 ///
@@ -128,6 +139,24 @@ pub trait ModelClientOps<B: Backend> {
     /// `add_quantity` returns the quantity, and the density it built is reachable only through the
     /// graph. Read-only, so it sits on the client tier.
     fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id>;
+
+    /// One [`FactorInfo`] per term, in term order.
+    fn factors(&self) -> Vec<FactorInfo>;
+
+    /// Every `(role, to)` pair `id` has bound, in binding order.
+    fn bindings_of(&self, id: Id) -> Vec<(Role, Id)>;
+
+    /// The `to`s `id` has bound under `role`, in binding order.
+    fn bound(&self, id: Id, role: Role) -> Vec<Id>;
+
+    /// One [`Term`] per id in the graph's likelihood terms, in marking order.
+    fn terms(&self) -> Vec<Term>;
+
+    /// The sum of every [`TermKind::Proposal`] term's log-density at `points`.
+    fn log_proposal(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>>;
+
+    /// The sum of every [`TermKind::Weight`] term's log-density at `points`.
+    fn log_weight(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>>;
 
     /// Fetch the quantity type associated with a quantity.
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
@@ -284,6 +313,13 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// the model — it adds `2k + 1` nodes — and for no other reason.
     fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>>;
 
+    /// Attach a free-standing likelihood factor to real-valued term with its declared
+    /// bindings, and bind `ARGUMENT` to each of `arguments` in order.
+    fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>>;
+
+    /// Record a binding: `to` plays `role` for `from`.
+    fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()>;
+
     /// Record a least-squares factor this builder just assembled.
     ///
     /// The claim is the recorder's, and it is checked only as far as the graph can check it;
@@ -398,6 +434,58 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
     #[inline(always)]
     fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id> {
         self.server_call(|server| server.graph().log_density_of(q.id()))
+    }
+
+    #[inline(always)]
+    fn factors(&self) -> Vec<FactorInfo> {
+        self.server_call(|server| {
+            server
+                .graph()
+                .terms()
+                .into_iter()
+                .map(|term| FactorInfo {
+                    density: term.density,
+                    scored: term.scored,
+                    kind: term.kind,
+                    arguments: server.graph().bound(term.density, ARGUMENT),
+                })
+                .collect()
+        })
+    }
+
+    #[inline(always)]
+    fn bindings_of(&self, id: Id) -> Vec<(Role, Id)> {
+        self.server_call(|server| server.graph().bindings_of(id).to_vec())
+    }
+
+    #[inline(always)]
+    fn bound(&self, id: Id, role: Role) -> Vec<Id> {
+        self.server_call(|server| server.graph().bound(id, role))
+    }
+
+    #[inline(always)]
+    fn terms(&self) -> Vec<Term> {
+        self.server_call(|server| server.graph().terms())
+    }
+
+    #[inline(always)]
+    fn log_proposal(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
+        let ids: Vec<Id> = ModelClientOps::terms(self)
+            .into_iter()
+            .filter(|t| t.kind == TermKind::Proposal)
+            .map(|t| t.density)
+            .collect();
+        self.server_call(|server| server.graph().log_density_terms(points, &ids))
+    }
+
+    #[inline(always)]
+    fn log_weight(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
+        let ids: Vec<Id> = ModelClientOps::terms(self)
+            .into_iter()
+            .filter(|t| t.kind == TermKind::Weight)
+            .map(|t| t.density)
+            .collect();
+        self.server_call(|server| server.graph().log_density_terms(points, &ids))
     }
 
     #[inline(always)]
@@ -573,6 +661,16 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>> {
         ModelClient::stacked_tangent(self, at, ids)
+    }
+
+    #[inline(always)]
+    fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
+        ModelClient::add_factor(self, factor, arguments)
+    }
+
+    #[inline(always)]
+    fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
+        ModelClient::bind(self, from, role, to)
     }
 
     #[inline(always)]

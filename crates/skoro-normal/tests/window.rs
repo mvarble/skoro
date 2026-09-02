@@ -131,7 +131,7 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         model.remove_closure(&[old_x.id(), old_z.id()]).unwrap();
 
         assert_eq!(
-            model.factors().len(),
+            ModelBuilderOps::factors(&model).len(),
             FACTORS,
             "the registry holds exactly the live factors"
         );

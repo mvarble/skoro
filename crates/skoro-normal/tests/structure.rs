@@ -198,7 +198,7 @@ mod records {
         let std_dev = constant_covariance_diagonal(&model, &[1.0, 2.0]);
         add_gaussian_quantity(&model, &mean, &std_dev).unwrap();
 
-        let factors = model.factors();
+        let factors = ModelBuilderOps::factors(&model);
         assert_eq!(
             factors[0].normalizer_parents,
             vec![std_dev.id()],
@@ -231,7 +231,7 @@ mod records {
         assert_eq!(blocks[1].whitening, cov_b.id());
 
         // The records agree with the blocks, factor for factor and in order.
-        let factors = model.factors();
+        let factors = ModelBuilderOps::factors(&model);
         assert_eq!(factors.len(), 2);
         for (factor, block) in factors.iter().zip(&blocks) {
             assert_eq!(factor.density, block.density);
@@ -286,7 +286,7 @@ mod records {
         let cov = constant_covariance_diagonal(&model, &[1.0, 2.0]);
         let x = add_gaussian_quantity(&model, &mean, &cov).unwrap();
 
-        let factors = model.factors();
+        let factors = ModelBuilderOps::factors(&model);
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].normalizer_parents, vec![cov.id()]);
 
@@ -311,7 +311,7 @@ mod records {
     #[test]
     fn an_untouched_model_records_nothing() {
         let model = ModelClient::<B>::default();
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
     }
 }
@@ -354,7 +354,10 @@ mod retirement {
             .with_quantity(&a, point(&[0.5, -1.25]))
             .with_quantity(&b, point(&[2.25]))
             .build();
-        let ids: Vec<Id> = model.factors().iter().map(|f| f.residual).collect();
+        let ids: Vec<Id> = ModelBuilderOps::factors(&model)
+            .iter()
+            .map(|f| f.residual)
+            .collect();
         let evaluated = model.evaluate_ids(&values, &ids).unwrap();
         for id in ids {
             assert!(evaluated.evaluations.get(&id).is_some());
@@ -387,14 +390,14 @@ mod retirement {
         let b = add(&[1.0, 2.0, 3.0]);
         let c = add(&[0.5]);
 
-        let before: Vec<_> = model.factors();
+        let before: Vec<_> = ModelBuilderOps::factors(&model);
         assert_eq!(before.len(), 3);
         assert_eq!(model.residual_layout().unwrap().total(), 6);
 
         model.remove_closure(&[b.id()]).unwrap();
         model.cleanup();
 
-        let after = model.factors();
+        let after = ModelBuilderOps::factors(&model);
         assert_eq!(
             after,
             [before[0].clone(), before[2].clone()],
@@ -425,7 +428,10 @@ mod retirement {
             .with_quantity(&a, point(&[0.5, -1.25]))
             .with_quantity(&c, point(&[2.25]))
             .build();
-        let ids: Vec<Id> = model.factors().iter().map(|f| f.residual).collect();
+        let ids: Vec<Id> = ModelBuilderOps::factors(&model)
+            .iter()
+            .map(|f| f.residual)
+            .collect();
         let evaluated = model.evaluate_ids(&values, &ids).unwrap();
         for id in ids {
             assert!(evaluated.evaluations.get(&id).is_some());

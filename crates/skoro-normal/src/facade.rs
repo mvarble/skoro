@@ -76,7 +76,7 @@ where
     B: Backend,
     C: ModelBuilderOps<B>,
 {
-    GaussianBlock::all(&client.factors())
+    GaussianBlock::all(&ModelBuilderOps::factors(client))
 }
 
 /// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose diagonal is `diag` and

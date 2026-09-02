@@ -56,14 +56,14 @@ mod pruning {
         assert_eq!(model.residual_layout().unwrap().total(), 2);
         assert_eq!(gaussian_blocks(&model).len(), 1);
 
-        let residual = model.factors()[0].residual;
+        let residual = ModelBuilderOps::factors(&model)[0].residual;
         model.demote_to_parameter(&x).unwrap();
 
         // The term left the objective at the demote — and the rows of `J` and the Gaussian
         // block left with it, in the same call.
         assert_eq!(scalar(model.log_density(&values).unwrap()), 0.0);
         assert_eq!(model.residual_layout().unwrap().total(), 0);
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert!(gaussian_blocks(&model).is_empty());
 
         // Uncertified, the residual subgraph is collectable again.
@@ -83,13 +83,13 @@ mod pruning {
         let cov = constant_covariance_diagonal(&model, &[1.0, 2.0]);
         let x = add_gaussian_quantity(&model, &mean, &cov).unwrap();
 
-        let record = model.factors()[0].clone();
+        let record = ModelBuilderOps::factors(&model)[0].clone();
         let values = points().with_quantity(&x, point(&[3.5, -0.25])).build();
         assert!(scalar(model.log_density(&values).unwrap()) != 0.0);
 
         model.remove_closure(&[x.id()]).unwrap();
 
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
         assert_eq!(scalar(model.log_density(&values).unwrap()), 0.0);
         assert!(model.tangent_layout(&[record.residual]).is_err());
@@ -119,7 +119,7 @@ mod rejections {
         let cov = constant_covariance_diagonal(&model, &[1.0, 2.0]);
         let x = add_gaussian_quantity(&model, &mean, &cov).unwrap();
 
-        let record = model.factors()[0].clone();
+        let record = ModelBuilderOps::factors(&model)[0].clone();
         let values = points().with_quantity(&x, point(&[3.5, -0.25])).build();
         let before = scalar(model.log_density(&values).unwrap());
         assert!(before != 0.0);
@@ -137,7 +137,7 @@ mod rejections {
         // Refused means refused: the objective, the rows of `J`, and the evidence are untouched.
         assert_eq!(scalar(model.log_density(&values).unwrap()), before);
         assert_eq!(model.residual_layout().unwrap().total(), 2);
-        assert_eq!(model.factors().len(), 1);
+        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
     }
 }
 
@@ -164,7 +164,7 @@ mod reclamation {
         let m1 = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
         let c1 = constant_covariance_diagonal(&model, &[1.0, 2.0]);
         let x1 = add_gaussian_quantity(&model, &m1, &c1).unwrap();
-        let residual = model.factors()[0].residual;
+        let residual = ModelBuilderOps::factors(&model)[0].residual;
 
         let m2 = model.add_constant(EuclideanD(2), &VectorD::new(&[1.0, 1.0]));
         let c2 = constant_covariance_diagonal(&model, &[1.0, 1.0]);
@@ -173,8 +173,7 @@ mod reclamation {
 
         model.demote_to_parameter(&x1).unwrap();
         assert!(
-            model
-                .factors()
+            ModelBuilderOps::factors(&model)
                 .iter()
                 .all(|factor| factor.residual != residual)
         );
