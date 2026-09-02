@@ -8,7 +8,7 @@
 //! a block index.
 
 use skoro_backend::{NdArrayBackend, Tensor};
-use skoro_core::{error::SkoroError, id::Id};
+use skoro_core::id::Id;
 use skoro_model::{
     TangentLayout,
     hash_map_builders::points,
@@ -217,24 +217,46 @@ fn a_column_that_reaches_no_row_is_zero() {
     }
 }
 
-/// A row that is a leaf rather than a mapped node is rejected, in both paths.
-///
-/// The truth would be `∂x/∂x = 1`, but neither pass seeds a leaf, so both would return a
-/// zero row — agreeing with each other on the wrong answer.
+/// A row that is a leaf and also a column is the identity on its own columns, in both paths.
 #[test]
-fn a_leaf_row_is_rejected() {
+fn a_leaf_row_that_is_a_column_is_the_identity() {
     let model = Model::new();
     let points = model.points();
     let inputs = model.inputs();
     let outputs = layout(&model.client, &[model.u.id(), model.x.id()]);
 
-    let expected = Err(SkoroError::NotMapped { id: model.x.id() });
-    assert_eq!(
-        jacobian_jvp(&model.client, &points, &inputs, &outputs).map(|j| j.dims()),
-        expected
-    );
-    assert_eq!(
-        jacobian_vjp(&model.client, &points, &inputs, &outputs).map(|j| j.dims()),
-        expected
-    );
+    for j in [
+        jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap(),
+        jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap(),
+    ] {
+        assert_eq!(j.dims(), [BATCH, 2, D_IN]);
+        let j = j.into_data().to_vec::<f64>().unwrap();
+        for batch in 0..BATCH {
+            // Row 1 of each batch is `x`'s row: `∂x/∂x = 1` in column 0, zero elsewhere.
+            let row = &j[batch * 2 * D_IN + D_IN..batch * 2 * D_IN + 2 * D_IN];
+            assert_eq!(row, &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        }
+    }
+}
+
+/// A row that is a leaf but not a column is zero, in both paths — not an error.
+#[test]
+fn a_leaf_row_that_is_not_a_column_is_zero() {
+    let model = Model::new();
+    let c = model.client.add_constant(Real, &3.0f64);
+    let points = model.points();
+    let inputs = model.inputs();
+    let outputs = layout(&model.client, &[model.u.id(), c.id()]);
+
+    for j in [
+        jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap(),
+        jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap(),
+    ] {
+        assert_eq!(j.dims(), [BATCH, 2, D_IN]);
+        let j = j.into_data().to_vec::<f64>().unwrap();
+        for batch in 0..BATCH {
+            let row = &j[batch * 2 * D_IN + D_IN..batch * 2 * D_IN + 2 * D_IN];
+            assert_eq!(row, &[0.0; 8]);
+        }
+    }
 }

@@ -11,29 +11,18 @@
 //! These take a client rather than a graph, which is why they live here and not next to
 //! [`TangentLayout`] in `skoro-graph`.
 //!
-//! # Structural constraint: columns are leaves, rows are mapped nodes
+//! # Rows may be any continuous node
 //!
-//! This is a constraint on *how a model is written*, not just on how these functions are
-//! called, and it is not enforced by the type system:
+//! A Jacobian row may be a `Mapped` / `LogDensity` node — recorded in the primal's
+//! `evaluations` — or a leaf (`Parameter`, `Stochastic`, `Constant`, `Observed`), which
+//! never is. A leaf row is filled in after the fact by `fill_leaf_rows`: the identity on
+//! its own columns if it also has an input block (`∂x/∂x = 1`), and zero otherwise — which
+//! is already what the flattening produces, so there is nothing to do in that case.
 //!
-//! > **Jacobian columns must be `Parameter` / `Stochastic` leaves. Jacobian rows must be
-//! > `Mapped` / `LogDensity` nodes.**
-//!
-//! It follows from the compiler, and both passes agree on it. `vjp_forward` collects
-//! cotangents only at `CompiledStep::Parameter` / `Sampler`, so nothing else can be a column;
-//! `jvp_forward` emits tangents only in the `CompiledStep::Operation` branch, and `vjp_forward`
-//! reads its seeds only there too, so nothing else can be a row.
-//!
-//! For a filter chain this is natural — `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped
-//! — but a state chain built entirely out of mapped nodes cannot be differentiated
-//! block-to-block. A correlated joint over several quantities is no exception: it is
-//! modelled as a likelihood factor over `Parameter` leaves, and those are ordinary
-//! columns.
-//!
-//! A **row** that breaks the rule is reported as [`SkoroError::NotMapped`]. A **column**
-//! that breaks it is not, and cannot be distinguished by these functions from the
-//! legitimate case below: a mapped-node column yields a **silently zero column**. That is
-//! the one failure mode here that no return value announces.
+//! A **column** that is not a leaf is not detected here, and cannot be distinguished by
+//! these functions from the legitimate case below: a mapped-node column yields a
+//! **silently zero column**. That is the one failure mode here that no return value
+//! announces.
 //!
 //! # A leaf that does not reach the rows is not an error
 //!
@@ -52,10 +41,7 @@
 //! empty `points` falls back to batch 1 on the default device.
 
 use skoro_backend::{Backend, Tensor};
-use skoro_core::{
-    error::{SkoroError, SkoroResult},
-    id::Id,
-};
+use skoro_core::{error::SkoroResult, id::Id};
 use skoro_graph::{compiler::ForwardOutput, tangent_layout::TangentLayout};
 use skoro_operation::ValueMap;
 
@@ -69,24 +55,39 @@ fn batch_and_device<B: Backend>(points: &ValueMap<B>) -> (usize, B::Device) {
     }
 }
 
-/// Reject a row that is not a mapped node.
-///
-/// Every compile target lands in the sequence, and every `Mapped` / `LogDensity` node
-/// lowers to a `CompiledStep::Operation`, whose value is recorded in `evaluations`. So a
-/// row absent from `evaluations` is a `Parameter`, `Sampler`, `Constant` or `Observed`
-/// node — none of which receives a seed in either pass.
-///
-/// Without this the result would be a zero row, which for a leaf is *wrong* rather than
-/// merely useless: `∂x/∂x` is the identity. Both paths produce the same zero, so the
-/// JVP/VJP agreement check cannot catch it either.
-fn check_rows<B: Backend>(primal: &ForwardOutput<B>, outputs: &TangentLayout) -> SkoroResult<()> {
-    let unmapped = outputs
-        .ids()
-        .find(|id| primal.evaluations.get(id).is_none());
-    match unmapped {
-        Some(id) => Err(SkoroError::NotMapped { id }),
-        None => Ok(()),
+/// Overwrite the rows of `j` (`[batch, Out.total(), In.total()]`) belonging to any output
+/// block that is a leaf (absent from `primal.evaluations` — a `Parameter`, `Stochastic`,
+/// `Constant` or `Observed` node): the identity on its own columns if it also has an input
+/// block, zero otherwise (already the case; nothing to do there).
+fn fill_leaf_rows<B: Backend>(
+    j: Tensor<B, 3>,
+    primal: &ForwardOutput<B>,
+    outputs: &TangentLayout,
+    inputs: &TangentLayout,
+    batch: usize,
+    device: &B::Device,
+) -> Tensor<B, 3> {
+    let mut j = j;
+    for r in outputs.blocks() {
+        if primal.evaluations.get(&r.id).is_some() {
+            continue;
+        }
+        let Some(c) = inputs.block(r.id) else {
+            continue;
+        };
+        let identity = Tensor::<B, 2>::eye(r.dimension, device)
+            .unsqueeze_dim::<3>(0)
+            .repeat_dim(0, batch);
+        j = j.slice_assign(
+            [
+                0..batch,
+                r.offset..r.offset + r.dimension,
+                c.offset..c.offset + c.dimension,
+            ],
+            identity,
+        );
     }
+    j
 }
 
 /// `J ∈ [batch, Out.total(), In.total()]` by one forward pass with `In.total()` frames.
@@ -98,8 +99,8 @@ fn check_rows<B: Backend>(primal: &ForwardOutput<B>, outputs: &TangentLayout) ->
 ///
 /// Costs `D_in` frames; prefer [`jacobian_vjp`] when the Jacobian is tall.
 ///
-/// See the [module documentation](self) for the constraint that columns must be leaves
-/// and rows must be mapped nodes, and for what a column that reaches no row does.
+/// See the [module documentation](self) for how a leaf row is filled and for what a
+/// column that reaches no row does.
 pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
     client: &C,
     points: &ValueMap<B>,
@@ -110,8 +111,15 @@ pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
     let seeds = inputs.identity_frames(batch, &device);
     let ids: Vec<Id> = outputs.ids().collect();
     let out = client.evaluate_ids_jvp(points, &seeds, &ids)?;
-    check_rows(&out.primal, outputs)?;
-    outputs.flatten_frames(&out.tangents, batch, inputs.total(), &device)
+    let j = outputs.flatten_frames(&out.tangents, batch, inputs.total(), &device)?;
+    Ok(fill_leaf_rows(
+        j,
+        &out.primal,
+        outputs,
+        inputs,
+        batch,
+        &device,
+    ))
 }
 
 /// The same `J ∈ [batch, Out.total(), In.total()]`, by one reverse pass with
@@ -131,8 +139,8 @@ pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
 /// Costs `D_out` frames; prefer this to [`jacobian_jvp`] when the Jacobian is tall, which
 /// is the usual shape of a least-squares problem.
 ///
-/// See the [module documentation](self) for the constraint that columns must be leaves
-/// and rows must be mapped nodes, and for what a column that reaches no row does.
+/// See the [module documentation](self) for how a leaf row is filled and for what a
+/// column that reaches no row does.
 pub fn jacobian_vjp<B: Backend, C: ModelClientOps<B>>(
     client: &C,
     points: &ValueMap<B>,
@@ -143,7 +151,14 @@ pub fn jacobian_vjp<B: Backend, C: ModelClientOps<B>>(
     let seeds = outputs.identity_frames(batch, &device);
     let ids: Vec<Id> = outputs.ids().collect();
     let out = client.evaluate_ids_vjp(points, &seeds, &ids)?;
-    check_rows(&out.primal, outputs)?;
     let transposed = inputs.flatten_frames(&out.cotangents, batch, outputs.total(), &device)?;
-    Ok(transposed.swap_dims(1, 2))
+    let j = transposed.swap_dims(1, 2);
+    Ok(fill_leaf_rows(
+        j,
+        &out.primal,
+        outputs,
+        inputs,
+        batch,
+        &device,
+    ))
 }
