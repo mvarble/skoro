@@ -647,3 +647,39 @@ mod retirement {
         );
     }
 }
+
+mod information {
+    use super::*;
+    use skoro_model::information::information;
+
+    #[test]
+    fn joint_information_is_the_precision() {
+        let model = ModelClient::<B>::default();
+        let pose_q: Q<B, SE3> = model.add_parameter(SE3);
+        let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
+
+        let at = point_map()
+            .with_quantity(&pose_q, pose_row(0.4, [1.5, -2.25, 0.75]))
+            .with_quantity(&point_q, row(&[1.0, 2.0, 3.0]))
+            .build();
+        let (packed, normalizer) = whitening_from_precision(&coupled_precision()).unwrap();
+        let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
+
+        let factor = JointNormal::new(
+            vec![pose_q.id(), point_q.id()],
+            at.clone(),
+            whitening,
+            normalizer,
+        );
+        add_joint_factor(&model, &factor).unwrap();
+
+        let free = model.tangent_layout(&[pose_q.id(), point_q.id()]).unwrap();
+        let info = information(&model, at.as_ref(), &free).unwrap();
+        let info = Dense::from_tensor(info).unwrap();
+
+        let lambda = coupled_precision();
+        for (g, w) in info.data().iter().zip(lambda.data()) {
+            approx::assert_abs_diff_eq!(g, w, epsilon = 1e-8);
+        }
+    }
+}
