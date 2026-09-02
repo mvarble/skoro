@@ -23,3 +23,9 @@ approx.workspace = true
 # sized by storage. No cycle: `skoro-se3` does not depend on `skoro-normal`.
 skoro-se3.workspace = true
 skoro-so3.workspace = true
+# The Fisher-information integration tests check the graph's roots against host references
+# built with `Dense`/`spd_solve`, and read tensors back with `skoro_model::test_utils`, which
+# lives behind the `testing` feature. Neither pulls in a cycle: `skoro-dense` depends only on
+# `skoro-backend`/`skoro-core`.
+skoro-dense.workspace = true
+skoro-model = { workspace = true, features = ["testing"] }

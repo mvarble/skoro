@@ -5920,6 +5920,7 @@ dependencies = [
  "burn",
  "skoro-backend",
  "skoro-core",
+ "skoro-dense",
  "skoro-graph",
  "skoro-linalg",
  "skoro-model",
