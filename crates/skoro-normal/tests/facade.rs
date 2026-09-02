@@ -69,7 +69,7 @@ fn a_builder_generic_adapter_grows_a_real_model() {
     assert_eq!(ld.dims(), [1, 1]);
 
     // And it recorded the factor it built, refinement and all.
-    let factors = ModelBuilderOps::factors(&model);
+    let factors = model.factors();
     assert_eq!(factors.len(), 1);
     assert_eq!(factors[0].location, Some(mean.id()));
 }

@@ -67,7 +67,7 @@ mod records {
             ))
             .unwrap();
 
-        let factors = ModelBuilderOps::factors(&model);
+        let factors = model.factors();
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, density.id());
         assert_eq!(factors[0].residual, residual.id());
@@ -84,7 +84,7 @@ mod records {
     #[test]
     fn an_unused_model_records_nothing() {
         let model = ModelClient::<B>::default();
-        assert!(ModelBuilderOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
     }
 }
@@ -111,7 +111,7 @@ mod rejections {
             model.record_factor(FactorRecord::new(not_a_density.id(), residual.id(), vec![],)),
             Err(SkoroError::NotLogLikelihood { .. })
         ));
-        assert!(ModelBuilderOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
     }
 
     /// An id naming nothing is refused rather than stored to fail later.
@@ -141,7 +141,7 @@ mod rejections {
             )),
             Err(SkoroError::DanglingParent { .. })
         ));
-        assert!(ModelBuilderOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
     }
 
     /// A discrete residual has no tangent space, so it can contribute no rows to `J`.
@@ -184,7 +184,7 @@ mod rejections {
         }
 
         // Refused means refused: the record, the rows of `J`, and the objective are untouched.
-        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
+        assert_eq!(model.factors().len(), 1);
         assert_eq!(model.residual_layout().unwrap().total(), 2);
         let values = points().with_quantity(&theta, point(&[3.0])).build();
         approx::assert_abs_diff_eq!(
