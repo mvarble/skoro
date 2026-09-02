@@ -58,6 +58,11 @@ macro_rules! tests {
             fn diag() {
                 super::common::tril::diag_impl::<$B>();
             }
+
+            #[test]
+            fn diag_survives_abs() {
+                super::common::tril::diag_survives_abs_impl::<$B>();
+            }
         }
 
         /// `Matmul` and its two broadcast forms, where one operand carries a batch and the other does not.
