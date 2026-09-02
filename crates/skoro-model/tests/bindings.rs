@@ -169,7 +169,11 @@ mod bindings {
         let info = ModelClientOps::factors(&model);
         assert_eq!(info.len(), 1);
         assert_eq!(info[0].scored, None);
-        assert_eq!(info[0].kind, skoro_graph::graph::TermKind::Weight);
+        assert_eq!(
+            (info[0].in_density, info[0].in_proposal),
+            (true, false),
+            "a free-standing factor is a summand of the log-density and of nothing else"
+        );
         assert_eq!(info[0].arguments, vec![a.id(), b.id()]);
         assert_eq!(
             ModelClientOps::bound(&model, term.id(), RESIDUAL),

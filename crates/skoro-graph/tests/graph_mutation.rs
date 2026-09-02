@@ -13,7 +13,7 @@ use skoro_core::any_tensor::QuantityValue;
 use skoro_core::error::SkoroError;
 use skoro_core::id::{Id, IdGenerator};
 use skoro_graph::{
-    graph::{Graph, TermKind},
+    graph::Graph,
     node::{MappedNode, Node, ObservedNode},
     operation::DiffGraphOperation,
 };
@@ -1522,7 +1522,7 @@ mod bindings {
     }
 
     #[test]
-    fn terms_classify_proposal_and_weight() {
+    fn terms_classify_density_and_proposal() {
         let mut graph = Graph::<B>::new();
         let stoch = stochastic(&mut graph, vec![]);
         // `summed`, not `inert`: this density is folded below, once its quantity is observed.
@@ -1545,12 +1545,18 @@ mod bindings {
             "marking order"
         );
         assert_eq!(
-            terms.iter().map(|t| t.kind).collect::<Vec<_>>(),
-            vec![TermKind::Proposal, TermKind::Weight, TermKind::Weight]
+            terms
+                .iter()
+                .map(|t| (t.in_density, t.in_proposal))
+                .collect::<Vec<_>>(),
+            vec![(true, true), (true, false), (true, false)],
+            "a live stochastic quantity's density is in both; an observed one's and a \
+             free-standing factor are in the log-density alone"
         );
 
         graph.observe::<_, Real, _>(stoch, &2.0f64).unwrap();
-        assert_eq!(graph.terms()[0].kind, TermKind::Weight);
+        let observed = graph.terms()[0];
+        assert_eq!((observed.in_density, observed.in_proposal), (true, false));
         graph.validate_indices().unwrap();
     }
 

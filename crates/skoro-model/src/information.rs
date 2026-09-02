@@ -27,8 +27,9 @@ fn batch_and_device<B: Backend>(points: &ValueMap<B>) -> (usize, B::Device) {
     }
 }
 
-/// One [`InformationBlock`] per term that carries a `FISHER_ROOT` binding, skipping every term
-/// that does not.
+/// One [`InformationBlock`] per log-density term that carries a `FISHER_ROOT` binding, skipping
+/// every term that does not — and every proposal-only term, whose density the model does not
+/// score.
 pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
     client: &C,
     points: &ValueMap<B>,
@@ -37,6 +38,11 @@ pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
     let (batch, _device) = batch_and_device(points);
     let mut blocks = Vec::new();
     for f in client.factors() {
+        // A proposal-only term is not a summand of the log-density, so it contributes no
+        // expected information — even though it binds a `FISHER_ROOT` like any other factor.
+        if !f.in_density {
+            continue;
+        }
         let roots = client.bound(f.density, FISHER_ROOT);
         let root_id = match roots.len() {
             0 => continue,

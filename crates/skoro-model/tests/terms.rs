@@ -1,9 +1,9 @@
-//! The `log p = log q + log w` split: a proposal term scores a live stochastic quantity; every
-//! other term (an observed quantity's density, a free-standing factor) is a weight term.
+//! The `log p = log q + log w` split. A term is a summand of the proposal `q` when it scores a
+//! quantity still being generated, and a summand of the log-density `p` unless it was introduced
+//! by `add_proposal`. The weight is the difference, so `q + w == p` by construction.
 
 use skoro_backend::{NdArrayBackend, Point, Tensor, TensorData};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
-use skoro_graph::graph::TermKind;
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
     distribution::{Distribution, Factor, Sampler},
@@ -83,20 +83,20 @@ fn proposal_plus_weight_is_the_log_density() {
 }
 
 #[test]
-fn observing_moves_a_term_to_the_weight() {
+fn observing_moves_a_term_out_of_the_proposal() {
     let model = ModelClient::<B>::default();
     let x = model.add_quantity(Linear).unwrap();
     let density = model.log_density_of(&x).unwrap();
-    let kind_of = |model: &ModelClient<B>| {
-        model
+    let flags_of = |model: &ModelClient<B>| {
+        let t = model
             .terms()
             .into_iter()
             .find(|t| t.density == density)
-            .unwrap()
-            .kind
+            .unwrap();
+        (t.in_density, t.in_proposal)
     };
 
-    assert_eq!(kind_of(&model), TermKind::Proposal);
+    assert_eq!(flags_of(&model), (true, true));
     x.observe(&0.5f64).unwrap();
-    assert_eq!(kind_of(&model), TermKind::Weight);
+    assert_eq!(flags_of(&model), (true, false));
 }
