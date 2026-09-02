@@ -186,10 +186,16 @@ where
         .as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
+    // The cotangent seed is all-ones, so this is `∇ₗ S` for
+    // `S(l) = 1/l₀ − l₁/(l₀l₂) + 1/l₂`, the sum of the packed inverse. At `l = (1, 2, 3)`:
+    //   ∂S/∂l₀ = −1/l₀² + l₁/(l₀²l₂) = −1 + 2/3 = −1/3
+    //   ∂S/∂l₁ = −1/(l₀l₂)           = −1/3
+    //   ∂S/∂l₂ = l₁/(l₀l₂²) − 1/l₂²  = 2/9 − 1/9 = 1/9
+    // The matrix route agrees: `pack(−Yᵀ ω Yᵀ)` for `Y = L⁻¹`, `ω = [[1,0],[1,1]]`.
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
-            [-1.0, 5.0 / 9.0, -1.0 / 9.0],
+            [-1.0 / 3.0, -1.0 / 3.0, 1.0 / 9.0],
             &Default::default()
         ))
         .as_slice(),
@@ -224,16 +230,23 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
-            [-1.0, 5.0 / 9.0, -1.0 / 9.0],
+            [-1.0 / 3.0, -1.0 / 3.0, 1.0 / 9.0],
             &Default::default()
         ))
         .as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
+    // `H · Δl` for the same scalar `S`, with `Δl = (0.2, 0.1, 0.4)`. The Hessian at
+    // `l = (1, 2, 3)` is
+    //   [[ 2/3,  1/3, −2/9 ],
+    //    [ 1/3,  0  ,  1/9 ],
+    //    [−2/9,  1/9, −2/27]]
+    // giving  7/90, 1/9, −17/270.  The matrix route agrees:
+    // `pack((Z Δlᵀ Z) ω Z + Z ω (Z Δlᵀ Z))` for `Z = (L⁻¹)ᵀ`.
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
-            [-0.4, 41.0 / 135.0, -4.0 / 135.0],
+            [7.0 / 90.0, 1.0 / 9.0, -17.0 / 270.0],
             &Default::default()
         ))
         .as_slice(),

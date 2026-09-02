@@ -135,9 +135,18 @@ where
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         if let Some(inv_mat_packed) = state {
-            let inv_mat: Tensor<B, 3> = unpack(inv_mat_packed.clone());
+            // `Z = Yᵀ`, where `Y = A⁻¹`.
+            //
+            // The JVP is the linear map `dY = -Y dA Y`. Pulling a Frobenius cotangent `ω` back
+            // through it,
+            //
+            //     ⟨ω, dY⟩ = tr(ωᵀ(-Y dA Y)) = -tr(Y ωᵀ Y dA) = ⟨-Yᵀ ω Yᵀ, dA⟩,
+            //
+            // so the conjugating matrix is `Yᵀ`, *not* `Y`. The two agree only when `Y` is
+            // symmetric, which a non-diagonal triangle never is.
+            let inv_mat_t: Tensor<B, 3> = unpack::<B, 2, 3>(inv_mat_packed.clone()).transpose();
             let omega_tril: Tensor<B, 4> = unpack(omega);
-            vec![Some(-pack(conjugate(inv_mat, omega_tril)))]
+            vec![Some(-pack(conjugate(inv_mat_t, omega_tril)))]
         } else {
             vec![None]
         }
@@ -150,18 +159,30 @@ where
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         if let (Some(inv_mat_packed), Some(dmat_packed)) = (vjp_state, hvp_state) {
-            let inv_mat: Tensor<B, 3> = unpack(inv_mat_packed.clone());
+            // The HVP is the derivative of the VJP expression `G(A) = -Z ω Z` (with `Z = Yᵀ` and
+            // `ω` held fixed) along the seeded tangent `ΔA`. Since `Z = (Aᵀ)⁻¹`,
+            //
+            //     dZ = -Z ΔAᵀ Z,
+            //     dG = -(dZ ω Z + Z ω dZ) = (Z ΔAᵀ Z) ω Z + Z ω (Z ΔAᵀ Z).
+            //
+            // Note all three differences from a naive reading: the conjugator is `Z = Yᵀ`, the
+            // tangent enters transposed, and the two terms are *positive* — each of the two
+            // minus signs in `dG` cancels one from `dZ`.
+            let inv_mat_t: Tensor<B, 3> = unpack::<B, 2, 3>(inv_mat_packed.clone()).transpose();
             let omega_mat: Tensor<B, 4> = unpack(omega);
-            let conj_omega = conjugate(inv_mat.clone(), omega_mat.clone());
+            let conj_omega = conjugate(inv_mat_t.clone(), omega_mat.clone());
 
-            let dmat = unpack(dmat_packed.clone()); // [b, n, n]
-            let conj_dmat = inv_mat.clone().matmul(dmat.clone()).matmul(inv_mat.clone());
+            let dmat_t: Tensor<B, 3> = unpack::<B, 2, 3>(dmat_packed.clone()).transpose(); // ΔAᵀ
+            let conj_dmat = inv_mat_t
+                .clone()
+                .matmul(dmat_t.clone())
+                .matmul(inv_mat_t.clone());
 
-            let s0 = -right_broadcast_matmul(
+            let s0 = right_broadcast_matmul(
                 left_broadcast_matmul(conj_dmat, omega_mat.clone()),
-                inv_mat.clone(),
+                inv_mat_t.clone(),
             );
-            let s1 = -right_broadcast_matmul(conj_omega, dmat.matmul(inv_mat));
+            let s1 = right_broadcast_matmul(conj_omega, dmat_t.matmul(inv_mat_t));
             vec![Some(pack(s0 + s1))]
         } else {
             vec![None]
