@@ -1,13 +1,13 @@
-//! What a Gaussian factor computes, and what its builder writes down about it.
+//! What a Gaussian factor computes, and what its builder binds to the term it built.
 //!
 //! Two things are at stake. First, that `whitened_residual` is really the `r` in
 //! `−log p = ½‖r‖² + n(θ)` — if it is not, a least-squares optimizer minimizes something
-//! unrelated to the model, silently. Second, that the builders record honestly: the record
-//! names the density and residual nodes that the graph actually holds.
+//! unrelated to the model, silently. Second, that the builder binds honestly: the bindings
+//! name the density and residual nodes that the graph actually holds.
 //!
-//! The recording is bookkeeping now rather than a trait bound, so the second half is the
-//! part that carries the weight: nothing but these tests checks that `add_gaussian_quantity`
-//! writes down the ids it really built.
+//! The bindings are declared by `Distribution::factor` rather than checked by a trait bound,
+//! so the second half is the part that carries the weight: nothing but these tests checks
+//! that `Normal::factor` binds the ids it really built.
 //!
 //! `SE3` is exercised deliberately. Its manifold dimension is 6 and its storage is 12, so a
 //! residual sized by storage rather than by dimension is visible here and invisible on
@@ -17,10 +17,16 @@ use skoro_backend::{NdArrayBackend, Point, TensorData};
 use skoro_core::id::Id;
 use skoro_linalg::tril::{Tril, TrilOps};
 use skoro_linalg::vector::LinalgVectorOps;
-use skoro_model::{ModelBuilderOps, hash_map_builders::points, model::ModelClient, q::Q};
+use skoro_model::{
+    ModelBuilderOps, ModelClientOps,
+    hash_map_builders::points,
+    least_squares::residual_layout,
+    model::ModelClient,
+    q::Q,
+    roles::{LOCATION, NORMALIZER_PARENT, RESIDUAL, WHITENING},
+};
 use skoro_normal::{
-    distribution::Normal,
-    facade::{add_gaussian_quantity, constant_covariance_diagonal, gaussian_blocks},
+    distribution::Normal, facade::constant_covariance_diagonal, structure::GaussianBlock,
 };
 use skoro_operation::{Input, ValueMap};
 use skoro_pointwise::PointwiseOps;
@@ -177,69 +183,79 @@ mod densities {
     }
 }
 
-/// That the builder writes down what it actually built: the ids it records name the nodes the graph
-/// holds, the recorded density is the term the model's own log-density sums, and the normalizer
+/// That the builder binds what it actually built: the ids it binds name the nodes the graph
+/// holds, the bound density is the term the model's own log-density sums, and the normalizer
 /// depends on the covariance factor and nothing else. That last one is what makes the least-squares
 /// precondition checkable without inspecting an operation.
 mod records {
     use super::*;
 
     /// `Normal`'s normalizer depends on the covariance factor and on nothing else, and the
-    /// record says so.
+    /// bindings say so.
     ///
     /// This is what makes the least-squares precondition checkable without inspecting an
-    /// operation: minimizing `½Σ‖rᵢ‖²` is minimizing `−log p` exactly when nothing in
-    /// `normalizer_parents` is being optimized. Recording the mean there would make every
-    /// Gaussian model look ineligible.
+    /// operation: minimizing `½Σ‖rᵢ‖²` is minimizing `−log p` exactly when nothing bound under
+    /// `NORMALIZER_PARENT` is being optimized. Binding the mean there would make every Gaussian
+    /// model look ineligible.
     #[test]
     fn only_the_covariance_reaches_the_normalizer() {
         let model = ModelClient::<B>::default();
         let mean = model.add_parameter(EuclideanD(2));
         let std_dev = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-        add_gaussian_quantity(&model, &mean, &std_dev).unwrap();
+        model
+            .add_quantity(Normal::new(mean.clone(), std_dev.clone()))
+            .unwrap();
 
-        let factors = model.factors();
+        let factors = ModelClientOps::factors(&model);
+        let density = factors[0].density;
         assert_eq!(
-            factors[0].normalizer_parents,
+            model.bound(density, NORMALIZER_PARENT),
             vec![std_dev.id()],
             "the mean must not be reported: it does not appear in the normalizer"
         );
         // The refinement is the other half: `μ` and `L` reachable apart, which is what a filter
         // needs since `H = ∂μ/∂x` and `R = L Lᵀ` are different objects.
-        assert_eq!(factors[0].location, Some(mean.id()));
-        assert_eq!(factors[0].whitening, Some(std_dev.id()));
+        assert_eq!(model.bound(density, LOCATION), vec![mean.id()]);
+        assert_eq!(model.bound(density, WHITENING), vec![std_dev.id()]);
     }
 
-    /// `add_gaussian_quantity` records every factor it builds, and the ids it records are the
+    /// Adding a Gaussian quantity binds every node its factor built, and the ids it binds are the
     /// ones the graph holds.
     #[test]
     fn the_gaussian_builder_records_what_it_built() {
         let model = ModelClient::<B>::default();
         let mean_a = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
         let cov_a = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-        let a = add_gaussian_quantity(&model, &mean_a, &cov_a).unwrap();
+        let a = model
+            .add_quantity(Normal::new(mean_a.clone(), cov_a.clone()))
+            .unwrap();
 
         let mean_b = model.add_constant(Real, &1.0f64);
         let cov_b = constant_covariance_diagonal(&model, &[0.5]);
-        let b = add_gaussian_quantity(&model, &mean_b, &cov_b).unwrap();
+        let b = model
+            .add_quantity(Normal::new(mean_b.clone(), cov_b.clone()))
+            .unwrap();
 
-        let blocks: Vec<_> = gaussian_blocks(&model);
+        let blocks: Vec<_> = GaussianBlock::all(&model);
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].mean, mean_a.id());
         assert_eq!(blocks[0].whitening, cov_a.id());
         assert_eq!(blocks[1].mean, mean_b.id());
         assert_eq!(blocks[1].whitening, cov_b.id());
 
-        // The records agree with the blocks, factor for factor and in order.
-        let factors = model.factors();
+        // The terms agree with the blocks, factor for factor and in order.
+        let factors = ModelClientOps::factors(&model);
         assert_eq!(factors.len(), 2);
         for (factor, block) in factors.iter().zip(&blocks) {
             assert_eq!(factor.density, block.density);
-            assert_eq!(factor.residual, block.residual);
-            assert_eq!(factor.normalizer_parents, vec![block.whitening]);
+            assert_eq!(model.bound(factor.density, RESIDUAL), vec![block.residual]);
+            assert_eq!(
+                model.bound(factor.density, NORMALIZER_PARENT),
+                vec![block.whitening]
+            );
         }
 
-        // Each recorded density really names a log-density node: evaluating the two by id and
+        // Each bound density really names a log-density node: evaluating the two by id and
         // summing must reproduce the model's total log-density. An id that named something else
         // — the outermost `+` of the sugar, say — would not add up.
         let values = points()
@@ -251,7 +267,7 @@ mod records {
         let summed: f64 = density_ids
             .iter()
             .map(|id| {
-                let (value, _) = evaluated.evaluations.get(id).expect("a recorded density");
+                let (value, _) = evaluated.evaluations.get(id).expect("a term's density");
                 scalar(value.unwrap_float_ref().clone())
             })
             .sum();
@@ -262,7 +278,7 @@ mod records {
         );
 
         // The row layout of `J` is the residuals, sized by dimension: 2 then 1.
-        let layout = model.residual_layout().unwrap();
+        let layout = residual_layout(&model).unwrap();
         assert_eq!(layout.total(), 3);
         assert_eq!(
             layout
@@ -274,9 +290,9 @@ mod records {
         );
     }
 
-    /// The recorded density really is the term the objective sums.
+    /// The bound density really is the term the objective sums.
     ///
-    /// The id in a record is only worth having if it names the node the graph actually scores;
+    /// A term's density id is only worth having if it names the node the graph actually scores;
     /// an id that named something else — the outermost `+` of the sugar, say — would evaluate to
     /// a number that does not add up to the model's log-density.
     #[test]
@@ -284,26 +300,31 @@ mod records {
         let model = ModelClient::<B>::default();
         let mean = model.add_constant(EuclideanD(2), &VectorD::new(&[3.0, -1.0]));
         let cov = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-        let x = add_gaussian_quantity(&model, &mean, &cov).unwrap();
+        let x = model
+            .add_quantity(Normal::new(mean.clone(), cov.clone()))
+            .unwrap();
 
-        let factors = model.factors();
+        let factors = ModelClientOps::factors(&model);
         assert_eq!(factors.len(), 1);
-        assert_eq!(factors[0].normalizer_parents, vec![cov.id()]);
+        assert_eq!(
+            model.bound(factors[0].density, NORMALIZER_PARENT),
+            vec![cov.id()]
+        );
 
-        // The recorded density is the model's whole log-density, this being its only factor.
+        // The bound density is the model's whole log-density, this being its only factor.
         let values = points().with_quantity(&x, point(&[3.5, -0.25])).build();
         let evaluated = model.evaluate_ids(&values, &[factors[0].density]).unwrap();
         let (density, _) = evaluated
             .evaluations
             .get(&factors[0].density)
-            .expect("the recorded density");
+            .expect("the term's density");
         approx::assert_abs_diff_eq!(
             scalar(density.unwrap_float_ref().clone()),
             scalar(model.log_density(&values).unwrap()),
             epsilon = 1e-9
         );
 
-        let layout = model.residual_layout().unwrap();
+        let layout = residual_layout(&model).unwrap();
         assert_eq!(layout.total(), 2);
     }
 
@@ -311,52 +332,49 @@ mod records {
     #[test]
     fn an_untouched_model_records_nothing() {
         let model = ModelClient::<B>::default();
-        assert!(model.factors().is_empty());
-        assert_eq!(model.residual_layout().unwrap().total(), 0);
+        assert!(ModelClientOps::factors(&model).is_empty());
+        assert_eq!(residual_layout(&model).unwrap().total(), 0);
     }
 }
 
-/// The recorded nodes survive garbage collection -- a residual is a childless `Mapped` node whose
-/// handle the builder does not keep, so without the record pinning it the collector would take it.
+/// The bound nodes survive garbage collection -- a residual is a `Mapped` node whose handle the
+/// builder does not keep, so without the binding pinning it the collector would take it.
 /// Retiring the middle factor of three keeps the outer two *in order*, since `residual_layout` is
 /// the row order of `J` and the block list is read positionally beside it.
 mod retirement {
     use super::*;
 
-    /// The recorded nodes survive garbage collection.
+    /// The bound nodes survive garbage collection.
     ///
-    /// A residual is a `Mapped` node with no children, and `add_gaussian_quantity` does not keep
-    /// its handle — so without the record pinning it, the collector would take it and leave the
-    /// registry holding ids the graph no longer has. `cleanup()` is a public method, so this is
-    /// reachable rather than theoretical.
+    /// A residual's handle dies inside `Normal::factor` — so without the `RESIDUAL` binding
+    /// pinning it, the collector would take it and leave the term's bindings naming ids the graph
+    /// no longer has. `cleanup()` is a public method, so this is reachable rather than
+    /// theoretical.
     #[test]
     fn cleanup_does_not_collect_the_recorded_residuals() {
         let model = ModelClient::<B>::default();
         let mean_a = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
         let cov_a = constant_covariance_diagonal(&model, &[1.0, 2.0]);
-        let a = add_gaussian_quantity(&model, &mean_a, &cov_a).unwrap();
+        let a = model.add_quantity(Normal::new(mean_a, cov_a)).unwrap();
 
         let mean_b = model.add_constant(Real, &1.0f64);
         let cov_b = constant_covariance_diagonal(&model, &[0.5]);
-        let b = add_gaussian_quantity(&model, &mean_b, &cov_b).unwrap();
+        let b = model.add_quantity(Normal::new(mean_b, cov_b)).unwrap();
 
-        let before = model.residual_layout().unwrap();
+        let before = residual_layout(&model).unwrap();
         model.cleanup();
-        let after = model.residual_layout().unwrap();
-        assert_eq!(
-            before, after,
-            "cleanup must not collect a recorded residual"
-        );
+        let after = residual_layout(&model).unwrap();
+        assert_eq!(before, after, "cleanup must not collect a bound residual");
 
         // And the residuals still evaluate: the whole subgraph beneath them survives too, not
-        // only the node the certificate names.
+        // only the node the binding names.
         let values = points()
             .with_quantity(&a, point(&[0.5, -1.25]))
             .with_quantity(&b, point(&[2.25]))
             .build();
-        let ids: Vec<Id> = model.factors()
+        let ids: Vec<Id> = ModelClientOps::factors(&model)
             .iter()
-            .map(|f| f.residual)
+            .map(|f| model.bound(f.density, RESIDUAL)[0])
             .collect();
         let evaluated = model.evaluate_ids(&values, &ids).unwrap();
         for id in ids {
@@ -371,8 +389,8 @@ mod retirement {
     /// a prune that reordered the survivors would hand an optimizer one factor's rows labelled with
     /// another's, which no shape check downstream would reject.
     ///
-    /// The block list is *derived* from the records rather than kept beside them, so the two
-    /// cannot come to disagree about which factors exist — but the derivation still has to
+    /// The block list is *derived* from the terms' bindings rather than kept beside them, so the
+    /// two cannot come to disagree about which factors exist — but the derivation still has to
     /// preserve order, which is what this pins.
     #[test]
     fn retiring_a_factor_prunes_the_records_and_keeps_the_order() {
@@ -384,36 +402,40 @@ mod retirement {
                 &VectorD::new(&vec![0.0; dims.len()]),
             );
             let cov = constant_covariance_diagonal(&model, dims);
-            add_gaussian_quantity(&model, &mean, &cov).unwrap()
+            model.add_quantity(Normal::new(mean, cov)).unwrap()
         };
         let a = add(&[1.0, 2.0]);
         let b = add(&[1.0, 2.0, 3.0]);
         let c = add(&[0.5]);
 
-        let before: Vec<_> = model.factors();
+        let before: Vec<_> = ModelClientOps::factors(&model);
         assert_eq!(before.len(), 3);
-        assert_eq!(model.residual_layout().unwrap().total(), 6);
+        let before_residuals: Vec<Id> = before
+            .iter()
+            .map(|f| model.bound(f.density, RESIDUAL)[0])
+            .collect();
+        assert_eq!(residual_layout(&model).unwrap().total(), 6);
 
         model.remove_closure(&[b.id()]).unwrap();
         model.cleanup();
 
-        let after = model.factors();
+        let after = ModelClientOps::factors(&model);
         assert_eq!(
             after,
             [before[0].clone(), before[2].clone()],
             "the survivors keep their identity and their order"
         );
         assert_eq!(
-            gaussian_blocks(&model)
+            GaussianBlock::all(&model)
                 .iter()
                 .map(|block| block.residual)
                 .collect::<Vec<_>>(),
-            vec![before[0].residual, before[2].residual],
-            "the block list follows the records by derivation"
+            vec![before_residuals[0], before_residuals[2]],
+            "the block list follows the terms by derivation"
         );
 
         // The rows of `J` are now `a` then `c`: 2 then 1, and never 2 then 3.
-        let layout = model.residual_layout().unwrap();
+        let layout = residual_layout(&model).unwrap();
         assert_eq!(
             layout
                 .blocks()
@@ -428,9 +450,9 @@ mod retirement {
             .with_quantity(&a, point(&[0.5, -1.25]))
             .with_quantity(&c, point(&[2.25]))
             .build();
-        let ids: Vec<Id> = model.factors()
+        let ids: Vec<Id> = ModelClientOps::factors(&model)
             .iter()
-            .map(|f| f.residual)
+            .map(|f| model.bound(f.density, RESIDUAL)[0])
             .collect();
         let evaluated = model.evaluate_ids(&values, &ids).unwrap();
         for id in ids {

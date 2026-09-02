@@ -18,7 +18,8 @@ use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelClientOps,
+    distribution::Factor,
     hash_map_builders::point_map,
     jacobian::jacobian_vjp,
     least_squares::residual_layout,
@@ -413,7 +414,7 @@ mod scoring {
 mod records {
     use super::*;
 
-    /// The least-squares builder records a joint factor as one row block, and keeps it alive.
+    /// The least-squares builder binds a joint factor as one row block, and keeps it alive.
     ///
     /// `residual_layout` is what an optimizer takes as the rows of `J`, so a 9-member joint has to
     /// arrive as 9 rows — and the residual node has to survive `cleanup()`, which is the hazard
@@ -431,20 +432,26 @@ mod records {
         let (packed, normalizer) = whitening_from_precision(&coupled_precision()).unwrap();
         let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
 
-        let factor = JointNormal::new(
-            vec![pose_q.id(), point_q.id()],
-            at,
-            whitening.clone(),
-            normalizer,
-        );
+        let ids = vec![pose_q.id(), point_q.id()];
+        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
         let density = add_joint_factor(&model, &factor).unwrap();
 
         assert_eq!(ModelClientOps::factors(&model).len(), 1);
         assert_eq!(ModelClientOps::factors(&model)[0].density, density.id());
         assert_eq!(
+            ModelClientOps::factors(&model)[0].arguments,
+            ids,
+            "the joint's arguments are its members, in the order it was given them"
+        );
+        assert_eq!(
             ModelClientOps::bound(&model, density.id(), NORMALIZER_PARENT),
             vec![whitening.id()],
             "the whitening is the normalizer's only parent"
+        );
+        assert_eq!(
+            ModelClientOps::bound(&model, density.id(), RESIDUAL).len(),
+            1,
+            "one residual, which is the row block `residual_layout` reads"
         );
 
         // Nine rows of `J`: six for the pose block, three for the Euclidean one.
@@ -462,8 +469,8 @@ mod records {
 /// Retiring a joint factor, where a plain downstream walk is not enough. The factor's body is
 /// downstream of the quantities it scores, so a closure at one member reaches it -- but its
 /// **anchors** are not, and neither is a surviving member's per-block tangent. Both halves fail
-/// silently on their own: a stranded anchor is a leak nothing reports, and a dangling record is a
-/// `NodeNotFound` at the *next* solve rather than at the removal that caused it.
+/// silently on their own: a stranded anchor is a leak nothing reports, and a binding left naming a
+/// deleted node is a `NodeNotFound` at the *next* solve rather than at the removal that caused it.
 mod retirement {
     use super::*;
 
@@ -476,8 +483,8 @@ mod retirement {
     /// `Q`, and would be stranded once per tick forever.
     ///
     /// Both halves are asserted here, because each fails silently on its own. A stranded anchor is a
-    /// leak nothing reports, and a dangling record is a `NodeNotFound` at the *next* solve
-    /// rather than at the removal that caused it.
+    /// leak nothing reports, and a binding left naming a deleted node is a `NodeNotFound` at the
+    /// *next* solve rather than at the removal that caused it.
     #[test]
     fn retiring_a_scored_quantity_takes_the_whole_joint_factor() {
         let model = ModelClient::<B>::default();
@@ -497,14 +504,12 @@ mod retirement {
         // The pose, the point, and the whitening — everything the factor is built *from*.
         let baseline = node_count();
 
-        let factor = JointNormal::new(
-            vec![pose_q.id(), point_q.id()],
-            at,
-            whitening.clone(),
-            normalizer,
-        );
+        let ids = vec![pose_q.id(), point_q.id()];
+        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
         let density = factor.log_density(&model).unwrap();
-        model.mark_likelihood(&density).unwrap();
+        model
+            .add_factor(Factor::new(density.clone()), &ids)
+            .unwrap();
         assert!(node_count() > baseline);
 
         // Retire the pose, as a window retires its oldest state.
@@ -521,12 +526,12 @@ mod retirement {
         assert!(contains(whitening.id()), "so is the whitening");
     }
 
-    /// A retirement that deletes a recorded factor drops its record with it.
+    /// A retirement that deletes a bound factor drops its term and its bindings with it.
     ///
-    /// The record is not merely stale afterwards, it is unusable: `residual_layout` resolves every
-    /// recorded id through `TangentLayout::from_ids`, so one naming a deleted node fails the *next*
-    /// solve rather than the removal that caused it. Pruning can only ever shrink the registry, so
-    /// none of what makes one unforgeable is touched.
+    /// A surviving binding would not be merely stale, it would be unusable: `residual_layout`
+    /// resolves every bound residual through `TangentLayout::from_ids`, so one naming a deleted
+    /// node fails the *next* solve rather than the removal that caused it. Removing a node clears
+    /// both binding directions for it, so nothing survives naming a node the arena no longer has.
     #[test]
     fn retiring_a_scored_quantity_prunes_the_registry() {
         let model = ModelClient::<B>::default();
@@ -554,15 +559,16 @@ mod retirement {
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
     }
 
-    /// A record whose density is gone is dropped, even though its residual node survives.
+    /// A term whose density is gone is dropped, even though its residual node has no handle.
     ///
     /// Reachable by an obvious call: `add_joint_factor` hands back the log-density, and rooting a
     /// removal there takes `ℓ` alone — nothing is downstream of it. Half a factor is not a factor. It
-    /// contributes nothing to the log-density any more, so leaving the record would put rows in `J`
-    /// for a term the objective does not contain, which is the one way this fails without erroring.
+    /// contributes nothing to the log-density any more, so leaving the term would put rows in `J`
+    /// for something the objective does not contain, which is the one way this fails without
+    /// erroring.
     ///
-    /// The residual handle goes with the record rather than with the node: the builder holds it to
-    /// keep a *certified* residual alive, so an uncertified one becomes collectable again.
+    /// The residual is kept alive by the `RESIDUAL` binding rather than by a handle, so once the
+    /// density that bound it is gone the residual becomes collectable again.
     #[test]
     fn a_factor_whose_density_was_removed_is_uncertified() {
         let model = ModelClient::<B>::default();
@@ -581,7 +587,7 @@ mod retirement {
         let residual =
             ModelClientOps::bound(&model, ModelClientOps::factors(&model)[0].density, RESIDUAL)[0];
 
-        // Rooted at the density: `ℓ` alone goes, and with the record pruned the residual is
+        // Rooted at the density: `ℓ` alone goes, and with its bindings cleared the residual is
         // unpinned — so the same call's cascade reclaims it too.
         assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
@@ -589,7 +595,7 @@ mod retirement {
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
         assert!(
             model.tangent_layout(&[residual]).is_err(),
-            "an uncertified residual is reclaimed in the same breath"
+            "an unbound residual is reclaimed in the same breath"
         );
 
         // The handle outlives the node; dropping it stays uneventful.
@@ -622,14 +628,12 @@ mod retirement {
         let node_count = || model.server_call(|server| server.graph().node_count());
         let baseline = node_count();
 
-        let factor = JointNormal::new(
-            vec![pose_q.id(), point_q.id()],
-            at,
-            whitening.clone(),
-            normalizer,
-        );
+        let ids = vec![pose_q.id(), point_q.id()];
+        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
         let density = factor.log_density(&model).unwrap();
-        model.mark_likelihood(&density).unwrap();
+        model
+            .add_factor(Factor::new(density.clone()), &ids)
+            .unwrap();
         assert!(node_count() > baseline);
 
         model.remove_closure(&[density.id()]).unwrap();

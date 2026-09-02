@@ -4,7 +4,7 @@
 //! identity and every dependent quantity, but gives up its sampler, its parents, and its own
 //! log-density — the joint being supplied separately as a likelihood factor.
 
-use skoro_model::ModelBuilderOps;
+use skoro_model::{ModelBuilderOps, distribution::Factor};
 use std::collections::HashMap;
 
 use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TensorData};
@@ -231,7 +231,9 @@ mod joint_factors {
         // One factor over both, standing in for a correlated joint marginal.
         let factor =
             (a.clone().norm_squared().unwrap() + b.clone().norm_squared().unwrap()).unwrap();
-        model.mark_likelihood(&factor).unwrap();
+        model
+            .add_factor(Factor::new(factor.clone()), &[a.id(), b.id()])
+            .unwrap();
 
         let pts = points()
             .with_tensor(
