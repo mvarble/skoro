@@ -71,9 +71,9 @@ pub mod prelude {
     pub use skoro_operation::{Input, ValueMap};
 
     // ----- the model interface -----
-    pub use skoro_model::{ModelBuilderOps, ModelClientOps};
     pub use skoro_model::model::{ModelClient, ModelServer};
     pub use skoro_model::q::{Handle, Q};
+    pub use skoro_model::{ModelBuilderOps, ModelClientOps};
 
     // ----- what a builder declares about its factors -----
     pub use skoro_graph::graph::Term;

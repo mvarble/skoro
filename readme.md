@@ -27,6 +27,9 @@ It breaks this domain down into a few distinct crates:
   Evaluation is not limited to end-to-end state-to-density evaluations; subsets of the DAG can be selected, compiled into a sequential program, and evaluated.
   Bindings are labelled reference edges `(from, role, to)` that annotate graph nodes with semantic information — for example, which nodes play the roles of `argument`, `residual`, `location`, `whitening`, or `fisher_root` for a given term's density.
   Bindings are not data edges and do not enter the compiler's control flow, but they are lifecycle references: removing a bound target is rejected, and marking a referrer live marks all its bound targets live as well.
+  A graph carries two densities over the same nodes: the posterior `p(x|z)` it scores, and the generative model `q(x|z)` it samples from.
+  Each term declares whether it is a summand of each — membership in `p` is stored on the term, membership in `q` is read off whether the quantity it scores is still being generated — so a *proposal-only* term can generate a quantity the posterior does not score.
+  That is what lets a Monte-Carlo algorithm work over a distribution whose density is known but which offers no sampler: propose from something you can draw from, and let the log-weight `p − q` correct.
 
 - **`skoro-model`**: The high-level facade mapping user API concepts (like `ModelClient` and `Q` quantity proxies) down into the backend `Graph` execution logic.
   This offers type-gating on the operations we add to the graph as well as lifetimes for the quantities in the graph for garbage collection.
@@ -37,6 +40,8 @@ It breaks this domain down into a few distinct crates:
   A bare `Id` is a weak reference by comparison — it may name nothing after a `cleanup()`.
   Bindings attach role-labelled edges from a term's log-density to other nodes, recording semantic relationships for inference algorithms: `argument` nodes (where the term's local computation is expressed), `residual` (a node `r` with `−log p = ½‖r‖² + n`), `location` and `whitening` (parameters in the residual formula `r = L⁻¹(x ⊖ μ)`), `normalizer_parent` (nodes the normalizing constant depends on), and `fisher_root` (a matrix whose row-product CᵀC equals the expected information for that term).
   A binding is validated against the graph at creation time, prevents removal of its target, and is attached to the term in the same call as any mutation that retires the term — inference algorithms read bindings through `ModelClientOps::{factors, bound}` at solve time.
+  `add_quantity` adds a quantity the model both generates and scores; `add_proposal` adds one it generates without scoring, leaving the posterior's account of it to a separate `add_factor`.
+  `ModelClientOps::{log_density, log_proposal, log_weight}` evaluate `p`, `q` and their difference, and each `FactorInfo` reports which of the two it belongs to — objective-assembling readers such as `residual_layout` and `information_blocks` use that to skip the terms `p` does not contain.
 
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
   These are _differentiable graph operations_; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §3.3 explains why they run on the host rather than on the backend.

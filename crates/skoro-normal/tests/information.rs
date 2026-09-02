@@ -126,7 +126,12 @@ fn observed_gaussian_information_is_h_transpose_precision_h() {
     let outputs = model.tangent_layout(&[mu.id()]).unwrap();
     let h = Dense::from_tensor(jacobian_vjp(&model, &theta_val, &free, &outputs).unwrap()).unwrap();
     let sigma_inv = precision_from_tril(&l_packed, 3);
-    let expected = h.transpose().matmul(&sigma_inv).unwrap().matmul(&h).unwrap();
+    let expected = h
+        .transpose()
+        .matmul(&sigma_inv)
+        .unwrap()
+        .matmul(&h)
+        .unwrap();
 
     assert_dense_close(&Dense::from_tensor(info).unwrap(), &expected, 1e-9);
 
@@ -283,7 +288,9 @@ fn se3_root_is_sized_by_dimension() {
     let model = ModelClient::<B>::default();
     let mu = model.add_parameter(SE3);
     let l = model.add_parameter(Tril(6));
-    let x = model.add_quantity(Normal::new(mu.clone(), l.clone())).unwrap();
+    let x = model
+        .add_quantity(Normal::new(mu.clone(), l.clone()))
+        .unwrap();
 
     let density = model.log_density_of(&x).unwrap();
     let root_id = model.bound(density, skoro_model::roles::FISHER_ROOT)[0];
@@ -295,7 +302,11 @@ fn se3_root_is_sized_by_dimension() {
             .expect("the root is a matrix quantity");
         (m.0, m.1)
     });
-    assert_eq!(shape, (42, 33), "6 + 36 rows over 6 + 6 + 21 argument columns");
+    assert_eq!(
+        shape,
+        (42, 33),
+        "6 + 36 rows over 6 + 6 + 21 argument columns"
+    );
 
     let args = model.bound(density, skoro_model::roles::ARGUMENT);
     let layout = model.tangent_layout(&args).unwrap();
@@ -307,12 +318,16 @@ fn a_constant_covariance_folds_the_root() {
     let model = ModelClient::<B>::default();
     let mu = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
     let l_const = model.add_constant(Tril(2), &VectorD::new(&[1.0, 0.0, 1.0]));
-    let x = model.add_quantity(Normal::new(mu.clone(), l_const)).unwrap();
+    let x = model
+        .add_quantity(Normal::new(mu.clone(), l_const))
+        .unwrap();
     let density = ModelClientOps::log_density_of(&model, &x).unwrap();
     let root_id = ModelClientOps::bound(&model, density, skoro_model::roles::FISHER_ROOT)[0];
     assert!(model.server_call(|s| matches!(
         s.graph().node(root_id),
-        Some(skoro_graph::node::Node::Mapped(skoro_graph::node::MappedNode { value: Some(_), .. }))
+        Some(skoro_graph::node::Node::Mapped(
+            skoro_graph::node::MappedNode { value: Some(_), .. }
+        ))
     )));
 
     let mu2 = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
@@ -322,7 +337,9 @@ fn a_constant_covariance_folds_the_root() {
     let root_id2 = ModelClientOps::bound(&model, density2, skoro_model::roles::FISHER_ROOT)[0];
     assert!(model.server_call(|s| matches!(
         s.graph().node(root_id2),
-        Some(skoro_graph::node::Node::Mapped(skoro_graph::node::MappedNode { value: None, .. }))
+        Some(skoro_graph::node::Node::Mapped(
+            skoro_graph::node::MappedNode { value: None, .. }
+        ))
     )));
 }
 
