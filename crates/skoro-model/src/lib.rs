@@ -16,6 +16,7 @@ pub mod client_ops;
 pub mod discrete;
 pub mod distribution;
 pub mod hash_map_builders;
+pub mod information;
 pub mod jacobian;
 pub mod least_squares;
 pub mod map;
