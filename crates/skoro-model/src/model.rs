@@ -279,7 +279,7 @@ impl<B: Backend> ModelServer<B> {
     ///   a caller might hold a bare [`Id`], and leaked every temporary constant to do it.
     /// - **The sweep cannot fail.** See below.
     ///
-    /// **The roots** are the ids a live [`Q`](crate::q::Q) names and the graph's likelihood
+    /// **The roots** are the ids a live [`Q`] names and the graph's likelihood
     /// terms. Private nodes — a stacked tangent's anchors and per-block tangents — are
     /// deliberately *not* roots: they are ancestors of
     /// the `δ` node the caller holds, so they are marked while `δ` lives and swept when it
