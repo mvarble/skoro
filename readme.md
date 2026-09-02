@@ -35,7 +35,7 @@ It breaks this domain down into a few distinct crates:
   The API here is as intuitive as if `x` and `y` were structs with concrete data, despite the fact that they represent nodes in a graph for _realizing_ our random quantities.
   A `Q` is the ownership token: the collector is a mark-and-sweep whose roots are the live handles, the model's likelihood terms, and the nodes that a term's density binds, so a quantity nothing reaches is reclaimed whatever kind of node it is.
   A bare `Id` is a weak reference by comparison — it may name nothing after a `cleanup()`.
-  Bindings attach role-labelled edges from a term's log-density to other nodes, recording semantic relationships for inference algorithms: `argument` nodes (where the term's local computation is expressed), `residual` (an exponential-family whitened residual), `location` and `whitening` (parameters in the residual formula `r = L⁻¹(x ⊖ μ)`), `normalizer_parent` (nodes the normalizing constant depends on), and `fisher_root` (a matrix whose rows form the stacked Fisher information).
+  Bindings attach role-labelled edges from a term's log-density to other nodes, recording semantic relationships for inference algorithms: `argument` nodes (where the term's local computation is expressed), `residual` (a node `r` with `−log p = ½‖r‖² + n`), `location` and `whitening` (parameters in the residual formula `r = L⁻¹(x ⊖ μ)`), `normalizer_parent` (nodes the normalizing constant depends on), and `fisher_root` (a matrix whose row-product CᵀC equals the expected information for that term).
   A binding is validated against the graph at creation time, prevents removal of its target, and is attached to the term in the same call as any mutation that retires the term — inference algorithms read bindings through `ModelClientOps::{factors, bound}` at solve time.
 
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
@@ -50,7 +50,7 @@ It breaks this domain down into a few distinct crates:
 - **`skoro-normal`**: A manifold-aware Gaussian distribution (`Normal<B, M>`) parameterized by a `mean: Q<B, M>` and a lower-triangular factor `std_dev: Q<B, Tril>`.
   Calling `add_quantity(Normal::new(μ, L))` registers the distribution's log-density and creates a `Factor<B>` (a structure holding the log-density quantity and a list of `(role, handle)` bindings) that binds the whitened residual `r = L⁻¹(x ⊖ μ)`, location μ, and whitening L under their respective roles.
   The distribution also binds its `fisher_root` — a matrix C such that CᵀC equals the expected Fisher information over the distribution's arguments — allowing inference algorithms to assemble the full Fisher root by stacking contributions from all terms.
-  `GaussianBlock` is the read-side API for accessing the bound nodes and their values during inference.
+  `GaussianBlock` is the read-side API for accessing the bound node IDs during inference.
 
 - **`skoro-dense`**: Host-resident dense linear algebra in `f64`, one matrix at a time, backed by `faer`: Cholesky, triangular and SPD solves, and a column-pivoted-QR least squares.
   A leaf crate depending on nothing else in the workspace, so only the estimators pay for it. `docs/skoro.md` §3.3 explains why this runs on the host rather than on the backend.
