@@ -139,7 +139,7 @@ pub struct MappedNode<B: Backend> {
 
 /// A mapped real value that corresponds to a log-density in the model.
 ///
-/// Just as with a mapped node, the log-density is cached if none of its denscendants are free or
+/// Just as with a mapped node, the log-density is cached if none of its descendants are free or
 /// stochastic.
 #[derive(Clone)]
 pub struct LogLikelihoodNode<B: Backend> {
