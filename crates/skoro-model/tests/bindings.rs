@@ -30,6 +30,10 @@ use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
 type B = NdArrayBackend<f64, i32>;
 
+/// `bound_model`'s return: the model, `x`, `x`'s parent `p`, and the residual bound to `x`'s
+/// term.
+type BoundModel = (ModelClient<B>, Q<B, Real>, Q<B, Real>, Q<B, EuclideanD>);
+
 #[derive(Debug, Clone)]
 struct BoundSampler;
 
@@ -66,7 +70,7 @@ impl Distribution<B, Continuous> for BoundDistr {
 }
 
 /// `x ~ BoundDistr` over parent `p`, with `residual` bound to `x`'s term.
-fn bound_model() -> (ModelClient<B>, Q<B, Real>, Q<B, Real>, Q<B, EuclideanD>) {
+fn bound_model() -> BoundModel {
     let model = ModelClient::<B>::default();
     let p = model.add_parameter(Real);
     let residual = model.add_parameter(EuclideanD(1));

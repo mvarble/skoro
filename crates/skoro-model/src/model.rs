@@ -774,11 +774,6 @@ impl<B: Backend> ModelClient<B> {
         ))
     }
 
-    /// Mark the mapped quantity as a likelihood.
-    pub(crate) fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
-        self.server.write().unwrap().mark_likelihood(likelihood)
-    }
-
     /// Record a binding. See [`ModelServer::bind`].
     pub fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
         self.server.write().unwrap().bind(from, role, to)
