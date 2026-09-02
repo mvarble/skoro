@@ -29,6 +29,7 @@ use crate::operation::{DiffGraphOperation, DynGraphOperation};
 use crate::point_map::PointMap;
 use crate::quantity::{DynContinuous, DynQuantityType, QuantityType};
 use crate::sampler::{DynGraphSampler, GraphSampler};
+pub use crate::term::{Term, TermKind};
 
 /// A mutable probabilistic graphical model representing the causal nature of sampling realizations
 /// of the quantities.
@@ -1442,6 +1443,64 @@ impl<B: Backend> Graph<B> {
         self.get_quantity_type_impl(id)?
             .as_manifold()
             .ok_or(SkoroError::NotContinuous { id })
+    }
+
+    /// One [`Term`] per id in [`log_likelihoods`](Self::log_likelihoods), in that order.
+    pub fn terms(&self) -> Vec<Term> {
+        self.log_likelihoods
+            .iter()
+            .map(|&density| {
+                let scored = self.stochastic_of(density);
+                let kind = match scored {
+                    Some(s) if matches!(self.nodes.get(&s), Some(Node::Stochastic(_))) => {
+                        TermKind::Proposal
+                    }
+                    _ => TermKind::Weight,
+                };
+                Term {
+                    density,
+                    scored,
+                    kind,
+                }
+            })
+            .collect()
+    }
+
+    /// [`log_density`](Self::log_density) restricted to `terms`: every id must be in
+    /// [`log_likelihoods`](Self::log_likelihoods) (else [`SkoroError::NotLogLikelihood`]), and
+    /// an empty slice yields zeros of shape `[batch, 1]`, batch taken from `points` exactly as
+    /// [`log_density`](Self::log_density) does.
+    pub fn log_density_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
+        for id in terms {
+            if !self.log_likelihoods.contains(id) {
+                return Err(SkoroError::NotLogLikelihood { id: *id });
+            }
+        }
+        let compiled_sequence = self.compile_backward_from(terms);
+        let batch_size = if let Some((_, point)) = points.iter().next() {
+            point.dims()[0]
+        } else {
+            1
+        };
+        let forward_output = compiled_sequence.forward(ForwardInput {
+            points,
+            options: ForwardOptions {
+                batch_size,
+                use_model_samplers: false,
+            },
+        })?;
+        let mut log_density = Point::zeros([batch_size, 1], &Default::default());
+        for id in terms {
+            log_density = log_density
+                + forward_output
+                    .evaluations
+                    .get(id)
+                    .expect("a validated term should be evaluated")
+                    .0
+                    .clone()
+                    .unwrap_float();
+        }
+        Ok(log_density)
     }
 
     /// Evaluate the log-density of the model at the specified values.

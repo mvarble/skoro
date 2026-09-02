@@ -13,7 +13,7 @@ use skoro_core::any_tensor::QuantityValue;
 use skoro_core::error::SkoroError;
 use skoro_core::id::{Id, IdGenerator};
 use skoro_graph::{
-    graph::Graph,
+    graph::{Graph, TermKind},
     node::{MappedNode, Node, ObservedNode},
     operation::DiffGraphOperation,
 };
@@ -1519,5 +1519,64 @@ mod bindings {
 
         graph.remove(&[a, b, c]).unwrap();
         graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn terms_classify_proposal_and_weight() {
+        let mut graph = Graph::<B>::new();
+        let stoch = stochastic(&mut graph, vec![]);
+        // `summed`, not `inert`: this density is folded below, once its quantity is observed.
+        let density = summed(&mut graph, vec![stoch]);
+        graph.mark_log_density(density, stoch).unwrap();
+
+        let obs = stochastic(&mut graph, vec![]);
+        let obs_density = summed(&mut graph, vec![obs]);
+        graph.mark_log_density(obs_density, obs).unwrap();
+        graph.observe::<_, Real, _>(obs, &1.0f64).unwrap();
+
+        let free_standing = graph.add_parameter(Real);
+        let free_density = inert(&mut graph, vec![free_standing]);
+        graph.mark_log_likelihood(free_density).unwrap();
+
+        let terms = graph.terms();
+        assert_eq!(
+            terms.iter().map(|t| t.density).collect::<Vec<_>>(),
+            vec![density, obs_density, free_density],
+            "marking order"
+        );
+        assert_eq!(
+            terms.iter().map(|t| t.kind).collect::<Vec<_>>(),
+            vec![TermKind::Proposal, TermKind::Weight, TermKind::Weight]
+        );
+
+        graph.observe::<_, Real, _>(stoch, &2.0f64).unwrap();
+        assert_eq!(graph.terms()[0].kind, TermKind::Weight);
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn log_density_terms_sums_only_the_named_terms() {
+        let mut graph = Graph::<B>::new();
+        let stoch = stochastic(&mut graph, vec![]);
+        // `summed`, not `inert`: this density is actually evaluated below via `log_density`.
+        let t1 = summed(&mut graph, vec![stoch]);
+        graph.mark_log_density(t1, stoch).unwrap();
+        let free_standing = graph.add_parameter(Real);
+        let t2 = summed(&mut graph, vec![free_standing]);
+        graph.mark_log_likelihood(t2).unwrap();
+
+        // `stoch` is a leaf the compiled program reads from `points`, so it needs a value too.
+        let points = points([(free_standing, 3.0), (stoch, 0.5)]);
+        let whole = graph.log_density(&points).unwrap();
+        let split = (into_vec(graph.log_density_terms(&points, &[t1]).unwrap())[0]
+            + into_vec(graph.log_density_terms(&points, &[t2]).unwrap())[0])
+            - into_vec(whole)[0];
+        approx::assert_abs_diff_eq!(split, 0.0, epsilon = 1e-12);
+
+        let mapped = inert(&mut graph, vec![free_standing]);
+        assert!(matches!(
+            graph.log_density_terms(&points, &[mapped]),
+            Err(SkoroError::NotLogLikelihood { id }) if id == mapped
+        ));
     }
 }
