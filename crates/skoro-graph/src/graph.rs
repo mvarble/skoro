@@ -182,7 +182,7 @@ impl<B: Backend> Graph<B> {
         self.bindings.bound(from, role)
     }
 
-    /// Every node that has bound `to` under any role.
+    /// Every node that has bound `to` under any role, in no particular order.
     pub fn referrers_of(&self, to: Id) -> Vec<Id> {
         self.bindings.referrers_of(to).collect()
     }
@@ -244,12 +244,15 @@ impl<B: Backend> Graph<B> {
         None
     }
 
-    /// Remove `roots` together with everything downstream of them.
+    /// Remove `roots` together with everything downstream of them, including anything bound to
+    /// a node in the closure.
     ///
     /// [`remove`](Self::remove) is leaf-only and all-or-nothing: it rejects a batch that any
-    /// surviving node still points into. That is the right primitive, but it makes every caller
-    /// compute the downward closure itself, and retiring a tick of a filter needs exactly that
-    /// closure at every retention policy. This is that walk, done once here.
+    /// surviving node still points into, whether by a data edge or a binding. That is the right
+    /// primitive, but it makes every caller compute the downward closure itself, and retiring a
+    /// tick of a filter needs exactly that closure at every retention policy. This is that walk,
+    /// done once here: it follows both children and [`referrers_of`](Self::referrers_of), so a
+    /// bound target's referrer is taken with it.
     ///
     /// Returns the removed nodes. The closure includes `roots`; ids not in the arena are
     /// skipped rather than reported, so removing an already-removed subtree is a no-op.
@@ -268,6 +271,7 @@ impl<B: Backend> Graph<B> {
             if let Some(children) = self.children.get(&id) {
                 queue.extend(children.iter().copied());
             }
+            queue.extend(self.referrers_of(id));
         }
 
         // Children before parents: `remove` checks that nothing outside the batch still names
@@ -1315,10 +1319,14 @@ impl<B: Backend> Graph<B> {
         Ok(orphaned)
     }
 
-    /// Removes leaf nodes, verifying they have no children which would be kept in the graph.
+    /// Removes leaf nodes, verifying they have no children which would be kept in the graph, and
+    /// no binding from outside the batch that still refers to them.
     ///
-    /// Returns an error if a node does not exist, or is still referenced as a parent of a node that
-    /// is not also being removed.
+    /// Returns an error if a node does not exist, is still referenced as a parent of a node that
+    /// is not also being removed ([`NodeStillReferenced`](SkoroError::NodeStillReferenced)), or
+    /// is still named as a binding target by a node outside the batch
+    /// ([`NodeStillBound`](SkoroError::NodeStillBound)). Removing a node clears both binding
+    /// directions for it, so nothing survives naming a node that no longer exists.
     pub fn remove(&mut self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         // Validate no dangling pointers.
         for id in ids {
@@ -1328,6 +1336,18 @@ impl<B: Backend> Graph<B> {
                 return Err(SkoroError::NodeStillReferenced {
                     id: *id,
                     child_id: *child_id,
+                });
+            }
+        }
+        for id in ids {
+            if let Some(referrer) = self
+                .referrers_of(*id)
+                .into_iter()
+                .find(|r| !ids.contains(r))
+            {
+                return Err(SkoroError::NodeStillBound {
+                    id: *id,
+                    by: referrer,
                 });
             }
         }
@@ -1342,6 +1362,8 @@ impl<B: Backend> Graph<B> {
                 return Err(SkoroError::NodeNotFound { id: *id });
             };
             self.private_nodes.remove(id);
+            self.bindings.remove_source(*id);
+            self.bindings.remove_target(*id);
             let parent_ids = node.parent_ids().to_vec();
             self.unregister_children(*id, &parent_ids);
             match &node {

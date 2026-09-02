@@ -1463,4 +1463,61 @@ mod bindings {
         assert_eq!(graph.referrers_of(b), vec![a]);
         graph.validate_indices().unwrap();
     }
+
+    #[test]
+    fn remove_refuses_a_bound_target() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        graph.bind(a, R1, b).unwrap();
+
+        assert!(matches!(
+            graph.remove(&[b]),
+            Err(SkoroError::NodeStillBound { id, by }) if id == b && by == a
+        ));
+        graph.remove(&[a, b]).unwrap();
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn remove_source_clears_the_reference() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        graph.bind(a, R1, b).unwrap();
+
+        graph.remove(&[a]).unwrap();
+        assert!(graph.referrers_of(b).is_empty());
+        graph.remove(&[b]).unwrap();
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn remove_closure_takes_referrers() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        graph.bind(a, R1, b).unwrap();
+
+        let removed = graph.remove_closure(&[b]).unwrap();
+        assert_eq!(removed.len(), 2, "b and its referrer a");
+        assert!(!graph.contains(a));
+        assert!(!graph.contains(b));
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn validate_indices_holds_after_binding_mutations() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        let c = graph.add_parameter(Real);
+        graph.bind(a, R1, b).unwrap();
+        graph.bind(a, R2, c).unwrap();
+        graph.bind(a, R1, c).unwrap();
+        graph.validate_indices().unwrap();
+
+        graph.remove(&[a, b, c]).unwrap();
+        graph.validate_indices().unwrap();
+    }
 }
