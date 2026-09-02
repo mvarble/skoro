@@ -27,7 +27,7 @@ use crate::structure::GaussianBlock;
 ///
 /// `std_dev` is the lower-triangular covariance factor `L`, with `Σ = L Lᵀ`.
 ///
-/// The residual node built here is a *second* copy of the one `Normal::log_density` builds
+/// The residual node built here is a *second* copy of the one `Normal::factor` builds
 /// internally. That is not free — it is an extra subgraph — but it is the node the record
 /// names, and a least-squares consumer evaluates it on every iteration anyway.
 ///

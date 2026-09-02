@@ -246,8 +246,7 @@ mod quantities {
 
     use skoro_core::kind::Discrete;
     use skoro_core::sampler::Sampler;
-    use skoro_model::distribution::Distribution;
-    use skoro_riemann::real::Real;
+    use skoro_model::distribution::{Distribution, Factor};
 
     #[derive(Debug, Clone)]
     struct PointMass;
@@ -272,8 +271,8 @@ mod quantities {
         fn parent_ids(&self) -> &[Id] {
             &[]
         }
-        fn log_density(&self, x: &Q<B, Boolean>) -> SkoroResult<Q<B, Real>> {
-            x.to_real()? * 0.0f32
+        fn factor(&self, x: &Q<B, Boolean>) -> SkoroResult<Factor<B>> {
+            Ok(Factor::new((x.to_real()? * 0.0f32)?))
         }
     }
 

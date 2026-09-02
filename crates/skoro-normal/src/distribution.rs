@@ -1,5 +1,5 @@
 use burn::tensor::Distribution as BurnDistribution;
-use skoro_core::error::SkoroResult;
+use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_riemann::euclidean::EuclideanD;
 use std::marker::PhantomData;
 
@@ -10,13 +10,20 @@ use skoro_linalg::{
     tril::{Tril, TrilOps, TrilVectorProduct},
     vector::LinalgVectorOps,
 };
-use skoro_model::{distribution::Distribution, q::Q};
+use skoro_model::{
+    distribution::{Distribution, Factor},
+    q::Q,
+    roles::{FISHER_ROOT, LOCATION, NORMALIZER_PARENT, RESIDUAL, WHITENING},
+};
+
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
 };
 use skoro_pointwise::PointwiseOps;
-use skoro_riemann::{DynManifold, real::Real};
+use skoro_riemann::DynManifold;
+
+use crate::information::information_root;
 
 /// Sampler associated with a normal distribution.
 pub struct NormalSampler<B: Backend, T: ContinuousQuantity<B>> {
@@ -189,10 +196,25 @@ where
         &self.ids
     }
 
-    fn log_density(&self, x: &Q<B, M>) -> SkoroResult<Q<B, Real>> {
-        let white_tangent = self.whitened_residual(x)?;
-        let log_det = self.std_dev.invert()?.diag()?.abs()?.log()?.sum()?;
-        let quadratic = (white_tangent.norm_squared()? * -0.5)?;
-        (quadratic + self.constant)? + log_det
+    fn factor(&self, x: &Q<B, M>) -> SkoroResult<Factor<B>> {
+        let d = self.quantity_type.dimension();
+        let n = self.std_dev.get_quantity_type::<Continuous>().0;
+        if n != d {
+            return Err(SkoroError::ShapeMismatch {
+                expected: d,
+                found: n,
+            });
+        }
+        let w = self.std_dev.invert()?;
+        let r = w.vector_product(&self.mean.inverse_retract(x)?)?;
+        let log_det = w.diag()?.abs()?.log()?.sum()?;
+        let density = ((r.norm_squared()? * -0.5)? + self.constant)? + log_det;
+        let root = information_root(&w, d)?;
+        Ok(Factor::new(density?)
+            .bind(RESIDUAL, &r)
+            .bind(LOCATION, &self.mean)
+            .bind(WHITENING, &self.std_dev)
+            .bind(NORMALIZER_PARENT, &self.std_dev)
+            .bind(FISHER_ROOT, &root))
     }
 }

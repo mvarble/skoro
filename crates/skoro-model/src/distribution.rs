@@ -12,8 +12,8 @@ use crate::q::{Q, Handle};
 
 /// A conditional distribution over a quantity of kind `K`.
 ///
-/// The kind parameter unifies continuous distributions (whose `log_density` is
-/// a log-pdf) and discrete distributions (whose `log_density` is a log-pmf):
+/// The kind parameter unifies continuous distributions (whose factor carries a
+/// log-pdf) and discrete distributions (whose factor carries a log-pmf):
 /// both produce a real-valued log-probability term, and both are registered
 /// through the single [`ModelClient::add_quantity`](crate::model::ModelClient::add_quantity)
 /// entry point.
@@ -26,12 +26,13 @@ pub trait Distribution<B: Backend, K: Kind<B>> {
     fn quantity_type(&self) -> Self::Qty;
     fn sampler(&self) -> Self::Sampler;
     fn parent_ids(&self) -> &[Id];
-    /// Build the log-density node scoring `x` under this distribution.
+    /// Build the factor — log-density term plus its declared bindings — scoring `x` under
+    /// this distribution.
     ///
     /// Fallible because a distribution's parameters and its quantity can disagree
     /// dimensionally — a covariance factor sized for a different manifold, say — which
     /// is ordinary user error rather than an internal fault.
-    fn log_density(&self, x: &Q<B, Self::Qty>) -> SkoroResult<Q<B, Real>>;
+    fn factor(&self, x: &Q<B, Self::Qty>) -> SkoroResult<Factor<B>>;
 }
 
 /// What a distribution (or a free-standing builder) hands back to describe one log-density

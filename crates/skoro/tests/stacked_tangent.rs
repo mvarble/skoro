@@ -18,8 +18,14 @@ use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp,
-    model::ModelClient, q::Q, test_utils::into_vec,
+    ModelBuilderOps, ModelClientOps,
+    hash_map_builders::point_map,
+    jacobian::jacobian_vjp,
+    least_squares::residual_layout,
+    model::ModelClient,
+    q::Q,
+    roles::{NORMALIZER_PARENT, RESIDUAL},
+    test_utils::into_vec,
 };
 use skoro_normal::joint::{JointNormal, add_joint_factor};
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
@@ -433,22 +439,22 @@ mod records {
         );
         let density = add_joint_factor(&model, &factor).unwrap();
 
-        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
-        assert_eq!(ModelBuilderOps::factors(&model)[0].density, density.id());
+        assert_eq!(ModelClientOps::factors(&model).len(), 1);
+        assert_eq!(ModelClientOps::factors(&model)[0].density, density.id());
         assert_eq!(
-            ModelBuilderOps::factors(&model)[0].normalizer_parents,
+            ModelClientOps::bound(&model, density.id(), NORMALIZER_PARENT),
             vec![whitening.id()],
             "the whitening is the normalizer's only parent"
         );
 
         // Nine rows of `J`: six for the pose block, three for the Euclidean one.
-        assert_eq!(model.residual_layout().unwrap().total(), 9);
+        assert_eq!(residual_layout(&model).unwrap().total(), 9);
 
         model.cleanup();
         assert_eq!(
-            model.residual_layout().unwrap().total(),
+            residual_layout(&model).unwrap().total(),
             9,
-            "cleanup must not collect the recorded residual"
+            "cleanup must not collect the bound residual"
         );
     }
 }
@@ -536,16 +542,16 @@ mod retirement {
 
         let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
         add_joint_factor(&model, &factor).unwrap();
-        assert_eq!(model.residual_layout().unwrap().total(), 9);
+        assert_eq!(residual_layout(&model).unwrap().total(), 9);
 
         model.remove_closure(&[pose_q.id()]).unwrap();
         model.cleanup();
 
         assert!(
-            ModelBuilderOps::factors(&model).is_empty(),
-            "a record naming a deleted node is not evidence"
+            ModelClientOps::factors(&model).is_empty(),
+            "a term naming a deleted node is not evidence"
         );
-        assert_eq!(model.residual_layout().unwrap().total(), 0);
+        assert_eq!(residual_layout(&model).unwrap().total(), 0);
     }
 
     /// A record whose density is gone is dropped, even though its residual node survives.
@@ -572,14 +578,15 @@ mod retirement {
 
         let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
         let density = add_joint_factor(&model, &factor).unwrap();
-        let residual = ModelBuilderOps::factors(&model)[0].residual;
+        let residual =
+            ModelClientOps::bound(&model, ModelClientOps::factors(&model)[0].density, RESIDUAL)[0];
 
         // Rooted at the density: `ℓ` alone goes, and with the record pruned the residual is
         // unpinned — so the same call's cascade reclaims it too.
         assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
-        assert!(ModelBuilderOps::factors(&model).is_empty());
-        assert_eq!(model.residual_layout().unwrap().total(), 0);
+        assert!(ModelClientOps::factors(&model).is_empty());
+        assert_eq!(residual_layout(&model).unwrap().total(), 0);
         assert!(
             model.tangent_layout(&[residual]).is_err(),
             "an uncertified residual is reclaimed in the same breath"

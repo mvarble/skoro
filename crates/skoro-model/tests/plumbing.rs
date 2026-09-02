@@ -18,7 +18,12 @@ use skoro_core::{
     sampler::Sampler,
 };
 use skoro_graph::node::{Node, ObservedNode};
-use skoro_model::{distribution::Distribution, map::register_map1, model::ModelClient, q::Q};
+use skoro_model::{
+    distribution::{Distribution, Factor},
+    map::register_map1,
+    model::ModelClient,
+    q::Q,
+};
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -80,8 +85,8 @@ impl Distribution<B, Continuous> for DummyDistribution {
     fn sampler(&self) -> Self::Sampler {
         self.clone()
     }
-    fn log_density(&self, x: &Q<B, Real>) -> SkoroResult<Q<B, Real>> {
-        register_map1(Real, DummyOperation, x)
+    fn factor(&self, x: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+        Ok(Factor::new(register_map1(Real, DummyOperation, x)?))
     }
 }
 

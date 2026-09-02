@@ -15,11 +15,17 @@ use skoro_backend::Backend;
 use skoro_core::{error::SkoroResult, id::Id};
 use skoro_graph::point_map::PointMap;
 use skoro_linalg::{
+    matrix::{FixedLinearMap, linear_map},
     tril::{Tril, TrilOps},
     vector::LinalgVectorOps,
 };
-use skoro_model::{FactorRecord, ModelBuilderOps, q::Q};
-use skoro_riemann::{euclidean::EuclideanD, real::Real};
+use skoro_model::{
+    ModelBuilderOps,
+    distribution::Factor,
+    q::Q,
+    roles::{FISHER_ROOT, NORMALIZER_PARENT, RESIDUAL},
+};
+use skoro_riemann::{euclidean::EuclideanD, matrix::EuclideanMatrixD, real::Real};
 
 /// A Gaussian factor `−½ δᵀ Λ δ + n` over a set of quantities, where `δ` stacks their tangents
 /// against a frozen linearization point.
@@ -139,6 +145,39 @@ where
         quadratic + self.normalizer
     }
 
+    /// The scatter matrix `P`, shape `[D·D, D(D+1)/2]`, with `P[i·D + j, i(i+1)/2 + j] = 1` for
+    /// `j ≤ i`, zero elsewhere — unpacks a `Tril(D)` into its dense `D×D` row-major form.
+    fn scatter_matrix(d: usize) -> (usize, usize, Vec<f64>) {
+        let cols = d * (d + 1) / 2;
+        let rows = d * d;
+        let mut p = vec![0.0_f64; rows * cols];
+        for i in 0..d {
+            for j in 0..=i {
+                let packed = i * (i + 1) / 2 + j;
+                p[(i * d + j) * cols + packed] = 1.0;
+            }
+        }
+        (rows, cols, p)
+    }
+
+    /// The factor: `RESIDUAL` is the stacked-tangent residual, `NORMALIZER_PARENT` is the
+    /// whitening, and `FISHER_ROOT` is the whitening itself unpacked to a dense
+    /// `EuclideanMatrixD(D, D)` — since `r = Wδ`, `CᵀC = WᵀW = Λ` exactly for `C = W` dense.
+    pub fn factor<C: ModelBuilderOps<B>>(&self, client: &C) -> SkoroResult<Factor<B>> {
+        let residual = self.residual(client)?;
+        // Built from the same residual node as the residual binding, so the two cannot
+        // disagree — and the stacked tangent is built once rather than twice.
+        let density = ((residual.norm_squared()? * -0.5)? + self.normalizer)?;
+        let d = client.tangent_layout(&self.ids)?.total();
+        let (rows, cols, data) = Self::scatter_matrix(d);
+        let map = FixedLinearMap::from_row_major(rows, cols, &data, &Default::default());
+        let root = linear_map(&self.whitening, EuclideanMatrixD(d, d), map)?;
+        Ok(Factor::new(density)
+            .bind(RESIDUAL, &residual)
+            .bind(NORMALIZER_PARENT, &self.whitening)
+            .bind(FISHER_ROOT, &root))
+    }
+
     /// The quantities the normalizer `n` depends on: the whitening constant, and nothing
     /// else.
     ///
@@ -152,17 +191,18 @@ where
     }
 }
 
-/// Add a joint Gaussian factor over quantities the model **already holds**, and record it.
+/// Add a joint Gaussian factor over quantities the model **already holds**, with its bindings.
 ///
 /// This is what a marginalized-out quantity leaves behind: a joint over its Markov blanket,
 /// which is not a distribution over any new quantity. It adds no stochastic node — the
-/// factor is attached with [`ModelBuilderOps::mark_likelihood`], and the quantities it scores
-/// are untouched.
+/// factor is attached with [`ModelBuilderOps::add_factor`], which marks the term and binds
+/// `ARGUMENT` to each scored quantity in block order, and the quantities themselves are
+/// untouched.
 ///
 /// The returned handle is the log-density node, for a caller that wants to inspect or retire
-/// the factor later. The record carries no `μ`/`L` refinement: a joint factor has no single
+/// the factor later. No `LOCATION`/`WHITENING` pair is bound: a joint factor has no single
 /// mean node, which is the whole reason it is not a [`Normal`](crate::distribution::Normal).
-pub fn add_joint_factor<B, C>(client: &C, factor: &JointNormal<B>) -> SkoroResult<Q<B, Real>>
+pub fn add_joint_factor<B, C>(client: &C, joint: &JointNormal<B>) -> SkoroResult<Q<B, Real>>
 where
     B: Backend,
     C: ModelBuilderOps<B>,
@@ -173,13 +213,5 @@ where
         + std::ops::Neg<Output = B::FloatElem>
         + std::ops::AddAssign<B::FloatElem>,
 {
-    let residual = factor.whitened_residual(client)?;
-    let density = factor.log_density(client)?;
-    client.mark_likelihood(&density)?;
-    client.record_factor(FactorRecord::new(
-        density.id(),
-        residual.id(),
-        factor.normalizer_parents().to_vec(),
-    ))?;
-    Ok(density)
+    client.add_factor(joint.factor(client)?, joint.ids())
 }

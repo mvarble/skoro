@@ -8,9 +8,9 @@
 //! visible from a `Graph`:
 //!
 //! - the closure is reachable through the **builder** trait and not the client one, which is what
-//!   keeps an `NlsStructure`-bounded estimator from deleting a cone of its own evidence. The
-//!   negative half is a `trybuild` case, since a test that compiles cannot assert that another
-//!   does not;
+//!   keeps an estimator holding only `ModelClientOps` from deleting a cone of its own evidence:
+//!   growing or retiring a model is `ModelBuilderOps`' business. The negative half is a
+//!   `trybuild` case, since a test that compiles cannot assert that another does not;
 //! - `cleanup()` survives it. A closure removal deliberately takes nodes the caller *does* hold a
 //!   `Q` for, so dropping that handle afterwards leaves a handle naming nothing — and cleanup used
 //!   to `expect` on exactly that.
@@ -22,7 +22,7 @@ use skoro_backend::{NdArrayBackend, Point};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
-    distribution::{Distribution, Sampler},
+    distribution::{Distribution, Factor, Sampler},
     map::{register_map_slice, register_map1},
     model::ModelClient,
     q::Q,
@@ -183,8 +183,12 @@ mod cleanup {
             &self.ids
         }
 
-        fn log_density(&self, x: &Q<B, Real>) -> SkoroResult<Q<B, Real>> {
-            register_map1(Real, LiteralScalarMultiplication::new(2.0), x)
+        fn factor(&self, x: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+            Ok(Factor::new(register_map1(
+                Real,
+                LiteralScalarMultiplication::new(2.0),
+                x,
+            )?))
         }
     }
 
@@ -322,7 +326,7 @@ mod reachability {
         assert!(model.server_call(|server| server.graph().contains(root.id())));
     }
 
-    /// A distribution whose `log_density` never reads its own quantity.
+    /// A distribution whose `factor` never reads its own quantity.
     ///
     /// Nothing in the `Distribution` contract requires a density to be built over the quantity it
     /// scores, so the density's parents are not a reliable route to `x`. If the mark followed
@@ -353,8 +357,12 @@ mod reachability {
             &self.ids
         }
 
-        fn log_density(&self, _x: &Q<B, Real>) -> SkoroResult<Q<B, Real>> {
-            register_map1(Real, LiteralScalarMultiplication::new(2.0), &self.elsewhere)
+        fn factor(&self, _x: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+            Ok(Factor::new(register_map1(
+                Real,
+                LiteralScalarMultiplication::new(2.0),
+                &self.elsewhere,
+            )?))
         }
     }
 

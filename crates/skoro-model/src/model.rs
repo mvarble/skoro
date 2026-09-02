@@ -873,14 +873,21 @@ impl<B: Backend> ModelClient<B> {
         let id = server.add_stochastic(&distr)?;
         let x = Q::new(id, self.clone(), NodeDropGuard::new(id, &server.handles));
 
-        // maybe slow, but currently the price for ergonomic interface: we need to drop the server
-        // to add the log-density term (or else deadlock will occur).
+        // The lock must be dropped before calling distr.factor(&x), or the distribution's own
+        // graph-building calls (which take the write lock themselves) deadlock.
         drop(server);
-        let density = distr.log_density(&x)?;
+        let factor = distr.factor(&x)?;
 
-        // again, slow... but now we mark the mapped quantity as a density.
         let mut server = self.server.write().unwrap();
-        server.mark_density(&density, &x)?;
+        server.mark_density(&factor.log_density, &x)?;
+        let density = factor.log_density.id;
+        server.bind(density, ARGUMENT, x.id())?;
+        for &parent in distr.parent_ids() {
+            server.bind(density, ARGUMENT, parent)?;
+        }
+        for (role, handle) in &factor.bindings {
+            server.bind(density, *role, handle.id)?;
+        }
         Ok(x)
     }
 

@@ -11,8 +11,9 @@
 use skoro_backend::{NdArrayBackend, Point, TensorData};
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelClientOps,
     hash_map_builders::{point_map, points},
+    least_squares::residual_layout,
     model::ModelClient,
     q::Q,
 };
@@ -131,12 +132,12 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         model.remove_closure(&[old_x.id(), old_z.id()]).unwrap();
 
         assert_eq!(
-            ModelBuilderOps::factors(&model).len(),
+            ModelClientOps::factors(&model).len(),
             FACTORS,
-            "the registry holds exactly the live factors"
+            "the model holds exactly the live terms"
         );
         assert_eq!(
-            model.residual_layout().unwrap().total(),
+            residual_layout(&model).unwrap().total(),
             ROWS,
             "the rows of `J` are exactly the live factors'"
         );
