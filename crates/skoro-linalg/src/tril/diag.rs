@@ -119,6 +119,14 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
                 &device,
             );
             let expanded = omega.select(1, indices_tensor);
+            // Same column-major hazard as `diagonal()` above: `select` on axis 1
+            // can hand back a non-standard-layout tensor, which burn-ndarray's
+            // SIMD `abs`/etc. fast path silently scrambles once it reaches 32+
+            // elements. Not reachable today (`omega * mask_tensor` below isn't a
+            // SIMD-fast-pathed op), but kept consistent with `diagonal()` so a
+            // future caller of this cotangent can't reintroduce the bug here.
+            let dims = expanded.dims();
+            let expanded = expanded.reshape(dims);
             vec![Some(expanded * mask_tensor)]
         } else {
             vec![None]
