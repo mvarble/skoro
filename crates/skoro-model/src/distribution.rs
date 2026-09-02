@@ -2,13 +2,13 @@ use skoro_backend::Backend;
 use skoro_core::error::SkoroResult;
 use skoro_core::id::Id;
 use skoro_core::kind::Kind;
+use skoro_graph::binding::Role;
 use skoro_graph::quantity::QuantityType;
 use skoro_riemann::real::Real;
-use skoro_graph::binding::Role;
 
 pub use skoro_core::sampler::Sampler;
 
-use crate::q::{Q, Handle};
+use crate::q::{Handle, Q};
 
 /// A conditional distribution over a quantity of kind `K`.
 ///

@@ -57,10 +57,7 @@ fn every_variant() -> Vec<(SkoroError, &'static str)> {
             SkoroError::NodeStillReferenced { id, child_id: id },
             "still a parent",
         ),
-        (
-            SkoroError::NodeStillBound { id, by: id },
-            "still bound by",
-        ),
+        (SkoroError::NodeStillBound { id, by: id }, "still bound by"),
         (
             SkoroError::BatchSizeMismatch {
                 expected: 3,
