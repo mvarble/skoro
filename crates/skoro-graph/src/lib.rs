@@ -9,6 +9,7 @@
 //! [`ContinuousQuantity`](quantity::ContinuousQuantity) and
 //! [`DiscreteQuantity`](quantity::DiscreteQuantity) as the kind-specific capability traits).
 
+pub mod binding;
 pub mod compiler;
 pub mod graph;
 pub mod node;

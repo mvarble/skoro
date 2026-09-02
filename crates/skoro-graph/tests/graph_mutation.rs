@@ -1422,3 +1422,45 @@ mod degenerate {
         assert_eq!(graph.topological_sort(&[bogus_id()]), vec![bogus_id()]);
     }
 }
+
+mod bindings {
+    use super::*;
+    use skoro_graph::binding::Role;
+
+    const R1: Role = Role("r1");
+    const R2: Role = Role("r2");
+
+    #[test]
+    fn bind_refuses_a_missing_endpoint() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let fresh = bogus_id();
+
+        assert!(matches!(
+            graph.bind(a, R1, fresh),
+            Err(SkoroError::NodeNotFound { id }) if id == fresh
+        ));
+        assert!(matches!(
+            graph.bind(fresh, R1, a),
+            Err(SkoroError::NodeNotFound { id }) if id == fresh
+        ));
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn bind_is_readable_in_order() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_parameter(Real);
+        let b = graph.add_parameter(Real);
+        let c = graph.add_parameter(Real);
+
+        graph.bind(a, R1, b).unwrap();
+        graph.bind(a, R2, c).unwrap();
+        graph.bind(a, R1, c).unwrap();
+
+        assert_eq!(graph.bindings_of(a), &[(R1, b), (R2, c), (R1, c)]);
+        assert_eq!(graph.bound(a, R1), vec![b, c]);
+        assert_eq!(graph.referrers_of(b), vec![a]);
+        graph.validate_indices().unwrap();
+    }
+}

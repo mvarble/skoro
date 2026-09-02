@@ -17,6 +17,7 @@ use skoro_operation::{Input, ValueMap, ops::TangentConcat};
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
+use crate::binding::{Bindings, Role};
 use crate::compiler::{
     CompiledSequence, CompiledStep, ForwardInput, ForwardOptions, ForwardOutput, HvpForwardInput,
     HvpForwardOutput, JvpForwardInput, JvpForwardOutput, VjpForwardInput, VjpForwardOutput,
@@ -69,6 +70,9 @@ pub struct Graph<B: Backend> {
     /// through which a a compile-time type gate cannot be developed. Such quantities get stored
     /// internally here.
     private_nodes: HashSet<Id>,
+    /// Labelled reference edges from a log-density term to other nodes (R5/R6). Read by
+    /// inference algorithms and by the collector; never by the compiler (R10).
+    bindings: Bindings,
 }
 
 impl<B: Backend> Default for Graph<B> {
@@ -129,6 +133,7 @@ impl<B: Backend> Graph<B> {
             stochastic_to_log_density: HashMap::new(),
             pinnable: HashSet::new(),
             private_nodes: HashSet::new(),
+            bindings: Bindings::default(),
         }
     }
 
@@ -150,6 +155,36 @@ impl<B: Backend> Graph<B> {
     /// The number of nodes in the arena. The bound a retention policy watches.
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Record `(from, role, to)`. Errors [`SkoroError::NodeNotFound`] if `from` is missing
+    /// (checked first) or `to` is. Duplicate identical triples are allowed and stored twice —
+    /// nothing here deduplicates. No cycle check: a binding is a reference, not a data edge.
+    pub fn bind(&mut self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
+        if !self.nodes.contains_key(&from) {
+            return Err(SkoroError::NodeNotFound { id: from });
+        }
+        if !self.nodes.contains_key(&to) {
+            return Err(SkoroError::NodeNotFound { id: to });
+        }
+        self.bindings.bind(from, role, to);
+        self.debug_validate_indices();
+        Ok(())
+    }
+
+    /// Every `(role, to)` pair `from` has bound, in binding order.
+    pub fn bindings_of(&self, from: Id) -> &[(Role, Id)] {
+        self.bindings.of(from)
+    }
+
+    /// The `to`s `from` has bound under `role`, in binding order.
+    pub fn bound(&self, from: Id, role: Role) -> Vec<Id> {
+        self.bindings.bound(from, role)
+    }
+
+    /// Every node that has bound `to` under any role.
+    pub fn referrers_of(&self, to: Id) -> Vec<Id> {
+        self.bindings.referrers_of(to).collect()
     }
 
     /// The ids of every node that consumes `id` as a parent.
@@ -289,6 +324,8 @@ impl<B: Backend> Graph<B> {
     ///   likelihood factor may not score a particular quantity
     /// - every id in `private_nodes` names a node.
     /// - `pinnable` is the exact collection of nodes of type `Constant` and `Observed`.
+    /// - every binding endpoint names a node, and `Bindings`' reverse index is the exact
+    ///   reverse of its forward one.
     ///
     /// Runs after every mutation in debug builds, and is public so a test can assert it
     /// directly after a sequence the mutators do not cover.
@@ -392,6 +429,22 @@ impl<B: Backend> Graph<B> {
                 }
             }
         }
+
+        for (from, pairs) in self.bindings.iter() {
+            if !self.nodes.contains_key(&from) {
+                return Err(format!(
+                    "a binding names {from:?} as a source, which is not a node"
+                ));
+            }
+            for (_, to) in pairs {
+                if !self.nodes.contains_key(to) {
+                    return Err(format!(
+                        "a binding names {to:?} as a target, which is not a node"
+                    ));
+                }
+            }
+        }
+        self.bindings.validate()?;
 
         Ok(())
     }
