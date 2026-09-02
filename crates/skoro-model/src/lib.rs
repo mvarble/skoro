@@ -23,6 +23,7 @@ pub mod ops;
 pub mod point_map_access;
 pub mod q;
 pub mod residual;
+pub mod roles;
 
 pub use client_ops::{ModelBuilderOps, ModelClientOps};
 pub use residual::{FactorRecord, ResidualRegistry};

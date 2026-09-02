@@ -4,10 +4,11 @@ use skoro_core::id::Id;
 use skoro_core::kind::Kind;
 use skoro_graph::quantity::QuantityType;
 use skoro_riemann::real::Real;
+use skoro_graph::binding::Role;
 
 pub use skoro_core::sampler::Sampler;
 
-use crate::q::Q;
+use crate::q::{Q, Handle};
 
 /// A conditional distribution over a quantity of kind `K`.
 ///
@@ -31,4 +32,29 @@ pub trait Distribution<B: Backend, K: Kind<B>> {
     /// dimensionally — a covariance factor sized for a different manifold, say — which
     /// is ordinary user error rather than an internal fault.
     fn log_density(&self, x: &Q<B, Self::Qty>) -> SkoroResult<Q<B, Real>>;
+}
+
+/// What a distribution (or a free-standing builder) hands back to describe one log-density
+/// term: the term itself, plus every labelled binding it wants recorded once the term is
+/// marked. The `Handle`s are load-bearing — they are the roots that keep a bound node (a
+/// residual, a Fisher root) alive between the moment this is built and the moment
+/// [`ModelServer::add_factor`](crate::model::ModelServer::add_factor) records its bindings.
+pub struct Factor<B: Backend> {
+    pub log_density: Q<B, Real>,
+    pub bindings: Vec<(Role, Handle<B>)>,
+}
+
+impl<B: Backend> Factor<B> {
+    pub fn new(log_density: Q<B, Real>) -> Self {
+        Self {
+            log_density,
+            bindings: Vec::new(),
+        }
+    }
+
+    /// Queue `(role, q)` to be bound once this factor is recorded.
+    pub fn bind<T>(mut self, role: Role, q: &Q<B, T>) -> Self {
+        self.bindings.push((role, Handle::from(q)));
+        self
+    }
 }

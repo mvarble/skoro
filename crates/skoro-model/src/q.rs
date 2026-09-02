@@ -183,6 +183,55 @@ impl<B: Backend, M: ContinuousQuantity<B>> Q<B, M> {
     }
 }
 
+/// A cloneable, type-erased reference to a quantity — what [`Factor::bind`](crate::distribution::Factor::bind)
+/// stores instead of a `Q<B, T>`, since a `Factor` collects bindings of heterogeneous quantity
+/// types in one `Vec`.
+///
+/// Carries the same drop guard as the `Q` it was built from, so the bound node is kept alive by
+/// the collector for exactly as long as *some* handle to it — `Q` or `Handle` — survives.
+pub struct Handle<B: Backend> {
+    pub(crate) id: Id,
+    pub(crate) client: ModelClient<B>,
+    pub(crate) guard: Arc<NodeDropGuard>,
+}
+
+impl<B: Backend> Handle<B> {
+    /// The identifier of the node this handle names.
+    #[inline(always)]
+    pub fn id(&self) -> Id {
+        self.id
+    }
+}
+
+impl<B: Backend, T> From<&Q<B, T>> for Handle<B> {
+    fn from(q: &Q<B, T>) -> Self {
+        Self {
+            id: q.id,
+            client: q.client.clone(),
+            guard: q.guard.clone(),
+        }
+    }
+}
+
+impl<B: Backend> Clone for Handle<B> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            client: self.client.clone(),
+            guard: self.guard.clone(),
+        }
+    }
+}
+
+impl<B: Backend> std::fmt::Debug for Handle<B> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Handle")
+            .field("id", &self.id)
+            .field("server_id", &self.client.server_id)
+            .finish_non_exhaustive()
+    }
+}
+
 // `mark_likelihood` deliberately does not live here. Attaching an arbitrary factor to
 // any real-valued quantity would let a holder of a `Q` handed out by a restricted model
 // widen that model behind its back. It is on `ModelBuilderOps` instead, which a
