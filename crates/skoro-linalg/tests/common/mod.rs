@@ -55,6 +55,11 @@ macro_rules! tests {
             }
 
             #[test]
+            fn invert_derivatives() {
+                super::common::tril::invert_derivatives_impl::<$B>($delta, $epsilon);
+            }
+
+            #[test]
             fn diag() {
                 super::common::tril::diag_impl::<$B>();
             }

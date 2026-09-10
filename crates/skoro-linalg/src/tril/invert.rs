@@ -135,9 +135,12 @@ where
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         if let Some(inv_mat_packed) = state {
+            // The pullback of `Y = X⁻¹` is `Ω ↦ −Yᵀ Ω Yᵀ`, read off on the lower triangle. The
+            // pushforward `dX ↦ −Y dX Y` has no transposes, which is exactly why a pullback
+            // copied from it is wrong.
             let inv_mat: Tensor<B, 3> = unpack(inv_mat_packed.clone());
             let omega_tril: Tensor<B, 4> = unpack(omega);
-            vec![Some(-pack(conjugate(inv_mat, omega_tril)))]
+            vec![Some(-pack(conjugate(inv_mat.swap_dims(1, 2), omega_tril)))]
         } else {
             vec![None]
         }
@@ -150,18 +153,23 @@ where
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         if let (Some(inv_mat_packed), Some(dmat_packed)) = (vjp_state, hvp_state) {
+            // The derivative of the pullback `−Yᵀ Ω Yᵀ` along `dX`, with `dYᵀ = −Yᵀ dXᵀ Yᵀ`:
+            // `(Yᵀ dXᵀ Yᵀ) Ω Yᵀ + (Yᵀ Ω Yᵀ) dXᵀ Yᵀ`.
             let inv_mat: Tensor<B, 3> = unpack(inv_mat_packed.clone());
+            let inv_t = inv_mat.swap_dims(1, 2);
+            let dmat: Tensor<B, 3> = unpack(dmat_packed.clone()); // [b, n, n]
+            let dmat_t = dmat.swap_dims(1, 2);
             let omega_mat: Tensor<B, 4> = unpack(omega);
-            let conj_omega = conjugate(inv_mat.clone(), omega_mat.clone());
 
-            let dmat = unpack(dmat_packed.clone()); // [b, n, n]
-            let conj_dmat = inv_mat.clone().matmul(dmat.clone()).matmul(inv_mat.clone());
-
-            let s0 = -right_broadcast_matmul(
+            let conj_dmat = inv_t.clone().matmul(dmat_t.clone()).matmul(inv_t.clone());
+            let s0 = right_broadcast_matmul(
                 left_broadcast_matmul(conj_dmat, omega_mat.clone()),
-                inv_mat.clone(),
+                inv_t.clone(),
             );
-            let s1 = -right_broadcast_matmul(conj_omega, dmat.matmul(inv_mat));
+            let s1 = right_broadcast_matmul(
+                conjugate(inv_t.clone(), omega_mat),
+                dmat_t.matmul(inv_t),
+            );
             vec![Some(pack(s0 + s1))]
         } else {
             vec![None]
