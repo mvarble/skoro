@@ -886,13 +886,18 @@ impl<B: Backend> ModelClient<B> {
         let x = Q::new(id, self.clone(), NodeDropGuard::new(id, &server.handles));
 
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
-        // to add the log-density term (or else deadlock will occur).
+        // to build the factor (or else deadlock will occur).
         drop(server);
-        let density = distr.log_density(&x)?;
+        let factor = distr.factor(&x)?;
 
-        // again, slow... but now we mark the mapped quantity as a density.
+        // again, slow... but now we mark the mapped quantity as a density and record its
+        // bindings. `factor` is still alive here, so nothing it binds can have been collected.
         let mut server = self.server.write().unwrap();
-        server.mark_density(&density, &x)?;
+        server.mark_density(&factor.log_density, &x)?;
+        let arguments: Vec<Id> = std::iter::once(x.id)
+            .chain(distr.parent_ids().iter().copied())
+            .collect();
+        server.bind_factor(&factor, &arguments)?;
         Ok(x)
     }
 
