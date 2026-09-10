@@ -13,6 +13,7 @@ use skoro_core::{
     pack::Packable,
 };
 use skoro_graph::{
+    binding::Role,
     compiler::{ForwardOutput, HvpForwardOutput, JvpForwardOutput, VjpForwardOutput},
     graph::{
         EvalOrder1, EvalOrder2, Graph, PointEvalOrder1, PointEvalOrder2, PointHvpEval,
@@ -29,7 +30,12 @@ use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
 use crate::residual::{FactorRecord, ResidualRegistry};
-use crate::{cleanup::HandleRegistry, distribution::Distribution, q::Q};
+use crate::{
+    cleanup::HandleRegistry,
+    distribution::{Distribution, Factor},
+    q::Q,
+    roles::ARGUMENT,
+};
 
 lazy_static! {
     /// Global Id generator of model servers.
@@ -177,6 +183,40 @@ impl<B: Backend> ModelServer<B> {
     /// Mark a mapped quantity as a likelihood.
     pub fn mark_likelihood(&mut self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         self.graph.mark_log_likelihood(likelihood.id)
+    }
+
+    /// Record a binding: `to` plays `role` for `from`. See
+    /// [`Graph::bind`](skoro_graph::graph::Graph::bind).
+    pub fn bind(&mut self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
+        self.graph.bind(from, role, to)
+    }
+
+    /// Mark `factor`'s log-density as a free-standing likelihood term, bind
+    /// [`ARGUMENT`] to each of `arguments` in order, then bind every role `factor` declares.
+    ///
+    /// Returns [`SkoroError::ShapeMismatch`] before changing anything if `arguments` is empty: a
+    /// term has at least one argument.
+    pub fn add_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
+        if arguments.is_empty() {
+            return Err(SkoroError::ShapeMismatch {
+                expected: 1,
+                found: 0,
+            });
+        }
+        self.mark_likelihood(&factor.log_density)?;
+        self.bind_factor(factor, arguments)
+    }
+
+    /// Bind [`ARGUMENT`] to each of `arguments`, then every role `factor` declares.
+    fn bind_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
+        let density = factor.log_density.id;
+        for argument in arguments {
+            self.bind(density, ARGUMENT, *argument)?;
+        }
+        for (role, handle) in &factor.bindings {
+            self.bind(density, *role, handle.id)?;
+        }
+        Ok(())
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.
@@ -466,6 +506,12 @@ impl<B: Backend> ModelServer<B> {
                 && marked.insert(stochastic)
             {
                 queue.push_back(stochastic);
+            }
+            // What the node binds: a binding is a reference, even though it is not a data edge.
+            for (_, to) in self.graph.bindings_of(id) {
+                if marked.insert(*to) {
+                    queue.push_back(*to);
+                }
             }
         }
 
@@ -892,6 +938,18 @@ impl<B: Backend> ModelClient<B> {
     /// Mark the mapped quantity as a likelihood.
     pub(crate) fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         self.server.write().unwrap().mark_likelihood(likelihood)
+    }
+
+    /// Record a binding: `to` plays `role` for `from`. See [`ModelServer::bind`].
+    pub fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
+        self.server.write().unwrap().bind(from, role, to)
+    }
+
+    /// Attach a free-standing likelihood factor over `arguments`, with the bindings it
+    /// declares. See [`ModelServer::add_factor`].
+    pub fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
+        self.server.write().unwrap().add_factor(&factor, arguments)?;
+        Ok(factor.log_density)
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.

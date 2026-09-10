@@ -67,7 +67,7 @@ mod records {
             ))
             .unwrap();
 
-        let factors = model.factors();
+        let factors = ModelBuilderOps::factors(&model);
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, density.id());
         assert_eq!(factors[0].residual, residual.id());
@@ -84,7 +84,7 @@ mod records {
     #[test]
     fn an_unused_model_records_nothing() {
         let model = ModelClient::<B>::default();
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
         assert_eq!(model.residual_layout().unwrap().total(), 0);
     }
 }
@@ -111,7 +111,7 @@ mod rejections {
             model.record_factor(FactorRecord::new(not_a_density.id(), residual.id(), vec![],)),
             Err(SkoroError::NotLogLikelihood { .. })
         ));
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
     }
 
     /// An id naming nothing is refused rather than stored to fail later.
@@ -141,7 +141,7 @@ mod rejections {
             )),
             Err(SkoroError::DanglingParent { .. })
         ));
-        assert!(model.factors().is_empty());
+        assert!(ModelBuilderOps::factors(&model).is_empty());
     }
 
     /// A discrete residual has no tangent space, so it can contribute no rows to `J`.
@@ -184,7 +184,7 @@ mod rejections {
         }
 
         // Refused means refused: the record, the rows of `J`, and the objective are untouched.
-        assert_eq!(model.factors().len(), 1);
+        assert_eq!(ModelBuilderOps::factors(&model).len(), 1);
         assert_eq!(model.residual_layout().unwrap().total(), 2);
         let values = points().with_quantity(&theta, point(&[3.0])).build();
         approx::assert_abs_diff_eq!(
@@ -197,6 +197,130 @@ mod rejections {
             -1.5,
             epsilon = 1e-12
         );
+    }
+}
+
+/// Free-standing factors attached through `add_factor`, and what their bindings do to reading the
+/// model back, to collection, and to the rows of `J`.
+mod bindings_via_add_factor {
+    use super::*;
+    use skoro_graph::graph::TermKind;
+    use skoro_model::{
+        distribution::Factor,
+        least_squares::residual_layout,
+        roles::{ARGUMENT, RESIDUAL},
+    };
+
+    fn a_term(model: &ModelClient<B>) -> (Q<B, Real>, Q<B, Real>) {
+        let theta = model.add_parameter(Real);
+        let term = register_map1(Real, LiteralScalarMultiplication::new(-0.5), &theta).unwrap();
+        (theta, term)
+    }
+
+    #[test]
+    fn add_factor_marks_and_binds() {
+        let model = ModelClient::<B>::default();
+        let (a, term) = a_term(&model);
+        let b = model.add_parameter(Real);
+        let r = model.add_parameter(EuclideanD(2));
+
+        let density = model
+            .add_factor(Factor::new(term.clone()).bind(RESIDUAL, &r), &[a.id(), b.id()])
+            .unwrap();
+        assert_eq!(density.id(), term.id());
+
+        let factors = ModelClientOps::factors(&model);
+        assert_eq!(factors.len(), 1);
+        assert_eq!(factors[0].density, term.id());
+        assert_eq!(factors[0].scored, None);
+        assert_eq!(factors[0].kind, TermKind::Weight);
+        assert_eq!(factors[0].arguments, vec![a.id(), b.id()]);
+        assert_eq!(model.bound(term.id(), RESIDUAL), vec![r.id()]);
+        assert_eq!(
+            model.bindings_of(term.id()),
+            vec![(ARGUMENT, a.id()), (ARGUMENT, b.id()), (RESIDUAL, r.id())]
+        );
+    }
+
+    #[test]
+    fn add_factor_needs_an_argument() {
+        let model = ModelClient::<B>::default();
+        let (_theta, term) = a_term(&model);
+
+        assert!(matches!(
+            model.add_factor(Factor::new(term.clone()), &[]),
+            Err(SkoroError::ShapeMismatch {
+                expected: 1,
+                found: 0
+            })
+        ));
+        // Refused before marking anything.
+        assert!(ModelClientOps::factors(&model).is_empty());
+        assert!(model.bindings_of(term.id()).is_empty());
+    }
+
+    #[test]
+    fn a_bound_node_survives_cleanup() {
+        let model = ModelClient::<B>::default();
+        let (theta, term) = a_term(&model);
+        let r = model.add_parameter(EuclideanD(2));
+        let r_id = r.id();
+        model
+            .add_factor(Factor::new(term).bind(RESIDUAL, &r), &[theta.id()])
+            .unwrap();
+
+        // An unbound node in the same position is collected, so the survival below is the
+        // binding's doing.
+        let unbound = model.add_parameter(EuclideanD(2));
+        let unbound_id = unbound.id();
+        drop(unbound);
+        drop(r);
+        model.cleanup();
+
+        assert!(model.server_call(|s| s.graph().contains(r_id)));
+        assert!(!model.server_call(|s| s.graph().contains(unbound_id)));
+    }
+
+    #[test]
+    fn factors_are_in_term_order() {
+        let model = ModelClient::<B>::default();
+        let mut densities = Vec::new();
+        for _ in 0..3 {
+            let (theta, term) = a_term(&model);
+            model
+                .add_factor(Factor::new(term.clone()), &[theta.id()])
+                .unwrap();
+            densities.push(term.id());
+        }
+        let factors = ModelClientOps::factors(&model);
+        assert_eq!(
+            factors.iter().map(|f| f.density).collect::<Vec<_>>(),
+            densities
+        );
+    }
+
+    #[test]
+    fn residual_layout_follows_term_order_and_dimension() {
+        let model = ModelClient::<B>::default();
+        let (a, term_a) = a_term(&model);
+        let r2 = model.add_parameter(EuclideanD(2));
+        model
+            .add_factor(Factor::new(term_a).bind(RESIDUAL, &r2), &[a.id()])
+            .unwrap();
+
+        // A term with no residual contributes no rows.
+        let (c, term_c) = a_term(&model);
+        model.add_factor(Factor::new(term_c), &[c.id()]).unwrap();
+
+        let (b, term_b) = a_term(&model);
+        let r3 = model.add_parameter(EuclideanD(3));
+        model
+            .add_factor(Factor::new(term_b).bind(RESIDUAL, &r3), &[b.id()])
+            .unwrap();
+
+        let layout = residual_layout(&model).unwrap();
+        assert_eq!(layout.total(), 5);
+        assert_eq!(layout.ids().collect::<Vec<_>>(), vec![r2.id(), r3.id()]);
     }
 }
 

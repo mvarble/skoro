@@ -183,6 +183,55 @@ impl<B: Backend, M: ContinuousQuantity<B>> Q<B, M> {
     }
 }
 
+/// A type-erased reference to a quantity: its id, plus the same drop guard the [`Q`] it was made
+/// from carries.
+///
+/// This is what lets one collection hold references to quantities of different types, as a
+/// [`Factor`](crate::distribution::Factor)'s bindings do. While any clone of a `Handle` (or of
+/// the `Q` it came from) lives, the collector treats the node as a root.
+pub struct Handle<B: Backend> {
+    pub(crate) id: Id,
+    pub(crate) client: ModelClient<B>,
+    pub(crate) guard: Arc<NodeDropGuard>,
+}
+
+impl<B: Backend> Handle<B> {
+    /// The identifier of the node this handle names.
+    #[inline(always)]
+    pub fn id(&self) -> Id {
+        self.id
+    }
+}
+
+impl<B: Backend, T> From<&Q<B, T>> for Handle<B> {
+    fn from(q: &Q<B, T>) -> Self {
+        Self {
+            id: q.id,
+            client: q.client.clone(),
+            guard: q.guard.clone(),
+        }
+    }
+}
+
+impl<B: Backend> Clone for Handle<B> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            client: self.client.clone(),
+            guard: self.guard.clone(),
+        }
+    }
+}
+
+impl<B: Backend> std::fmt::Debug for Handle<B> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Handle")
+            .field("id", &self.id)
+            .field("server_id", &self.client.server_id)
+            .finish_non_exhaustive()
+    }
+}
+
 // `mark_likelihood` deliberately does not live here. Attaching an arbitrary factor to
 // any real-valued quantity would let a holder of a `Q` handed out by a restricted model
 // widen that model behind its back. It is on `ModelBuilderOps` instead, which a

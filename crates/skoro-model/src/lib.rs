@@ -16,13 +16,16 @@ pub mod client_ops;
 pub mod discrete;
 pub mod distribution;
 pub mod hash_map_builders;
+pub mod information;
 pub mod jacobian;
+pub mod least_squares;
 pub mod map;
 pub mod model;
 pub mod ops;
 pub mod point_map_access;
 pub mod q;
 pub mod residual;
+pub mod roles;
 
 pub use client_ops::{ModelBuilderOps, ModelClientOps};
 pub use residual::{FactorRecord, ResidualRegistry};
