@@ -60,11 +60,14 @@ pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
         let arguments = client.tangent_layout(&factor.arguments)?;
         let j = jacobian_vjp(client, points, free, &arguments)?;
 
+        // A mapped root is evaluated, a constant (or constant-folded) one is read from the
+        // constants, and a parameter or stochastic one from the points it was given.
         let out = client.evaluate_ids(points, &[root_id])?;
         let (value, quantity_type) = out
             .evaluations
             .get(&root_id)
             .or_else(|| out.constants.get(&root_id))
+            .or_else(|| out.variables.get(&root_id))
             .ok_or(SkoroError::NodeNotFound { id: root_id })?;
         let &EuclideanMatrixD(rows, cols) = quantity_type
             .as_any()
