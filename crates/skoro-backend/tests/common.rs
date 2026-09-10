@@ -38,3 +38,98 @@ macro_rules! exercise_api {
         }
     };
 }
+
+/// The kernels `ndarray_simd_workaround` wraps, on the two layouts burn-ndarray's SIMD unary path
+/// gets wrong: a `select` along a trailing axis and a contiguous `swap_dims`. A second handle is
+/// kept on each input so the kernel cannot take its correct in-place path, and there are enough
+/// rows to clear its 32-element threshold.
+pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
+    use skoro_backend::{Int, TensorData, ndarray_simd_workaround};
+
+    let device = Default::default();
+    let rows = 64;
+    // Signs alternate and magnitudes stay away from zero, so `abs` is visibly not the identity
+    // and `recip` stays well conditioned.
+    let value = |i: usize| {
+        let magnitude = 0.5 + (i as f64 * 0.53).sin().abs();
+        if i.is_multiple_of(2) { magnitude } else { -magnitude }
+    };
+    let check = |what: &str, got: Vec<f64>, inputs: &[f64], f: fn(f64) -> f64| {
+        assert_eq!(got.len(), inputs.len(), "{what}");
+        for (i, (g, x)) in got.iter().zip(inputs).enumerate() {
+            let want = f(*x);
+            assert!(
+                (g - want).abs() <= 1e-5 * want.abs().max(1.0),
+                "{what}: entry {i} is {g}, expected {want}"
+            );
+        }
+    };
+    let to_host = |t: Tensor<B, 2>| t.into_data().convert::<f64>().to_vec::<f64>().unwrap();
+    let to_host3 = |t: Tensor<B, 3>| t.into_data().convert::<f64>().to_vec::<f64>().unwrap();
+
+    // A `select` of columns 0 and 2 from a `[rows, 3]` tensor.
+    let packed: Vec<f64> = (0..3 * rows).map(value).collect();
+    let tensor = Tensor::<B, 2>::from_data(
+        TensorData::new(packed.clone(), [rows, 3]).convert::<B::FloatElem>(),
+        &device,
+    );
+    let indices = Tensor::<B, 1, Int>::from_data(
+        TensorData::new(vec![0i64, 2], [2]).convert::<B::IntElem>(),
+        &device,
+    );
+    let selected = tensor.select(1, indices);
+    let host_selected: Vec<f64> = packed.chunks(3).flat_map(|r| [r[0], r[2]]).collect();
+    let _held = selected.clone();
+    check(
+        "abs of a select",
+        to_host(ndarray_simd_workaround::abs(selected.clone())),
+        &host_selected,
+        f64::abs,
+    );
+    check(
+        "recip of a select",
+        to_host(ndarray_simd_workaround::recip(selected)),
+        &host_selected,
+        f64::recip,
+    );
+
+    // A contiguous `[rows, 2, 2]` tensor with its last two axes swapped.
+    let data: Vec<f64> = (0..4 * rows).map(value).collect();
+    let tensor = Tensor::<B, 3>::from_data(
+        TensorData::new(data.clone(), [rows, 2, 2]).convert::<B::FloatElem>(),
+        &device,
+    );
+    let swapped = tensor.swap_dims(1, 2);
+    let mut host_swapped = vec![0.0; 4 * rows];
+    for s in 0..rows {
+        for r in 0..2 {
+            for c in 0..2 {
+                host_swapped[4 * s + 2 * r + c] = data[4 * s + 2 * c + r];
+            }
+        }
+    }
+    let _held = swapped.clone();
+    check(
+        "abs of a swap_dims",
+        to_host3(ndarray_simd_workaround::abs(swapped.clone())),
+        &host_swapped,
+        f64::abs,
+    );
+    check(
+        "recip of a swap_dims",
+        to_host3(ndarray_simd_workaround::recip(swapped)),
+        &host_swapped,
+        f64::recip,
+    );
+}
+
+#[allow(unused)]
+#[macro_export]
+macro_rules! unary_kernels_on_non_standard_layouts {
+    ($B:ident) => {
+        #[test]
+        fn unary_kernels_on_non_standard_layouts() {
+            common::unary_kernels_on_non_standard_layouts::<$B>();
+        }
+    };
+}
