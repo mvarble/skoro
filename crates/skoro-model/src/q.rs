@@ -232,7 +232,7 @@ impl<B: Backend> std::fmt::Debug for Handle<B> {
     }
 }
 
-// `mark_likelihood` deliberately does not live here. Attaching an arbitrary factor to
+// `add_factor` and `bind` deliberately do not live here. Attaching an arbitrary factor to
 // any real-valued quantity would let a holder of a `Q` handed out by a restricted model
-// widen that model behind its back. It is on `ModelBuilderOps` instead, which a
+// widen that model behind its back. They are on `ModelBuilderOps` instead, which a
 // restricting facade can decline to implement.

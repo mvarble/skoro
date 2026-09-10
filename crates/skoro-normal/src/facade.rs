@@ -1,83 +1,15 @@
-//! Building Gaussian factors, and recording what was built.
+//! Constant covariance factors for building Gaussians.
 //!
-//! A [`Normal`] conditional is added through [`add_gaussian_quantity`], which does three
-//! things in one call: it adds the stochastic quantity, it builds the whitened residual
-//! `r = L⁻¹ (x ⊖ μ)`, and it records the resulting factor with its `μ` and `L` named
-//! separately. The recording is the point. A distribution is consumed when a quantity is
-//! added and nothing identifying it survives into the graph, so the moment of building is
-//! the only moment the family is knowable.
-//!
-//! **This is bookkeeping, not proof.** Nothing here restricts what else a caller may add to
-//! the same model — the record says "this factor is a Gaussian whitened residual", and says
-//! nothing at all about the factors it does not cover. An estimator reading
-//! [`ModelBuilderOps::residual_layout`] gets the rows for the factors that *were* recorded,
-//! and it is the caller's business to know whether that is the whole model.
+//! A Gaussian enters a model through `client.add_quantity(Normal::new(mean, std_dev))`: its
+//! [`Factor`](skoro_model::distribution::Factor) binds the residual, the mean and the whitening
+//! separately, and [`GaussianBlock`](crate::structure::GaussianBlock) reads them back. What is
+//! left here are the helpers that build the lower-triangular covariance factor `std_dev` for the
+//! common constant cases.
 
 use skoro_backend::{Backend, ElementConversion};
-use skoro_core::error::SkoroResult;
-use skoro_graph::quantity::ContinuousQuantity;
 use skoro_linalg::tril::Tril;
-use skoro_model::{FactorRecord, ModelBuilderOps, ModelClientOps, q::Q};
+use skoro_model::{ModelClientOps, q::Q};
 use skoro_riemann::euclidean::VectorD;
-
-use crate::distribution::Normal;
-use crate::structure::GaussianBlock;
-
-/// Add a quantity with a `Normal(mean, std_dev)` conditional, and record the factor.
-///
-/// `std_dev` is the lower-triangular covariance factor `L`, with `Σ = L Lᵀ`.
-///
-/// The residual node built here is a *second* copy of the one `Normal::log_density` builds
-/// internally. That is not free — it is an extra subgraph — but it is the node the record
-/// names, and a least-squares consumer evaluates it on every iteration anyway.
-///
-/// Recording pins the density and the residual against the collector and against
-/// [`ModelClientOps::remove`]; retiring the factor is a closure removal at `x`.
-pub fn add_gaussian_quantity<B, C, T>(
-    client: &C,
-    mean: &Q<B, T>,
-    std_dev: &Q<B, Tril>,
-) -> SkoroResult<Q<B, T>>
-where
-    B: Backend,
-    C: ModelBuilderOps<B>,
-    T: ContinuousQuantity<B>,
-    B::FloatElem: std::ops::Div<B::FloatElem, Output = B::FloatElem>
-        + std::ops::Mul<B::FloatElem, Output = B::FloatElem>
-        + std::ops::Add<B::FloatElem, Output = B::FloatElem>
-        + std::ops::Sub<B::FloatElem, Output = B::FloatElem>
-        + std::ops::Neg<Output = B::FloatElem>
-        + std::ops::AddAssign<B::FloatElem>,
-{
-    let distr = Normal::new(mean.clone(), std_dev.clone());
-    let x = client.add_quantity(distr.clone())?;
-    let residual = distr.whitened_residual(&x)?;
-    let density = client
-        .log_density_of(&x)
-        .ok_or(skoro_model::SkoroError::NotStochastic { id: x.id() })?;
-
-    // `Normal`'s normalizer is `constant + log|L⁻¹|`: it depends on the covariance factor
-    // and on nothing else, which is what makes the least-squares precondition checkable
-    // without inspecting an operation.
-    client.record_factor(
-        FactorRecord::new(density, residual.id(), vec![std_dev.id()])
-            .with_refinement(mean.id(), std_dev.id()),
-    )?;
-    Ok(x)
-}
-
-/// The model's recorded factors that carry a `μ`/`L` refinement, in record order.
-///
-/// Derived from the registry on every call rather than kept as a parallel list that could
-/// disagree with it: membership is the registry's decision, and a retired factor's block
-/// simply stops appearing.
-pub fn gaussian_blocks<B, C>(client: &C) -> Vec<GaussianBlock>
-where
-    B: Backend,
-    C: ModelBuilderOps<B>,
-{
-    GaussianBlock::all(&ModelBuilderOps::factors(client))
-}
 
 /// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose diagonal is `diag` and
 /// whose off-diagonal entries are zero.

@@ -11,7 +11,7 @@ use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_graph::node::Node;
 use skoro_linalg::{tril::Tril, vector::LinalgVectorOps};
-use skoro_model::{hash_map_builders::points, model::ModelClient, q::Q};
+use skoro_model::{distribution::Factor, hash_map_builders::points, model::ModelClient, q::Q};
 use skoro_operation::Input;
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
 
@@ -231,7 +231,9 @@ mod joint_factors {
         // One factor over both, standing in for a correlated joint marginal.
         let factor =
             (a.clone().norm_squared().unwrap() + b.clone().norm_squared().unwrap()).unwrap();
-        model.mark_likelihood(&factor).unwrap();
+        let factor = model
+            .add_factor(Factor::new(factor), &[a.id(), b.id()])
+            .unwrap();
 
         let pts = points()
             .with_tensor(

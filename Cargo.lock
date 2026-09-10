@@ -1362,15 +1362,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-queue"
-version = "0.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f58bbc28f91df819d0aa2a2c00cd19754769c2fad90579b3592b1c9ba7a3115"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5909,7 +5900,6 @@ name = "skoro-model"
 version = "0.0.0"
 dependencies = [
  "approx",
- "crossbeam-queue",
  "dashmap",
  "lazy_static",
  "ndarray 0.17.2",

@@ -1,4 +1,4 @@
-//! The Gaussian view of a recorded least-squares factor.
+//! The Gaussian view of a term's bindings.
 //!
 //! A [`Normal`](crate::distribution::Normal) factor's negative log-density is `½‖r‖²` plus a
 //! normalizer, with `r(x) = L⁻¹ (x ⊖ μ)`. What distinguishes it from a merely
@@ -6,16 +6,21 @@
 //! **separately** — which is what a filter needs, since `H = ∂μ/∂x` and `R = L Lᵀ` are
 //! different objects.
 //!
-//! That separation is recorded when the factor is built, in
-//! [`FactorRecord::location`] and [`FactorRecord::whitening`], and [`GaussianBlock`] is the
-//! view of a record that has both. The *nonlinearity* of the mean needs no expression here:
-//! `location` names a graph node, which may be the output of arbitrarily many operations, so
-//! the refinement is two ids rather than a new algebra.
+//! That separation is bound when the factor is built, under
+//! [`LOCATION`] and [`WHITENING`], and [`GaussianBlock`] is the view of a term that binds both
+//! alongside its [`RESIDUAL`]. The *nonlinearity* of the mean needs no expression here: the
+//! location is a graph node, which may be the output of arbitrarily many operations, so the
+//! refinement is two ids rather than a new algebra.
 
+use skoro_backend::Backend;
 use skoro_core::id::Id;
-use skoro_model::FactorRecord;
+use skoro_model::{
+    ModelClientOps,
+    client_ops::FactorInfo,
+    roles::{LOCATION, RESIDUAL, WHITENING},
+};
 
-/// One factor of a hierarchical Gaussian model, as its builder recorded it.
+/// One factor of a hierarchical Gaussian model, read off its term's bindings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GaussianBlock {
     /// The log-density node.
@@ -29,23 +34,31 @@ pub struct GaussianBlock {
 }
 
 impl GaussianBlock {
-    /// The Gaussian view of `record`, or `None` if it carries no `μ`/`L` refinement.
-    ///
-    /// Deriving rather than keeping a parallel list is the point: membership is the
-    /// registry's decision, so the two cannot come to disagree about which factors exist. A
-    /// record whose factor was retired simply stops being offered.
-    pub fn of(record: &FactorRecord) -> Option<Self> {
+    /// The Gaussian view of `factor`, or `None` unless its term binds exactly one [`RESIDUAL`],
+    /// one [`LOCATION`] and one [`WHITENING`].
+    pub fn of<B: Backend, C: ModelClientOps<B>>(client: &C, factor: &FactorInfo) -> Option<Self> {
+        let single = |ids: Vec<Id>| match ids.as_slice() {
+            [id] => Some(*id),
+            _ => None,
+        };
         Some(Self {
-            density: record.density,
-            residual: record.residual,
-            mean: record.location?,
-            whitening: record.whitening?,
+            density: factor.density,
+            residual: single(client.bound(factor.density, RESIDUAL))?,
+            mean: single(client.bound(factor.density, LOCATION))?,
+            whitening: single(client.bound(factor.density, WHITENING))?,
         })
     }
 
-    /// The Gaussian blocks among `records`, in the order they were recorded — the row order
-    /// of `J`, restricted to the factors that carry a refinement.
-    pub fn all(records: &[FactorRecord]) -> Vec<Self> {
-        records.iter().filter_map(Self::of).collect()
+    /// The Gaussian blocks among the model's terms, in term order — the row order of `J`,
+    /// restricted to the terms that bind a location and a whitening.
+    ///
+    /// Derived from the bindings on every call rather than kept as a parallel list, so a retired
+    /// term's block simply stops appearing.
+    pub fn all<B: Backend, C: ModelClientOps<B>>(client: &C) -> Vec<Self> {
+        client
+            .factors()
+            .iter()
+            .filter_map(|factor| Self::of(client, factor))
+            .collect()
     }
 }

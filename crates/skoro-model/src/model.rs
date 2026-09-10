@@ -23,13 +23,11 @@ use skoro_graph::{
     operation::DynGraphOperation,
     point_map::PointMap,
     quantity::{ContinuousQuantity, QuantityType},
-    tangent_layout::TangentLayout,
 };
 use skoro_operation::ValueMap;
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
-use crate::residual::{FactorRecord, ResidualRegistry};
 use crate::{
     cleanup::HandleRegistry,
     distribution::{Distribution, Factor},
@@ -52,16 +50,6 @@ pub struct ModelServer<B: Backend> {
     graph: Graph<B>,
     pub device: B::Device,
     handles: Arc<HandleRegistry>,
-    /// What this server has been told about its least-squares factors, pruned against the
-    /// graph inside every mutating method below — so a record and the factor it names cannot
-    /// drift apart between calls, only within one, where `prune_registry` is the last thing
-    /// that runs.
-    ///
-    /// It is also the pin table: the nodes it names are the ones neither the collector may
-    /// reclaim nor [`remove`](Self::remove) may delete. That is one set, owned by
-    /// [`ResidualRegistry`] and asked through [`names`](ResidualRegistry::names), rather
-    /// than a copy kept here — a second owner would be a second thing to keep in step.
-    registry: ResidualRegistry,
 }
 
 impl<B: Backend> std::fmt::Debug for ModelServer<B> {
@@ -80,7 +68,6 @@ impl<B: Backend> ModelServer<B> {
             graph: Graph::new(),
             device,
             handles: Arc::new(HandleRegistry::default()),
-            registry: ResidualRegistry::new(),
         }
     }
 
@@ -243,13 +230,12 @@ impl<B: Backend> ModelServer<B> {
     /// when a quantity's distribution is superseded by a joint likelihood factor
     /// over several quantities — a marginalization whose result does not factorize.
     ///
-    /// The demoted quantity's log-density leaves the objective here, so a
-    /// record naming it leaves too: `prune_registry` runs in the same call, and the
-    /// rows of `J` shrink exactly when the term stops scoring.
+    /// The demoted quantity's log-density leaves the objective here, and its bindings stop
+    /// counting with it: the rows of `J` shrink exactly when the term stops scoring.
     ///
     /// Everything the demotion made unreachable is collected before returning — the orphaned
-    /// density, the subgraph it was holding up, the now-uncertified residual, and the parent
-    /// edges the old distribution owned. The graph reports each of those, because none of them
+    /// density, the subgraph it was holding up, the residual and Fisher root it bound, and the
+    /// parent edges the old distribution owned. The graph reports each of those, because none of them
     /// is an event a later pass could reconstruct.
     ///
     /// Returns an error if the quantity does not exist or is neither stochastic nor
@@ -257,7 +243,6 @@ impl<B: Backend> ModelServer<B> {
     #[inline(always)]
     pub fn demote_to_parameter<T>(&mut self, tag: &Q<B, T>) -> SkoroResult<()> {
         self.graph.demote_to_parameter(tag.id)?;
-        self.prune_registry();
         self.handles.mark_dirty();
         self.cleanup();
         Ok(())
@@ -265,22 +250,19 @@ impl<B: Backend> ModelServer<B> {
 
     /// Removes quantities, verifying they have no children which would be kept in the graph.
     ///
-    /// Refuses a node a record names, for the same reason it refuses one another node
-    /// still points into: this is the primitive that will not break a reference, and a record
-    /// is a reference. That refusal is what keeps `remove` safe on
-    /// [`ModelClientOps`](crate::client_ops::ModelClientOps), which an estimator holds — a
-    /// recorded residual is childless, so without the check a `remove` could silently take a
-    /// factor out of the objective. Retiring a factor is
+    /// Refuses a node that a node outside the batch still binds
+    /// ([`SkoroError::NodeStillBound`]), for the same reason it refuses one another node still
+    /// points into as a parent: this is the primitive that will not break a reference, and a
+    /// binding is a reference. That refusal is what keeps `remove` safe on
+    /// [`ModelClientOps`](crate::client_ops::ModelClientOps), which an estimator holds — a bound
+    /// residual is childless, so without the check a `remove` could silently leave a term
+    /// binding a node that is gone. Retiring a factor is
     /// [`remove_closure`](Self::remove_closure), one tier up.
     ///
     /// The removal is also a collection point: anything it orphaned is swept before
     /// returning, so the model is clean after every retire.
     pub fn remove(&mut self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        if let Some(id) = ids.iter().find(|id| self.registry.names(**id)) {
-            return Err(SkoroError::NodeStillBound { id: *id, by: *id });
-        }
         let removed = self.graph.remove(ids)?;
-        self.prune_registry();
         self.handles.mark_dirty();
         self.cleanup();
         Ok(removed)
@@ -298,131 +280,9 @@ impl<B: Backend> ModelServer<B> {
     /// in the cascade before returning.
     pub fn remove_closure(&mut self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
         let removed = self.graph.remove_closure(roots)?;
-        self.prune_registry();
         self.handles.mark_dirty();
         self.cleanup();
         Ok(removed)
-    }
-
-    /// Drop the records whose factor no longer exists — and unmark the density of a record
-    /// whose *residual* died while the density still scores. Half a factor is not a factor:
-    /// a term the objective sums but `J` has no rows for is the one failure mode here
-    /// nothing reports, so the two leave in the same breath.
-    ///
-    /// Liveness is two questions, both asked of the graph, right now: the residual must be
-    /// in the arena, and the density must still be a live likelihood term. The second is the
-    /// one arena membership cannot answer — a demotion orphans a density without removing
-    /// it, and an orphaned density scores nothing.
-    fn prune_registry(&mut self) {
-        let graph = &self.graph;
-        let mut densities = Vec::new();
-        self.registry.retain(
-            |record| graph.contains(record.residual) && graph.is_scoring(record.density),
-            |record| {
-                if !graph.contains(record.residual) && graph.is_scoring(record.density) {
-                    densities.push(record.density);
-                }
-            },
-        );
-        for density in densities {
-            // Infallible in practice: `density` was just observed to be a live scoring term.
-            // A `NotLogLikelihood` here would mean the check above and the graph disagree.
-            let _ = self.graph.unmark_log_likelihood(density);
-        }
-        self.debug_validate_state();
-    }
-
-    /// Record a least-squares factor, validating it against the graph as it stands.
-    ///
-    /// This is the runtime replacement for what used to be a trait bound. The bound could
-    /// assert that a *distribution* had a residual; it could not assert that the ids handed
-    /// over name the nodes the graph actually holds, which is the failure that costs a
-    /// caller a `NodeNotFound` at solve time rather than at build time. So:
-    ///
-    /// - `density` must be in the arena and still scoring — else
-    ///   [`SkoroError::NotLogLikelihood`];
-    /// - `residual` must be in the arena and continuous — else [`SkoroError::NodeNotFound`]
-    ///   or [`SkoroError::NotContinuous`], a discrete node having no tangent space and so
-    ///   contributing no rows to `J`;
-    /// - every id in `normalizer_parents`, `location` and `whitening` must exist — else
-    ///   [`SkoroError::DanglingParent`].
-    ///
-    /// What is *not* checked is that the density really is `−½‖r‖² + n`. Nothing here can
-    /// check that, and it stays the recorder's obligation.
-    ///
-    /// Recording pins the factor's nodes: neither `cleanup` nor [`remove`](Self::remove) may
-    /// take one until the record leaves.
-    pub fn record_factor(&mut self, record: FactorRecord) -> SkoroResult<()> {
-        if !self.graph.is_scoring(record.density) {
-            return Err(if self.graph.contains(record.density) {
-                SkoroError::NotLogLikelihood { id: record.density }
-            } else {
-                SkoroError::NodeNotFound { id: record.density }
-            });
-        }
-        match self.graph.node(record.residual) {
-            None => {
-                return Err(SkoroError::NodeNotFound {
-                    id: record.residual,
-                });
-            }
-            Some(node) if !node.is_continuous() => {
-                return Err(SkoroError::NotContinuous {
-                    id: record.residual,
-                });
-            }
-            Some(_) => {}
-        }
-        for parent in record
-            .normalizer_parents
-            .iter()
-            .chain(record.location.iter())
-            .chain(record.whitening.iter())
-        {
-            if !self.graph.contains(*parent) {
-                return Err(SkoroError::DanglingParent { parent_id: *parent });
-            }
-        }
-        self.registry.record(record);
-        self.debug_validate_state();
-        Ok(())
-    }
-
-    /// What this server has been told about its factors, pruned against the graph at every
-    /// mutation above.
-    pub fn registry(&self) -> &ResidualRegistry {
-        &self.registry
-    }
-
-    /// The rows of `J`, in the order the factors were recorded.
-    ///
-    /// The registry names the residual nodes and [`TangentLayout::from_ids`] sizes them by
-    /// manifold dimension, so an `SE3` residual is 6 rows wide and never its 12-wide storage.
-    pub fn residual_layout(&self) -> SkoroResult<TangentLayout> {
-        let ids: Vec<Id> = self.registry.residual_ids().collect();
-        TangentLayout::from_ids(&self.graph, &ids)
-    }
-
-    /// The registry invariants, checked after every registry mutation in debug builds — the
-    /// same regime [`Graph::validate_indices`] runs under, one layer up.
-    ///
-    /// Only the registry-against-graph half is asserted here. The registry's own index is
-    /// not a second copy to cross-check: it is private to [`ResidualRegistry`] and written
-    /// beside every record that enters or leaves.
-    fn debug_validate_state(&self) {
-        #[cfg(debug_assertions)]
-        for record in self.registry.factors() {
-            assert!(
-                self.graph.contains(record.residual),
-                "a record names residual {:?}, which is not in the arena",
-                record.residual
-            );
-            assert!(
-                self.graph.is_scoring(record.density),
-                "a record names density {:?}, which is not a live likelihood term",
-                record.density
-            );
-        }
     }
 
     /// Reclaim every node the model can no longer reach.
@@ -440,8 +300,8 @@ impl<B: Backend> ModelServer<B> {
     ///   a caller might hold a bare [`Id`], and leaked every temporary constant to do it.
     /// - **The sweep cannot fail.** See below.
     ///
-    /// **The roots** are the ids a live [`Q`](crate::q::Q) names, the graph's likelihood
-    /// terms, and the nodes a [`FactorRecord`] names. Private nodes — a stacked tangent's
+    /// **The roots** are the ids a live [`Q`](crate::q::Q) names and the graph's likelihood
+    /// terms. Private nodes — a stacked tangent's
     /// anchors and per-block tangents — are deliberately *not* roots: they are ancestors of
     /// the `δ` node the caller holds, so they are marked while `δ` lives and swept when it
     /// does not. Rooting them would strand `2k + 1` nodes per tick of a sliding window.
@@ -453,10 +313,15 @@ impl<B: Backend> ModelServer<B> {
     /// [`Graph::remove`] retire a live scoring density, changing the objective inside a
     /// garbage collection with no error at all.
     ///
+    /// **Bindings are references too.** Marking a node marks every node it binds, so a term's
+    /// residual and Fisher root live exactly as long as the term does, with no handle of their
+    /// own.
+    ///
     /// **Why the sweep cannot fail.** [`Graph::remove`] is leaf-only: it refuses a batch any
     /// survivor points into. The garbage set is closed downward, so it never presents one. If
     /// a garbage node `n` had a surviving child `c`, then `c` was marked, and marking walks
-    /// `c` to its parents, which would have marked `n`.
+    /// `c` to its parents, which would have marked `n`. The same holds for a surviving node
+    /// that binds `n`, so the sweep never trips [`SkoroError::NodeStillBound`] either.
     ///
     /// **The contract this fixes on the caller.** A `Q` is the ownership token; a bare `Id`
     /// is a weak reference. An `Id` kept across a `cleanup()` may name nothing afterwards,
@@ -481,12 +346,6 @@ impl<B: Backend> ModelServer<B> {
         let mut queue: VecDeque<Id> = VecDeque::new();
         let mut roots = self.handles.roots();
         roots.extend_from_slice(self.graph.log_likelihoods());
-        roots.extend(
-            self.registry
-                .factors()
-                .iter()
-                .flat_map(|record| [record.density, record.residual]),
-        );
         for id in roots {
             if self.graph.contains(id) && marked.insert(id) {
                 queue.push_back(id);
@@ -938,11 +797,6 @@ impl<B: Backend> ModelClient<B> {
             self.clone(),
             NodeDropGuard::new(id, &server.handles),
         ))
-    }
-
-    /// Mark the mapped quantity as a likelihood.
-    pub(crate) fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
-        self.server.write().unwrap().mark_likelihood(likelihood)
     }
 
     /// Record a binding: `to` plays `role` for `from`. See [`ModelServer::bind`].

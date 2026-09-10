@@ -133,7 +133,7 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
         model.remove_closure(&[old_x.id(), old_z.id()]).unwrap();
 
         assert_eq!(
-            ModelClientOps::factors(&model).len(),
+            model.factors().len(),
             FACTORS,
             "the model holds exactly the live factors"
         );

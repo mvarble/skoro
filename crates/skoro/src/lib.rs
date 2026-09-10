@@ -12,9 +12,9 @@
 //! ## Quick orientation
 //!
 //! - Build a model through a [`ModelClient`](skoro_model::model::ModelClient);
-//!   Gaussian conditionals go in through
-//!   [`add_gaussian_quantity`](skoro_normal::facade::add_gaussian_quantity),
-//!   which records the factor it built.
+//!   a Gaussian conditional goes in through
+//!   `add_quantity(Normal::new(mean, std_dev))`, whose factor binds its residual,
+//!   location, whitening, and Fisher information root.
 //! - Quantities are typed proxies [`Q<B, M>`](skoro_model::q::Q) over a manifold
 //!   `M` (e.g. [`Real`](skoro_riemann::real::Real),
 //!   [`Euclidean`](skoro_riemann::euclidean::Euclidean),
@@ -71,13 +71,22 @@ pub mod prelude {
     pub use skoro_operation::{Input, ValueMap};
 
     // ----- the model interface -----
+    pub use skoro_model::model::{ModelClient, ModelServer};
+    pub use skoro_model::q::{Handle, Q};
     pub use skoro_model::{ModelBuilderOps, ModelClientOps};
 
-    // ----- what a builder records about its least-squares factors -----
-    pub use skoro_model::model::{ModelClient, ModelServer};
-    pub use skoro_model::q::Q;
-    pub use skoro_model::{FactorRecord, ResidualRegistry};
+    // ----- what a builder declares about its factors -----
+    pub use skoro_graph::graph::{Term, TermKind};
+    pub use skoro_model::client_ops::FactorInfo;
+    pub use skoro_model::distribution::Factor;
+    pub use skoro_model::roles::{self, Role};
     pub use skoro_normal::structure::GaussianBlock;
+
+    // ----- reading factors back: least squares and Fisher information -----
+    pub use skoro_model::information::{
+        InformationBlock, information, information_blocks, information_root,
+    };
+    pub use skoro_model::least_squares::residual_layout;
 
     // ----- distributions -----
     pub use skoro_core::sampler::Sampler;
@@ -86,8 +95,7 @@ pub mod prelude {
 
     // ----- Gaussian factor builders -----
     pub use skoro_normal::facade::{
-        add_gaussian_quantity, constant_covariance_diagonal, constant_covariance_identity,
-        constant_covariance_isotropic, gaussian_blocks,
+        constant_covariance_diagonal, constant_covariance_identity, constant_covariance_isotropic,
     };
     pub use skoro_normal::joint::add_joint_factor;
 
@@ -109,7 +117,7 @@ pub mod prelude {
     pub use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
 
     // ----- linear algebra & pointwise op traits (operator/method sugar on Q) -----
-    pub use skoro_linalg::matrix::{MatmulOps, TransposeOps};
+    pub use skoro_linalg::matrix::{FixedLinearMap, MatmulOps, TransposeOps, linear_map};
     pub use skoro_linalg::tril::{Tril, TrilOps};
     pub use skoro_linalg::vector::{CrossProductOps, LinalgVectorOps};
     pub use skoro_pointwise::PointwiseOps;

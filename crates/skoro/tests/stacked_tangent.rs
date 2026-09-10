@@ -437,7 +437,7 @@ mod records {
         );
         let density = add_joint_factor(&model, &factor).unwrap();
 
-        let factors = ModelClientOps::factors(&model);
+        let factors = model.factors();
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, density.id());
         assert_eq!(factors[0].scored, None);
@@ -542,7 +542,7 @@ mod retirement {
         model.remove_closure(&[pose_q.id()]).unwrap();
         model.cleanup();
 
-        assert!(ModelClientOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
     }
 
@@ -570,7 +570,7 @@ mod retirement {
 
         assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
-        assert!(ModelClientOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
         assert!(
             model.tangent_layout(&[residual]).is_err(),
@@ -622,5 +622,48 @@ mod retirement {
             baseline,
             "ℓ goes in the closure; everything that computed or was bound by it follows"
         );
+    }
+}
+
+/// A joint factor's Fisher root is its whitening unpacked dense, so over its own members the
+/// model's expected information is exactly the precision the factor was built from.
+mod information {
+    use super::*;
+    use skoro_model::information::information;
+
+    /// For the coupled `SE3 + EuclideanD(3)` precision, `information` over the two members is `Λ`.
+    #[test]
+    fn joint_information_is_the_precision() {
+        let model = ModelClient::<B>::default();
+        let pose_q: Q<B, SE3> = model.add_parameter(SE3);
+        let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
+
+        let at = point_map()
+            .with_quantity(&pose_q, pose_row(0.4, [1.5, -2.25, 0.75]))
+            .with_quantity(&point_q, row(&[1.0, 2.0, 3.0]))
+            .build();
+        let lambda = coupled_precision();
+        let (packed, normalizer) = whitening_from_precision(&lambda).unwrap();
+        let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
+
+        let factor = JointNormal::new(
+            vec![pose_q.id(), point_q.id()],
+            at.clone(),
+            whitening,
+            normalizer,
+        );
+        add_joint_factor(&model, &factor).unwrap();
+
+        let free = model
+            .tangent_layout(&[pose_q.id(), point_q.id()])
+            .unwrap();
+        let info = information(&model, at.as_ref(), &free).unwrap();
+        assert_eq!(info.dims(), [1, 9, 9]);
+        let info = into_vec(info);
+        for i in 0..9 {
+            for j in 0..9 {
+                assert_abs_diff_eq!(info[i * 9 + j], lambda.get(i, j), epsilon = 1e-8);
+            }
+        }
     }
 }

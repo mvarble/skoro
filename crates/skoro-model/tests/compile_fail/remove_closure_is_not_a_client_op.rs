@@ -1,8 +1,8 @@
 //! Retiring a cone of the model is a *builder* capability.
 //!
 //! `ModelClientOps::remove` is safe at the client tier because it refuses to break a reference:
-//! an estimator holding it cannot delete a factor out from under the records it was handed —
-//! `remove` returns `SkoroError::NodeStillBound` for a node a record names. `remove_closure`
+//! an estimator holding it cannot delete a node out from under the term that binds it —
+//! `remove` returns `SkoroError::NodeStillBound` for a node a binding names. `remove_closure`
 //! deliberately does the opposite: it takes the referents too. So it belongs with the calls that
 //! shape the model, not with the ones that only read it.
 //!

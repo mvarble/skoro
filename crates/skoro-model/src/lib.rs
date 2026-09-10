@@ -7,9 +7,10 @@
 //! [`distribution::Distribution`] registers conditional distributions
 //! (continuous or discrete, via the shared kind parameter); [`map`]'s
 //! `register_mapN` and the [`ops`] / [`discrete`] modules expose deterministic
-//! operations (with operator sugar) on quantities of either kind. [`residual`]
-//! is where a builder writes down what it knows about a least-squares factor,
-//! for an estimator to read back at solve time.
+//! operations (with operator sugar) on quantities of either kind. A
+//! distribution's [`Factor`](distribution::Factor) binds its term to the nodes
+//! playing each of the [`roles`], and [`least_squares`] and [`information`]
+//! read those bindings back at solve time.
 
 mod cleanup;
 pub mod client_ops;
@@ -24,11 +25,9 @@ pub mod model;
 pub mod ops;
 pub mod point_map_access;
 pub mod q;
-pub mod residual;
 pub mod roles;
 
 pub use client_ops::{ModelBuilderOps, ModelClientOps};
-pub use residual::{FactorRecord, ResidualRegistry};
 
 /// The flattened tangent-space layout the [`jacobian`] functions index by, re-exported
 /// from `skoro-graph` so a caller assembling dense matrices needs only this crate.

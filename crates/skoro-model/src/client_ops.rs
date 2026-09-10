@@ -16,8 +16,8 @@
 //! Code that is generic over "some client one can drive a model through" should
 //! bound on `ModelClientOps`; code that also builds should bound on
 //! [`ModelBuilderOps`]. Neither says anything about what a model *contains* —
-//! for that, read the factors a builder recorded, through
-//! [`ModelBuilderOps::factors`].
+//! for that, read its terms and their bindings, through
+//! [`ModelClientOps::factors`] and [`ModelClientOps::bound`].
 
 use std::collections::HashMap;
 
@@ -42,7 +42,6 @@ use skoro_riemann::{euclidean::EuclideanD, real::Real};
 use crate::distribution::{Distribution, Factor};
 use crate::model::ModelClient;
 use crate::q::Q;
-use crate::residual::FactorRecord;
 use crate::roles::ARGUMENT;
 
 /// One term of a model's log-density, with the arguments it is expressed over.
@@ -296,16 +295,13 @@ pub trait ModelClientOps<B: Backend> {
 /// of.
 ///
 /// Note what this trait is not: implementing it says nothing about what a model *contains*. What a
-/// model contains is read from the factors its builder recorded, via [`factors`](Self::factors).
+/// model contains is read from its terms and their bindings, via [`ModelClientOps::factors`].
 pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// Add a stochastic quantity with the given conditional distribution.
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
         D: Distribution<B, K>;
-
-    /// Attach a free-standing likelihood factor to a real-valued quantity.
-    fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()>;
 
     /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
     /// quantities, as one `Q<B, EuclideanD>` of width `Σ dᵢ`.
@@ -317,26 +313,12 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>>;
 
     /// Attach a free-standing likelihood factor over `arguments`, bound as its
-    /// [`ARGUMENT`](crate::roles::ARGUMENT)s in order, together with the bindings it declares.
+    /// [`ARGUMENT`]s in order, together with the bindings it declares.
     /// Returns the factor's log-density.
     fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>>;
 
     /// Record a binding: `to` plays `role` for `from`.
     fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()>;
-
-    /// Record a least-squares factor this builder just assembled.
-    ///
-    /// The claim is the recorder's, and it is checked only as far as the graph can check it;
-    /// see [`ModelServer::record_factor`](crate::model::ModelServer::record_factor) for
-    /// exactly what is validated and what is not. On the builder tier rather than the client
-    /// one because recording *pins* nodes, which is a change to the model's shape.
-    fn record_factor(&self, record: FactorRecord) -> SkoroResult<()>;
-
-    /// The factors this model has been told about, in the order they were recorded.
-    fn factors(&self) -> Vec<FactorRecord>;
-
-    /// The rows of `J`: a layout over the recorded residuals, in record order.
-    fn residual_layout(&self) -> SkoroResult<TangentLayout>;
 
     /// Remove `roots` together with everything downstream of them.
     ///
@@ -351,7 +333,7 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// finished is the same order of authority as adding a factor, so it sits with the other
     /// calls that shape the model rather than with the ones that only read it.
     ///
-    /// The server's factor records are pruned in the same call, and anything the removal
+    /// A term bound to any node in the cone goes with it, and anything the removal
     /// orphaned upstream — a retired factor's body, the anchors of a stacked tangent — is
     /// swept before it returns.
     fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>>;
@@ -680,26 +662,6 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
         ModelClient::bind(self, from, role, to)
-    }
-
-    #[inline(always)]
-    fn record_factor(&self, record: FactorRecord) -> SkoroResult<()> {
-        self.server_call_mut(|server| server.record_factor(record))
-    }
-
-    #[inline(always)]
-    fn factors(&self) -> Vec<FactorRecord> {
-        self.server_call(|server| server.registry().factors().to_vec())
-    }
-
-    #[inline(always)]
-    fn residual_layout(&self) -> SkoroResult<TangentLayout> {
-        self.server_call(|server| server.residual_layout())
-    }
-
-    #[inline(always)]
-    fn mark_likelihood(&self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
-        ModelClient::mark_likelihood(self, likelihood)
     }
 
     #[inline(always)]
