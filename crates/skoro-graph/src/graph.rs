@@ -17,6 +17,9 @@ use skoro_operation::{Input, ValueMap, ops::TangentConcat};
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
+pub use crate::term::{Term, TermKind};
+
+use crate::binding::{Bindings, Role};
 use crate::compiler::{
     CompiledSequence, CompiledStep, ForwardInput, ForwardOptions, ForwardOutput, HvpForwardInput,
     HvpForwardOutput, JvpForwardInput, JvpForwardOutput, VjpForwardInput, VjpForwardOutput,
@@ -69,6 +72,9 @@ pub struct Graph<B: Backend> {
     /// through which a a compile-time type gate cannot be developed. Such quantities get stored
     /// internally here.
     private_nodes: HashSet<Id>,
+    /// Labelled reference edges from a node (typically a log-density term) to others. Read by
+    /// inference algorithms and by garbage collection; never by the compiler.
+    bindings: Bindings,
 }
 
 impl<B: Backend> Default for Graph<B> {
@@ -129,7 +135,42 @@ impl<B: Backend> Graph<B> {
             stochastic_to_log_density: HashMap::new(),
             pinnable: HashSet::new(),
             private_nodes: HashSet::new(),
+            bindings: Bindings::default(),
         }
+    }
+
+    /// Record a binding: `to` plays `role` for `from`.
+    ///
+    /// A binding is a reference, not a data edge: it keeps `to` from being removed while `from`
+    /// exists, but the compiler never reads it. Duplicate triples are stored twice, and there is
+    /// no cycle check.
+    ///
+    /// Returns [`SkoroError::NodeNotFound`] if `from` (checked first) or `to` is not a node.
+    pub fn bind(&mut self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
+        if !self.nodes.contains_key(&from) {
+            return Err(SkoroError::NodeNotFound { id: from });
+        }
+        if !self.nodes.contains_key(&to) {
+            return Err(SkoroError::NodeNotFound { id: to });
+        }
+        self.bindings.bind(from, role, to);
+        self.debug_validate_indices();
+        Ok(())
+    }
+
+    /// Every `(role, to)` pair `from` has bound, in binding order.
+    pub fn bindings_of(&self, from: Id) -> &[(Role, Id)] {
+        self.bindings.of(from)
+    }
+
+    /// The nodes `from` has bound under `role`, in binding order.
+    pub fn bound(&self, from: Id, role: Role) -> Vec<Id> {
+        self.bindings.bound(from, role)
+    }
+
+    /// Every node that has bound `to` under any role.
+    pub fn referrers_of(&self, to: Id) -> Vec<Id> {
+        self.bindings.referrers_of(to).collect()
     }
 
     /// The node stored at `id`, if it exists.
@@ -233,6 +274,8 @@ impl<B: Backend> Graph<B> {
             if let Some(children) = self.children.get(&id) {
                 queue.extend(children.iter().copied());
             }
+            // A referrer would be left binding a node that is gone, so it goes too.
+            queue.extend(self.bindings.referrers_of(id));
         }
 
         // Children before parents: `remove` checks that nothing outside the batch still names
@@ -289,6 +332,7 @@ impl<B: Backend> Graph<B> {
     ///   likelihood factor may not score a particular quantity
     /// - every id in `private_nodes` names a node.
     /// - `pinnable` is the exact collection of nodes of type `Constant` and `Observed`.
+    /// - every binding endpoint names a node, and the bindings' reverse index agrees with them.
     ///
     /// Runs after every mutation in debug builds, and is public so a test can assert it
     /// directly after a sequence the mutators do not cover.
@@ -392,6 +436,20 @@ impl<B: Backend> Graph<B> {
                 }
             }
         }
+
+        for (from, pairs) in self.bindings.iter() {
+            if !self.nodes.contains_key(&from) {
+                return Err(format!(
+                    "a binding names {from:?} as its source, which is not a node"
+                ));
+            }
+            if let Some((role, to)) = pairs.iter().find(|(_, to)| !self.nodes.contains_key(to)) {
+                return Err(format!(
+                    "{from:?} binds {to:?} as {role}, which is not a node"
+                ));
+            }
+        }
+        self.bindings.validate()?;
 
         Ok(())
     }
@@ -1278,6 +1336,15 @@ impl<B: Backend> Graph<B> {
                 });
             }
         }
+        for id in ids {
+            if let Some(by) = self
+                .bindings
+                .referrers_of(*id)
+                .find(|referrer| !ids.contains(referrer))
+            {
+                return Err(SkoroError::NodeStillBound { id: *id, by });
+            }
+        }
         // Perform removal.
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
@@ -1289,6 +1356,8 @@ impl<B: Backend> Graph<B> {
                 return Err(SkoroError::NodeNotFound { id: *id });
             };
             self.private_nodes.remove(id);
+            self.bindings.remove_source(*id);
+            self.bindings.remove_target(*id);
             let parent_ids = node.parent_ids().to_vec();
             self.unregister_children(*id, &parent_ids);
             match &node {
@@ -1369,9 +1438,43 @@ impl<B: Backend> Graph<B> {
             .ok_or(SkoroError::NotContinuous { id })
     }
 
-    /// Evaluate the log-density of the model at the specified values.
-    pub fn log_density(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
-        let compiled_sequence = self.compile_backward_from(&self.log_likelihoods);
+    /// One [`Term`] per id in [`log_likelihoods`](Self::log_likelihoods), in that order.
+    ///
+    /// A term is a [`TermKind::Proposal`] when it scores a node that is currently
+    /// [`Node::Stochastic`]; every other term (an observed quantity's density, a free-standing
+    /// factor) is a [`TermKind::Weight`].
+    pub fn terms(&self) -> Vec<Term> {
+        self.log_likelihoods
+            .iter()
+            .map(|&density| {
+                let scored = self.stochastic_of(density);
+                let kind = match scored.and_then(|s| self.nodes.get(&s)) {
+                    Some(Node::Stochastic(_)) => TermKind::Proposal,
+                    _ => TermKind::Weight,
+                };
+                Term {
+                    density,
+                    scored,
+                    kind,
+                }
+            })
+            .collect()
+    }
+
+    /// [`log_density`](Self::log_density) restricted to `terms`.
+    ///
+    /// An empty slice yields zeros of shape `[batch, 1]`. Returns
+    /// [`SkoroError::NotLogLikelihood`] for an id that is not among the likelihood terms.
+    pub fn log_density_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
+        if let Some(id) = terms.iter().find(|id| !self.log_likelihoods.contains(id)) {
+            return Err(SkoroError::NotLogLikelihood { id: *id });
+        }
+        self.sum_terms(points, terms)
+    }
+
+    /// Evaluate and sum `terms`, which the caller has checked are likelihood terms.
+    fn sum_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
+        let compiled_sequence = self.compile_backward_from(terms);
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1385,7 +1488,7 @@ impl<B: Backend> Graph<B> {
             },
         })?;
         let mut log_density = Point::zeros([batch_size, 1], &Default::default());
-        for log_likelihood_id in &self.log_likelihoods {
+        for log_likelihood_id in terms {
             log_density = log_density
                 + forward_output
                     .evaluations
@@ -1396,6 +1499,11 @@ impl<B: Backend> Graph<B> {
                     .unwrap_float();
         }
         Ok(log_density)
+    }
+
+    /// Evaluate the log-density of the model at the specified values.
+    pub fn log_density(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
+        self.sum_terms(points, &self.log_likelihoods)
     }
 
     /// The evaluation of [`log_density`](Self::log_density) with the first-order gradient

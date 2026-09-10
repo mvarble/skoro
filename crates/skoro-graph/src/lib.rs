@@ -9,6 +9,7 @@
 //! [`ContinuousQuantity`](quantity::ContinuousQuantity) and
 //! [`DiscreteQuantity`](quantity::DiscreteQuantity) as the kind-specific capability traits).
 
+pub mod binding;
 pub mod compiler;
 pub mod graph;
 pub mod node;
@@ -17,6 +18,7 @@ pub mod point_map;
 pub mod quantity;
 pub mod sampler;
 pub mod tangent_layout;
+mod term;
 
 #[cfg(feature = "test-utils")]
 pub mod test_utils;

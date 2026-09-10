@@ -1422,3 +1422,188 @@ mod degenerate {
         assert_eq!(graph.topological_sort(&[bogus_id()]), vec![bogus_id()]);
     }
 }
+
+/// Bindings: labelled reference edges that removal and closure removal respect, and the terms
+/// they hang off.
+mod bindings {
+    use super::*;
+    use skoro_graph::binding::Role;
+    use skoro_graph::graph::TermKind;
+
+    const R1: Role = Role("r1");
+    const R2: Role = Role("r2");
+
+    fn three_constants(graph: &mut Graph<B>) -> [Id; 3] {
+        [
+            graph.add_constant(Real, &1.0f64),
+            graph.add_constant(Real, &2.0f64),
+            graph.add_constant(Real, &3.0f64),
+        ]
+    }
+
+    #[test]
+    fn bind_refuses_a_missing_endpoint() {
+        let mut graph = Graph::<B>::new();
+        let a = graph.add_constant(Real, &1.0f64);
+        let fresh = bogus_id();
+
+        assert!(matches!(
+            graph.bind(a, R1, fresh),
+            Err(SkoroError::NodeNotFound { id }) if id == fresh
+        ));
+        assert!(matches!(
+            graph.bind(fresh, R1, a),
+            Err(SkoroError::NodeNotFound { id }) if id == fresh
+        ));
+        assert!(graph.bindings_of(a).is_empty());
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn bind_is_readable_in_order() {
+        let mut graph = Graph::<B>::new();
+        let [a, b, c] = three_constants(&mut graph);
+
+        graph.bind(a, R1, b).unwrap();
+        graph.bind(a, R2, c).unwrap();
+        graph.bind(a, R1, c).unwrap();
+
+        assert_eq!(graph.bindings_of(a), &[(R1, b), (R2, c), (R1, c)]);
+        assert_eq!(graph.bound(a, R1), vec![b, c]);
+        assert_eq!(graph.bound(a, R2), vec![c]);
+        assert_eq!(graph.referrers_of(b), vec![a]);
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn remove_refuses_a_bound_target() {
+        let mut graph = Graph::<B>::new();
+        let [a, b, _] = three_constants(&mut graph);
+        graph.bind(a, R1, b).unwrap();
+
+        assert!(matches!(
+            graph.remove(&[b]),
+            Err(SkoroError::NodeStillBound { id, by }) if id == b && by == a
+        ));
+        assert!(graph.contains(b));
+        graph.remove(&[a, b]).unwrap();
+        assert!(!graph.contains(a) && !graph.contains(b));
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn remove_source_clears_the_reference() {
+        let mut graph = Graph::<B>::new();
+        let [a, b, _] = three_constants(&mut graph);
+        graph.bind(a, R1, b).unwrap();
+
+        graph.remove(&[a]).unwrap();
+        assert!(graph.referrers_of(b).is_empty());
+        graph.remove(&[b]).unwrap();
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn remove_closure_takes_referrers() {
+        let mut graph = Graph::<B>::new();
+        let [a, b, c] = three_constants(&mut graph);
+        graph.bind(a, R1, b).unwrap();
+
+        let removed = graph.remove_closure(&[b]).unwrap();
+        assert_eq!(removed.len(), 2, "b and its referrer a");
+        assert!(!graph.contains(a));
+        assert!(!graph.contains(b));
+        assert!(graph.contains(c));
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn validate_indices_holds_after_binding_mutations() {
+        let mut graph = Graph::<B>::new();
+        let [a, b, c] = three_constants(&mut graph);
+        graph.validate_indices().unwrap();
+        graph.bind(a, R1, b).unwrap();
+        graph.validate_indices().unwrap();
+        graph.bind(a, R2, c).unwrap();
+        graph.validate_indices().unwrap();
+        graph.bind(a, R1, c).unwrap();
+        graph.validate_indices().unwrap();
+        graph.bind(b, R1, c).unwrap();
+        graph.validate_indices().unwrap();
+
+        assert!(graph.remove(&[c]).is_err());
+        graph.validate_indices().unwrap();
+        graph.remove(&[a]).unwrap();
+        graph.validate_indices().unwrap();
+        assert_eq!(graph.referrers_of(c), vec![b]);
+        graph.remove_closure(&[c]).unwrap();
+        graph.validate_indices().unwrap();
+        assert_eq!(graph.node_count(), 0);
+    }
+
+    #[test]
+    fn terms_classify_proposal_and_weight() {
+        let mut graph = Graph::<B>::new();
+        let x = stochastic(&mut graph, vec![]);
+        let x_density = summed(&mut graph, vec![x]);
+        graph.mark_log_density(x_density, x).unwrap();
+
+        let y = stochastic(&mut graph, vec![]);
+        let y_density = summed(&mut graph, vec![y]);
+        graph.mark_log_density(y_density, y).unwrap();
+        graph.observe::<_, Real, _>(y, &1.0f64).unwrap();
+
+        let p = graph.add_parameter(Real);
+        let free_standing = summed(&mut graph, vec![p]);
+        graph.mark_log_likelihood(free_standing).unwrap();
+
+        let terms = graph.terms();
+        assert_eq!(
+            terms.iter().map(|t| t.density).collect::<Vec<_>>(),
+            vec![x_density, y_density, free_standing],
+            "marking order"
+        );
+        assert_eq!(
+            terms.iter().map(|t| t.scored).collect::<Vec<_>>(),
+            vec![Some(x), Some(y), None]
+        );
+        assert_eq!(
+            terms.iter().map(|t| t.kind).collect::<Vec<_>>(),
+            vec![TermKind::Proposal, TermKind::Weight, TermKind::Weight]
+        );
+
+        graph.observe::<_, Real, _>(x, &2.0f64).unwrap();
+        assert_eq!(graph.terms()[0].kind, TermKind::Weight);
+        graph.validate_indices().unwrap();
+    }
+
+    #[test]
+    fn log_density_terms_sums_only_the_named_terms() {
+        let mut graph = Graph::<B>::new();
+        let x = stochastic(&mut graph, vec![]);
+        let t1 = summed(&mut graph, vec![x]);
+        graph.mark_log_density(t1, x).unwrap();
+        let p = graph.add_parameter(Real);
+        let t2 = summed(&mut graph, vec![p, p]);
+        graph.mark_log_likelihood(t2).unwrap();
+
+        let values = points([(x, 0.5), (p, 3.0)]);
+        let whole = into_vec(graph.log_density(&values).unwrap())[0];
+        let first = into_vec(graph.log_density_terms(&values, &[t1]).unwrap())[0];
+        let second = into_vec(graph.log_density_terms(&values, &[t2]).unwrap())[0];
+        assert!((first - 0.5).abs() < 1e-12);
+        assert!((second - 6.0).abs() < 1e-12);
+        assert!((first + second - whole).abs() < 1e-12);
+
+        let empty = graph.log_density_terms(&values, &[]).unwrap();
+        assert_eq!(empty.dims(), [1, 1]);
+        assert_eq!(into_vec(empty), vec![0.0]);
+
+        let mapped = summed(&mut graph, vec![p]);
+        assert!(matches!(
+            graph.log_density_terms(&values, &[mapped]),
+            Err(SkoroError::NotLogLikelihood { id }) if id == mapped
+        ));
+        graph.validate_indices().unwrap();
+    }
+}
