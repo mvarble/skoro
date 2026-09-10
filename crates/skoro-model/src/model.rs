@@ -183,6 +183,9 @@ impl<B: Backend> ModelServer<B> {
     ///
     /// Returns [`SkoroError::ShapeMismatch`] before changing anything if `arguments` is empty: a
     /// term has at least one argument.
+    ///
+    /// The server cannot tell whether `factor` was built against it; a handle from another model
+    /// names an id in that model's graph. [`ModelClient::add_factor`] checks that, so prefer it.
     pub fn add_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
         if arguments.is_empty() {
             return Err(SkoroError::ShapeMismatch {
@@ -748,6 +751,7 @@ impl<B: Backend> ModelClient<B> {
         // to build the factor (or else deadlock will occur).
         drop(server);
         let factor = distr.factor(&x)?;
+        self.check_factor_model(&factor)?;
 
         // again, slow... but now we mark the mapped quantity as a density and record its
         // bindings. `factor` is still alive here, so nothing it binds can have been collected.
@@ -806,9 +810,28 @@ impl<B: Backend> ModelClient<B> {
 
     /// Attach a free-standing likelihood factor over `arguments`, with the bindings it
     /// declares. See [`ModelServer::add_factor`].
+    ///
+    /// Returns [`SkoroError::ModelMismatch`] before changing anything if the factor's
+    /// log-density or any node it binds belongs to another model.
     pub fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
+        self.check_factor_model(&factor)?;
         self.server.write().unwrap().add_factor(&factor, arguments)?;
         Ok(factor.log_density)
+    }
+
+    /// Refuse a factor built against another model. Its handles name ids in that model's graph,
+    /// which here would name unrelated nodes — or none — and be bound without complaint.
+    fn check_factor_model(&self, factor: &Factor<B>) -> SkoroResult<()> {
+        let foreign = std::iter::once(&factor.log_density.client)
+            .chain(factor.bindings.iter().map(|(_, handle)| &handle.client))
+            .find(|client| client.server_id != self.server_id);
+        match foreign {
+            Some(client) => Err(SkoroError::ModelMismatch {
+                lhs: self.server_id,
+                rhs: client.server_id,
+            }),
+            None => Ok(()),
+        }
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.

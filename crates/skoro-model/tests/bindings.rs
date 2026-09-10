@@ -212,6 +212,30 @@ mod through_add_quantity {
         assert_eq!(scalar(bound.model.log_density(&values).unwrap()), 0.0);
     }
 
+    /// A binding to a quantity of another model is refused, rather than recorded against whatever
+    /// node carries the same id here — here, one of `x`'s own parents.
+    #[test]
+    fn add_quantity_refuses_a_binding_from_another_model() {
+        let model = ModelClient::<B>::default();
+        let parents = [model.add_parameter(Real), model.add_parameter(Real)];
+        let elsewhere = ModelClient::<B>::default();
+        let theta = elsewhere.add_parameter(EuclideanD(2));
+        let residual =
+            register_map1(EuclideanD(2), LiteralScalarMultiplication::new(3.0), &theta).unwrap();
+        assert!(contains(&model, residual.id()), "the foreign id collides with a node here");
+
+        let result = model.add_quantity(BoundDistr {
+            residual,
+            parents: [parents[0].id(), parents[1].id()],
+        });
+        assert!(matches!(
+            result,
+            Err(SkoroError::ModelMismatch { lhs, rhs })
+                if lhs == model.server_id && rhs == elsewhere.server_id
+        ));
+        assert!(model.factors().is_empty());
+    }
+
     /// The demoted density and its bound residual leave in the same sweep: the density is no
     /// longer a root once retired, and nothing else reaches the residual once its handle is gone.
     #[test]
@@ -279,6 +303,32 @@ mod through_add_factor {
             })
         ));
         // Refused before marking anything.
+        assert!(model.factors().is_empty());
+        assert!(model.bindings_of(term.id()).is_empty());
+    }
+
+    /// A factor whose log-density or bound handles come from another model is refused before
+    /// anything is marked, rather than bound to whatever node carries the same id here.
+    #[test]
+    fn add_factor_refuses_a_handle_from_another_model() {
+        let model = ModelClient::<B>::default();
+        let (theta, term) = a_term(&model);
+        let elsewhere = ModelClient::<B>::default();
+        let foreign = elsewhere.add_parameter(EuclideanD(2));
+        assert!(contains(&model, foreign.id()), "the foreign id collides with a node here");
+
+        assert!(matches!(
+            model.add_factor(Factor::new(term.clone()).bind(RESIDUAL, &foreign), &[theta.id()]),
+            Err(SkoroError::ModelMismatch { lhs, rhs })
+                if lhs == model.server_id && rhs == elsewhere.server_id
+        ));
+        let (other_theta, foreign_term) = a_term(&elsewhere);
+        assert!(matches!(
+            model.add_factor(Factor::new(foreign_term), &[other_theta.id()]),
+            Err(SkoroError::ModelMismatch { .. })
+        ));
+
+        // Refused before marking or binding anything.
         assert!(model.factors().is_empty());
         assert!(model.bindings_of(term.id()).is_empty());
     }
