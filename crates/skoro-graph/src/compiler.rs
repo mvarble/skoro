@@ -300,7 +300,12 @@ impl<B: Backend> CompiledSequence<B> {
         let mut point_seq: Vec<Option<Input<B>>> = vec![None; steps_len];
         let mut cotangent_seq: Vec<Option<CotangentFrame<B>>> = vec![None; steps_len];
         let mut out = VjpForwardOutput::default();
+        // The seeds fix the pass's frame count even when no operation consumes one: a leaf's
+        // zero cotangent below must still carry that many frames.
         let mut frame_count: Option<usize> = None;
+        for cotangent in input.cotangents.values() {
+            check_tensor_frames(&mut frame_count, Some(cotangent))?;
+        }
         let mut tape = Tape::new();
         for (index, step) in self.steps.iter().enumerate() {
             match step {

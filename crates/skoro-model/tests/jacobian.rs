@@ -265,3 +265,33 @@ fn a_leaf_row_that_is_not_a_column_is_zero() {
         }
     }
 }
+
+/// When every row is a leaf, no operation consumes a seed — and the columns that reach no row
+/// must still carry the pass's frame count, or the reverse path cannot assemble at all. Both
+/// paths agree on the identity blocks.
+#[test]
+fn a_jacobian_whose_rows_are_all_leaves_is_filled_on_both_paths() {
+    let model = Model::new();
+    let points = model.points();
+    let inputs = model.inputs();
+    let outputs = layout(&model.client, &[model.x.id(), model.p.id()]);
+    let x = inputs.block(model.x.id()).unwrap();
+    let p = inputs.block(model.p.id()).unwrap();
+
+    let jvp = jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap();
+    let vjp = jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap();
+    assert_eq!(jvp.dims(), [BATCH, 3, D_IN]);
+    assert_eq!(into_vec(jvp.clone()), into_vec(vjp));
+
+    let j = into_vec(jvp);
+    let mut expected = vec![0.0; 3 * D_IN];
+    expected[x.offset] = 1.0;
+    expected[D_IN + p.offset] = 1.0;
+    expected[2 * D_IN + p.offset + 1] = 1.0;
+    for batch in 0..BATCH {
+        assert_eq!(
+            &j[batch * 3 * D_IN..(batch + 1) * 3 * D_IN],
+            expected.as_slice()
+        );
+    }
+}
