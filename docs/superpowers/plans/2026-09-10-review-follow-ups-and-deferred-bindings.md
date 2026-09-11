@@ -1,7 +1,8 @@
 # Review follow-ups: Fisher root cost, devices, leaf rows, and deferred bindings
 
-Status: **proposal for review**. Steps 3.1 and 3.2 are implemented, and F4 is resolved
-(documentation only, §3.4); nothing else here is implemented.
+Status: steps **3.1–3.3 are implemented**, and F4 is resolved (documentation only, §3.4).
+Deferred bindings (§3.5) are **postponed** and not planned for some time. The lesser observations
+(§2.5) remain open.
 
 Context: the factor-bindings work
 (`docs/superpowers/specs/2026-09-01-factor-bindings-and-fisher-root-spec.md`,
@@ -20,15 +21,14 @@ full design for building bindings lazily ("deferred bindings"), which the spec (
 
 | # | Finding | Severity | Proposed step | Needs a decision? |
 | --- | --- | --- | --- | --- |
-| F1 | Every `Normal` builds a dense O(d⁵) matrix for its Fisher root, eagerly | High for d ≳ 10 | 3.1 sparse root op (**implemented**); 3.5 deferral (optional) | Only whether to defer |
+| F1 | Every `Normal` builds a dense O(d⁵) matrix for its Fisher root, eagerly | High for d ≳ 10 | 3.1 sparse root op (**implemented**); 3.5 deferral (postponed) | **Decided: not for now** |
 | F2 | Fixed matrices are created on the default device | Medium (breaks non-default GPU) | 3.2 (**implemented**; the Gaussian and joint roots were already fixed by 3.1) | No |
-| F3 | A non-differentiable leaf listed as both row and column gets an identity block | Low (corner case) | 3.3 | Amend R22 |
+| F3 | A non-differentiable leaf listed as both row and column gets an identity block | Low (corner case) | 3.3 (**implemented**) | R22 amended |
 | F4 | The Gaussian root's `(x, μ)` block is exact only on flat manifolds | Medium (semantics) | 3.4 | **Resolved: (a), docs only** |
 | — | Lesser observations (§2.5) | Low | §2.5 | Some |
 
-Recommended order: **3.3** (3.1 and 3.2 are done; it is small, independent, no public API break), then build
-**deferred bindings** (3.5) when one of its triggers (§3.5.1) actually shows up. **F4** is resolved
-(§3.4).
+Steps 3.1–3.3 are done. **Deferred bindings** (3.5) are postponed: the design stays here as a record,
+to revisit only if one of its triggers (§3.5.1) shows up. **F4** is resolved (§3.4).
 
 ---
 
@@ -232,6 +232,9 @@ wgpu suite behind an `#[ignore]` with a note, since CI has one adapter.
 
 ### 3.3 Leaf rows (F3)
 
+**Status: implemented** (`fill_leaf_rows` in `crates/skoro-model/src/jacobian.rs`; tests in
+`crates/skoro-model/tests/jacobian.rs`; R22 amended).
+
 In `fill_leaf_rows`, write the identity only when the row id appears in `primal.variables`, which is
 where a `Parameter` or `Sampler` step records its value. A constant or observed row is recorded in
 `primal.constants` and stays zero, matching its zero column. No graph access is needed.
@@ -282,6 +285,9 @@ Documented in the "Accuracy on curved manifolds" section of the `skoro_normal::i
 and in `FISHER_ROOT`, `Normal::factor`, spec §2 and §4.1, and `docs/fisher-scoring.md` §8.
 
 ### 3.5 Deferred bindings (the lazy design)
+
+**Status: postponed.** Not planned for some time. The design is kept as a record, to revisit if one
+of the triggers in §3.5.1 appears.
 
 #### 3.5.1 Is it still needed after 3.1?
 
@@ -508,9 +514,9 @@ Each phase is additive until D3, which is the only behavioural change: a root is
 
 ## 4. Decisions requested
 
-1. Approve steps 3.1–3.3 as proposed, including the R22/R24/R26 spec amendments.
+1. Steps 3.1–3.3: done, with the R22/R24/R26 spec amendments.
 2. F4: decided, option (a) (§3.4).
-3. Deferred bindings: build now or wait for a trigger (§3.5.1)? If now: the tier, the explicit
-   `resolve`, the `FISHER_ROOT` default, and cardinality enforcement (§3.5.7).
+3. Deferred bindings: decided, wait. Not for some time; §3.5.1 lists what would reopen it, and
+   §3.5.7 the questions that would then need answers.
 4. Lesser observations (§2.5): which to schedule. Items 1, 2 and 4 are cheap; 5 waits for the flex
    backend; 6 is separate `skoro-so3` work.

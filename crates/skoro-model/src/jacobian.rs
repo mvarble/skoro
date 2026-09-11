@@ -34,10 +34,11 @@
 //!
 //! A mapped row is differentiated by the passes. A **leaf row** — a `Parameter`,
 //! `Stochastic`, `Constant` or `Observed` node, which neither pass seeds — is filled in
-//! here instead: the identity on its own columns when it is also a column, and zero
-//! everywhere else. A constant or observed row is therefore all zero, which is correct: it
-//! does not move with any column. This is what lets a term's arguments, which usually
-//! include leaves, be the rows of a Jacobian.
+//! here instead. A `Parameter` or unobserved `Stochastic` row is the identity on its own
+//! columns when it is also a column, and zero everywhere else. A `Constant` or `Observed`
+//! row is all zero, even when the caller also lists it as a column: it does not move with
+//! any column, and neither pass seeds a constant, so its own column is zero too. This is
+//! what lets a term's arguments, which usually include leaves, be the rows of a Jacobian.
 //!
 //! # A leaf that does not reach the rows is not an error
 //!
@@ -72,11 +73,15 @@ pub(crate) fn batch_and_device<B: Backend>(points: &ValueMap<B>) -> (usize, B::D
 
 /// Fill in the rows of `j` that neither pass seeds.
 ///
-/// Every compile target lands in the sequence, and every `Mapped` / `LogLikelihood` node
-/// lowers to a `CompiledStep::Operation`, whose value is recorded in `evaluations`. So a
-/// row absent from `evaluations` is a leaf, and both passes left it zero. For a leaf that is
-/// also a column that is *wrong* — `∂x/∂x` is the identity — and both paths would agree on
-/// the wrong answer, so the identity block is written here.
+/// Every compile target lands in the sequence. A `Mapped` / `LogLikelihood` node lowers to a
+/// `CompiledStep::Operation`, recorded in `evaluations`; a `Parameter` or `Sampler` step is
+/// recorded in `variables`; a `Constant` step, which is also how an observed node lowers, is
+/// recorded in `constants`. Both passes leave every leaf row zero.
+///
+/// For a variable that is also a column that is *wrong* — `∂x/∂x` is the identity — and both
+/// paths would agree on the wrong answer, so the identity block is written here. A constant
+/// or observed row stays zero even when it is also listed as a column: neither pass seeds a
+/// constant, so that column is zero as well, and the two stay consistent.
 fn fill_leaf_rows<B: Backend>(
     mut j: Tensor<B, 3>,
     primal: &ForwardOutput<B>,
@@ -86,7 +91,7 @@ fn fill_leaf_rows<B: Backend>(
     device: &B::Device,
 ) -> Tensor<B, 3> {
     for row in outputs.blocks() {
-        if primal.evaluations.get(&row.id).is_some() {
+        if primal.variables.get(&row.id).is_none() {
             continue;
         }
         let Some(column) = inputs.block(row.id) else {

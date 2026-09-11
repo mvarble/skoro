@@ -388,12 +388,19 @@ assembling `J` (both `jacobian_jvp` and `jacobian_vjp`), for every block `r` of 
 id is **absent from** `primal.evaluations` (i.e. it is a `Parameter`, `Stochastic`, `Constant`
 or `Observed` node):
 
-- if `inputs.block(r.id)` is `Some(c)`: set `J[:, r.offset..r.offset+r.dimension, c.offset..c.offset+c.dimension]`
+- if the id is in `primal.variables` (a `Parameter` or `Sampler` step recorded it) and
+  `inputs.block(r.id)` is `Some(c)`: set `J[:, r.offset..r.offset+r.dimension, c.offset..c.offset+c.dimension]`
   to the identity (`r.dimension == c.dimension` necessarily);
-- otherwise leave those rows zero (they already are).
+- otherwise leave those rows zero (they already are). A `Constant` or `Observed` row is recorded in
+  `primal.constants` and stays zero even when it is also listed as a column, matching that column,
+  which neither pass seeds.
 
-Update the module docs: rows may be any continuous node; a leaf row is the identity on its own
-columns and zero elsewhere.
+Update the module docs: rows may be any continuous node; a parameter or stochastic row is the
+identity on its own columns and zero elsewhere, and a constant or observed row is zero.
+
+(Amended after review, F3: this originally wrote the identity for any row absent from
+`primal.evaluations` that was also a column, which gave a constant listed in both layouts an
+identity row beside a zero column, contradicting §8.)
 
 ### 3.6 skoro-model: Fisher assembly
 

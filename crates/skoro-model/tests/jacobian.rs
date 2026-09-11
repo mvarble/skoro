@@ -7,16 +7,18 @@
 //! both layouts, so `total()` differs from the block *count* and a slot index differs from
 //! a block index.
 
-use skoro_backend::{NdArrayBackend, Tensor};
-use skoro_core::id::Id;
+use skoro_backend::{NdArrayBackend, Point, Tensor};
+use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
-    TangentLayout,
+    ModelBuilderOps, TangentLayout,
+    distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,
     jacobian::{jacobian_jvp, jacobian_vjp},
+    map::register_map1,
     model::ModelClient,
     q::Q,
 };
-use skoro_operation::ValueMap;
+use skoro_operation::{Input, ValueMap, ops::LiteralScalarMultiplication};
 use skoro_riemann::{euclidean::Euclidean, real::Real};
 
 type B = NdArrayBackend<f64, i32>;
@@ -293,5 +295,71 @@ fn a_jacobian_whose_rows_are_all_leaves_is_filled_on_both_paths() {
             &j[batch * 3 * D_IN..(batch + 1) * 3 * D_IN],
             expected.as_slice()
         );
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NeverSampler;
+
+impl Sampler<B, Continuous> for NeverSampler {
+    fn sample(&self, _: usize, _: Vec<Input<B>>) -> Point<B> {
+        unimplemented!("the observed quantity is never generated")
+    }
+}
+
+/// `log p(o) = 2o`, over no parents: only here to make an observable quantity.
+struct Linear;
+
+impl Distribution<B, Continuous> for Linear {
+    type Qty = Real;
+    type Sampler = NeverSampler;
+
+    fn quantity_type(&self) -> Real {
+        Real
+    }
+    fn sampler(&self) -> NeverSampler {
+        NeverSampler
+    }
+    fn parent_ids(&self) -> &[Id] {
+        &[]
+    }
+    fn factor(&self, o: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+        Ok(Factor::new(register_map1(
+            Real,
+            LiteralScalarMultiplication::new(2.0),
+            o,
+        )?))
+    }
+}
+
+/// A constant or observed node listed as both a row and a column is zero in both, in both paths,
+/// while a parameter listed the same way keeps its identity block.
+///
+/// Neither pass seeds a constant, so its column is zero; its row must be zero too, or `J` claims
+/// the node moves with itself while nothing moves with it. Both used to get an identity row.
+#[test]
+fn a_constant_or_observed_node_that_is_a_row_and_a_column_is_zero() {
+    let model = Model::new();
+    let c = model.client.add_constant(Real, &3.0f64);
+    let o = model.client.add_quantity(Linear).unwrap();
+    o.observe(&1.5f64).unwrap();
+    let points = model.points();
+    let ids = [model.x.id(), c.id(), o.id()];
+    let (inputs, outputs) = (layout(&model.client, &ids), layout(&model.client, &ids));
+
+    let jvp = jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap();
+    let vjp = jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap();
+    assert_eq!(jvp.dims(), [BATCH, 3, 3]);
+    assert_eq!(into_vec(jvp.clone()), into_vec(vjp));
+
+    #[rustfmt::skip]
+    let expected = [
+        1.0, 0.0, 0.0, // x
+        0.0, 0.0, 0.0, // c
+        0.0, 0.0, 0.0, // o
+    ];
+    let j = into_vec(jvp);
+    for batch in 0..BATCH {
+        assert_eq!(&j[batch * 9..(batch + 1) * 9], expected.as_slice());
     }
 }
