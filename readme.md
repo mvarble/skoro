@@ -40,7 +40,7 @@ It breaks this domain down into a few distinct crates:
   Inference algorithms read back the bindings they need: `least_squares::residual_layout` gathers each term's `RESIDUAL` as the rows of `J`, and `information` assembles the expected (Fisher) information from each term's `FISHER_ROOT`, a matrix node `C` with `CᵀC` equal to the term's expected information over its arguments.
 
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
-  `FixedLinearMap` / `linear_map` apply a host-supplied matrix as a differentiable operation, which is how a builder without access to constants — a distribution — puts a known matrix into the graph.
+  `FixedLinearMap` / `linear_map` apply a host-supplied matrix as a differentiable operation, which is how a builder without access to constants — a distribution — puts a known matrix into the graph; the matrix follows its input to whatever device that lives on.
   `SparseLinearMap` / `sparse_linear_map` do the same for a large, sparse matrix, storing only its nonzero entries and building its indices on the input's device; the Gaussian Fisher root is built this way.
   These are _differentiable graph operations_; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §3.3 explains why they run on the host rather than on the backend.
 

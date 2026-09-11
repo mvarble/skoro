@@ -3,6 +3,10 @@
 //! This is how a builder that cannot add constants of its own (a distribution only ever sees
 //! quantities, never the client) still gets a known matrix into the graph: the matrix lives in
 //! the operation, not in a node.
+//!
+//! The matrix is not tied to the device it was created on. Every application first moves it to
+//! its input's device, which is a no-op when they already match, so a map built on the default
+//! device still applies to a quantity that lives on another one.
 
 use skoro_backend::{Backend, CotangentFrame, Point, Tensor, TensorData};
 use skoro_core::error::{SkoroError, SkoroResult};
@@ -28,7 +32,8 @@ impl<B: Backend> FixedLinearMap<B> {
 
     /// The map whose `rows × cols` matrix is `data`, in row-major order.
     ///
-    /// Built through `TensorData` so an `f64` backend keeps full precision.
+    /// Built through `TensorData` so an `f64` backend keeps full precision. `device` is only where
+    /// the matrix starts: each application moves it to the input's device.
     pub fn from_row_major(rows: usize, cols: usize, data: &[f64], device: &B::Device) -> Self {
         let data = TensorData::new(data.to_vec(), [rows, cols]).convert::<B::FloatElem>();
         Self::new(Tensor::from_data(data, device))
@@ -67,13 +72,14 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [x] = inputs.try_into().unwrap();
-        let transpose = self.matrix.clone().transpose();
+        let matrix = self.matrix.clone().to_device(&x.device());
+        let transpose = matrix.clone().transpose();
         let y = x.matmul(transpose.clone());
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(y),
             DiffModeState::Jvp(tangents) => {
                 let [dx] = tangents.try_into().unwrap();
-                let dy = dx.map(|dx| left_multiply_frame(dx, &self.matrix));
+                let dy = dx.map(|dx| left_multiply_frame(dx, &matrix));
                 DiffOperationForward::jvp(y, dy)
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(y, diffs[0]),
@@ -90,8 +96,10 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
         state: &Self::VjpState,
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
-        let transpose = self.matrix.clone().transpose();
-        vec![state.then(|| left_multiply_frame(omega, &transpose))]
+        vec![state.then(|| {
+            let transpose = self.matrix.clone().to_device(&omega.device()).transpose();
+            left_multiply_frame(omega, &transpose)
+        })]
     }
 
     fn hvp(

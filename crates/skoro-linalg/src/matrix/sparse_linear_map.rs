@@ -1,7 +1,7 @@
 //! A fixed sparse linear map `y = K x`, with the nonzero entries of `K` supplied from the host.
 //!
-//! [`FixedLinearMap`](super::FixedLinearMap) stores `K` as a dense backend tensor, created on one
-//! device. This operation stores only the nonzero entries of `K`, as host triplets, and applies them
+//! [`FixedLinearMap`](super::FixedLinearMap) stores `K` as a dense backend tensor. This operation
+//! stores only the nonzero entries of `K`, as host triplets, and applies them
 //! by gathering the entries of `x` they read and scatter-adding the scaled values into `y`. That
 //! matters when `K` is large but sparse: the Gaussian Fisher root's map has O(d⁵) entries and only
 //! O(d³) nonzeros. The index and coefficient tensors are built on the input's own device at every

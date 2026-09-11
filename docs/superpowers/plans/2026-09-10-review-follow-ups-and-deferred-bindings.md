@@ -1,7 +1,7 @@
 # Review follow-ups: Fisher root cost, devices, leaf rows, and deferred bindings
 
-Status: **proposal for review**. Step 3.1 is implemented, and F4 is resolved (documentation only,
-§3.4); nothing else here is implemented.
+Status: **proposal for review**. Steps 3.1 and 3.2 are implemented, and F4 is resolved
+(documentation only, §3.4); nothing else here is implemented.
 
 Context: the factor-bindings work
 (`docs/superpowers/specs/2026-09-01-factor-bindings-and-fisher-root-spec.md`,
@@ -21,12 +21,12 @@ full design for building bindings lazily ("deferred bindings"), which the spec (
 | # | Finding | Severity | Proposed step | Needs a decision? |
 | --- | --- | --- | --- | --- |
 | F1 | Every `Normal` builds a dense O(d⁵) matrix for its Fisher root, eagerly | High for d ≳ 10 | 3.1 sparse root op (**implemented**); 3.5 deferral (optional) | Only whether to defer |
-| F2 | Fixed matrices are created on the default device | Medium (breaks non-default GPU) | 3.2 (the Gaussian and joint roots are already fixed by 3.1) | No |
+| F2 | Fixed matrices are created on the default device | Medium (breaks non-default GPU) | 3.2 (**implemented**; the Gaussian and joint roots were already fixed by 3.1) | No |
 | F3 | A non-differentiable leaf listed as both row and column gets an identity block | Low (corner case) | 3.3 | Amend R22 |
 | F4 | The Gaussian root's `(x, μ)` block is exact only on flat manifolds | Medium (semantics) | 3.4 | **Resolved: (a), docs only** |
 | — | Lesser observations (§2.5) | Low | §2.5 | Some |
 
-Recommended order: **3.2 → 3.3** (3.1 is done; both are small, independent, no public API break), then build
+Recommended order: **3.3** (3.1 and 3.2 are done; it is small, independent, no public API break), then build
 **deferred bindings** (3.5) when one of its triggers (§3.5.1) actually shows up. **F4** is resolved
 (§3.4).
 
@@ -218,6 +218,9 @@ root must remain a differentiable graph node. The assembly in `information_block
 Jacobian passes) is itself not yet tape-differentiable; making it so is future RMHMC work.
 
 ### 3.2 Device placement for fixed matrices (F2)
+
+**Status: implemented** (`crates/skoro-linalg/src/matrix/linear_map.rs`; the ignored cross-device
+test is `fixed_linear_map_follows_its_input_device` in `crates/skoro-linalg/tests/wgpu_f32.rs`).
 
 `FixedLinearMap` keeps its tensor, but `forward`, `vjp` and `hvp` use
 `self.matrix.clone().to_device(&input.device())`. That is a no-op when the devices already match.
