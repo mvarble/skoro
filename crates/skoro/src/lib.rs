@@ -117,7 +117,9 @@ pub mod prelude {
     pub use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
 
     // ----- linear algebra & pointwise op traits (operator/method sugar on Q) -----
-    pub use skoro_linalg::matrix::{FixedLinearMap, MatmulOps, TransposeOps, linear_map};
+    pub use skoro_linalg::matrix::{
+        FixedLinearMap, MatmulOps, SparseLinearMap, TransposeOps, linear_map, sparse_linear_map,
+    };
     pub use skoro_linalg::tril::{Tril, TrilOps};
     pub use skoro_linalg::vector::{CrossProductOps, LinalgVectorOps};
     pub use skoro_pointwise::PointwiseOps;

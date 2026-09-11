@@ -1,7 +1,7 @@
 # Review follow-ups: Fisher root cost, devices, leaf rows, and deferred bindings
 
-Status: **proposal for review**. F4 is resolved (documentation only, §3.4); nothing else here is
-implemented.
+Status: **proposal for review**. Step 3.1 is implemented, and F4 is resolved (documentation only,
+§3.4); nothing else here is implemented.
 
 Context: the factor-bindings work
 (`docs/superpowers/specs/2026-09-01-factor-bindings-and-fisher-root-spec.md`,
@@ -20,13 +20,13 @@ full design for building bindings lazily ("deferred bindings"), which the spec (
 
 | # | Finding | Severity | Proposed step | Needs a decision? |
 | --- | --- | --- | --- | --- |
-| F1 | Every `Normal` builds a dense O(d⁵) matrix for its Fisher root, eagerly | High for d ≳ 10 | 3.1 structured root op; 3.5 deferral (optional) | Only whether to defer |
-| F2 | Fixed matrices are created on the default device | Medium (breaks non-default GPU) | 3.2 | No |
+| F1 | Every `Normal` builds a dense O(d⁵) matrix for its Fisher root, eagerly | High for d ≳ 10 | 3.1 sparse root op (**implemented**); 3.5 deferral (optional) | Only whether to defer |
+| F2 | Fixed matrices are created on the default device | Medium (breaks non-default GPU) | 3.2 (the Gaussian and joint roots are already fixed by 3.1) | No |
 | F3 | A non-differentiable leaf listed as both row and column gets an identity block | Low (corner case) | 3.3 | Amend R22 |
 | F4 | The Gaussian root's `(x, μ)` block is exact only on flat manifolds | Medium (semantics) | 3.4 | **Resolved: (a), docs only** |
 | — | Lesser observations (§2.5) | Low | §2.5 | Some |
 
-Recommended order: **3.1 → 3.2 → 3.3** (small, independent, no public API break), then build
+Recommended order: **3.2 → 3.3** (3.1 is done; both are small, independent, no public API break), then build
 **deferred bindings** (3.5) when one of its triggers (§3.5.1) actually shows up. **F4** is resolved
 (§3.4).
 
@@ -136,7 +136,9 @@ groups. It is still not the Gauss–Newton matrix at the current `x`.
 
 ### 3.1 Sparse, differentiable Gaussian roots (fixes F1's cost, and F2 for Gaussians)
 
-**Status: agreed design, not yet implemented.**
+**Status: implemented** (`SparseLinearMap` in `crates/skoro-linalg/src/matrix/sparse_linear_map.rs`;
+the roots in `crates/skoro-normal/src/information.rs` and `joint.rs`). `gaussian_root_map` is exposed
+alongside `gaussian_root_triplets` so the nonzero count can be tested directly.
 
 The dense `K` is replaced by a general sparse linear-map operation in `skoro-linalg`, and both
 Gaussian roots are built from it.

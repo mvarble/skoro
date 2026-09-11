@@ -15,7 +15,7 @@ use skoro_backend::Backend;
 use skoro_core::{error::SkoroResult, id::Id};
 use skoro_graph::point_map::PointMap;
 use skoro_linalg::{
-    matrix::{FixedLinearMap, linear_map},
+    matrix::{SparseLinearMap, sparse_linear_map},
     tril::{Tril, TrilOps},
     vector::LinalgVectorOps,
 };
@@ -171,13 +171,7 @@ where
         let residual = self.residual(client)?;
         let density = ((residual.norm_squared()? * -0.5)? + self.normalizer)?;
         let d = client.tangent_layout(&self.ids)?.total();
-        let map = FixedLinearMap::from_row_major(
-            d * d,
-            d * (d + 1) / 2,
-            &scatter_matrix(d),
-            &Default::default(),
-        );
-        let root = linear_map(&self.whitening, EuclideanMatrixD(d, d), map)?;
+        let root = sparse_linear_map(&self.whitening, EuclideanMatrixD(d, d), unpack_map(d))?;
         Ok(Factor::new(density)
             .bind(RESIDUAL, &residual)
             .bind(NORMALIZER_PARENT, &self.whitening)
@@ -185,17 +179,12 @@ where
     }
 }
 
-/// The `[d², d(d+1)/2]` matrix unpacking a row-major packed lower triangle into its dense `d × d`
-/// row-major form: entry `(i·d + j, i(i+1)/2 + j)` is one for `j ≤ i`, and every other is zero.
-fn scatter_matrix(d: usize) -> Vec<f64> {
-    let cols = d * (d + 1) / 2;
-    let mut p = vec![0.0; d * d * cols];
-    for i in 0..d {
-        for j in 0..=i {
-            p[(i * d + j) * cols + i * (i + 1) / 2 + j] = 1.0;
-        }
-    }
-    p
+/// The `[d², d(d+1)/2]` map unpacking a row-major packed lower triangle into its dense `d × d`
+/// row-major form: entry `i·d + j` of the output reads entry `i(i+1)/2 + j` of the input, for
+/// `j ≤ i`, and the upper triangle stays zero.
+fn unpack_map(d: usize) -> SparseLinearMap {
+    let triplets = (0..d).flat_map(|i| (0..=i).map(move |j| (i * d + j, i * (i + 1) / 2 + j, 1.0)));
+    SparseLinearMap::from_triplets(d * d, d * (d + 1) / 2, triplets)
 }
 
 /// Add a joint Gaussian factor over quantities the model **already holds**.

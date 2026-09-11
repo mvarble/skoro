@@ -435,14 +435,20 @@ Batch and device are taken from the first entry of `points` exactly as `jacobian
 **R24.** Add `crates/skoro-normal/src/information.rs`:
 
 ```rust
-/// K with vec(C) = K · vec(W), W = L⁻¹ packed (Tril), C the Gaussian Fisher root over [x, μ, L].
-pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>);   // (rows, cols, row-major data)
+/// The nonzeros of K, where vec(C) = K · vec(W), W = L⁻¹ packed (Tril), and C the Gaussian Fisher
+/// root over [x, μ, L].
+pub fn gaussian_root_triplets(d: usize) -> Vec<(usize, usize, f64)>; // (vec C index, packed W index, coefficient)
+pub fn gaussian_root_map(d: usize) -> SparseLinearMap;              // K, storing only its O(d³) nonzeros
+pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>);  // K densely: a test reference
 pub fn information_root<B: Backend>(w: &Q<B, Tril>, d: usize) -> SkoroResult<Q<B, EuclideanMatrixD>>;
 ```
 
-`gaussian_root_matrix(d)` implements §4.1 exactly. `information_root` builds
-`FixedLinearMap::from_row_major(rows, cols, &data, &Default::default())` and returns
-`linear_map(w, EuclideanMatrixD(d + d*d, 2*d + d*(d+1)/2), map)`.
+`gaussian_root_triplets(d)` implements §4.1 exactly. `information_root` returns
+`sparse_linear_map(w, EuclideanMatrixD(d + d*d, 2*d + d*(d+1)/2), gaussian_root_map(d))`.
+`SparseLinearMap` (`skoro_linalg::matrix`) applies a sparse host matrix by gathering and
+scatter-adding, with index tensors built on the input's device. (Amended after review: this
+originally used a dense `FixedLinearMap`, whose matrix has O(d⁵) entries and lives on the default
+device.)
 
 **R25.** `Normal::factor(&self, x)` replaces `Normal::log_density`:
 
@@ -463,9 +469,10 @@ Keep `whitened_residual` as a public helper (it may build its own nodes).
 
 **R26.** `JointNormal` gains `pub fn factor<C: ModelBuilderOps<B>>(&self, client: &C) -> SkoroResult<Factor<B>>`
 binding `RESIDUAL` (the residual node), `NORMALIZER_PARENT` (the whitening), and `FISHER_ROOT`
-= the dense whitening as `EuclideanMatrixD(D, D)` built with `linear_map(&self.whitening, .., P)`
-where `D = Σ dim(ids)` and `P` is the `[D·D, D(D+1)/2]` scatter matrix with
-`P[i·D + j, i(i+1)/2 + j] = 1` for `j ≤ i`, zero elsewhere. `add_joint_factor(client, &joint)`
+= the dense whitening as `EuclideanMatrixD(D, D)` built with
+`sparse_linear_map(&self.whitening, .., P)`, where `D = Σ dim(ids)` and `P` is the
+`[D·D, D(D+1)/2]` sparse unpacking map with `P[i·D + j, i(i+1)/2 + j] = 1` for `j ≤ i`
+(amended after review; originally a dense scatter matrix through `linear_map`). `add_joint_factor(client, &joint)`
 becomes `client.add_factor(joint.factor(client)?, joint.ids())`.
 
 **R27.** Delete `facade::add_gaussian_quantity` and `facade::gaussian_blocks`. Keep the three

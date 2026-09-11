@@ -16,7 +16,10 @@ use skoro_model::{
     model::ModelClient,
     roles::{ARGUMENT, FISHER_ROOT},
 };
-use skoro_normal::{distribution::Normal, information::gaussian_root_matrix};
+use skoro_normal::{
+    distribution::Normal,
+    information::{gaussian_root_map, gaussian_root_matrix},
+};
 use skoro_pointwise::PointwiseOps;
 use skoro_riemann::{
     euclidean::{EuclideanD, VectorD},
@@ -386,4 +389,50 @@ fn a_mismatched_covariance_is_refused() {
             found: 2
         })
     ));
+}
+
+/// The graph's root is the sparse map applied to `W`: for d = 1…6 it equals the dense reference
+/// `K · vec(W)` on every batch row.
+#[test]
+fn information_root_matches_the_dense_reference() {
+    for d in 1..=6 {
+        let d_l = d * (d + 1) / 2;
+        let batch = 2;
+        let model = ModelClient::<B>::default();
+        let w = model.add_parameter(Tril(d));
+        let root = skoro_normal::information::information_root(&w, d).unwrap();
+
+        let packed_w: Vec<f64> = (0..batch * d_l)
+            .map(|i| 0.5 + (i as f64 * 0.37).sin())
+            .collect();
+        let values = points()
+            .with_quantity(
+                &w,
+                Tensor::<B, 2>::from_data(
+                    TensorData::new(packed_w.clone(), [batch, d_l]),
+                    &Default::default(),
+                ),
+            )
+            .build();
+        let got = into_vec(root.evaluate(&values).unwrap());
+
+        let (rows, cols, k) = gaussian_root_matrix(d);
+        assert_eq!(got.len(), batch * rows);
+        for b in 0..batch {
+            let wb = &packed_w[b * d_l..(b + 1) * d_l];
+            let want: Vec<f64> = (0..rows)
+                .map(|r| (0..cols).map(|c| k[r * cols + c] * wb[c]).sum())
+                .collect();
+            assert_close(&got[b * rows..(b + 1) * rows], &want, 1e-12);
+        }
+    }
+}
+
+/// The map behind the root stores only its nonzeros: at d = 15 it is a 36,000 × 120 matrix with
+/// 1,585 of them, rather than 4.32 million dense entries.
+#[test]
+fn the_gaussian_root_map_stores_only_its_nonzeros() {
+    let map = gaussian_root_map(15);
+    assert_eq!(map.dims(), [36_000, 120]);
+    assert_eq!(map.nnz(), 1_585);
 }

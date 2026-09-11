@@ -15,8 +15,10 @@
 //! `vec((G_q + G_qᵀ) / √2)`. The cross blocks vanish in expectation, being linear in the whitened
 //! residual.
 //!
-//! Every entry of `C` is linear in `W`, which is what lets the root be one fixed linear map of
-//! the packed whitening.
+//! Every entry of `C` is linear in `W`, so the root is one fixed linear map `K` of the packed
+//! whitening. Each entry of `C` reads at most two entries of `W`, so that map is very sparse: it has
+//! O(d⁵) entries but only O(d³) nonzeros (1,585 at d = 15), and [`gaussian_root_map`] stores only
+//! those.
 //!
 //! # Accuracy on curved manifolds
 //!
@@ -44,7 +46,7 @@
 use skoro_backend::Backend;
 use skoro_core::error::SkoroResult;
 use skoro_linalg::{
-    matrix::{FixedLinearMap, linear_map},
+    matrix::{SparseLinearMap, sparse_linear_map},
     tril::Tril,
 };
 use skoro_model::q::Q;
@@ -55,49 +57,65 @@ fn packed(i: usize, j: usize) -> usize {
     i * (i + 1) / 2 + j
 }
 
-/// `K` with `vec(C) = K · vec(W)`: `W = L⁻¹` packed as a `Tril(d)`, `C` the Gaussian Fisher root
-/// over `[x, μ, L]` in row-major order.
+/// The nonzero entries of `K`, where `vec(C) = K · vec(W)`: `W = L⁻¹` packed as a `Tril(d)`, and `C`
+/// the Gaussian Fisher root over `[x, μ, L]` in row-major order.
 ///
-/// Returns `(rows, cols, data)` with `rows = (d + d²)(2d + d(d+1)/2)`, `cols = d(d+1)/2`, and
-/// `data` row-major.
-pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>) {
+/// Each entry is `(index into vec C, index into packed W, coefficient)`. Two entries can share a
+/// position — the diagonal of each `S_q` receives both `G_q` and `G_qᵀ` — and are to be summed.
+pub fn gaussian_root_triplets(d: usize) -> Vec<(usize, usize, f64)> {
     let d_l = d * (d + 1) / 2;
     let c_cols = 2 * d + d_l;
-    let c_rows = d + d * d;
-    let rows = c_rows * c_cols;
-    let cols = d_l;
-    let mut k = vec![0.0; rows * cols];
     let cidx = |r: usize, c: usize| r * c_cols + c;
+    let mut triplets = Vec::new();
 
     // The (x, μ) block: C[i][j] = W[i][j], C[i][d + j] = −W[i][j].
     for i in 0..d {
         for j in 0..=i {
-            k[cidx(i, j) * cols + packed(i, j)] += 1.0;
-            k[cidx(i, d + j) * cols + packed(i, j)] -= 1.0;
+            triplets.push((cidx(i, j), packed(i, j), 1.0));
+            triplets.push((cidx(i, d + j), packed(i, j), -1.0));
         }
     }
 
-    // The L block: C[d + r·d + c][2d + q] = (G_q[r][c] + G_q[c][r]) / √2, with
-    // G_q[r][c] = W[r][a] when c == b, for q = packed(a, b).
+    // The L block: C[d + r·d + c][2d + q] = (G_q[r][c] + G_q[c][r]) / √2 for q = packed(a, b),
+    // where G_q[r][c] = W[r][a] when c == b (and r ≥ a, W being lower triangular), and zero
+    // otherwise.
     let s = std::f64::consts::FRAC_1_SQRT_2;
     for a in 0..d {
         for b in 0..=a {
-            let q = packed(a, b);
-            for r in 0..d {
-                for c in 0..d {
-                    let row = cidx(d + r * d + c, 2 * d + q);
-                    if c == b && a <= r {
-                        k[row * cols + packed(r, a)] += s;
-                    }
-                    if r == b && a <= c {
-                        k[row * cols + packed(c, a)] += s;
-                    }
-                }
+            let col = 2 * d + packed(a, b);
+            // G_q, nonzero in column b: S_q[r][b] gains W[r][a].
+            for r in a..d {
+                triplets.push((cidx(d + r * d + b, col), packed(r, a), s));
+            }
+            // G_qᵀ, nonzero in row b: S_q[b][c] gains W[c][a].
+            for c in a..d {
+                triplets.push((cidx(d + b * d + c, col), packed(c, a), s));
             }
         }
     }
 
-    (rows, cols, k)
+    triplets
+}
+
+/// `K` as a [`SparseLinearMap`], storing only its O(d³) nonzero entries.
+pub fn gaussian_root_map(d: usize) -> SparseLinearMap {
+    let d_l = d * (d + 1) / 2;
+    SparseLinearMap::from_triplets((d + d * d) * (2 * d + d_l), d_l, gaussian_root_triplets(d))
+}
+
+/// `K` as a dense matrix: `(rows, cols, data)` with `rows = (d + d²)(2d + d(d+1)/2)`,
+/// `cols = d(d+1)/2`, and `data` row-major.
+///
+/// A reference for tests and small `d` only: it has O(d⁵) entries. The graph uses
+/// [`gaussian_root_map`].
+pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>) {
+    let d_l = d * (d + 1) / 2;
+    let rows = (d + d * d) * (2 * d + d_l);
+    let mut k = vec![0.0; rows * d_l];
+    for (row, col, value) in gaussian_root_triplets(d) {
+        k[row * d_l + col] += value;
+    }
+    (rows, d_l, k)
 }
 
 /// The Gaussian Fisher root over `[x, μ, L]` as a node of type
@@ -111,7 +129,10 @@ pub fn information_root<B: Backend>(
     w: &Q<B, Tril>,
     d: usize,
 ) -> SkoroResult<Q<B, EuclideanMatrixD>> {
-    let (rows, cols, data) = gaussian_root_matrix(d);
-    let map = FixedLinearMap::from_row_major(rows, cols, &data, &Default::default());
-    linear_map(w, EuclideanMatrixD(d + d * d, 2 * d + d * (d + 1) / 2), map)
+    let d_l = d * (d + 1) / 2;
+    sparse_linear_map(
+        w,
+        EuclideanMatrixD(d + d * d, 2 * d + d_l),
+        gaussian_root_map(d),
+    )
 }
