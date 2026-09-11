@@ -38,4 +38,8 @@ pub const WHITENING: Role = Role("whitening");
 /// of the term over the arguments' tangent coordinates, in `ARGUMENT` order.
 ///
 /// At most one per term. `k` need not equal `D`.
+///
+/// A root is either exact or accurate to a stated order, and its builder documents which. The
+/// Gaussian root (`skoro_normal::information`), for instance, is exact on flat manifolds and
+/// second-order accurate in the dispersion on groups.
 pub const FISHER_ROOT: Role = Role("fisher_root");

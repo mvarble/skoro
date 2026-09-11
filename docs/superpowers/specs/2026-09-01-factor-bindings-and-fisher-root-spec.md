@@ -141,7 +141,8 @@ information of the term over its arguments, which is what Fisher scoring needs.
 - **Fisher root** of a term: a node of type `EuclideanMatrixD(k, D)` with
   `D = Σ dim(arguments)` such that `CᵀC = E[−∂² log p]` over the arguments' tangent
   coordinates (in `ARGUMENT` order), the expectation being over the scored quantity given the
-  parents. `k` may differ from `D`.
+  parents. `k` may differ from `D`. A root may be exact or accurate to a stated order; the Gaussian
+  root of §4.1 is exact on flat manifolds and second-order accurate in the dispersion on groups.
 - **Free layout**: a `TangentLayout` over the leaves an algorithm optimises.
 
 ---
@@ -152,7 +153,7 @@ information of the term over its arguments, which is what Fisher scoring needs.
 
 **R1.** In `crates/skoro-core/src/error.rs`, remove `SkoroError::NodeIsRecorded { id }` and add
 `SkoroError::NodeStillBound { id: Id, by: Id }` with the message
-"node {id} is still bound by {by}". Fix every use site (`grep -rn NodeIsRecorded crates`).
+`"node {id} is still bound by {by}"`. Fix every use site (`grep -rn NodeIsRecorded crates`).
 
 ### 3.2 skoro-linalg: a fixed linear map operation
 
@@ -172,6 +173,7 @@ impl<B: Backend> FixedLinearMap<B> {
 
 **R3.** `impl<B: Backend> DiffOperation<B> for FixedLinearMap<B>` with `VjpState = bool`,
 `HvpState = ()`, one input `x: [batch, in]`:
+
 - forward output `y = x · Kᵀ`, shape `[batch, out]` (`x.matmul(K.transpose())` with `K`
   unsqueezed to `[1, out, in]` and broadcast, or an equivalent).
 - `Jvp`: tangent frame `dx: [batch, in, f]` maps to `K · dx`, shape `[batch, out, f]`.
@@ -279,14 +281,14 @@ pub const FISHER_ROOT: Role = Role("fisher_root");
 
 Each constant carries a doc comment stating its contract (from §2 and this table):
 
-| Role | Cardinality per term | Contract |
-|---|---|---|
-| `ARGUMENT` | ≥ 1, ordered | the term's local views are expressed over these, in this order; nodes must be distinct and continuous |
-| `RESIDUAL` | 0 or 1 | an `EuclideanD` node `r` with `−log p = ½‖r‖² + n` |
-| `NORMALIZER_PARENT` | any | every node `n` depends on |
-| `LOCATION` | 0 or 1 | `μ` in `r = L⁻¹(x ⊖ μ)` |
-| `WHITENING` | 0 or 1 | `L` in `r = L⁻¹(x ⊖ μ)`, with `Σ = LLᵀ` |
-| `FISHER_ROOT` | 0 or 1 | `EuclideanMatrixD(k, Σ dim(ARGUMENT))`, `CᵀC` = expected information over the arguments in `ARGUMENT` order |
+| Role                | Cardinality per term | Contract                                                                                                    |
+| ------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `ARGUMENT`          | ≥ 1, ordered         | the term's local views are expressed over these, in this order; nodes must be distinct and continuous       |
+| `RESIDUAL`          | 0 or 1               | an `EuclideanD` node `r` with `−log p = ½‖r‖² + n`                                                          |
+| `NORMALIZER_PARENT` | any                  | every node `n` depends on                                                                                   |
+| `LOCATION`          | 0 or 1               | `μ` in `r = L⁻¹(x ⊖ μ)`                                                                                     |
+| `WHITENING`         | 0 or 1               | `L` in `r = L⁻¹(x ⊖ μ)`, with `Σ = LLᵀ`                                                                     |
+| `FISHER_ROOT`       | 0 or 1               | `EuclideanMatrixD(k, Σ dim(ARGUMENT))`, `CᵀC` = expected information over the arguments in `ARGUMENT` order |
 
 **R13.** In `src/q.rs` add
 
@@ -512,6 +514,14 @@ Why: over `(x, μ)` the expected information of `−½‖W(x ⊖ μ)‖²` is
 equals `tr((G_q + G_qᵀ)(G_{q'} + G_{q'}ᵀ))`, so `C_Lᵀ C_L = F_LL`. Cross blocks between
 `(x, μ)` and `L` vanish in expectation (they are linear in the whitened residual).
 
+Curved manifolds: the `[W, −W]` block takes the Jacobians of `v = x ⊖ μ` to be `±I`, which is exact
+only on flat spaces. On `SO3` and `SE3` the Jacobians are `±I` plus terms linear in `v`. Since `v` is a
+zero-mean Gaussian under the model, those terms vanish in expectation, and the root is correct to second
+order in the dispersion: the relative error of `CᵀC` is proportional to `‖Σ‖`, measured at about
+`1.2 σ²` on `SO3` and `1.6 σ²` on `SE3` for `Σ = σ² L₀L₀ᵀ` with a skewed `L₀`. That is the same order
+as the manifold `Normal`'s own density, which omits the retraction's volume factor. See
+`skoro_normal::information`.
+
 **Construction of `K` (`gaussian_root_matrix(d)`)**, with `c_cols = 2d + d_L`,
 `c_rows = d + d²`, `rows = c_rows · c_cols`, `cols = d_L`, `K = zeros(rows × cols)` row-major,
 `cidx(r, c) = r · c_cols + c`:
@@ -556,59 +566,59 @@ tensors from `TensorData`, not `Tensor::from_floats`. Tolerances are absolute un
 
 ### 5.1 `crates/skoro-graph/tests/graph_mutation.rs` (add a `mod bindings`)
 
-| Test | Setup | Assert |
-|---|---|---|
-| `bind_refuses_a_missing_endpoint` | one constant `a` | `bind(a, Role("r"), fresh_id)` is `Err(NodeNotFound)`; `bind(fresh_id, .., a)` likewise |
-| `bind_is_readable_in_order` | constants `a, b, c` | after `bind(a,R1,b)`, `bind(a,R2,c)`, `bind(a,R1,c)`: `bindings_of(a) == [(R1,b),(R2,c),(R1,c)]`, `bound(a,R1) == [b,c]`, `referrers_of(b) == [a]` |
-| `remove_refuses_a_bound_target` | `bind(a, R, b)` | `remove(&[b])` is `Err(NodeStillBound { id: b, by: a })`; `remove(&[a, b])` is `Ok` |
-| `remove_source_clears_the_reference` | `bind(a, R, b)` | after `remove(&[a])`, `referrers_of(b)` is empty and `remove(&[b])` is `Ok` |
-| `remove_closure_takes_referrers` | `bind(a, R, b)` | `remove_closure(&[b])` removes both `a` and `b` |
-| `validate_indices_holds_after_binding_mutations` | the sequences above | `validate_indices()` is `Ok` after every step |
-| `terms_classify_proposal_and_weight` | stochastic `x` with a density; observed `y` with a density; a free-standing likelihood | `terms()` has kinds `[Proposal, Weight, Weight]` in marking order; after `observe(x)` the first becomes `Weight` |
-| `log_density_terms_sums_only_the_named_terms` | two terms | `log_density_terms(&[t1]) + log_density_terms(&[t2]) == log_density()` within `1e-12`; `log_density_terms(&[mapped_id])` is `Err(NotLogLikelihood)` |
+| Test                                             | Setup                                                                                  | Assert                                                                                                                                              |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bind_refuses_a_missing_endpoint`                | one constant `a`                                                                       | `bind(a, Role("r"), fresh_id)` is `Err(NodeNotFound)`; `bind(fresh_id, .., a)` likewise                                                             |
+| `bind_is_readable_in_order`                      | constants `a, b, c`                                                                    | after `bind(a,R1,b)`, `bind(a,R2,c)`, `bind(a,R1,c)`: `bindings_of(a) == [(R1,b),(R2,c),(R1,c)]`, `bound(a,R1) == [b,c]`, `referrers_of(b) == [a]`  |
+| `remove_refuses_a_bound_target`                  | `bind(a, R, b)`                                                                        | `remove(&[b])` is `Err(NodeStillBound { id: b, by: a })`; `remove(&[a, b])` is `Ok`                                                                 |
+| `remove_source_clears_the_reference`             | `bind(a, R, b)`                                                                        | after `remove(&[a])`, `referrers_of(b)` is empty and `remove(&[b])` is `Ok`                                                                         |
+| `remove_closure_takes_referrers`                 | `bind(a, R, b)`                                                                        | `remove_closure(&[b])` removes both `a` and `b`                                                                                                     |
+| `validate_indices_holds_after_binding_mutations` | the sequences above                                                                    | `validate_indices()` is `Ok` after every step                                                                                                       |
+| `terms_classify_proposal_and_weight`             | stochastic `x` with a density; observed `y` with a density; a free-standing likelihood | `terms()` has kinds `[Proposal, Weight, Weight]` in marking order; after `observe(x)` the first becomes `Weight`                                    |
+| `log_density_terms_sums_only_the_named_terms`    | two terms                                                                              | `log_density_terms(&[t1]) + log_density_terms(&[t2]) == log_density()` within `1e-12`; `log_density_terms(&[mapped_id])` is `Err(NotLogLikelihood)` |
 
 ### 5.2 `crates/skoro-linalg/tests/linear_map.rs`
 
-| Test | Assert |
-|---|---|
-| `forward_matches_the_host_product` | for a random `K: 3×2` and `x: [batch 2, 2]`, output equals `x Kᵀ` within `1e-12` |
-| `jacobian_is_the_matrix` | `jacobian_vjp(inputs=[x], outputs=[y])` equals `K` for every batch row, and equals `jacobian_jvp` |
-| `hvp_is_zero` | `evaluate_hvp` along any tangent returns second-order cotangents all zero |
-| `shape_mismatch_is_reported` | for a `3×2` map, `linear_map(&x, EuclideanD(4), ..)` is `Err(ShapeMismatch { expected: 4, found: 3 })` |
+| Test                               | Assert                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `forward_matches_the_host_product` | for a random `K: 3×2` and `x: [batch 2, 2]`, output equals `x Kᵀ` within `1e-12`                       |
+| `jacobian_is_the_matrix`           | `jacobian_vjp(inputs=[x], outputs=[y])` equals `K` for every batch row, and equals `jacobian_jvp`      |
+| `hvp_is_zero`                      | `evaluate_hvp` along any tangent returns second-order cotangents all zero                              |
+| `shape_mismatch_is_reported`       | for a `3×2` map, `linear_map(&x, EuclideanD(4), ..)` is `Err(ShapeMismatch { expected: 4, found: 3 })` |
 
 ### 5.3 `crates/skoro-model/tests/bindings.rs` (replaces `tests/residual.rs`)
 
 Use a local test distribution whose `factor` returns
 `Factor::new(register_map1(Real, LiteralScalarMultiplication::new(2.0), x)?).bind(RESIDUAL, &some_mapped_node)`.
 
-| Test | Assert |
-|---|---|
-| `add_quantity_binds_the_arguments` | `bound(density, ARGUMENT) == [x, parents...]` in that order |
-| `add_quantity_binds_what_the_factor_declared` | `bound(density, RESIDUAL) == [residual]` |
-| `a_bound_node_survives_cleanup` | drop the residual's `Q`; `cleanup()`; the residual is still in the graph |
-| `remove_refuses_a_bound_node` | `remove(&[residual])` is `Err(NodeStillBound { id: residual, by: density })` |
-| `remove_closure_takes_the_term_with_its_binding` | `remove_closure(&[residual])`: residual and density gone; `log_density == 0` |
-| `demotion_sweeps_the_bindings_with_the_density` | `demote_to_parameter(&x)`; residual (handle dropped) is gone; `factors()` is empty |
-| `add_factor_marks_and_binds` | `add_factor(Factor::new(term).bind(RESIDUAL,&r), &[a, b])`: `factors()` has one entry with `scored == None`, `kind == Weight`, `arguments == [a, b]`; `bound(term, RESIDUAL) == [r]` |
-| `add_factor_needs_an_argument` | `add_factor(.., &[])` is `Err(ShapeMismatch { expected: 1, found: 0 })` |
-| `factors_are_in_term_order` | three terms added in order appear in that order |
-| `residual_layout_follows_term_order_and_dimension` | two terms with residuals of dims 2 and 3: `residual_layout(&client).total() == 5`, ids in order |
+| Test                                               | Assert                                                                                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `add_quantity_binds_the_arguments`                 | `bound(density, ARGUMENT) == [x, parents...]` in that order                                                                                                                          |
+| `add_quantity_binds_what_the_factor_declared`      | `bound(density, RESIDUAL) == [residual]`                                                                                                                                             |
+| `a_bound_node_survives_cleanup`                    | drop the residual's `Q`; `cleanup()`; the residual is still in the graph                                                                                                             |
+| `remove_refuses_a_bound_node`                      | `remove(&[residual])` is `Err(NodeStillBound { id: residual, by: density })`                                                                                                         |
+| `remove_closure_takes_the_term_with_its_binding`   | `remove_closure(&[residual])`: residual and density gone; `log_density == 0`                                                                                                         |
+| `demotion_sweeps_the_bindings_with_the_density`    | `demote_to_parameter(&x)`; residual (handle dropped) is gone; `factors()` is empty                                                                                                   |
+| `add_factor_marks_and_binds`                       | `add_factor(Factor::new(term).bind(RESIDUAL,&r), &[a, b])`: `factors()` has one entry with `scored == None`, `kind == Weight`, `arguments == [a, b]`; `bound(term, RESIDUAL) == [r]` |
+| `add_factor_needs_an_argument`                     | `add_factor(.., &[])` is `Err(ShapeMismatch { expected: 1, found: 0 })`                                                                                                              |
+| `factors_are_in_term_order`                        | three terms added in order appear in that order                                                                                                                                      |
+| `residual_layout_follows_term_order_and_dimension` | two terms with residuals of dims 2 and 3: `residual_layout(&client).total() == 5`, ids in order                                                                                      |
 
 Keep the existing compile-fail case `tests/compile_fail/remove_closure_is_not_a_client_op.rs`.
 
 ### 5.4 `crates/skoro-model/tests/terms.rs`
 
-| Test | Assert |
-|---|---|
+| Test                                      | Assert                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `proposal_plus_weight_is_the_log_density` | model with a stochastic `x`, an observed `y`, and one `add_factor` term: `log_proposal + log_weight == log_density` within `1e-12` |
-| `observing_moves_a_term_to_the_weight` | before `observe(x)` the `x` term is `Proposal`; after, `Weight` |
+| `observing_moves_a_term_to_the_weight`    | before `observe(x)` the `x` term is `Proposal`; after, `Weight`                                                                    |
 
 ### 5.5 `crates/skoro-model/tests/jacobian.rs` (add)
 
-| Test | Assert |
-|---|---|
+| Test                                          | Assert                                                                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `a_leaf_row_that_is_a_column_is_the_identity` | outputs `[u, x]` with `x` a parameter in `inputs`: rows of `x` equal the identity on `x`'s columns and zero elsewhere, on both paths |
-| `a_leaf_row_that_is_not_a_column_is_zero` | outputs `[u, c]` with `c` a constant not in `inputs`: rows of `c` are zero on both paths, no error |
+| `a_leaf_row_that_is_not_a_column_is_zero`     | outputs `[u, c]` with `c` a constant not in `inputs`: rows of `c` are zero on both paths, no error                                   |
 
 ### 5.6 `crates/skoro-model/tests/teardown.rs`
 
@@ -618,16 +628,16 @@ Every existing test in the file must still pass unchanged in intent. Remove the 
 
 ### 5.7 `crates/skoro-normal/tests/information.rs` (new)
 
-| Test | Setup | Assert |
-|---|---|---|
-| `observed_gaussian_information_is_h_transpose_precision_h` | `θ: Parameter EuclideanD(2)`; `μ = log(A·θ + c)` with `A` a constant `EuclideanMatrixD(3,2)` and `c` a constant `EuclideanD(3)` chosen so `A θ + c > 0`; `L` a constant non-diagonal `Tril(3)`; `y = add_quantity(Normal::new(μ, L))`, then `observe(y)`; `free = [θ]` | `information(free)` equals `Hᵀ Σ⁻¹ H` within `1e-9`, where `H = jacobian_vjp(inputs=free, outputs=[μ])` and `Σ⁻¹` from `L` on the host; `information_root` has shape `[1, 3 + 9, 2]` |
-| `gaussian_prior_information_is_the_precision` | constants `μ`, `L` (non-diagonal `Tril(2)`); `x = add_quantity(Normal::new(μ, L))` unobserved; `free = [x]` | `information(free) == Σ⁻¹` within `1e-9` |
-| `covariance_information_matches_the_trace_formula` | `L: Parameter Tril(2)` at `L0 = [[1.5, 0], [-0.4, 0.8]]`; constant `μ`; `x` observed at any value; `free = [L]` | `information(free)` equals the host `F_LL` of §4.2 within `1e-9` (a `3×3` matrix) |
-| `covariance_information_matches_the_score_covariance` | as above but `x` unobserved; seed the backend if it offers `Backend::seed` (optional; the tolerance is wide enough without it); `N = 40_000`; `generate_from(points{L: L0 repeated N}, N)`; read the sampled `x` from the returned `variables`; feed `x` and `L0` (batch `N`) into `log_density_ord1`; average the outer products of the `L` cotangents over the batch | every entry within `0.05 · max(1, |F_LL|)` of the host `F_LL` |
-| `information_is_the_gram_of_the_root` | any model above | `information == information_rootᵀ · information_root` within `1e-12` |
-| `se3_root_is_sized_by_dimension` | `Normal` over `SE3` with `Tril(6)` | the `FISHER_ROOT` node's quantity type is `EuclideanMatrixD(42, 33)`; `bound(density, ARGUMENT)` has layout total `6 + 6 + 21 = 33` |
-| `a_constant_covariance_folds_the_root` | constant `L` | the root node is `Node::Mapped` with `value.is_some()`; with `L` a parameter, `value.is_none()` |
-| `a_mismatched_covariance_is_refused` | `Normal::new(μ: EuclideanD(3), L: Tril(2))` then `add_quantity` | `Err(ShapeMismatch { expected: 3, found: 2 })` |
+| Test                                                       | Setup                                                                                                                                                                                                                                                                                                                                                                  | Assert                                                                                                                                                                               |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `observed_gaussian_information_is_h_transpose_precision_h` | `θ: Parameter EuclideanD(2)`; `μ = log(A·θ + c)` with `A` a constant `EuclideanMatrixD(3,2)` and `c` a constant `EuclideanD(3)` chosen so `A θ + c > 0`; `L` a constant non-diagonal `Tril(3)`; `y = add_quantity(Normal::new(μ, L))`, then `observe(y)`; `free = [θ]`                                                                                                 | `information(free)` equals `Hᵀ Σ⁻¹ H` within `1e-9`, where `H = jacobian_vjp(inputs=free, outputs=[μ])` and `Σ⁻¹` from `L` on the host; `information_root` has shape `[1, 3 + 9, 2]` |
+| `gaussian_prior_information_is_the_precision`              | constants `μ`, `L` (non-diagonal `Tril(2)`); `x = add_quantity(Normal::new(μ, L))` unobserved; `free = [x]`                                                                                                                                                                                                                                                            | `information(free) == Σ⁻¹` within `1e-9`                                                                                                                                             |
+| `covariance_information_matches_the_trace_formula`         | `L: Parameter Tril(2)` at `L0 = [[1.5, 0], [-0.4, 0.8]]`; constant `μ`; `x` observed at any value; `free = [L]`                                                                                                                                                                                                                                                        | `information(free)` equals the host `F_LL` of §4.2 within `1e-9` (a `3×3` matrix)                                                                                                    |
+| `covariance_information_matches_the_score_covariance`      | as above but `x` unobserved; seed the backend if it offers `Backend::seed` (optional; the tolerance is wide enough without it); `N = 40_000`; `generate_from(points{L: L0 repeated N}, N)`; read the sampled `x` from the returned `variables`; feed `x` and `L0` (batch `N`) into `log_density_ord1`; average the outer products of the `L` cotangents over the batch | every entry within `0.05 · max(1,                                                                                                                                                    | F_LL | )`of the host`F_LL` |
+| `information_is_the_gram_of_the_root`                      | any model above                                                                                                                                                                                                                                                                                                                                                        | `information == information_rootᵀ · information_root` within `1e-12`                                                                                                                 |
+| `se3_root_is_sized_by_dimension`                           | `Normal` over `SE3` with `Tril(6)`                                                                                                                                                                                                                                                                                                                                     | the `FISHER_ROOT` node's quantity type is `EuclideanMatrixD(42, 33)`; `bound(density, ARGUMENT)` has layout total `6 + 6 + 21 = 33`                                                  |
+| `a_constant_covariance_folds_the_root`                     | constant `L`                                                                                                                                                                                                                                                                                                                                                           | the root node is `Node::Mapped` with `value.is_some()`; with `L` a parameter, `value.is_none()`                                                                                      |
+| `a_mismatched_covariance_is_refused`                       | `Normal::new(μ: EuclideanD(3), L: Tril(2))` then `add_quantity`                                                                                                                                                                                                                                                                                                        | `Err(ShapeMismatch { expected: 3, found: 2 })`                                                                                                                                       |
 
 ### 5.8 `crates/skoro-normal/tests/{structure,retire,facade,window,demote}.rs`
 
@@ -652,8 +662,8 @@ The following behaviours must remain asserted:
 Adapt the `records` and `retirement` modules to bindings (`FactorInfo.arguments == ids`,
 `bound(density, RESIDUAL)` is the residual). Add:
 
-| Test | Assert |
-|---|---|
+| Test                                 | Assert                                                                                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `joint_information_is_the_precision` | for the existing `coupled_precision()` fixture over `SE3 + EuclideanD(3)`, `information(free = the two ids)` equals `Λ` (the 9×9 precision) within `1e-8` |
 
 ---

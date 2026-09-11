@@ -17,6 +17,29 @@
 //!
 //! Every entry of `C` is linear in `W`, which is what lets the root be one fixed linear map of
 //! the packed whitening.
+//!
+//! # Accuracy on curved manifolds
+//!
+//! The `[W, −W]` block takes the Jacobians of `v = x ⊖ μ` with respect to `x` and `μ` to be `I` and
+//! `−I`. On `EuclideanD` that is exact. On a group the inverse retraction's Jacobians equal `±I`
+//! only at `v = 0`. For `SO3`, whose inverse retraction is `ω = Log(r₀ᵀ r₁)`, they are
+//! `J_r⁻¹(ω) = I + ½[ω]× + O(‖ω‖²)` and `−J_r⁻¹(ω) Exp(−ω) = −(I − ½[ω]×) + O(‖ω‖²)`; `SE3`'s
+//! translation block adds further terms linear in `v`.
+//!
+//! Under the model `v` is Gaussian with covariance `Σ`, and a Gaussian's odd moments vanish, so every
+//! correction linear in `v` drops out of the expectation. The root is therefore exact on flat spaces
+//! and correct to second order in the dispersion on `SO3` and `SE3`: the relative error of `CᵀC` grows
+//! like `‖Σ‖`. That matches the order of the approximation a `Normal` on a group already makes, since
+//! its density omits the retraction's volume factor `det J_r(ω) = 1 − ‖ω‖²/12 + …`. When `Σ` is
+//! isotropic the corrections vanish identically, because each one applies `[v]×` to a multiple of `v`.
+//!
+//! Against the covariance of the model's own score, with `Σ = σ² L₀L₀ᵀ` for a fixed skewed triangle
+//! `L₀`, the measured relative error of `CᵀC` is about `1.2 σ²` on `SO3` and `1.6 σ²` on `SE3`.
+//!
+//! Two alternatives were rejected. The exact expectation has no closed form on a group. A root built
+//! from the residual's Jacobian at the current point — the Gauss–Newton rows, which the `RESIDUAL`
+//! binding already provides — is exact at that point, but it is not an expected information, and it
+//! would make a Riemannian HMC metric depend on derivatives of the logarithm's Jacobians.
 
 use skoro_backend::Backend;
 use skoro_core::error::SkoroResult;
@@ -81,6 +104,9 @@ pub fn gaussian_root_matrix(d: usize) -> (usize, usize, Vec<f64>) {
 /// `EuclideanMatrixD(d + d², 2d + d(d+1)/2)`, built from the whitening `w = L⁻¹`.
 ///
 /// `d` is the manifold dimension of the Gaussian's quantity.
+///
+/// Exact on flat manifolds, and second-order accurate in the dispersion on groups; see the
+/// [module documentation](self).
 pub fn information_root<B: Backend>(
     w: &Q<B, Tril>,
     d: usize,

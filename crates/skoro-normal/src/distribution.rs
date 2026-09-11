@@ -200,7 +200,8 @@ where
     /// `L⁻¹` is built once and shared by the residual, the normalizer, and the Fisher root. The
     /// factor binds [`RESIDUAL`] to `r`, [`LOCATION`] to `μ`, [`WHITENING`] and
     /// [`NORMALIZER_PARENT`] to `L`, and [`FISHER_ROOT`] to the root over `[x, μ, L]` (see
-    /// [`information`](crate::information)).
+    /// [`information`](crate::information)). The root is exact on flat manifolds and second-order
+    /// accurate in the dispersion on groups; that module's documentation explains why.
     ///
     /// Returns [`SkoroError::ShapeMismatch`] if `L` is not sized for the quantity's dimension.
     fn factor(&self, x: &Q<B, M>) -> SkoroResult<Factor<B>> {
