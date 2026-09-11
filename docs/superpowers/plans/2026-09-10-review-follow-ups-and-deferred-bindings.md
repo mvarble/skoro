@@ -1,8 +1,8 @@
 # Review follow-ups: Fisher root cost, devices, leaf rows, and deferred bindings
 
 Status: steps **3.1–3.3 are implemented**, and F4 is resolved (documentation only, §3.4).
-Deferred bindings (§3.5) are **postponed** and not planned for some time. The lesser observations
-(§2.5) remain open.
+Deferred bindings (§3.5) are **postponed** and not planned for some time. Of the lesser
+observations (§2.5), items 1, 2 and 4 are implemented; 3, 5 and 6 remain open.
 
 Context: the factor-bindings work
 (`docs/superpowers/specs/2026-09-01-factor-bindings-and-fisher-root-spec.md`,
@@ -102,19 +102,21 @@ groups. It is still not the Gauss–Newton matrix at the current `x`.
 
 ### 2.5 Lesser observations
 
-1. **Per-term compilation in `information_blocks`.** Each term with a root compiles and runs its own
+1. **Per-term compilation in `information_blocks`.** (**Implemented**; R23 amended.) Each term with a root compiles and runs its own
    `jacobian_vjp` plus a separate `evaluate_ids` for the root: O(terms) compilations per call. One
    layout over the union of all terms' arguments, one reverse pass, and one evaluation of every root
    would be O(1) compilations. Each term's block is then sliced out. This needs no compiled-program
    cache, which §7 excludes.
-2. **An orphan stochastic node when a factor fails.** When `distr.factor(&x)` or the new model check
+2. **An orphan stochastic node when a factor fails.** (**Implemented**; R16 amended.) When `distr.factor(&x)` or the new model check
    fails inside `ModelClient::add_quantity`, the stochastic node `x` is already in the graph. It has
    no density and no handle, so it is swept at the next `cleanup()`, but it is visible until then.
    Removing `x` on the error path would make the call atomic.
 3. **`ModelServer::add_factor` cannot check model identity**, because the server does not know its
    own id; its docs point to the client method. Storing the id on `ModelServer` would let the server
    check too.
-4. **Spec text has drifted from the code** in three places, all deliberate:
+4. **Spec text has drifted from the code** (**implemented**: amended in place, with an amendments
+   list at the top of the spec and §1 relabelled as the pre-change record) in three places, all
+   deliberate:
    - R1's message wording;
    - R3's `hvp` (zeros shaped like the input, not `ω.zeros_like()`);
    - §5.8's residual refusal, which is `NodeStillReferenced`, since a `Normal` residual feeds its own
@@ -518,5 +520,5 @@ Each phase is additive until D3, which is the only behavioural change: a root is
 2. F4: decided, option (a) (§3.4).
 3. Deferred bindings: decided, wait. Not for some time; §3.5.1 lists what would reopen it, and
    §3.5.7 the questions that would then need answers.
-4. Lesser observations (§2.5): which to schedule. Items 1, 2 and 4 are cheap; 5 waits for the flex
+4. Lesser observations (§2.5): items 1, 2 and 4 are done; 3 is unscheduled; 5 waits for the flex
    backend; 6 is separate `skoro-so3` work.

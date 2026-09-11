@@ -7,6 +7,26 @@ features that are not listed here; §7 lists what is deliberately out of scope.
 
 Workspace root: `/home/mvarble/dev/skoro`. Rust 2024 edition. Run all commands from the root.
 
+## Amendments
+
+This change is implemented. Where the code deliberately departs from the text as first written,
+the text has been amended where it stands, so the document still describes the code. The reasons
+are in `docs/superpowers/plans/2026-09-10-review-follow-ups-and-deferred-bindings.md`.
+
+- **§1** records the code this change started from (`b7ae3c8`). It is kept as that record; much of
+  it, §1.3 in particular, no longer holds.
+- **R1**: the `NodeStillBound` message also says how to retire the referrer.
+- **R2, R3**: `FixedLinearMap` moves its matrix to the input's device on every application
+  (review 3.2), and its `hvp` returns zeros shaped like the input's cotangent, not like `ω`.
+- **R16**: `add_quantity` is atomic; a failed factor removes `x` and what was built from it
+  (review §2.5, item 2).
+- **R22**: only a parameter or stochastic leaf row gets the identity (review 3.3, F3).
+- **R23**: two compilations per call rather than two per term (review §2.5, item 1), and a
+  parameter root is read from the variables (`c07d0b8`).
+- **R24, R26**: the Gaussian and joint roots use `SparseLinearMap` (review 3.1).
+- **§5.8**: removing a bound Gaussian residual is refused with `NodeStillReferenced`, because the
+  residual also feeds its own density.
+
 ---
 
 ## 0. Goal in one paragraph
@@ -23,7 +43,11 @@ information of the term over its arguments, which is what Fisher scoring needs.
 
 ---
 
-## 1. Facts about the current code (verified; rely on these)
+## 1. Facts about the code before this change (as of `b7ae3c8`)
+
+These were verified against the code this change started from, and are kept as that record. Much of
+it no longer holds: R18, R25 and R27 removed `FactorRecord`, `Normal::log_density` and
+`add_gaussian_quantity`, for example. For how things are now, read the code, not this section.
 
 ### 1.1 Graph (`crates/skoro-graph`)
 
@@ -153,7 +177,9 @@ information of the term over its arguments, which is what Fisher scoring needs.
 
 **R1.** In `crates/skoro-core/src/error.rs`, remove `SkoroError::NodeIsRecorded { id }` and add
 `SkoroError::NodeStillBound { id: Id, by: Id }` with the message
-`"node {id} is still bound by {by}"`. Fix every use site (`grep -rn NodeIsRecorded crates`).
+`"cannot remove node {id:?}; it is still bound by {by:?} (retire the referrer with a closure removal instead)"`
+(amended: first written as `"node {id} is still bound by {by}"`; the implemented message matches
+`NodeStillReferenced`'s and says what to do instead). Fix every use site (`grep -rn NodeIsRecorded crates`).
 
 ### 3.2 skoro-linalg: a fixed linear map operation
 
@@ -180,8 +206,12 @@ impl<B: Backend> FixedLinearMap<B> {
 - `Vjp`: state is `diffs[0]`; `vjp` returns `[Some(Kᵀ · ω)]` with `ω: [batch, out, f]` giving
   `[batch, in, f]` when the state is `true`, else `[None]`.
 - `Hvp`: forward tangent as in `Jvp` but on a rank-2 vector; `hvp` returns
-  `[Some(ω.zeros_like())]` when the vjp state is `true`, else `[None]` (linear map).
+  `[Some(zeros [batch, in, f])]`, shaped like the input's cotangent, when the vjp state is `true`,
+  else `[None]` (linear map). (Amended: first written as `ω.zeros_like()`, which is
+  `[batch, out, f]` and so the wrong shape whenever `out ≠ in`.)
 - Backend-generic: no ndarray/cube split.
+- Every application first moves `K` to its input's device, a no-op when they already match, so
+  `from_row_major`'s `device` is only where `K` starts (amended after review 3.2).
 
 **R4.** Sugar in the same module, exported from `skoro_linalg::matrix`:
 
@@ -333,6 +363,10 @@ empty return `ShapeMismatch { expected: 1, found: 0 }` before mutating anything.
 3. write lock; `mark_density(&factor.log_density, &x)?`;
    bind `ARGUMENT` to `x.id()` then to each id of `distr.parent_ids()` in order;
    bind every `(role, handle)` of `factor.bindings`; return `x`.
+4. If step 2 or 3 fails (including the check that the factor belongs to this model), drop `x`,
+   `remove_closure(&[x.id()])`, and return the error, so a failed call leaves nothing behind
+   (amended after review, §2.5 item 2; first written without this step, which left `x` to the
+   next `cleanup`).
 
 `ModelClient::add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>>`
 takes the write lock, calls the server, returns `factor.log_density`.
@@ -421,15 +455,23 @@ pub fn information<B, C>(client: &C, points: &ValueMap<B>, free: &TangentLayout)
    `ShapeMismatch { expected: 1, found: n }`.
 2. `f.arguments` empty: `ShapeMismatch { expected: 1, found: 0 }`.
    `args = client.tangent_layout(&f.arguments)?`.
-3. `j = jacobian_vjp(client, points, free, &args)?` — shape `[batch, args.total(), free.total()]`.
-4. Evaluate the root: `out = client.evaluate_ids(points, &[root])?`; take
-   `out.evaluations.get(&root)` (if `None`, the root is a constant-folded or leaf node; then
-   look in `out.constants`); downcast its quantity type to `EuclideanMatrixD(k, cols)`
+3. `j` = the rows of `args` in one `J = jacobian_vjp(client, points, free, &union)?`, where
+   `union` lays out every term's arguments, each id once, in first-appearance order. Each block of
+   `args` is sliced from `J` and the slices are concatenated in `args` order, giving
+   `[batch, args.total(), free.total()]`.
+4. Evaluate the root from one `out = client.evaluate_ids(points, &roots)?` over every term's
+   root; take `out.evaluations.get(&root)`, else `out.constants` (a constant-folded or constant
+   root), else `out.variables` (a parameter root); downcast its quantity type to `EuclideanMatrixD(k, cols)`
    (error `QuantityTypeMismatch { id: root }` if it is not one); require `cols == args.total()`
    (else `LayoutDimensionMismatch { expected: args.total(), found: cols }`); reshape the float
    tensor `[batch, k·cols]` to `[batch, k, cols]`. If the evaluated tensor has batch 1 and
    `points` has batch `b > 1`, repeat it along dim 0 to `b`.
 5. `block = root.matmul(j)` → `[batch, k, free.total()]`. Push `InformationBlock { factor: f.density, root: block }`.
+
+Steps 1 and 2 run for every term before steps 3 and 4, which run once for all of them, so a call
+compiles twice however many terms there are. With no term binding a root, return no blocks
+without evaluating anything. (Amended after review, §2.5 item 1: first written with steps 3 and 4
+per term, O(terms) compilations; the `out.variables` lookup was added by `c07d0b8`.)
 
 `information_root` concatenates the blocks along dim 1 in order; with no blocks it returns
 `ShapeMismatch { expected: 1, found: 0 }`. `information` returns `Aᵀ A` via
@@ -665,8 +707,10 @@ The following behaviours must remain asserted:
   location, whitening, and normalizer parent it built; the bound density is the model's own term.
 - `retire.rs`: demoting a Gaussian quantity removes its term from `factors()`, its rows from
   `residual_layout`, and (after cleanup) its residual from the graph; `remove_closure(&[x])`
-  takes the factor and its bindings; client-tier `remove` of a bound residual is
-  `Err(NodeStillBound)`.
+  takes the factor and its bindings; client-tier `remove` of a bound, childless root is
+  `Err(NodeStillBound)`, and of the bound residual `Err(NodeStillReferenced)`. (Amended: first
+  written as `NodeStillBound` for the residual, but a Gaussian residual also feeds its own
+  density's `‖r‖²`, and the parent-edge check runs before the binding check.)
 - `window.rs`: the sliding window grows and retires without leaking (`graph_node_count`
   bounded), using `add_quantity` and `add_joint_factor`.
 - `facade.rs` / `demote.rs`: adapt mechanically.
