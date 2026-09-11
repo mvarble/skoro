@@ -11,7 +11,7 @@ use skoro_model::{
     ModelClientOps,
     distribution::Factor,
     hash_map_builders::points,
-    information::information,
+    information::{information, information_blocks, information_root},
     map::register_map1,
     model::ModelClient,
     q::Q,
@@ -84,4 +84,81 @@ fn a_mapped_root_is_evaluated() {
         .with_quantity(&c, row(1.5))
         .build();
     assert_eq!(information_over_theta(&model, &theta, &root, &values), 9.0);
+}
+
+/// Terms that share arguments, list them in different orders, or bind no root at all: each block
+/// is still the term's own root times the term's own Jacobian.
+///
+/// The free layout is `[φ, θ]` and `ψ = 3φ` is a mapped argument, so every row of `J` is known:
+/// `θ` is `[0, 0, 1]`, `ψ₀` is `[3, 0, 0]` and `ψ₁` is `[0, 3, 0]`. The first term lists `[θ, ψ]`,
+/// the rootless term `[ψ]`, and the last `[ψ, θ]`; the roots are constants, so each block can be
+/// multiplied out by hand.
+#[test]
+fn terms_sharing_arguments_in_different_orders_get_their_own_blocks() {
+    let model = ModelClient::<B>::default();
+    let theta = model.add_parameter(EuclideanD(1));
+    let phi = model.add_parameter(EuclideanD(2));
+    let psi = register_map1(EuclideanD(2), LiteralScalarMultiplication::new(3.0), &phi).unwrap();
+    let density = || register_map1(Real, LiteralScalarMultiplication::new(-0.5), &theta).unwrap();
+
+    let c1 = model.add_constant(
+        EuclideanMatrixD(2, 3),
+        &MatrixD::new(2, 3, &[1.0, 2.0, 0.0, 0.0, -1.0, 4.0]),
+    );
+    let first = model
+        .add_factor(
+            Factor::new(density()).bind(FISHER_ROOT, &c1),
+            &[theta.id(), psi.id()],
+        )
+        .unwrap();
+    model
+        .add_factor(Factor::new(density()), &[psi.id()])
+        .unwrap();
+    let c2 = model.add_constant(
+        EuclideanMatrixD(1, 3),
+        &MatrixD::new(1, 3, &[0.5, -2.0, 5.0]),
+    );
+    let last = model
+        .add_factor(
+            Factor::new(density()).bind(FISHER_ROOT, &c2),
+            &[psi.id(), theta.id()],
+        )
+        .unwrap();
+
+    let values = points()
+        .with_quantity(&theta, row(0.3))
+        .with_quantity(
+            &phi,
+            Tensor::<B, 2>::from_data(
+                TensorData::new(vec![0.1, -0.2], [1, 2]),
+                &Default::default(),
+            ),
+        )
+        .build();
+    let free = model.tangent_layout(&[phi.id(), theta.id()]).unwrap();
+
+    let blocks = information_blocks(&model, &values, &free).unwrap();
+    let factors: Vec<_> = blocks.iter().map(|block| block.factor).collect();
+    assert_eq!(
+        factors,
+        [first.id(), last.id()],
+        "the rootless term is skipped"
+    );
+
+    // C₁ J₁ = [[1, 2, 0], [0, −1, 4]] · [θ; ψ₀; ψ₁] and C₂ J₂ = [0.5, −2, 5] · [ψ₀; ψ₁; θ].
+    let expected: [&[f64]; 2] = [&[6.0, 0.0, 1.0, -3.0, 12.0, 0.0], &[1.5, -6.0, 5.0]];
+    for ((block, rows), want) in blocks.iter().zip([2, 1]).zip(expected) {
+        assert_eq!(block.root.dims(), [1, rows, 3]);
+        assert_eq!(
+            block.root.clone().into_data().to_vec::<f64>().unwrap(),
+            want
+        );
+    }
+
+    let stacked = information_root(&model, &values, &free).unwrap();
+    assert_eq!(stacked.dims(), [1, 3, 3]);
+    assert_eq!(
+        stacked.into_data().to_vec::<f64>().unwrap(),
+        expected.concat()
+    );
 }
