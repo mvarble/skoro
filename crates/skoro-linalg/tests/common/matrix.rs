@@ -152,3 +152,86 @@ where
     test_vjp_numerically(&b, &c, p.clone(), delta, epsilon);
     test_hvp_numerically(&b, &c, p.clone(), delta, epsilon);
 }
+
+/// `SparseLinearMap` against the dense product it stands for, and its derivatives against finite
+/// differences.
+///
+/// The map is non-square, repeats a position (whose entries must be summed), has a position whose
+/// entries cancel (which must be dropped), and leaves an output row and an input column empty. An
+/// empty map must still produce zeros of the right shape.
+pub fn sparse_linear_map_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+where
+    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
+{
+    use skoro_linalg::matrix::{SparseLinearMap, sparse_linear_map};
+    use skoro_riemann::euclidean::EuclideanD;
+
+    let (rows, cols, batch) = (4, 5, 3);
+    let triplets = [
+        (0, 1, 0.5),
+        (0, 1, 0.25),
+        (0, 3, -1.5),
+        (1, 0, 2.0),
+        (1, 2, 1.0),
+        (1, 3, 0.75),
+        (3, 0, -0.5),
+        (3, 1, 0.4),
+        (3, 1, -0.4),
+        (3, 2, 1.25),
+    ];
+    let map = SparseLinearMap::from_triplets(rows, cols, triplets);
+    assert_eq!(map.dims(), [rows, cols]);
+    assert_eq!(map.nnz(), 7, "(0, 1) merged and (3, 1) dropped");
+
+    let mut dense = vec![0.0f64; rows * cols];
+    for (row, col, value) in triplets {
+        dense[row * cols + col] += value;
+    }
+
+    let model = ModelClient::<B>::default();
+    let x = model.add_parameter(EuclideanD(cols));
+    let y = sparse_linear_map(&x, EuclideanD(rows), map).unwrap();
+    let empty = sparse_linear_map(
+        &x,
+        EuclideanD(2),
+        SparseLinearMap::from_triplets(2, cols, Vec::new()),
+    )
+    .unwrap();
+
+    let host_x: Vec<f64> = (0..batch * cols)
+        .map(|i| (i as f64 * 0.61).sin() + 0.25)
+        .collect();
+    let p = points()
+        .with_quantity(
+            &x,
+            Input::<B>::Float(Tensor::from_data(
+                TensorData::new(host_x.clone(), [batch, cols]).convert::<B::FloatElem>(),
+                &Default::default(),
+            )),
+        )
+        .build();
+
+    let to_host = |t: Tensor<B, 2>| t.into_data().convert::<f64>().to_vec::<f64>().unwrap();
+    let got = to_host(y.evaluate(&p).unwrap());
+    assert_eq!(got.len(), batch * rows);
+    for b in 0..batch {
+        for r in 0..rows {
+            let want: f64 = (0..cols)
+                .map(|c| dense[r * cols + c] * host_x[b * cols + c])
+                .sum();
+            let found = got[b * rows + r];
+            assert!(
+                (found - want).abs() <= 1e-5 * want.abs().max(1.0),
+                "batch {b}, row {r}: {found} vs {want}"
+            );
+        }
+    }
+    let zeros = empty.evaluate(&p).unwrap();
+    assert_eq!(zeros.dims(), [batch, 2]);
+    assert!(to_host(zeros).iter().all(|v| *v == 0.0));
+
+    test_jvp_numerically(&x, &y, p.clone(), delta, epsilon);
+    test_vjp_numerically(&x, &y, p.clone(), delta, epsilon);
+    test_hvp_numerically(&x, &y, p.clone(), delta, epsilon);
+    test_vjp_numerically(&x, &empty, p, delta, epsilon);
+}

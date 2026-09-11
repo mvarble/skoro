@@ -118,7 +118,22 @@ where
     I: ContinuousQuantity<B>,
     O: ContinuousQuantity<B>,
 {
-    let [rows, cols] = map.dims();
+    check_map_shape(x, &out, map.dims())?;
+    register_map1(out, map, x)
+}
+
+/// Refuse a `[rows, cols]` map that does not take `x`'s manifold dimension to `out`'s: rows are
+/// checked first, then columns, each as [`SkoroError::ShapeMismatch`].
+pub(super) fn check_map_shape<B, I, O>(
+    x: &Q<B, I>,
+    out: &O,
+    [rows, cols]: [usize; 2],
+) -> SkoroResult<()>
+where
+    B: Backend,
+    I: ContinuousQuantity<B>,
+    O: ContinuousQuantity<B>,
+{
     if rows != out.dimension() {
         return Err(SkoroError::ShapeMismatch {
             expected: out.dimension(),
@@ -132,5 +147,5 @@ where
             found: cols,
         });
     }
-    register_map1(out, map, x)
+    Ok(())
 }

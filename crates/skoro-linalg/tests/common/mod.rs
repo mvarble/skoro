@@ -83,6 +83,11 @@ macro_rules! tests {
             fn matmul() {
                 super::common::matrix::matmul_impl::<$B>($delta, $epsilon);
             }
+
+            #[test]
+            fn sparse_linear_map() {
+                super::common::matrix::sparse_linear_map_impl::<$B>($delta, $epsilon);
+            }
         }
     };
 }

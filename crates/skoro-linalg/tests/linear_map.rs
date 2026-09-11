@@ -1,4 +1,5 @@
-//! `FixedLinearMap`: a host matrix applied as a graph operation.
+//! `FixedLinearMap`: a host matrix applied as a graph operation. `SparseLinearMap`'s shape check
+//! lives here too; its values and derivatives are checked on every backend in `common/matrix.rs`.
 //!
 //! One backend for the binary (`NdArrayBackend<f64, i32>`), and tensors built through
 //! `TensorData`, so the exact comparisons below are not undone by an `f32` round trip.
@@ -7,7 +8,7 @@ use std::collections::HashMap;
 
 use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_core::error::SkoroError;
-use skoro_linalg::matrix::{FixedLinearMap, linear_map};
+use skoro_linalg::matrix::{FixedLinearMap, SparseLinearMap, linear_map, sparse_linear_map};
 use skoro_model::{
     ModelClientOps,
     hash_map_builders::points,
@@ -135,6 +136,30 @@ fn shape_mismatch_is_reported() {
     let wide = model.add_parameter(EuclideanD(5));
     assert!(matches!(
         linear_map(&wide, EuclideanD(3), k()),
+        Err(SkoroError::ShapeMismatch {
+            expected: 5,
+            found: 2
+        })
+    ));
+}
+
+#[test]
+fn sparse_shape_mismatch_is_reported() {
+    let model = ModelClient::<B>::default();
+    let x = model.add_parameter(EuclideanD(2));
+    // A 3 × 2 map; the check reports rows first, then columns.
+    let map = || SparseLinearMap::from_triplets(3, 2, [(0, 0, 1.0), (2, 1, -1.0)]);
+    assert!(matches!(
+        sparse_linear_map(&x, EuclideanD(4), map()),
+        Err(SkoroError::ShapeMismatch {
+            expected: 4,
+            found: 3
+        })
+    ));
+
+    let wide = model.add_parameter(EuclideanD(5));
+    assert!(matches!(
+        sparse_linear_map(&wide, EuclideanD(3), map()),
         Err(SkoroError::ShapeMismatch {
             expected: 5,
             found: 2
