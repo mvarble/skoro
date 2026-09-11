@@ -223,6 +223,7 @@ mod through_add_quantity {
         let residual =
             register_map1(EuclideanD(2), LiteralScalarMultiplication::new(3.0), &theta).unwrap();
         assert!(contains(&model, residual.id()), "the foreign id collides with a node here");
+        let before = model.graph_node_count();
 
         let result = model.add_quantity(BoundDistr {
             residual,
@@ -234,6 +235,11 @@ mod through_add_quantity {
                 if lhs == model.server_id && rhs == elsewhere.server_id
         ));
         assert!(model.factors().is_empty());
+        assert_eq!(
+            model.graph_node_count(),
+            before,
+            "the refused quantity and its density are removed, without waiting for a cleanup"
+        );
     }
 
     /// The demoted density and its bound residual leave in the same sweep: the density is no
@@ -400,4 +406,58 @@ mod compile_fail {
     fn remove_closure_cannot_be_reached_from_the_client_tier() {
         trybuild::TestCases::new().compile_fail("tests/compile_fail/*.rs");
     }
+}
+
+/// A distribution whose factor fails after building part of its density from `x`.
+struct FailingDistr;
+
+impl Distribution<B, Continuous> for FailingDistr {
+    type Qty = Real;
+    type Sampler = NeverSampler;
+
+    fn quantity_type(&self) -> Real {
+        Real
+    }
+    fn sampler(&self) -> NeverSampler {
+        NeverSampler
+    }
+    fn parent_ids(&self) -> &[Id] {
+        &[]
+    }
+    fn factor(&self, x: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+        let _partial = register_map1(Real, LiteralScalarMultiplication::new(2.0), x)?;
+        Err(SkoroError::ShapeMismatch {
+            expected: 1,
+            found: 0,
+        })
+    }
+}
+
+/// A quantity whose factor fails leaves nothing behind — neither the stochastic node nor the part
+/// of its density built before the failure — without waiting for a `cleanup`, and the model
+/// still takes quantities afterwards.
+#[test]
+fn add_quantity_whose_factor_fails_leaves_no_node_behind() {
+    let model = ModelClient::<B>::default();
+    let theta = model.add_parameter(Real);
+    let before = model.graph_node_count();
+
+    assert!(matches!(
+        model.add_quantity(FailingDistr),
+        Err(SkoroError::ShapeMismatch {
+            expected: 1,
+            found: 0
+        })
+    ));
+    assert_eq!(model.graph_node_count(), before);
+    assert!(model.factors().is_empty());
+
+    let residual = model.add_parameter(EuclideanD(1));
+    let _x = model
+        .add_quantity(BoundDistr {
+            residual,
+            parents: [theta.id(), theta.id()],
+        })
+        .unwrap();
+    assert_eq!(model.factors().len(), 1);
 }

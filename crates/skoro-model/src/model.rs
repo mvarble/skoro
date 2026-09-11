@@ -737,6 +737,11 @@ impl<B: Backend> ModelClient<B> {
     ///
     /// Returns an error if the distribution references a parent that does not
     /// exist in the model.
+    ///
+    /// The call is atomic. If the factor cannot be built or recorded — `distr.factor` fails,
+    /// the factor belongs to another model, or a binding is refused — the stochastic node and
+    /// everything built from it are removed before the error is returned, rather than left for
+    /// the next [`cleanup`](Self::cleanup).
     pub(crate) fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
@@ -750,18 +755,39 @@ impl<B: Backend> ModelClient<B> {
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
         // to build the factor (or else deadlock will occur).
         drop(server);
-        let factor = distr.factor(&x)?;
+        match self.record_factor(&distr, &x) {
+            Ok(()) => Ok(x),
+            Err(error) => {
+                // Nothing outside this call can reach `x` or anything built from it yet, so its
+                // downstream closure is exactly what the failed call added. Its handle goes first,
+                // so the collection that ends the removal does not count it as live. Should the
+                // removal itself fail, the nodes stay unreachable and the next `cleanup` takes
+                // them; the error worth reporting is still the first one.
+                drop(x);
+                let _ = self.server.write().unwrap().remove_closure(&[id]);
+                Err(error)
+            }
+        }
+    }
+
+    /// Build `distr`'s factor over `x` and record it: the density mark, the `ARGUMENT` bindings to
+    /// `x` and to each parent, and every binding the factor declares.
+    fn record_factor<K, D>(&self, distr: &D, x: &Q<B, D::Qty>) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        let factor = distr.factor(x)?;
         self.check_factor_model(&factor)?;
 
         // again, slow... but now we mark the mapped quantity as a density and record its
         // bindings. `factor` is still alive here, so nothing it binds can have been collected.
         let mut server = self.server.write().unwrap();
-        server.mark_density(&factor.log_density, &x)?;
+        server.mark_density(&factor.log_density, x)?;
         let arguments: Vec<Id> = std::iter::once(x.id)
             .chain(distr.parent_ids().iter().copied())
             .collect();
-        server.bind_factor(&factor, &arguments)?;
-        Ok(x)
+        server.bind_factor(&factor, &arguments)
     }
 
     /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
