@@ -55,13 +55,13 @@ macro_rules! tests {
             }
 
             #[test]
-            fn diag() {
-                super::common::tril::diag_impl::<$B>();
+            fn invert_derivatives() {
+                super::common::tril::invert_derivatives_impl::<$B>($delta, $epsilon);
             }
 
             #[test]
-            fn diag_survives_abs() {
-                super::common::tril::diag_survives_abs_impl::<$B>();
+            fn diag() {
+                super::common::tril::diag_impl::<$B>();
             }
         }
 
@@ -82,6 +82,11 @@ macro_rules! tests {
             #[test]
             fn matmul() {
                 super::common::matrix::matmul_impl::<$B>($delta, $epsilon);
+            }
+
+            #[test]
+            fn sparse_linear_map() {
+                super::common::matrix::sparse_linear_map_impl::<$B>($delta, $epsilon);
             }
         }
     };

@@ -28,8 +28,12 @@ use skoro_operation::ValueMap;
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
-use crate::roles::ARGUMENT;
-use crate::{cleanup::HandleRegistry, distribution::Distribution, distribution::Factor, q::Q};
+use crate::{
+    cleanup::HandleRegistry,
+    distribution::{Distribution, Factor},
+    q::Q,
+    roles::ARGUMENT,
+};
 
 lazy_static! {
     /// Global Id generator of model servers.
@@ -163,31 +167,25 @@ impl<B: Backend> ModelServer<B> {
         self.graph.mark_log_density(density.id, stochastic.id)
     }
 
-    /// Mark a mapped quantity as the proposal-only density for the stochastic quantity: a
-    /// summand of the generative model `q(x|z)` but not of the log-density. See
-    /// [`Graph::mark_log_proposal`](skoro_graph::graph::Graph::mark_log_proposal).
-    pub fn mark_proposal<T>(
-        &mut self,
-        density: &Q<B, Real>,
-        stochastic: &Q<B, T>,
-    ) -> SkoroResult<()> {
-        self.graph.mark_log_proposal(density.id, stochastic.id)
-    }
-
     /// Mark a mapped quantity as a likelihood.
     pub fn mark_likelihood(&mut self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         self.graph.mark_log_likelihood(likelihood.id)
     }
 
-    /// Record a binding: `to` plays `role` for `from`. Delegates to
+    /// Record a binding: `to` plays `role` for `from`. See
     /// [`Graph::bind`](skoro_graph::graph::Graph::bind).
     pub fn bind(&mut self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
         self.graph.bind(from, role, to)
     }
 
-    /// Mark `factor.log_density` as a free-standing likelihood term, then bind `ARGUMENT` to
-    /// each of `arguments` in order, then every `(role, handle)` `factor` declared. Refuses an
-    /// empty `arguments` before mutating anything — a term with no argument has no local view.
+    /// Mark `factor`'s log-density as a free-standing likelihood term, bind
+    /// [`ARGUMENT`] to each of `arguments` in order, then bind every role `factor` declares.
+    ///
+    /// Returns [`SkoroError::ShapeMismatch`] before changing anything if `arguments` is empty: a
+    /// term has at least one argument.
+    ///
+    /// The server cannot tell whether `factor` was built against it; a handle from another model
+    /// names an id in that model's graph. [`ModelClient::add_factor`] checks that, so prefer it.
     pub fn add_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
         if arguments.is_empty() {
             return Err(SkoroError::ShapeMismatch {
@@ -196,9 +194,14 @@ impl<B: Backend> ModelServer<B> {
             });
         }
         self.mark_likelihood(&factor.log_density)?;
+        self.bind_factor(factor, arguments)
+    }
+
+    /// Bind [`ARGUMENT`] to each of `arguments`, then every role `factor` declares.
+    fn bind_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
         let density = factor.log_density.id;
-        for &arg in arguments {
-            self.bind(density, ARGUMENT, arg)?;
+        for argument in arguments {
+            self.bind(density, ARGUMENT, *argument)?;
         }
         for (role, handle) in &factor.bindings {
             self.bind(density, *role, handle.id)?;
@@ -230,9 +233,12 @@ impl<B: Backend> ModelServer<B> {
     /// when a quantity's distribution is superseded by a joint likelihood factor
     /// over several quantities — a marginalization whose result does not factorize.
     ///
+    /// The demoted quantity's log-density leaves the objective here, and its bindings stop
+    /// counting with it: the rows of `J` shrink exactly when the term stops scoring.
+    ///
     /// Everything the demotion made unreachable is collected before returning — the orphaned
-    /// density, the subgraph it was holding up, the now-uncertified residual, and the parent
-    /// edges the old distribution owned. The graph reports each of those, because none of them
+    /// density, the subgraph it was holding up, the residual and Fisher root it bound, and the
+    /// parent edges the old distribution owned. The graph reports each of those, because none of them
     /// is an event a later pass could reconstruct.
     ///
     /// Returns an error if the quantity does not exist or is neither stochastic nor
@@ -245,9 +251,16 @@ impl<B: Backend> ModelServer<B> {
         Ok(())
     }
 
-    /// Removes quantities, verifying they have no children which would be kept in the graph,
-    /// nor is bound by another node still in the graph. [`Graph::remove`]'s own binding check
-    /// is what refuses the latter now, in place of the registry-backed check this used to run.
+    /// Removes quantities, verifying they have no children which would be kept in the graph.
+    ///
+    /// Refuses a node that a node outside the batch still binds
+    /// ([`SkoroError::NodeStillBound`]), for the same reason it refuses one another node still
+    /// points into as a parent: this is the primitive that will not break a reference, and a
+    /// binding is a reference. That refusal is what keeps `remove` safe on
+    /// [`ModelClientOps`](crate::client_ops::ModelClientOps), which an estimator holds — a bound
+    /// residual is childless, so without the check a `remove` could silently leave a term
+    /// binding a node that is gone. Retiring a factor is
+    /// [`remove_closure`](Self::remove_closure), one tier up.
     ///
     /// The removal is also a collection point: anything it orphaned is swept before
     /// returning, so the model is clean after every retire.
@@ -290,9 +303,9 @@ impl<B: Backend> ModelServer<B> {
     ///   a caller might hold a bare [`Id`], and leaked every temporary constant to do it.
     /// - **The sweep cannot fail.** See below.
     ///
-    /// **The roots** are the ids a live [`Q`] names and the graph's likelihood
-    /// terms. Private nodes — a stacked tangent's anchors and per-block tangents — are
-    /// deliberately *not* roots: they are ancestors of
+    /// **The roots** are the ids a live [`Q`](crate::q::Q) names and the graph's likelihood
+    /// terms. Private nodes — a stacked tangent's
+    /// anchors and per-block tangents — are deliberately *not* roots: they are ancestors of
     /// the `δ` node the caller holds, so they are marked while `δ` lives and swept when it
     /// does not. Rooting them would strand `2k + 1` nodes per tick of a sliding window.
     ///
@@ -303,10 +316,15 @@ impl<B: Backend> ModelServer<B> {
     /// [`Graph::remove`] retire a live scoring density, changing the objective inside a
     /// garbage collection with no error at all.
     ///
+    /// **Bindings are references too.** Marking a node marks every node it binds, so a term's
+    /// residual and Fisher root live exactly as long as the term does, with no handle of their
+    /// own.
+    ///
     /// **Why the sweep cannot fail.** [`Graph::remove`] is leaf-only: it refuses a batch any
     /// survivor points into. The garbage set is closed downward, so it never presents one. If
     /// a garbage node `n` had a surviving child `c`, then `c` was marked, and marking walks
-    /// `c` to its parents, which would have marked `n`.
+    /// `c` to its parents, which would have marked `n`. The same holds for a surviving node
+    /// that binds `n`, so the sweep never trips [`SkoroError::NodeStillBound`] either.
     ///
     /// **The contract this fixes on the caller.** A `Q` is the ownership token; a bare `Id`
     /// is a weak reference. An `Id` kept across a `cleanup()` may name nothing afterwards,
@@ -351,6 +369,7 @@ impl<B: Backend> ModelServer<B> {
             {
                 queue.push_back(stochastic);
             }
+            // What the node binds: a binding is a reference, even though it is not a data edge.
             for (_, to) in self.graph.bindings_of(id) {
                 if marked.insert(*to) {
                     queue.push_back(*to);
@@ -718,30 +737,12 @@ impl<B: Backend> ModelClient<B> {
     ///
     /// Returns an error if the distribution references a parent that does not
     /// exist in the model.
-    pub(crate) fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>,
-    {
-        self.add_quantity_with(distr, true)
-    }
-
-    /// Adds a stochastic quantity whose density scores it under the *proposal* only.
     ///
-    /// The quantity is generated exactly as [`add_quantity`](Self::add_quantity)'s is, but its
-    /// density is a summand of `q(x|z)` and not of `p(x|z)`. What the posterior says about the
-    /// quantity, if anything, is supplied separately with
-    /// [`add_factor`](Self::add_factor) — which is the point: it lets a model sample from a
-    /// distribution it can draw from while scoring one it can only evaluate.
-    pub(crate) fn add_proposal<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
-    where
-        K: Kind<B>,
-        D: Distribution<B, K>,
-    {
-        self.add_quantity_with(distr, false)
-    }
-
-    fn add_quantity_with<K, D>(&self, distr: D, in_log_density: bool) -> SkoroResult<Q<B, D::Qty>>
+    /// The call is atomic. If the factor cannot be built or recorded — `distr.factor` fails,
+    /// the factor belongs to another model, or a binding is refused — the stochastic node and
+    /// everything built from it are removed before the error is returned, rather than left for
+    /// the next [`cleanup`](Self::cleanup).
+    pub(crate) fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
         D: Distribution<B, K>,
@@ -751,26 +752,42 @@ impl<B: Backend> ModelClient<B> {
         let id = server.add_stochastic(&distr)?;
         let x = Q::new(id, self.clone(), NodeDropGuard::new(id, &server.handles));
 
-        // The lock must be dropped before calling distr.factor(&x), or the distribution's own
-        // graph-building calls (which take the write lock themselves) deadlock.
+        // maybe slow, but currently the price for ergonomic interface: we need to drop the server
+        // to build the factor (or else deadlock will occur).
         drop(server);
-        let factor = distr.factor(&x)?;
+        match self.record_factor(&distr, &x) {
+            Ok(()) => Ok(x),
+            Err(error) => {
+                // Nothing outside this call can reach `x` or anything built from it yet, so its
+                // downstream closure is exactly what the failed call added. Its handle goes first,
+                // so the collection that ends the removal does not count it as live. Should the
+                // removal itself fail, the nodes stay unreachable and the next `cleanup` takes
+                // them; the error worth reporting is still the first one.
+                drop(x);
+                let _ = self.server.write().unwrap().remove_closure(&[id]);
+                Err(error)
+            }
+        }
+    }
 
+    /// Build `distr`'s factor over `x` and record it: the density mark, the `ARGUMENT` bindings to
+    /// `x` and to each parent, and every binding the factor declares.
+    fn record_factor<K, D>(&self, distr: &D, x: &Q<B, D::Qty>) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        let factor = distr.factor(x)?;
+        self.check_factor_model(&factor)?;
+
+        // again, slow... but now we mark the mapped quantity as a density and record its
+        // bindings. `factor` is still alive here, so nothing it binds can have been collected.
         let mut server = self.server.write().unwrap();
-        if in_log_density {
-            server.mark_density(&factor.log_density, &x)?;
-        } else {
-            server.mark_proposal(&factor.log_density, &x)?;
-        }
-        let density = factor.log_density.id;
-        server.bind(density, ARGUMENT, x.id())?;
-        for &parent in distr.parent_ids() {
-            server.bind(density, ARGUMENT, parent)?;
-        }
-        for (role, handle) in &factor.bindings {
-            server.bind(density, *role, handle.id)?;
-        }
-        Ok(x)
+        server.mark_density(&factor.log_density, x)?;
+        let arguments: Vec<Id> = std::iter::once(x.id)
+            .chain(distr.parent_ids().iter().copied())
+            .collect();
+        server.bind_factor(&factor, &arguments)
     }
 
     /// The stacked tangent `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` over a heterogeneous set of
@@ -812,19 +829,35 @@ impl<B: Backend> ModelClient<B> {
         ))
     }
 
-    /// Record a binding. See [`ModelServer::bind`].
+    /// Record a binding: `to` plays `role` for `from`. See [`ModelServer::bind`].
     pub fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
         self.server.write().unwrap().bind(from, role, to)
     }
 
-    /// Attach a free-standing likelihood factor, with its declared bindings. See
-    /// [`ModelServer::add_factor`].
+    /// Attach a free-standing likelihood factor over `arguments`, with the bindings it
+    /// declares. See [`ModelServer::add_factor`].
+    ///
+    /// Returns [`SkoroError::ModelMismatch`] before changing anything if the factor's
+    /// log-density or any node it binds belongs to another model.
     pub fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
-        self.server
-            .write()
-            .unwrap()
-            .add_factor(&factor, arguments)?;
+        self.check_factor_model(&factor)?;
+        self.server.write().unwrap().add_factor(&factor, arguments)?;
         Ok(factor.log_density)
+    }
+
+    /// Refuse a factor built against another model. Its handles name ids in that model's graph,
+    /// which here would name unrelated nodes — or none — and be bound without complaint.
+    fn check_factor_model(&self, factor: &Factor<B>) -> SkoroResult<()> {
+        let foreign = std::iter::once(&factor.log_density.client)
+            .chain(factor.bindings.iter().map(|(_, handle)| &handle.client))
+            .find(|client| client.server_id != self.server_id);
+        match foreign {
+            Some(client) => Err(SkoroError::ModelMismatch {
+                lhs: self.server_id,
+                rhs: client.server_id,
+            }),
+            None => Ok(()),
+        }
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.

@@ -1,72 +1,15 @@
 use approx::assert_abs_diff_eq;
-use skoro_backend::{Backend, ElementConversion, TensorData};
+use skoro_backend::{Backend, ElementConversion};
 use skoro_model::{
     hash_map_builders::{points, tangent_frames},
     model::ModelClient,
     q::Q,
-    test_utils::{into_vec, tensor},
+    test_utils::{into_vec, tensor, test_hvp_numerically, test_jvp_numerically, test_vjp_numerically},
 };
 use skoro_operation::Input;
 use skoro_riemann::euclidean::Euclidean;
 
 use skoro_linalg::tril::{Tril, TrilOps};
-use skoro_pointwise::PointwiseOps;
-
-/// Regression: the packed diagonal must survive a following elementwise `abs`.
-///
-/// `Tril::diag` gathers with `select(1, ..)`, which `burn-ndarray` implements with
-/// `ndarray::concatenate` and therefore returns a *column-major* (non-standard-layout)
-/// array. `burn-ndarray`'s SIMD fast path for `abs` engages once the tensor has 32 or
-/// more elements and reads its input through `as_slice_memory_order` while writing a
-/// standard-layout output, so a column-major input comes back with its elements
-/// transposed — silently, and with no shape error.
-///
-/// `Normal::factor` computes its log-determinant as `diag().abs().log().sum()`, so this
-/// corrupted the log density of every 2+ dimensional `Normal` evaluated at a batch large
-/// enough to push the diagonal past that threshold. The batch below is sized to sit past
-/// it (`BATCH * N == 48`); anything under 32 elements passes even against the defect.
-pub fn diag_survives_abs_impl<B: Backend>()
-where
-    Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
-    const N: usize = 6;
-    const BATCH: usize = 8;
-    const K: usize = N * (N + 1) / 2;
-
-    let model = ModelClient::<B>::default();
-    let l = model.add_parameter(Tril(N));
-    let d = l.diag().unwrap().abs().unwrap();
-
-    // Every entry distinct, with alternating signs so that `abs` is genuinely exercised
-    // and any reordering of the result is detectable.
-    let packed: Vec<f64> = (0..BATCH * K)
-        .map(|i| {
-            let v = (i + 1) as f64;
-            if i % 2 == 0 { -v } else { v }
-        })
-        .collect();
-
-    // The i-th diagonal entry of a packed lower triangle sits at index i * (i + 3) / 2.
-    let expected: Vec<B::FloatElem> = (0..BATCH)
-        .flat_map(|b| (0..N).map(move |i| ((b * K + i * (i + 3) / 2 + 1) as f64).elem()))
-        .collect();
-
-    let points = points().with_tensor(
-        l.id(),
-        Input::<B>::Float(tensor::<B, 2>(
-            TensorData::new(packed, [BATCH, K]),
-            &Default::default(),
-        )),
-    );
-
-    let eval = d.evaluate(&points).unwrap();
-    assert_abs_diff_eq!(
-        into_vec(eval).as_slice(),
-        expected.as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
-    );
-}
 
 pub fn vector_product_impl<B: Backend>()
 where
@@ -243,15 +186,10 @@ where
         .as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
-    // The cotangent seed is all-ones, so this is `∇ₗ S` for
-    // `S(l) = 1/l₀ − l₁/(l₀l₂) + 1/l₂`, the sum of the packed inverse. At `l = (1, 2, 3)`:
-    //   ∂S/∂l₀ = −1/l₀² + l₁/(l₀²l₂) = −1 + 2/3 = −1/3
-    //   ∂S/∂l₁ = −1/(l₀l₂)           = −1/3
-    //   ∂S/∂l₂ = l₁/(l₀l₂²) − 1/l₂²  = 2/9 − 1/9 = 1/9
-    // The matrix route agrees: `pack(−Yᵀ ω Yᵀ)` for `Y = L⁻¹`, `ω = [[1,0],[1,1]]`.
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
+            // ∂(Y₀₀ + Y₁₀ + Y₁₁)/∂L for Y = L⁻¹: the pullback −Yᵀ Ω Yᵀ.
             [-1.0 / 3.0, -1.0 / 3.0, 1.0 / 9.0],
             &Default::default()
         ))
@@ -287,22 +225,17 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
+            // ∂(Y₀₀ + Y₁₀ + Y₁₁)/∂L for Y = L⁻¹: the pullback −Yᵀ Ω Yᵀ.
             [-1.0 / 3.0, -1.0 / 3.0, 1.0 / 9.0],
             &Default::default()
         ))
         .as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
-    // `H · Δl` for the same scalar `S`, with `Δl = (0.2, 0.1, 0.4)`. The Hessian at
-    // `l = (1, 2, 3)` is
-    //   [[ 2/3,  1/3, −2/9 ],
-    //    [ 1/3,  0  ,  1/9 ],
-    //    [−2/9,  1/9, −2/27]]
-    // giving  7/90, 1/9, −17/270.  The matrix route agrees:
-    // `pack((Z Δlᵀ Z) ω Z + Z ω (Z Δlᵀ Z))` for `Z = (L⁻¹)ᵀ`.
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>(
+            // The Hessian of Y₀₀ + Y₁₀ + Y₁₁ at L = [1, 2, 3] along dL = [0.2, 0.1, 0.4].
             [7.0 / 90.0, 1.0 / 9.0, -17.0 / 270.0],
             &Default::default()
         ))
@@ -390,6 +323,34 @@ where
         into_vec(tensor::<B, 1>([0.0, 0.0, 0.0], &Default::default())).as_slice(),
         epsilon = B::FloatElem::from_elem(1e-6),
     );
+}
+
+/// `TrilInvert`'s three derivative modes against finite differences.
+///
+/// The triangle is `3 × 3` and far from both the identity and the diagonal: a pullback that
+/// forgot its transposes — `−Y Ω Y` for `−Yᵀ Ω Yᵀ` — agrees with the true one on a diagonal
+/// fixture and nowhere else.
+pub fn invert_derivatives_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+where
+    Q<B, Tril>: TrilOps<B>,
+    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
+{
+    let model = ModelClient::<B>::default();
+    let l = model.add_parameter(Tril(3));
+    let linv = l.invert().unwrap();
+    let p = points()
+        .with_tensor(
+            l.id(),
+            Input::<B>::Float(tensor(
+                [[1.5, -0.7, 0.9, 0.4, 1.1, 1.3]],
+                &Default::default(),
+            )),
+        )
+        .build();
+
+    test_jvp_numerically(&l, &linv, p.clone(), delta, epsilon);
+    test_vjp_numerically(&l, &linv, p.clone(), delta, epsilon);
+    test_hvp_numerically(&l, &linv, p, delta, epsilon);
 }
 
 /// `TrilInvert` and `skoro-dense` must agree on the same triangle.

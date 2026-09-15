@@ -1,20 +1,20 @@
-//! Building Gaussian factors through the covariance helpers and `add_quantity`.
+//! Adding Gaussians through any builder, and the covariance helpers.
 //!
-//! There is no Gaussian-restricted client any more: a Gaussian enters a model through
-//! `add_quantity(Normal::new(μ, L))` on any `ModelBuilderOps`, so an adapter that builds
-//! Gaussian sub-models is generic over the builder rather than over a capability trait. What
-//! the old `GaussianModelClientOps` bound expressed — "this client can add Gaussians" — was
-//! never a claim about what a model *contained*, and every client that can grow a model can
-//! add one.
+//! There is no Gaussian-specific entry point: a Gaussian enters a model through
+//! `add_quantity(Normal::new(mean, std_dev))` on any `ModelBuilderOps`, so an adapter that builds
+//! Gaussian sub-models is generic over the builder rather than over a capability trait. What the
+//! old `GaussianModelClientOps` bound expressed — "this client can add Gaussians" — was never a
+//! claim about what a model *contained*, and every client that can grow a model can add one.
 
 use std::collections::HashMap;
 
 use skoro_backend::{NdArrayBackend, Point, TensorData};
 use skoro_linalg::tril::Tril;
-use skoro_model::{ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q, roles::LOCATION};
+use skoro_model::{ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q};
 use skoro_normal::{
     distribution::Normal,
     facade::{constant_covariance_diagonal, constant_covariance_identity},
+    structure::GaussianBlock,
 };
 use skoro_operation::Input;
 use skoro_riemann::{
@@ -39,9 +39,7 @@ fn a_gaussian_quantity_scores_the_peak_at_the_mean() {
     let mean = model.add_constant(EuclideanD(3), &VectorD::new(&[10.0, 20.0, 30.0]));
     let std_dev = constant_covariance_diagonal(&model, &[1.0, 2.0, 3.0]);
 
-    let x = model
-        .add_quantity(Normal::new(mean.clone(), std_dev.clone()))
-        .unwrap();
+    let x = model.add_quantity(Normal::new(mean, std_dev)).unwrap();
 
     // Evaluate the model log-density at the mean: should be the Gaussian peak.
     let mut points = HashMap::new();
@@ -72,10 +70,11 @@ fn a_builder_generic_adapter_grows_a_real_model() {
     let ld = model.log_density(&HashMap::new()).unwrap();
     assert_eq!(ld.dims(), [1, 1]);
 
-    // And it bound the factor it built, refinement and all.
-    let factors = ModelClientOps::factors(&model);
-    assert_eq!(factors.len(), 1);
-    assert_eq!(model.bound(factors[0].density, LOCATION), vec![mean.id()]);
+    // And its factor binds the mean it was given.
+    assert_eq!(model.factors().len(), 1);
+    let blocks = GaussianBlock::all(&model);
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].mean, mean.id());
 }
 
 #[test]

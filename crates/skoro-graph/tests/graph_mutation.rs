@@ -1423,17 +1423,28 @@ mod degenerate {
     }
 }
 
+/// Bindings: labelled reference edges that removal and closure removal respect, and the terms
+/// they hang off.
 mod bindings {
     use super::*;
     use skoro_graph::binding::Role;
+    use skoro_graph::graph::TermKind;
 
     const R1: Role = Role("r1");
     const R2: Role = Role("r2");
 
+    fn three_constants(graph: &mut Graph<B>) -> [Id; 3] {
+        [
+            graph.add_constant(Real, &1.0f64),
+            graph.add_constant(Real, &2.0f64),
+            graph.add_constant(Real, &3.0f64),
+        ]
+    }
+
     #[test]
     fn bind_refuses_a_missing_endpoint() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
+        let a = graph.add_constant(Real, &1.0f64);
         let fresh = bogus_id();
 
         assert!(matches!(
@@ -1444,15 +1455,14 @@ mod bindings {
             graph.bind(fresh, R1, a),
             Err(SkoroError::NodeNotFound { id }) if id == fresh
         ));
+        assert!(graph.bindings_of(a).is_empty());
         graph.validate_indices().unwrap();
     }
 
     #[test]
     fn bind_is_readable_in_order() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
-        let c = graph.add_parameter(Real);
+        let [a, b, c] = three_constants(&mut graph);
 
         graph.bind(a, R1, b).unwrap();
         graph.bind(a, R2, c).unwrap();
@@ -1460,6 +1470,7 @@ mod bindings {
 
         assert_eq!(graph.bindings_of(a), &[(R1, b), (R2, c), (R1, c)]);
         assert_eq!(graph.bound(a, R1), vec![b, c]);
+        assert_eq!(graph.bound(a, R2), vec![c]);
         assert_eq!(graph.referrers_of(b), vec![a]);
         graph.validate_indices().unwrap();
     }
@@ -1467,23 +1478,23 @@ mod bindings {
     #[test]
     fn remove_refuses_a_bound_target() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
+        let [a, b, _] = three_constants(&mut graph);
         graph.bind(a, R1, b).unwrap();
 
         assert!(matches!(
             graph.remove(&[b]),
             Err(SkoroError::NodeStillBound { id, by }) if id == b && by == a
         ));
+        assert!(graph.contains(b));
         graph.remove(&[a, b]).unwrap();
+        assert!(!graph.contains(a) && !graph.contains(b));
         graph.validate_indices().unwrap();
     }
 
     #[test]
     fn remove_source_clears_the_reference() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
+        let [a, b, _] = three_constants(&mut graph);
         graph.bind(a, R1, b).unwrap();
 
         graph.remove(&[a]).unwrap();
@@ -1495,233 +1506,104 @@ mod bindings {
     #[test]
     fn remove_closure_takes_referrers() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
+        let [a, b, c] = three_constants(&mut graph);
         graph.bind(a, R1, b).unwrap();
 
         let removed = graph.remove_closure(&[b]).unwrap();
         assert_eq!(removed.len(), 2, "b and its referrer a");
         assert!(!graph.contains(a));
         assert!(!graph.contains(b));
+        assert!(graph.contains(c));
         graph.validate_indices().unwrap();
     }
 
     #[test]
     fn validate_indices_holds_after_binding_mutations() {
         let mut graph = Graph::<B>::new();
-        let a = graph.add_parameter(Real);
-        let b = graph.add_parameter(Real);
-        let c = graph.add_parameter(Real);
+        let [a, b, c] = three_constants(&mut graph);
+        graph.validate_indices().unwrap();
         graph.bind(a, R1, b).unwrap();
+        graph.validate_indices().unwrap();
         graph.bind(a, R2, c).unwrap();
+        graph.validate_indices().unwrap();
         graph.bind(a, R1, c).unwrap();
         graph.validate_indices().unwrap();
-
-        graph.remove(&[a, b, c]).unwrap();
+        graph.bind(b, R1, c).unwrap();
         graph.validate_indices().unwrap();
+
+        assert!(graph.remove(&[c]).is_err());
+        graph.validate_indices().unwrap();
+        graph.remove(&[a]).unwrap();
+        graph.validate_indices().unwrap();
+        assert_eq!(graph.referrers_of(c), vec![b]);
+        graph.remove_closure(&[c]).unwrap();
+        graph.validate_indices().unwrap();
+        assert_eq!(graph.node_count(), 0);
     }
 
     #[test]
-    fn terms_classify_density_and_proposal() {
+    fn terms_classify_proposal_and_weight() {
         let mut graph = Graph::<B>::new();
-        let stoch = stochastic(&mut graph, vec![]);
-        // `summed`, not `inert`: this density is folded below, once its quantity is observed.
-        let density = summed(&mut graph, vec![stoch]);
-        graph.mark_log_density(density, stoch).unwrap();
+        let x = stochastic(&mut graph, vec![]);
+        let x_density = summed(&mut graph, vec![x]);
+        graph.mark_log_density(x_density, x).unwrap();
 
-        let obs = stochastic(&mut graph, vec![]);
-        let obs_density = summed(&mut graph, vec![obs]);
-        graph.mark_log_density(obs_density, obs).unwrap();
-        graph.observe::<_, Real, _>(obs, &1.0f64).unwrap();
+        let y = stochastic(&mut graph, vec![]);
+        let y_density = summed(&mut graph, vec![y]);
+        graph.mark_log_density(y_density, y).unwrap();
+        graph.observe::<_, Real, _>(y, &1.0f64).unwrap();
 
-        let free_standing = graph.add_parameter(Real);
-        let free_density = inert(&mut graph, vec![free_standing]);
-        graph.mark_log_likelihood(free_density).unwrap();
+        let p = graph.add_parameter(Real);
+        let free_standing = summed(&mut graph, vec![p]);
+        graph.mark_log_likelihood(free_standing).unwrap();
 
         let terms = graph.terms();
         assert_eq!(
             terms.iter().map(|t| t.density).collect::<Vec<_>>(),
-            vec![density, obs_density, free_density],
+            vec![x_density, y_density, free_standing],
             "marking order"
         );
         assert_eq!(
-            terms
-                .iter()
-                .map(|t| (t.in_density, t.in_proposal))
-                .collect::<Vec<_>>(),
-            vec![(true, true), (true, false), (true, false)],
-            "a live stochastic quantity's density is in both; an observed one's and a \
-             free-standing factor are in the log-density alone"
+            terms.iter().map(|t| t.scored).collect::<Vec<_>>(),
+            vec![Some(x), Some(y), None]
+        );
+        assert_eq!(
+            terms.iter().map(|t| t.kind).collect::<Vec<_>>(),
+            vec![TermKind::Proposal, TermKind::Weight, TermKind::Weight]
         );
 
-        graph.observe::<_, Real, _>(stoch, &2.0f64).unwrap();
-        let observed = graph.terms()[0];
-        assert_eq!((observed.in_density, observed.in_proposal), (true, false));
+        graph.observe::<_, Real, _>(x, &2.0f64).unwrap();
+        assert_eq!(graph.terms()[0].kind, TermKind::Weight);
         graph.validate_indices().unwrap();
     }
 
     #[test]
     fn log_density_terms_sums_only_the_named_terms() {
         let mut graph = Graph::<B>::new();
-        let stoch = stochastic(&mut graph, vec![]);
-        // `summed`, not `inert`: this density is actually evaluated below via `log_density`.
-        let t1 = summed(&mut graph, vec![stoch]);
-        graph.mark_log_density(t1, stoch).unwrap();
-        let free_standing = graph.add_parameter(Real);
-        let t2 = summed(&mut graph, vec![free_standing]);
+        let x = stochastic(&mut graph, vec![]);
+        let t1 = summed(&mut graph, vec![x]);
+        graph.mark_log_density(t1, x).unwrap();
+        let p = graph.add_parameter(Real);
+        let t2 = summed(&mut graph, vec![p, p]);
         graph.mark_log_likelihood(t2).unwrap();
 
-        // `stoch` is a leaf the compiled program reads from `points`, so it needs a value too.
-        let points = points([(free_standing, 3.0), (stoch, 0.5)]);
-        let whole = graph.log_density(&points).unwrap();
-        let split = (into_vec(graph.log_density_terms(&points, &[t1]).unwrap())[0]
-            + into_vec(graph.log_density_terms(&points, &[t2]).unwrap())[0])
-            - into_vec(whole)[0];
-        approx::assert_abs_diff_eq!(split, 0.0, epsilon = 1e-12);
+        let values = points([(x, 0.5), (p, 3.0)]);
+        let whole = into_vec(graph.log_density(&values).unwrap())[0];
+        let first = into_vec(graph.log_density_terms(&values, &[t1]).unwrap())[0];
+        let second = into_vec(graph.log_density_terms(&values, &[t2]).unwrap())[0];
+        assert!((first - 0.5).abs() < 1e-12);
+        assert!((second - 6.0).abs() < 1e-12);
+        assert!((first + second - whole).abs() < 1e-12);
 
-        let mapped = inert(&mut graph, vec![free_standing]);
+        let empty = graph.log_density_terms(&values, &[]).unwrap();
+        assert_eq!(empty.dims(), [1, 1]);
+        assert_eq!(into_vec(empty), vec![0.0]);
+
+        let mapped = summed(&mut graph, vec![p]);
         assert!(matches!(
-            graph.log_density_terms(&points, &[mapped]),
+            graph.log_density_terms(&values, &[mapped]),
             Err(SkoroError::NotLogLikelihood { id }) if id == mapped
         ));
-    }
-
-    /// A proposal-only term is a summand of the generative model and of nothing else: it stays
-    /// in the term arena, it still scores its quantity, and `log_density` walks past it.
-    #[test]
-    fn a_proposal_only_term_is_not_in_the_log_density() {
-        let mut graph = Graph::<B>::new();
-        let scored = stochastic(&mut graph, vec![]);
-        let density = summed(&mut graph, vec![scored]);
-        graph.mark_log_density(density, scored).unwrap();
-
-        let proposed = stochastic(&mut graph, vec![]);
-        let proposal = summed(&mut graph, vec![proposed]);
-        graph.mark_log_proposal(proposal, proposed).unwrap();
-        graph.validate_indices().unwrap();
-
-        // It is a term, and it scores its quantity exactly as an ordinary density does.
-        assert_eq!(graph.log_likelihoods(), &[density, proposal]);
-        assert!(graph.is_scoring(proposal));
-        assert_eq!(graph.stochastic_of(proposal), Some(proposed));
-        assert_eq!(graph.log_density_of(proposed), Some(proposal));
-
-        // But it is not in the log-density.
-        assert!(!graph.in_log_density(proposal));
-        assert!(graph.in_log_density(density));
-        assert_eq!(graph.density_term_ids(), vec![density]);
-        let term = graph.terms()[1];
-        assert_eq!((term.in_density, term.in_proposal), (false, true));
-
-        let points = points([(scored, 0.5), (proposed, 4.0)]);
-        approx::assert_abs_diff_eq!(
-            into_vec(graph.log_density(&points).unwrap())[0],
-            0.5,
-            epsilon = 1e-12
-        );
-        // `log_density_terms` will still sum it when asked: the caller picks the set.
-        approx::assert_abs_diff_eq!(
-            into_vec(graph.log_density_terms(&points, &[proposal]).unwrap())[0],
-            4.0,
-            epsilon = 1e-12
-        );
-    }
-
-    /// Observing a proposal-only quantity fixes its value, so nothing samples it any more. The
-    /// term is then a summand of neither density — the fourth cell — and `unobserve` restores it.
-    #[test]
-    fn observing_a_proposal_only_quantity_leaves_it_in_neither() {
-        let mut graph = Graph::<B>::new();
-        let proposed = stochastic(&mut graph, vec![]);
-        let proposal = summed(&mut graph, vec![proposed]);
-        graph.mark_log_proposal(proposal, proposed).unwrap();
-
-        let flags = |graph: &Graph<B>| {
-            let t = graph.terms()[0];
-            (t.in_density, t.in_proposal)
-        };
-        assert_eq!(flags(&graph), (false, true));
-
-        graph.observe::<_, Real, _>(proposed, &1.0f64).unwrap();
-        assert_eq!(flags(&graph), (false, false));
-        graph.validate_indices().unwrap();
-
-        graph.unobserve(proposed).unwrap();
-        assert_eq!(flags(&graph), (false, true));
-        graph.validate_indices().unwrap();
-    }
-
-    /// With nothing but proposals there is no log-density to sum, and the empty target list must
-    /// compile to zeros rather than panic.
-    #[test]
-    fn a_model_of_only_proposals_has_zero_log_density() {
-        let mut graph = Graph::<B>::new();
-        let proposed = stochastic(&mut graph, vec![]);
-        let proposal = summed(&mut graph, vec![proposed]);
-        graph.mark_log_proposal(proposal, proposed).unwrap();
-
-        assert!(graph.density_term_ids().is_empty());
-        let points = points([(proposed, 7.0)]);
-        let value = graph.log_density(&points).unwrap();
-        assert_eq!(value.dims(), [1, 1]);
-        approx::assert_abs_diff_eq!(into_vec(value)[0], 0.0, epsilon = 1e-12);
-    }
-
-    /// A proposal-only term is still a density, so the guard that keeps a density from being
-    /// demoted to a bare factor applies to it too.
-    #[test]
-    fn marking_a_proposal_as_a_likelihood_is_refused() {
-        let mut graph = Graph::<B>::new();
-        let proposed = stochastic(&mut graph, vec![]);
-        let proposal = summed(&mut graph, vec![proposed]);
-        graph.mark_log_proposal(proposal, proposed).unwrap();
-
-        assert!(matches!(
-            graph.mark_log_likelihood(proposal),
-            Err(SkoroError::MustRemainDensity { id }) if id == proposal
-        ));
-        assert!(!graph.in_log_density(proposal));
-    }
-
-    /// Promoting a free-standing factor through `mark_log_proposal` moves it out of the
-    /// log-density; the reverse — retiring it and marking it again — brings it back, because
-    /// membership goes with the node type rather than being remembered.
-    #[test]
-    fn promoting_a_factor_to_a_proposal_moves_it_out_of_the_density() {
-        let mut graph = Graph::<B>::new();
-        let proposed = stochastic(&mut graph, vec![]);
-        let factor = summed(&mut graph, vec![proposed]);
-        graph.mark_log_likelihood(factor).unwrap();
-        assert!(graph.in_log_density(factor));
-
-        graph.mark_log_proposal(factor, proposed).unwrap();
-        assert!(!graph.in_log_density(factor));
-        assert_eq!(
-            graph.log_likelihoods(),
-            &[factor],
-            "no second term is added"
-        );
-        graph.validate_indices().unwrap();
-
-        graph.unmark_log_likelihood(factor).unwrap();
-        graph.mark_log_likelihood(factor).unwrap();
-        assert!(graph.in_log_density(factor));
-        graph.validate_indices().unwrap();
-    }
-
-    /// Retiring a proposal-only term goes through the same path as any other density.
-    #[test]
-    fn demoting_a_proposal_only_quantity_retires_its_term() {
-        let mut graph = Graph::<B>::new();
-        let proposed = stochastic(&mut graph, vec![]);
-        let proposal = summed(&mut graph, vec![proposed]);
-        graph.mark_log_proposal(proposal, proposed).unwrap();
-
-        graph.demote_to_parameter(proposed).unwrap();
-        assert!(graph.log_likelihoods().is_empty());
-        assert_eq!(graph.log_density_of(proposed), None);
-        assert!(!graph.in_log_density(proposal));
-        assert!(matches!(graph.node(proposal), Some(Node::Mapped(_))));
         graph.validate_indices().unwrap();
     }
 }

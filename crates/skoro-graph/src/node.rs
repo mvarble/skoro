@@ -20,8 +20,7 @@ pub enum Node<B: Backend> {
     Mapped(MappedNode<B>),
     /// A dedicated transformation representing the real-valued log-likelihood factor within the
     /// model. Semantically identical to its sibling `Mapped`, but it is guaranteed to be a `Real`
-    /// quantity type and carries two further facts: which stochastic quantity it is the density
-    /// of, if any, and whether it is a summand of the model's log-density.
+    /// quantity type and has information on whether it is a density for a stochastic quantity.
     LogLikelihood(LogLikelihoodNode<B>),
 }
 
@@ -71,11 +70,6 @@ pub struct ConstantNode<B: Backend> {
 }
 
 /// A free variable with an initial value, intended to be optimized/inferred.
-///
-/// A parameter differs from a [`StochasticNode`] in exactly one respect: it does not know how
-/// to generate itself. Whether a quantity is *scored* by the model's log-density is a separate
-/// fact, carried by [`LogLikelihoodNode::in_log_density`] — a stochastic quantity introduced as
-/// a proposal is generated without contributing to the density.
 #[derive(Clone)]
 pub struct ParameterNode<B: Backend> {
     pub id: Id,
@@ -83,10 +77,6 @@ pub struct ParameterNode<B: Backend> {
 }
 
 /// Represents a stochastic quantity with a known conditional distribution.
-///
-/// The sampler is what separates this from a [`ParameterNode`]: a stochastic quantity knows how
-/// to generate itself. It says nothing about whether the model's log-density scores it — see
-/// [`LogLikelihoodNode::in_log_density`].
 #[derive(Clone)]
 pub struct StochasticNode<B: Backend> {
     pub id: Id,
@@ -139,23 +129,13 @@ pub struct MappedNode<B: Backend> {
 
 /// A mapped real value that corresponds to a log-density in the model.
 ///
-/// Just as with a mapped node, the log-density is cached if none of its descendants are free or
+/// Just as with a mapped node, the log-density is cached if none of its denscendants are free or
 /// stochastic.
 #[derive(Clone)]
 pub struct LogLikelihoodNode<B: Backend> {
     pub id: Id,
     pub op: Arc<dyn DynGraphOperation<B>>,
     pub stochastic_id: Option<Id>,
-    /// Whether this term is a summand of the model's log-density `p(x|z)`.
-    ///
-    /// `false` marks a *proposal-only* term: a factor of the generative mechanism `q(x|z)`
-    /// that the posterior does not score. Such a term still lives in
-    /// [`log_likelihoods`](crate::graph::Graph::log_likelihoods) — it is a term of the graph,
-    /// it is a garbage-collection root, and it is removed by the same bookkeeping — but
-    /// [`log_density`](crate::graph::Graph::log_density) skips it.
-    ///
-    /// Only [`mark_log_proposal`](crate::graph::Graph::mark_log_proposal) sets this `false`.
-    pub in_log_density: bool,
     pub parent_ids: Vec<Id>,
     pub quantity_type: Arc<dyn DynQuantityType<B>>,
     pub value: Option<QuantityValue<B>>,

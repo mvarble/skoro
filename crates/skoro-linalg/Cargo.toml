@@ -22,5 +22,4 @@ approx.workspace = true
 skoro-dense.workspace = true
 ndarray.workspace = true
 skoro-model = { workspace = true, features = ["testing"] }
-skoro-pointwise.workspace = true
 burn-wgpu.workspace = true

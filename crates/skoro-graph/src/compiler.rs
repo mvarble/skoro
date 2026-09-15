@@ -300,14 +300,9 @@ impl<B: Backend> CompiledSequence<B> {
         let mut point_seq: Vec<Option<Input<B>>> = vec![None; steps_len];
         let mut cotangent_seq: Vec<Option<CotangentFrame<B>>> = vec![None; steps_len];
         let mut out = VjpForwardOutput::default();
+        // The seeds fix the pass's frame count even when no operation consumes one: a leaf's
+        // zero cotangent below must still carry that many frames.
         let mut frame_count: Option<usize> = None;
-        // The seeds carry the frame count, and they are the *only* place it is available when
-        // every target is a leaf: the `Operation` arm below is what otherwise learns it, and a
-        // sequence whose targets are all `Parameter`/`Sampler`/`Constant`/`Observed` has no
-        // differentiable operation to learn it from. Without this, such a pass fell back to
-        // `frame_count.unwrap_or(1)` and handed back one-frame zero cotangents — a Jacobian over
-        // a factor whose arguments are all leaves then failed as `InconsistentFrameCount`. Doing
-        // it here also checks the caller's seeds against each other, which nothing did before.
         for cotangent in input.cotangents.values() {
             check_tensor_frames(&mut frame_count, Some(cotangent))?;
         }

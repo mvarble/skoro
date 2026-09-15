@@ -1,6 +1,12 @@
-//! A fixed (non-differentiable) linear map `y = K x`, for turning a host-computed matrix into
-//! a graph node without a distribution being able to add constants of its own (`Q.client` is
-//! `pub(crate)` — see `crates/skoro-model/src/q.rs`).
+//! A fixed linear map `y = K x`, with `K` supplied from the host at construction.
+//!
+//! This is how a builder that cannot add constants of its own (a distribution only ever sees
+//! quantities, never the client) still gets a known matrix into the graph: the matrix lives in
+//! the operation, not in a node.
+//!
+//! The matrix is not tied to the device it was created on. Every application first moves it to
+//! its input's device, which is a no-op when they already match, so a map built on the default
+//! device still applies to a quantity that lives on another one.
 
 use skoro_backend::{Backend, CotangentFrame, Point, Tensor, TensorData};
 use skoro_core::error::{SkoroError, SkoroResult};
@@ -12,52 +18,50 @@ use skoro_operation::{
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
 };
 
-/// `K`, shape `[out, in]`, fixed at construction.
+/// The linear map `x ↦ K x` for a fixed `K` of shape `[out, in]`.
 #[derive(Debug, Clone)]
 pub struct FixedLinearMap<B: Backend> {
     matrix: Tensor<B, 2>,
 }
 
 impl<B: Backend> FixedLinearMap<B> {
+    /// The map whose matrix is `matrix`, shape `[out, in]`.
     pub fn new(matrix: Tensor<B, 2>) -> Self {
         Self { matrix }
     }
 
-    /// Build `K` from row-major host data, through `TensorData` — never `Tensor::from_floats`,
-    /// which rounds through `f32` even on an `f64` backend.
+    /// The map whose `rows × cols` matrix is `data`, in row-major order.
+    ///
+    /// Built through `TensorData` so an `f64` backend keeps full precision. `device` is only where
+    /// the matrix starts: each application moves it to the input's device.
     pub fn from_row_major(rows: usize, cols: usize, data: &[f64], device: &B::Device) -> Self {
-        let tensor = Tensor::<B, 2>::from_data(
-            TensorData::new(data.to_vec(), [rows, cols]).convert::<B::FloatElem>(),
-            device,
-        );
-        Self::new(tensor)
+        let data = TensorData::new(data.to_vec(), [rows, cols]).convert::<B::FloatElem>();
+        Self::new(Tensor::from_data(data, device))
     }
 
-    fn dims(&self) -> [usize; 2] {
+    /// The matrix's `[out, in]` shape.
+    pub fn dims(&self) -> [usize; 2] {
         self.matrix.dims()
-    }
-
-    /// `K` broadcast to `[batch, out, in]` — `K` itself carries no batch dimension, so every
-    /// frame-shaped mode has to repeat it explicitly; burn's `matmul` does not implicitly
-    /// broadcast a batch-1 operand against a wider one.
-    fn batched(&self, batch: usize) -> Tensor<B, 3> {
-        self.matrix
-            .clone()
-            .unsqueeze_dim::<3>(0)
-            .repeat_dim(0, batch)
-    }
-
-    /// `Kᵀ` broadcast to `[batch, in, out]`.
-    fn batched_transpose(&self, batch: usize) -> Tensor<B, 3> {
-        self.matrix
-            .clone()
-            .transpose()
-            .unsqueeze_dim::<3>(0)
-            .repeat_dim(0, batch)
     }
 }
 
+/// `M · frame` for a `[batch, n, f]` frame and an `[m, n]` matrix, giving `[batch, m, f]`.
+///
+/// Every column of every batch is a row of one rank-2 product, so nothing relies on the backend
+/// broadcasting a batch dimension.
+fn left_multiply_frame<B: Backend>(frame: Tensor<B, 3>, matrix: &Tensor<B, 2>) -> Tensor<B, 3> {
+    let [batch, n, frames] = frame.dims();
+    let rows = matrix.dims()[0];
+    frame
+        .swap_dims(1, 2)
+        .reshape([batch * frames, n])
+        .matmul(matrix.clone().transpose())
+        .reshape([batch, frames, rows])
+        .swap_dims(1, 2)
+}
+
 impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
+    /// Whether the input is differentiable.
     type VjpState = bool;
     type HvpState = ();
 
@@ -68,25 +72,20 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [x] = inputs.try_into().unwrap();
-        let batch = x.dims()[0];
-        // Plain rank-2 matmul: x is [batch, in] as a literal matrix, Kᵀ is [in, out] — no
-        // batching broadcast needed here, unlike the frame-shaped modes below.
-        let y = x.clone().matmul(self.matrix.clone().transpose());
+        let matrix = self.matrix.clone().to_device(&x.device());
+        let transpose = matrix.clone().transpose();
+        let y = x.matmul(transpose.clone());
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(y),
-            DiffModeState::Jvp(tvecs) => {
-                let [dx] = tvecs.try_into().unwrap();
-                let dy = dx.map(|dx| self.batched(batch).matmul(dx));
+            DiffModeState::Jvp(tangents) => {
+                let [dx] = tangents.try_into().unwrap();
+                let dy = dx.map(|dx| left_multiply_frame(dx, &matrix));
                 DiffOperationForward::jvp(y, dy)
             }
             DiffModeState::Vjp(diffs) => DiffOperationForward::vjp(y, diffs[0]),
             DiffModeState::Hvp { diffs, tangents } => {
                 let [dx] = tangents.try_into().unwrap();
-                let dy = dx.map(|dx| {
-                    self.batched(batch)
-                        .matmul(dx.unsqueeze_dim(2))
-                        .squeeze_dim(2)
-                });
+                let dy = dx.map(|dx| dx.matmul(transpose));
                 DiffOperationForward::hvp(y, dy, diffs[0], ())
             }
         }
@@ -97,8 +96,10 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
         state: &Self::VjpState,
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
-        let batch = omega.dims()[0];
-        vec![state.then(|| self.batched_transpose(batch).matmul(omega))]
+        vec![state.then(|| {
+            let transpose = self.matrix.clone().to_device(&omega.device()).transpose();
+            left_multiply_frame(omega, &transpose)
+        })]
     }
 
     fn hvp(
@@ -107,37 +108,52 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
         _: &Self::HvpState,
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
-        // A linear map has zero Hessian, but the cotangent lives on `x`, not `y`: its shape is
-        // `[batch, in, frame]`, which only matches `omega`'s `[batch, out, frame]` when
-        // `in == out`. Build the zero explicitly at the right shape rather than reusing `omega`'s.
-        let [batch, _, frame] = omega.dims();
-        let [_, cols] = self.dims();
-        vec![state.then(|| Tensor::<B, 3>::zeros([batch, cols, frame], &omega.device()))]
+        // Linear, so the second-order term vanishes wherever the first-order one exists. It is
+        // shaped like the input's cotangent, `[batch, in, f]`, not like `omega`.
+        let [batch, _, frames] = omega.dims();
+        let cols = self.matrix.dims()[1];
+        vec![state.then(|| Tensor::zeros([batch, cols, frames], &omega.device()))]
     }
 }
 
-/// Register `x` mapped through a fixed linear map, checking `map`'s shape against `x`'s and
-/// `out`'s manifold dimensions first.
+/// Register `map` applied to `x` as a quantity of type `out`.
+///
+/// Returns [`SkoroError::ShapeMismatch`] if the matrix's rows disagree with `out`'s dimension
+/// (checked first) or its columns with `x`'s manifold dimension.
 pub fn linear_map<B, I, O>(x: &Q<B, I>, out: O, map: FixedLinearMap<B>) -> SkoroResult<Q<B, O>>
 where
     B: Backend,
     I: ContinuousQuantity<B>,
     O: ContinuousQuantity<B>,
 {
-    let [rows, cols] = map.dims();
-    let out_dim = out.dimension();
-    let in_dim = x.get_quantity_type::<Continuous>().dimension();
-    if rows != out_dim {
+    check_map_shape(x, &out, map.dims())?;
+    register_map1(out, map, x)
+}
+
+/// Refuse a `[rows, cols]` map that does not take `x`'s manifold dimension to `out`'s: rows are
+/// checked first, then columns, each as [`SkoroError::ShapeMismatch`].
+pub(super) fn check_map_shape<B, I, O>(
+    x: &Q<B, I>,
+    out: &O,
+    [rows, cols]: [usize; 2],
+) -> SkoroResult<()>
+where
+    B: Backend,
+    I: ContinuousQuantity<B>,
+    O: ContinuousQuantity<B>,
+{
+    if rows != out.dimension() {
         return Err(SkoroError::ShapeMismatch {
-            expected: out_dim,
+            expected: out.dimension(),
             found: rows,
         });
     }
-    if cols != in_dim {
+    let input_dimension = x.get_quantity_type::<Continuous>().dimension();
+    if cols != input_dimension {
         return Err(SkoroError::ShapeMismatch {
-            expected: in_dim,
+            expected: input_dimension,
             found: cols,
         });
     }
-    register_map1(out, map, x)
+    Ok(())
 }

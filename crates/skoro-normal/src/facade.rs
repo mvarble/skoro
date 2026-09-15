@@ -1,7 +1,10 @@
-//! Helpers for constructing Gaussian factors.
+//! Constant covariance factors for building Gaussians.
 //!
-//! A Gaussian quantity now enters a model through `client.add_quantity(Normal::new(mean, std_dev))` directly,
-//! which builds its Factor (bindings and all) through the Distribution trait.
+//! A Gaussian enters a model through `client.add_quantity(Normal::new(mean, std_dev))`: its
+//! [`Factor`](skoro_model::distribution::Factor) binds the residual, the mean and the whitening
+//! separately, and [`GaussianBlock`](crate::structure::GaussianBlock) reads them back. What is
+//! left here are the helpers that build the lower-triangular covariance factor `std_dev` for the
+//! common constant cases.
 
 use skoro_backend::{Backend, ElementConversion};
 use skoro_linalg::tril::Tril;

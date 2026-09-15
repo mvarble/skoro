@@ -183,12 +183,12 @@ impl<B: Backend, M: ContinuousQuantity<B>> Q<B, M> {
     }
 }
 
-/// A cloneable, type-erased reference to a quantity — what [`Factor::bind`](crate::distribution::Factor::bind)
-/// stores instead of a `Q<B, T>`, since a `Factor` collects bindings of heterogeneous quantity
-/// types in one `Vec`.
+/// A type-erased reference to a quantity: its id, plus the same drop guard the [`Q`] it was made
+/// from carries.
 ///
-/// Carries the same drop guard as the `Q` it was built from, so the bound node is kept alive by
-/// the collector for exactly as long as *some* handle to it — `Q` or `Handle` — survives.
+/// This is what lets one collection hold references to quantities of different types, as a
+/// [`Factor`](crate::distribution::Factor)'s bindings do. While any clone of a `Handle` (or of
+/// the `Q` it came from) lives, the collector treats the node as a root.
 pub struct Handle<B: Backend> {
     pub(crate) id: Id,
     pub(crate) client: ModelClient<B>,
@@ -232,7 +232,7 @@ impl<B: Backend> std::fmt::Debug for Handle<B> {
     }
 }
 
-// `mark_likelihood` deliberately does not live here. Attaching an arbitrary factor to
+// `add_factor` and `bind` deliberately do not live here. Attaching an arbitrary factor to
 // any real-valued quantity would let a holder of a `Q` handed out by a restricted model
-// widen that model behind its back. It is on `ModelBuilderOps` instead, which a
+// widen that model behind its back. They are on `ModelBuilderOps` instead, which a
 // restricting facade can decline to implement.

@@ -14,6 +14,8 @@ pub use burn_ndarray::{
     SharedArray,
 };
 
+pub mod ndarray_simd_workaround;
+
 mod private {
     pub trait Sealed {}
 }

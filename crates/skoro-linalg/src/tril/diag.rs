@@ -28,25 +28,7 @@ fn diagonal<B: Backend, const D: usize>(tril: Tensor<B, D>) -> Tensor<B, D> {
             &device,
         )
     };
-    let diag = tril.select(1, indices);
-
-    // `select` on an axis other than 0 is implemented in `burn-ndarray` with
-    // `ndarray::concatenate`, which returns a column-major (non-standard-layout)
-    // array. That is a valid tensor, but `burn-ndarray`'s SIMD fast path for
-    // `abs` (taken once the tensor has >= 32 elements) reads its input through
-    // `as_slice_memory_order` while writing a standard-layout output, so a
-    // column-major input comes back with its elements transposed. `Normal::factor`
-    // does exactly `diag().abs().log().sum()`, which silently produced a wrong
-    // log-determinant for any distribution whose batch reached 32 diagonal
-    // elements.
-    //
-    // Reshaping to the shape the tensor already has is `burn-ndarray`'s own
-    // normalization idiom for this (its `concatenate` does the same, citing
-    // burn issue #1053): the `reshape!` macro calls `as_standard_layout()`
-    // whenever the input is not already in standard layout, and is a metadata
-    // no-op otherwise, so this costs nothing on the cubecl/wgpu backends.
-    let dims = diag.dims();
-    diag.reshape(dims)
+    tril.select(1, indices)
 }
 
 fn packed_diagonal_mask<B: Backend>(n: usize, device: &B::Device) -> Tensor<B, 1> {
@@ -119,14 +101,6 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
                 &device,
             );
             let expanded = omega.select(1, indices_tensor);
-            // Same column-major hazard as `diagonal()` above: `select` on axis 1
-            // can hand back a non-standard-layout tensor, which burn-ndarray's
-            // SIMD `abs`/etc. fast path silently scrambles once it reaches 32+
-            // elements. Not reachable today (`omega * mask_tensor` below isn't a
-            // SIMD-fast-pathed op), but kept consistent with `diagonal()` so a
-            // future caller of this cotangent can't reintroduce the bug here.
-            let dims = expanded.dims();
-            let expanded = expanded.reshape(dims);
             vec![Some(expanded * mask_tensor)]
         } else {
             vec![None]

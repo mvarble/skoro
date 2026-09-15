@@ -7,16 +7,18 @@
 //! both layouts, so `total()` differs from the block *count* and a slot index differs from
 //! a block index.
 
-use skoro_backend::{NdArrayBackend, Tensor};
-use skoro_core::id::Id;
+use skoro_backend::{NdArrayBackend, Point, Tensor};
+use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
-    TangentLayout,
+    ModelBuilderOps, TangentLayout,
+    distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,
     jacobian::{jacobian_jvp, jacobian_vjp},
+    map::register_map1,
     model::ModelClient,
     q::Q,
 };
-use skoro_operation::ValueMap;
+use skoro_operation::{Input, ValueMap, ops::LiteralScalarMultiplication};
 use skoro_riemann::{euclidean::Euclidean, real::Real};
 
 type B = NdArrayBackend<f64, i32>;
@@ -218,23 +220,28 @@ fn a_column_that_reaches_no_row_is_zero() {
 }
 
 /// A row that is a leaf and also a column is the identity on its own columns, in both paths.
+///
+/// Neither pass seeds a leaf, so both would return a zero row — agreeing with each other on
+/// the wrong answer, since `∂x/∂x = 1`.
 #[test]
 fn a_leaf_row_that_is_a_column_is_the_identity() {
     let model = Model::new();
     let points = model.points();
     let inputs = model.inputs();
     let outputs = layout(&model.client, &[model.u.id(), model.x.id()]);
+    let x = inputs.block(model.x.id()).unwrap();
 
-    for j in [
-        jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap(),
-        jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap(),
-    ] {
+    let jvp = jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap();
+    let vjp = jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap();
+    assert_eq!(into_vec(jvp.clone()), into_vec(vjp.clone()));
+    for j in [jvp, vjp] {
         assert_eq!(j.dims(), [BATCH, 2, D_IN]);
-        let j = j.into_data().to_vec::<f64>().unwrap();
+        let j = into_vec(j);
         for batch in 0..BATCH {
-            // Row 1 of each batch is `x`'s row: `∂x/∂x = 1` in column 0, zero elsewhere.
             let row = &j[batch * 2 * D_IN + D_IN..batch * 2 * D_IN + 2 * D_IN];
-            assert_eq!(row, &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+            let mut expected = vec![0.0; D_IN];
+            expected[x.offset] = 1.0;
+            assert_eq!(row, expected.as_slice());
         }
     }
 }
@@ -253,10 +260,106 @@ fn a_leaf_row_that_is_not_a_column_is_zero() {
         jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap(),
     ] {
         assert_eq!(j.dims(), [BATCH, 2, D_IN]);
-        let j = j.into_data().to_vec::<f64>().unwrap();
+        let j = into_vec(j);
         for batch in 0..BATCH {
             let row = &j[batch * 2 * D_IN + D_IN..batch * 2 * D_IN + 2 * D_IN];
-            assert_eq!(row, &[0.0; 8]);
+            assert_eq!(row, &[0.0; D_IN]);
         }
+    }
+}
+
+/// When every row is a leaf, no operation consumes a seed — and the columns that reach no row
+/// must still carry the pass's frame count, or the reverse path cannot assemble at all. Both
+/// paths agree on the identity blocks.
+#[test]
+fn a_jacobian_whose_rows_are_all_leaves_is_filled_on_both_paths() {
+    let model = Model::new();
+    let points = model.points();
+    let inputs = model.inputs();
+    let outputs = layout(&model.client, &[model.x.id(), model.p.id()]);
+    let x = inputs.block(model.x.id()).unwrap();
+    let p = inputs.block(model.p.id()).unwrap();
+
+    let jvp = jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap();
+    let vjp = jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap();
+    assert_eq!(jvp.dims(), [BATCH, 3, D_IN]);
+    assert_eq!(into_vec(jvp.clone()), into_vec(vjp));
+
+    let j = into_vec(jvp);
+    let mut expected = vec![0.0; 3 * D_IN];
+    expected[x.offset] = 1.0;
+    expected[D_IN + p.offset] = 1.0;
+    expected[2 * D_IN + p.offset + 1] = 1.0;
+    for batch in 0..BATCH {
+        assert_eq!(
+            &j[batch * 3 * D_IN..(batch + 1) * 3 * D_IN],
+            expected.as_slice()
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NeverSampler;
+
+impl Sampler<B, Continuous> for NeverSampler {
+    fn sample(&self, _: usize, _: Vec<Input<B>>) -> Point<B> {
+        unimplemented!("the observed quantity is never generated")
+    }
+}
+
+/// `log p(o) = 2o`, over no parents: only here to make an observable quantity.
+struct Linear;
+
+impl Distribution<B, Continuous> for Linear {
+    type Qty = Real;
+    type Sampler = NeverSampler;
+
+    fn quantity_type(&self) -> Real {
+        Real
+    }
+    fn sampler(&self) -> NeverSampler {
+        NeverSampler
+    }
+    fn parent_ids(&self) -> &[Id] {
+        &[]
+    }
+    fn factor(&self, o: &Q<B, Real>) -> SkoroResult<Factor<B>> {
+        Ok(Factor::new(register_map1(
+            Real,
+            LiteralScalarMultiplication::new(2.0),
+            o,
+        )?))
+    }
+}
+
+/// A constant or observed node listed as both a row and a column is zero in both, in both paths,
+/// while a parameter listed the same way keeps its identity block.
+///
+/// Neither pass seeds a constant, so its column is zero; its row must be zero too, or `J` claims
+/// the node moves with itself while nothing moves with it. Both used to get an identity row.
+#[test]
+fn a_constant_or_observed_node_that_is_a_row_and_a_column_is_zero() {
+    let model = Model::new();
+    let c = model.client.add_constant(Real, &3.0f64);
+    let o = model.client.add_quantity(Linear).unwrap();
+    o.observe(&1.5f64).unwrap();
+    let points = model.points();
+    let ids = [model.x.id(), c.id(), o.id()];
+    let (inputs, outputs) = (layout(&model.client, &ids), layout(&model.client, &ids));
+
+    let jvp = jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap();
+    let vjp = jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap();
+    assert_eq!(jvp.dims(), [BATCH, 3, 3]);
+    assert_eq!(into_vec(jvp.clone()), into_vec(vjp));
+
+    #[rustfmt::skip]
+    let expected = [
+        1.0, 0.0, 0.0, // x
+        0.0, 0.0, 0.0, // c
+        0.0, 0.0, 0.0, // o
+    ];
+    let j = into_vec(jvp);
+    for batch in 0..BATCH {
+        assert_eq!(&j[batch * 9..(batch + 1) * 9], expected.as_slice());
     }
 }

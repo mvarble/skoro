@@ -18,15 +18,8 @@ use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelClientOps,
-    distribution::Factor,
-    hash_map_builders::point_map,
-    jacobian::jacobian_vjp,
-    least_squares::residual_layout,
-    model::ModelClient,
-    q::Q,
-    roles::{NORMALIZER_PARENT, RESIDUAL},
-    test_utils::into_vec,
+    ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp,
+    model::ModelClient, q::Q, test_utils::into_vec,
 };
 use skoro_normal::joint::{JointNormal, add_joint_factor};
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
@@ -410,17 +403,21 @@ mod scoring {
 }
 
 /// A joint factor arrives as *one* row block: a 9-member joint is 9 rows of `J`, and the residual
-/// node has to survive `cleanup()`, which it reaches by a route no single-quantity factor takes.
+/// node has to survive `cleanup()`, which only the factor's binding keeps it through.
 mod records {
     use super::*;
+    use skoro_model::{
+        least_squares::residual_layout,
+        roles::{NORMALIZER_PARENT, RESIDUAL},
+    };
 
-    /// The least-squares builder binds a joint factor as one row block, and keeps it alive.
+    /// The builder binds a joint factor's residual as one row block, and the binding keeps it alive.
     ///
     /// `residual_layout` is what an optimizer takes as the rows of `J`, so a 9-member joint has to
-    /// arrive as 9 rows — and the residual node has to survive `cleanup()`, which is the hazard
-    /// `residual_layout` exists for and which a joint factor reaches by a new route.
+    /// arrive as 9 rows — and the residual node, whose handle the builder does not keep, has to
+    /// survive `cleanup()`.
     #[test]
-    fn the_builder_records_a_joint_factor_as_one_row_block() {
+    fn the_builder_binds_a_joint_factor_as_one_row_block() {
         let model = ModelClient::<B>::default();
         let pose_q: Q<B, SE3> = model.add_parameter(SE3);
         let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
@@ -432,27 +429,25 @@ mod records {
         let (packed, normalizer) = whitening_from_precision(&coupled_precision()).unwrap();
         let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
 
-        let ids = vec![pose_q.id(), point_q.id()];
-        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
+        let factor = JointNormal::new(
+            vec![pose_q.id(), point_q.id()],
+            at,
+            whitening.clone(),
+            normalizer,
+        );
         let density = add_joint_factor(&model, &factor).unwrap();
 
-        assert_eq!(ModelClientOps::factors(&model).len(), 1);
-        assert_eq!(ModelClientOps::factors(&model)[0].density, density.id());
+        let factors = model.factors();
+        assert_eq!(factors.len(), 1);
+        assert_eq!(factors[0].density, density.id());
+        assert_eq!(factors[0].scored, None);
+        assert_eq!(factors[0].arguments, vec![pose_q.id(), point_q.id()]);
         assert_eq!(
-            ModelClientOps::factors(&model)[0].arguments,
-            ids,
-            "the joint's arguments are its members, in the order it was given them"
-        );
-        assert_eq!(
-            ModelClientOps::bound(&model, density.id(), NORMALIZER_PARENT),
+            model.bound(density.id(), NORMALIZER_PARENT),
             vec![whitening.id()],
             "the whitening is the normalizer's only parent"
         );
-        assert_eq!(
-            ModelClientOps::bound(&model, density.id(), RESIDUAL).len(),
-            1,
-            "one residual, which is the row block `residual_layout` reads"
-        );
+        assert_eq!(model.bound(density.id(), RESIDUAL).len(), 1);
 
         // Nine rows of `J`: six for the pose block, three for the Euclidean one.
         assert_eq!(residual_layout(&model).unwrap().total(), 9);
@@ -468,23 +463,19 @@ mod records {
 
 /// Retiring a joint factor, where a plain downstream walk is not enough. The factor's body is
 /// downstream of the quantities it scores, so a closure at one member reaches it -- but its
-/// **anchors** are not, and neither is a surviving member's per-block tangent. Both halves fail
-/// silently on their own: a stranded anchor is a leak nothing reports, and a binding left naming a
-/// deleted node is a `NodeNotFound` at the *next* solve rather than at the removal that caused it.
+/// **anchors** are not, and neither is a surviving member's per-block tangent, nor the Fisher root
+/// the factor binds. A stranded node is a leak nothing reports, so every one of them is counted.
 mod retirement {
     use super::*;
+    use skoro_model::{least_squares::residual_layout, roles::RESIDUAL};
 
     /// Retiring a scored quantity takes the whole joint factor and leaves nothing stranded.
     ///
     /// The teardown half of a sliding window, and the reason it is not just a downstream walk. A joint
     /// factor's body — the per-block tangents, the concatenation, `Wδ`, `‖·‖²`, `ℓ` — is all
     /// downstream of the quantities it scores, so a closure at one member reaches it. Its **anchors**
-    /// are not, and neither is the surviving member's per-block tangent: those sit upstream, carry no
-    /// `Q`, and would be stranded once per tick forever.
-    ///
-    /// Both halves are asserted here, because each fails silently on its own. A stranded anchor is a
-    /// leak nothing reports, and a binding left naming a deleted node is a `NodeNotFound` at the
-    /// *next* solve rather than at the removal that caused it.
+    /// are not, and neither is the surviving member's per-block tangent or the Fisher root: those sit
+    /// upstream or beside it, carry no `Q`, and would be stranded once per tick forever.
     #[test]
     fn retiring_a_scored_quantity_takes_the_whole_joint_factor() {
         let model = ModelClient::<B>::default();
@@ -504,12 +495,13 @@ mod retirement {
         // The pose, the point, and the whitening — everything the factor is built *from*.
         let baseline = node_count();
 
-        let ids = vec![pose_q.id(), point_q.id()];
-        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
-        let density = factor.log_density(&model).unwrap();
-        model
-            .add_factor(Factor::new(density.clone()), &ids)
-            .unwrap();
+        let factor = JointNormal::new(
+            vec![pose_q.id(), point_q.id()],
+            at,
+            whitening.clone(),
+            normalizer,
+        );
+        let density = add_joint_factor(&model, &factor).unwrap();
         assert!(node_count() > baseline);
 
         // Retire the pose, as a window retires its oldest state.
@@ -520,20 +512,18 @@ mod retirement {
         assert_eq!(
             node_count(),
             baseline - 1,
-            "the pose, and every node the factor built — anchors included"
+            "the pose, and every node the factor built — anchors and root included"
         );
         assert!(contains(point_q.id()), "the scored survivor is intact");
         assert!(contains(whitening.id()), "so is the whitening");
     }
 
-    /// A retirement that deletes a bound factor drops its term and its bindings with it.
+    /// A retirement that deletes a factor's term takes its bindings with it.
     ///
-    /// A surviving binding would not be merely stale, it would be unusable: `residual_layout`
-    /// resolves every bound residual through `TangentLayout::from_ids`, so one naming a deleted
-    /// node fails the *next* solve rather than the removal that caused it. Removing a node clears
-    /// both binding directions for it, so nothing survives naming a node the arena no longer has.
+    /// The residual layout is read off the live terms' bindings, so once the term is gone its rows
+    /// are too, with nothing to prune.
     #[test]
-    fn retiring_a_scored_quantity_prunes_the_registry() {
+    fn retiring_a_scored_quantity_takes_its_rows() {
         let model = ModelClient::<B>::default();
         let pose_q: Q<B, SE3> = model.add_parameter(SE3);
         let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
@@ -552,25 +542,17 @@ mod retirement {
         model.remove_closure(&[pose_q.id()]).unwrap();
         model.cleanup();
 
-        assert!(
-            ModelClientOps::factors(&model).is_empty(),
-            "a term naming a deleted node is not evidence"
-        );
+        assert!(model.factors().is_empty());
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
     }
 
-    /// A term whose density is gone is dropped, even though its residual node has no handle.
+    /// Removing a factor's density releases what it bound.
     ///
     /// Reachable by an obvious call: `add_joint_factor` hands back the log-density, and rooting a
-    /// removal there takes `ℓ` alone — nothing is downstream of it. Half a factor is not a factor. It
-    /// contributes nothing to the log-density any more, so leaving the term would put rows in `J`
-    /// for something the objective does not contain, which is the one way this fails without
-    /// erroring.
-    ///
-    /// The residual is kept alive by the `RESIDUAL` binding rather than by a handle, so once the
-    /// density that bound it is gone the residual becomes collectable again.
+    /// removal there takes `ℓ` alone — nothing is downstream of it. The residual was kept alive only
+    /// by the density's binding, so the same call's collection reclaims it.
     #[test]
-    fn a_factor_whose_density_was_removed_is_uncertified() {
+    fn removing_a_density_releases_what_it_bound() {
         let model = ModelClient::<B>::default();
         let pose_q: Q<B, SE3> = model.add_parameter(SE3);
         let point_q: Q<B, EuclideanD> = model.add_parameter(EuclideanD(3));
@@ -584,14 +566,11 @@ mod retirement {
 
         let factor = JointNormal::new(vec![pose_q.id(), point_q.id()], at, whitening, normalizer);
         let density = add_joint_factor(&model, &factor).unwrap();
-        let residual =
-            ModelClientOps::bound(&model, ModelClientOps::factors(&model)[0].density, RESIDUAL)[0];
+        let residual = model.bound(density.id(), RESIDUAL)[0];
 
-        // Rooted at the density: `ℓ` alone goes, and with its bindings cleared the residual is
-        // unpinned — so the same call's cascade reclaims it too.
         assert_eq!(model.remove_closure(&[density.id()]).unwrap().len(), 1);
 
-        assert!(ModelClientOps::factors(&model).is_empty());
+        assert!(model.factors().is_empty());
         assert_eq!(residual_layout(&model).unwrap().total(), 0);
         assert!(
             model.tangent_layout(&[residual]).is_err(),
@@ -607,11 +586,8 @@ mod retirement {
     ///
     /// A log-density is a leaf, so the closure takes `ℓ` alone; everything that computed it —
     /// the whitening product, the squared norm, the concatenation, the per-block tangents, the
-    /// frozen anchors — sits *upstream* of it and holds no handle. That is the leak the cascade
-    /// in `cleanup()` exists for: the removal offers the removed node's parents, each collection
-    /// offers the next layer up, and the body unwinds entirely. `private_nodes` alone never
-    /// covered this: it reclaims anchors only when the *concatenation* dies inside a closure,
-    /// and here the concatenation is upstream of the root.
+    /// frozen anchors — sits *upstream* of it and holds no handle, and the Fisher root sits beside
+    /// it, held only by the binding. The collection after the removal unwinds all of it.
     #[test]
     fn retiring_a_density_reclaims_the_whole_factor_body() {
         let model = ModelClient::<B>::default();
@@ -628,12 +604,13 @@ mod retirement {
         let node_count = || model.server_call(|server| server.graph().node_count());
         let baseline = node_count();
 
-        let ids = vec![pose_q.id(), point_q.id()];
-        let factor = JointNormal::new(ids.clone(), at, whitening.clone(), normalizer);
-        let density = factor.log_density(&model).unwrap();
-        model
-            .add_factor(Factor::new(density.clone()), &ids)
-            .unwrap();
+        let factor = JointNormal::new(
+            vec![pose_q.id(), point_q.id()],
+            at,
+            whitening.clone(),
+            normalizer,
+        );
+        let density = add_joint_factor(&model, &factor).unwrap();
         assert!(node_count() > baseline);
 
         model.remove_closure(&[density.id()]).unwrap();
@@ -643,15 +620,18 @@ mod retirement {
         assert_eq!(
             node_count(),
             baseline,
-            "ℓ goes in the closure; everything that computed it follows in the cascade"
+            "ℓ goes in the closure; everything that computed or was bound by it follows"
         );
     }
 }
 
+/// A joint factor's Fisher root is its whitening unpacked dense, so over its own members the
+/// model's expected information is exactly the precision the factor was built from.
 mod information {
     use super::*;
     use skoro_model::information::information;
 
+    /// For the coupled `SE3 + EuclideanD(3)` precision, `information` over the two members is `Λ`.
     #[test]
     fn joint_information_is_the_precision() {
         let model = ModelClient::<B>::default();
@@ -662,7 +642,8 @@ mod information {
             .with_quantity(&pose_q, pose_row(0.4, [1.5, -2.25, 0.75]))
             .with_quantity(&point_q, row(&[1.0, 2.0, 3.0]))
             .build();
-        let (packed, normalizer) = whitening_from_precision(&coupled_precision()).unwrap();
+        let lambda = coupled_precision();
+        let (packed, normalizer) = whitening_from_precision(&lambda).unwrap();
         let whitening = model.add_constant(Tril(9), &VectorD::new(&packed));
 
         let factor = JointNormal::new(
@@ -673,13 +654,16 @@ mod information {
         );
         add_joint_factor(&model, &factor).unwrap();
 
-        let free = model.tangent_layout(&[pose_q.id(), point_q.id()]).unwrap();
+        let free = model
+            .tangent_layout(&[pose_q.id(), point_q.id()])
+            .unwrap();
         let info = information(&model, at.as_ref(), &free).unwrap();
-        let info = Dense::from_tensor(info).unwrap();
-
-        let lambda = coupled_precision();
-        for (g, w) in info.data().iter().zip(lambda.data()) {
-            approx::assert_abs_diff_eq!(g, w, epsilon = 1e-8);
+        assert_eq!(info.dims(), [1, 9, 9]);
+        let info = into_vec(info);
+        for i in 0..9 {
+            for j in 0..9 {
+                assert_abs_diff_eq!(info[i * 9 + j], lambda.get(i, j), epsilon = 1e-8);
+            }
         }
     }
 }

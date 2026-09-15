@@ -8,9 +8,9 @@
 //! visible from a `Graph`:
 //!
 //! - the closure is reachable through the **builder** trait and not the client one, which is what
-//!   keeps an estimator holding only `ModelClientOps` from deleting a cone of its own evidence:
-//!   growing or retiring a model is `ModelBuilderOps`' business. The negative half is a
-//!   `trybuild` case, since a test that compiles cannot assert that another does not;
+//!   keeps an estimator that holds only `ModelClientOps` from deleting a cone of its own evidence. The
+//!   negative half is a `trybuild` case, since a test that compiles cannot assert that another
+//!   does not;
 //! - `cleanup()` survives it. A closure removal deliberately takes nodes the caller *does* hold a
 //!   `Q` for, so dropping that handle afterwards leaves a handle naming nothing — and cleanup used
 //!   to `expect` on exactly that.
@@ -149,7 +149,7 @@ mod closures {
 mod cleanup {
     use super::*;
 
-    /// A distribution whose `log_density` does **not** rebuild over its parents — the one shape
+    /// A distribution whose `factor` does **not** rebuild over its parents — the one shape
     /// the old drop-guard protocol could not survive.
     ///
     /// Nothing in the `Distribution` contract says the density must be expressed over the
@@ -395,78 +395,6 @@ mod reachability {
             model.server_call(|server| server.graph().is_scoring(density)),
             "and the term is still in the objective"
         );
-    }
-
-    /// A proposal-only term is a collector root exactly as a scored one is.
-    ///
-    /// This is what the single term arena buys: `cleanup`'s roots are
-    /// `graph.log_likelihoods()`, which holds every term whether or not it is a summand of the
-    /// log-density, so a proposal survives a sweep and takes the quantity it scores with it. Had
-    /// proposal-only terms been kept in an arena of their own, they would be unrooted here and
-    /// the sweep would take them silently.
-    #[test]
-    fn a_proposal_only_term_is_a_collector_root() {
-        let model = ModelClient::<B>::default();
-        let c = model.add_constant(Real, &2.0f64);
-        let z = ModelBuilderOps::add_proposal(
-            &model,
-            DetachedDistr {
-                elsewhere: c.clone(),
-                ids: [c.id()],
-            },
-        )
-        .unwrap();
-        let z_id = z.id();
-        let proposal = model.log_density_of(&z).expect("the proposal's density");
-        assert!(model.server_call(|server| !server.graph().in_log_density(proposal)));
-
-        // The only handle to the proposed quantity goes, and — as in the test above — the
-        // proposal's density is not written over it.
-        drop(z);
-        model.cleanup();
-
-        assert!(
-            model.server_call(|server| server.graph().contains(z_id)),
-            "a quantity a live proposal generates is reachable"
-        );
-        assert!(
-            model.server_call(|server| server.graph().is_scoring(proposal)),
-            "and the proposal is still a term"
-        );
-        assert!(
-            model.server_call(|server| !server.graph().in_log_density(proposal)),
-            "still out of the log-density"
-        );
-        model
-            .server_call(|server| server.graph().validate_indices())
-            .expect("the sweep leaves the indices coherent");
-    }
-
-    /// Demotion through the *client* runs a `cleanup()` of its own, which the graph-layer test of
-    /// the same case does not exercise. Retiring the proposal leaves an ordinary mapped node
-    /// behind, and the sweep must not trip over it.
-    #[test]
-    fn demoting_a_proposed_quantity_through_the_client_retires_its_term() {
-        let model = ModelClient::<B>::default();
-        let c = model.add_constant(Real, &2.0f64);
-        let z = ModelBuilderOps::add_proposal(
-            &model,
-            DetachedDistr {
-                elsewhere: c.clone(),
-                ids: [c.id()],
-            },
-        )
-        .unwrap();
-        let proposal = model.log_density_of(&z).expect("the proposal's density");
-
-        model.demote_to_parameter(&z).unwrap();
-
-        assert!(model.server_call(|server| !server.graph().is_scoring(proposal)));
-        assert!(model.terms().is_empty(), "no term is left");
-        assert_eq!(model.log_density_of(&z), None);
-        model
-            .server_call(|server| server.graph().validate_indices())
-            .expect("demotion plus cleanup leaves the indices coherent");
     }
 }
 

@@ -5,6 +5,7 @@ mod common;
 type B = skoro_backend::CubeBackend<burn_wgpu::WgpuRuntime, f32, i32>;
 
 exercise_api!(B);
+unary_kernels_on_non_standard_layouts!(B);
 
 #[test]
 fn to_cube_tensor() {

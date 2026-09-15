@@ -7,7 +7,10 @@
 //! [`distribution::Distribution`] registers conditional distributions
 //! (continuous or discrete, via the shared kind parameter); [`map`]'s
 //! `register_mapN` and the [`ops`] / [`discrete`] modules expose deterministic
-//! operations (with operator sugar) on quantities of either kind.
+//! operations (with operator sugar) on quantities of either kind. A
+//! distribution's [`Factor`](distribution::Factor) binds its term to the nodes
+//! playing each of the [`roles`], and [`least_squares`] and [`information`]
+//! read those bindings back at solve time.
 
 mod cleanup;
 pub mod client_ops;

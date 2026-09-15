@@ -15,7 +15,6 @@ use skoro_model::{
     q::Q,
     roles::{FISHER_ROOT, LOCATION, NORMALIZER_PARENT, RESIDUAL, WHITENING},
 };
-
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -196,6 +195,15 @@ where
         &self.ids
     }
 
+    /// The factor `log p(x) = constant − ½‖r‖² + log|diag(L⁻¹)|`, with `r = L⁻¹ (x ⊖ μ)`.
+    ///
+    /// `L⁻¹` is built once and shared by the residual, the normalizer, and the Fisher root. The
+    /// factor binds [`RESIDUAL`] to `r`, [`LOCATION`] to `μ`, [`WHITENING`] and
+    /// [`NORMALIZER_PARENT`] to `L`, and [`FISHER_ROOT`] to the root over `[x, μ, L]` (see
+    /// [`information`](crate::information)). The root is exact on flat manifolds and second-order
+    /// accurate in the dispersion on groups; that module's documentation explains why.
+    ///
+    /// Returns [`SkoroError::ShapeMismatch`] if `L` is not sized for the quantity's dimension.
     fn factor(&self, x: &Q<B, M>) -> SkoroResult<Factor<B>> {
         let d = self.quantity_type.dimension();
         let n = self.std_dev.get_quantity_type::<Continuous>().0;
