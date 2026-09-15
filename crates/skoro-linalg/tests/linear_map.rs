@@ -1,12 +1,12 @@
 //! `FixedLinearMap`: a host matrix applied as a graph operation. `SparseLinearMap`'s shape check
 //! lives here too; its values and derivatives are checked on every backend in `common/matrix.rs`.
 //!
-//! One backend for the binary (`NdArrayBackend<f64, i32>`), and tensors built through
+//! One backend for the binary (`Flex` under the `f64` float policy), and tensors built through
 //! `TensorData`, so the exact comparisons below are not undone by an `f32` round trip.
 
 use std::collections::HashMap;
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_linalg::matrix::{FixedLinearMap, SparseLinearMap, linear_map, sparse_linear_map};
 use skoro_model::{
@@ -18,7 +18,8 @@ use skoro_model::{
 };
 use skoro_riemann::euclidean::EuclideanD;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// `K`, row-major, `3 × 2`.
 const K: [f64; 6] = [0.7, -1.3, 2.1, 0.4, -0.25, 1.9];

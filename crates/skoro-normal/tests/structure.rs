@@ -10,7 +10,7 @@
 //! residual sized by storage rather than by dimension is visible here and invisible on
 //! `Real` or `EuclideanD`.
 
-use skoro_backend::{NdArrayBackend, Point, TensorData};
+use skoro_backend::{Flex, Point, TensorData};
 use skoro_core::id::Id;
 use skoro_linalg::tril::{Tril, TrilOps};
 use skoro_linalg::vector::LinalgVectorOps;
@@ -34,7 +34,8 @@ use skoro_riemann::{
 use skoro_se3::quantity::{SE3, SE3Pose};
 use skoro_so3::quantity::SO3Matrix;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn point(values: &[f64]) -> Input<B> {
     Input::float(Point::<B>::from_data(

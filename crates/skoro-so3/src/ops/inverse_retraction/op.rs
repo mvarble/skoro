@@ -1,16 +1,16 @@
 use skoro_backend::{
-    CotangentFrame, CubeBackend, CubeFloat, CubeInt, CubeRuntime, NdArrayBackend, NdArrayFloat,
-    NdArrayInt, NdArrayTensor, Point, SharedArray, TangentVector, Tensor,
+    CotangentFrame, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Flex, Point, TangentVector,
+    Tensor,
 };
 use skoro_linalg::vector::cross_product::cube::left_broadcast_cross_product as cube_cross;
-use skoro_linalg::vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_cross;
+use skoro_linalg::vector::cross_product::flex::left_broadcast_cross_product as host_cross;
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
     sum_opt_tensors,
 };
 
-use crate::ops::log::{cube, ndarray};
+use crate::ops::log::{cube, flex};
 
 use super::SO3InverseRetraction;
 
@@ -179,33 +179,27 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
     }
 }
 
-impl<F, I> DiffOperation<NdArrayBackend<F, I>> for SO3InverseRetraction
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl DiffOperation<Flex> for SO3InverseRetraction {
     /// `(ω, Δr)` for each input, present exactly when that input is differentiable.
     type VjpState = (
-        Option<(Point<NdArrayBackend<F, I>>, Tensor<NdArrayBackend<F, I>, 3>)>,
-        Option<(Point<NdArrayBackend<F, I>>, Tensor<NdArrayBackend<F, I>, 3>)>,
+        Option<(Point<Flex>, Tensor<Flex, 3>)>,
+        Option<(Point<Flex>, Tensor<Flex, 3>)>,
     );
-    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 2];
+    type HvpState = [Option<TangentVector<Flex>>; 2];
 
     fn forward(
         &self,
-        inputs: Vec<Input<NdArrayBackend<F, I>>>,
-        diff_state: DiffModeState<NdArrayBackend<F, I>>,
-    ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::unwrap_float).collect();
+        inputs: Vec<Input<Flex>>,
+        diff_state: DiffModeState<Flex>,
+    ) -> DiffOperationForward<Flex, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<Flex>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [u, v] = inputs.try_into().unwrap();
         let b = u.dims()[0];
         let dr = u
             .reshape([b, 3, 3])
             .transpose()
             .matmul(v.reshape([b, 3, 3]));
-        let omega = ndarray::log(dr.clone().reshape([b, 9]));
+        let omega = flex::log(dr.clone().reshape([b, 9]));
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(omega),
             DiffModeState::Jvp(tvecs) => {
@@ -214,9 +208,9 @@ where
                     omega.clone(),
                     sum_opt_tensors([
                         du.map(|du| {
-                            -ndarray::log_jvp(omega.clone(), dr.clone().transpose().matmul(du))
+                            -flex::log_jvp(omega.clone(), dr.clone().transpose().matmul(du))
                         }),
-                        dv.map(|dv| ndarray::log_jvp(omega.clone(), dv)),
+                        dv.map(|dv| flex::log_jvp(omega.clone(), dv)),
                     ]),
                 )
             }
@@ -240,15 +234,14 @@ where
                     omega.clone(),
                     sum_opt_tensors([
                         du.as_ref().map(|du| {
-                            -ndarray::log_jvp(
+                            -flex::log_jvp(
                                 omega.clone(),
                                 dr.clone().transpose().matmul(du.clone().unsqueeze_dim(2)),
                             )
                             .squeeze_dim(2)
                         }),
                         dv.as_ref().map(|dv| {
-                            ndarray::log_jvp(omega.clone(), dv.clone().unsqueeze_dim(2))
-                                .squeeze_dim(2)
+                            flex::log_jvp(omega.clone(), dv.clone().unsqueeze_dim(2)).squeeze_dim(2)
                         }),
                     ]),
                     // `diffs` (not the tangents) says whether an input traces back to a free
@@ -267,16 +260,16 @@ where
     fn vjp(
         &self,
         (u_state, v_state): &Self::VjpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         vec![
             u_state.as_ref().map(|(omega, dr)| {
                 -dr.clone()
-                    .matmul(ndarray::log_vjp(omega.clone(), alpha.clone()))
+                    .matmul(flex::log_vjp(omega.clone(), alpha.clone()))
             }),
             v_state
                 .as_ref()
-                .map(|(omega, _)| ndarray::log_vjp(omega.clone(), alpha.clone())),
+                .map(|(omega, _)| flex::log_vjp(omega.clone(), alpha.clone())),
         ]
     }
 
@@ -284,8 +277,8 @@ where
         &self,
         (u_state, v_state): &Self::VjpState,
         [du, dv]: &Self::HvpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         // `ω` and `Δr` are shared by both blocks; either state slot exposes them.
         let shared = u_state.as_ref().or(v_state.as_ref());
 
@@ -300,18 +293,18 @@ where
                 }),
                 dv.clone(),
             ])?;
-            let eta = ndarray::log_jvp(omega.clone(), h.unsqueeze_dim(2)).squeeze_dim(2);
-            Some(ndarray::log_hvp(omega.clone(), eta, alpha.clone()))
+            let eta = flex::log_jvp(omega.clone(), h.unsqueeze_dim(2)).squeeze_dim(2);
+            Some(flex::log_hvp(omega.clone(), eta, alpha.clone()))
         });
 
         vec![
             u_state.as_ref().map(|(omega, dr)| {
-                let vjp = ndarray::log_vjp(omega.clone(), alpha.clone());
+                let vjp = flex::log_vjp(omega.clone(), alpha.clone());
                 sum_opt_tensors([
                     du.as_ref()
-                        .map(|du| ndarray_cross(du.clone(), dr.clone().matmul(vjp.clone()))),
+                        .map(|du| host_cross(du.clone(), dr.clone().matmul(vjp.clone()))),
                     dv.as_ref()
-                        .map(|dv| -dr.clone().matmul(ndarray_cross(dv.clone(), vjp.clone()))),
+                        .map(|dv| -dr.clone().matmul(host_cross(dv.clone(), vjp.clone()))),
                     log_hvp.clone().map(|log_hvp| -dr.clone().matmul(log_hvp)),
                 ])
                 .unwrap_or_else(|| alpha.zeros_like())

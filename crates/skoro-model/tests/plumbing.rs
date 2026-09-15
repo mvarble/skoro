@@ -10,7 +10,7 @@ use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
-use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TensorData};
+use skoro_backend::{CotangentFrame, Flex, Point, TensorData};
 use skoro_core::{
     discrete::{Boolean, Categorical},
     id::Id,
@@ -30,7 +30,7 @@ use skoro_operation::{
 };
 use skoro_riemann::real::Real;
 
-type B = NdArrayBackend<f32, i32>;
+type B = Flex;
 
 /// A `DiffOperation` whose only purpose is to let us construct the density of a `Stochastic` node.
 #[derive(Debug, Clone)]

@@ -9,7 +9,7 @@
 //! `Graph::update_stochastic`, and replacing a factor is now a closure removal followed by a
 //! rebuild, which `retiring_a_scored_quantity_takes_the_factor_and_its_bindings` covers.
 
-use skoro_backend::{NdArrayBackend, Point, TensorData};
+use skoro_backend::{Flex, Point, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
@@ -28,7 +28,8 @@ use skoro_riemann::{
     matrix::{EuclideanMatrixD, MatrixD},
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn point(values: &[f64]) -> Input<B> {
     Input::float(Point::<B>::from_data(

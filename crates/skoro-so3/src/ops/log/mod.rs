@@ -1,5 +1,5 @@
 pub mod cube;
-pub mod ndarray;
+pub mod flex;
 mod sugar;
 
 pub use sugar::*;

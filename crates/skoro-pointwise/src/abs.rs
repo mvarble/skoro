@@ -1,4 +1,4 @@
-use skoro_backend::{Backend, CotangentFrame, Point, ndarray_simd_workaround};
+use skoro_backend::{Backend, CotangentFrame, Point};
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -18,17 +18,12 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [x] = inputs.try_into().unwrap();
-        // `abs` goes through `ndarray_simd_workaround`: the input is often a `select` result
-        // (a `Tril` diagonal, say) that is still held elsewhere, which is the case burn-ndarray's
-        // SIMD kernel gets wrong.
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                DiffOperationForward::forward_only(ndarray_simd_workaround::abs(x))
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(x.abs()),
             DiffModeState::Jvp(tvecs) => {
                 let [dx] = tvecs.try_into().unwrap();
                 DiffOperationForward::jvp(
-                    ndarray_simd_workaround::abs(x.clone()),
+                    x.clone().abs(),
                     dx.map(|dx| {
                         dx.full_like(-1.0)
                             .mask_fill(x.unsqueeze_dim(2).greater_equal_elem(0.0), 1.0)
@@ -38,9 +33,9 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
             DiffModeState::Vjp(diffs) => {
                 let [diff] = diffs.try_into().unwrap();
                 if diff {
-                    DiffOperationForward::vjp(ndarray_simd_workaround::abs(x.clone()), Some(x))
+                    DiffOperationForward::vjp(x.clone().abs(), Some(x))
                 } else {
-                    DiffOperationForward::vjp(ndarray_simd_workaround::abs(x), None)
+                    DiffOperationForward::vjp(x.abs(), None)
                 }
             }
             DiffModeState::Hvp {
@@ -53,7 +48,7 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
                         .mask_fill(x.clone().greater_equal_elem(0.0), 1.0)
                 });
                 let vjp_state = diffs[0].then(|| x.clone());
-                DiffOperationForward::hvp(ndarray_simd_workaround::abs(x), tangent, vjp_state, ())
+                DiffOperationForward::hvp(x.abs(), tangent, vjp_state, ())
             }
         }
     }

@@ -1,8 +1,4 @@
-use num_traits::Float;
-use skoro_backend::{
-    Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Element, NdArrayBackend, NdArrayFloat,
-    NdArrayInt, NdArrayTensor, SharedArray,
-};
+use skoro_backend::{Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Element, Flex};
 use skoro_core::pack::{NumComponents, Packable};
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::ops::{AssociatedTangentVector, AssociatedTangentVectorBuilder};
@@ -61,21 +57,16 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> Manifold<CubeBackend<R, F, I>> fo
     }
 }
 
-impl<F, I> Manifold<NdArrayBackend<F, I>> for SO3
-where
-    F: NdArrayFloat + Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl Manifold<Flex> for SO3 {
     fn dimension(&self) -> usize {
         3
     }
 
-    fn retraction(&self) -> impl DiffOperation<NdArrayBackend<F, I>> {
+    fn retraction(&self) -> impl DiffOperation<Flex> {
         SO3Retraction
     }
 
-    fn inverse_retraction(&self) -> impl DiffOperation<NdArrayBackend<F, I>> {
+    fn inverse_retraction(&self) -> impl DiffOperation<Flex> {
         SO3InverseRetraction
     }
 }

@@ -1,10 +1,7 @@
 use num_traits::{Float, FromPrimitive, One};
-use skoro_backend::{
-    Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentFrame, TangentVector,
-};
+use skoro_backend::{Backend, CotangentFrame, Flex, Point, TangentFrame, TangentVector};
 use skoro_backend::{Element, host};
-use skoro_linalg::vector::cross_product::ndarray::cross_product_impl as cross_product;
+use skoro_linalg::vector::cross_product::flex::cross_product_impl as cross_product;
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -12,22 +9,16 @@ use skoro_operation::{
 
 use super::SO3Log;
 
-impl<F, I> DiffOperation<NdArrayBackend<F, I>> for SO3Log
-where
-    F: NdArrayFloat + Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
-    type VjpState = Option<Point<NdArrayBackend<F, I>>>;
-    type HvpState = Option<Point<NdArrayBackend<F, I>>>;
+impl DiffOperation<Flex> for SO3Log {
+    type VjpState = Option<Point<Flex>>;
+    type HvpState = Option<Point<Flex>>;
 
     fn forward(
         &self,
-        inputs: Vec<Input<NdArrayBackend<F, I>>>,
-        diff_state: DiffModeState<NdArrayBackend<F, I>>,
-    ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::unwrap_float).collect();
+        inputs: Vec<Input<Flex>>,
+        diff_state: DiffModeState<Flex>,
+    ) -> DiffOperationForward<Flex, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<Flex>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [r] = inputs.try_into().unwrap();
         let omega = log(r);
         match diff_state {
@@ -63,8 +54,8 @@ where
     fn vjp(
         &self,
         vjp_state: &Self::VjpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         if let Some(omega) = vjp_state {
             vec![Some(log_vjp(omega.clone(), alpha))]
         } else {
@@ -76,8 +67,8 @@ where
         &self,
         vjp_state: &Self::VjpState,
         hvp_state: &Self::HvpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         if let Some((omega, eta)) = vjp_state.as_ref().zip(hvp_state.as_ref()) {
             vec![Some(log_hvp(omega.clone(), eta.clone(), alpha))]
         } else {
@@ -501,7 +492,7 @@ where
 ///
 /// Returned as a struct rather than a tuple because the JVP and VJP need only `c` while the HVP
 /// needs both. Field access keeps each call site self-documenting and makes a mix-up a compile
-/// error. Note this is a *different* Jacobian from [`super::super::exp::ndarray::ExpJacobianCoeffs`]
+/// error. Note this is a *different* Jacobian from [`super::super::exp::flex::ExpJacobianCoeffs`]
 /// — that one is `Exp`'s, this one is `Log`'s.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogJacobianCoeffs<F> {

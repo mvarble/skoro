@@ -39,12 +39,12 @@ macro_rules! exercise_api {
     };
 }
 
-/// The kernels `ndarray_simd_workaround` wraps, on the two layouts burn-ndarray's SIMD unary path
-/// gets wrong: a `select` along a trailing axis and a contiguous `swap_dims`. A second handle is
-/// kept on each input so the kernel cannot take its correct in-place path, and there are enough
-/// rows to clear its 32-element threshold.
+/// `abs` and `recip` on the two layouts burn-ndarray's SIMD unary path used to get wrong: a
+/// `select` along a trailing axis and a contiguous `swap_dims`. A second handle is kept on each
+/// input so no kernel can take an in-place path, and there are enough rows to clear a 32-element
+/// SIMD threshold. Kept as a backend-agnostic layout check.
 pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
-    use skoro_backend::{Int, TensorData, ndarray_simd_workaround};
+    use skoro_backend::{Int, TensorData};
 
     let device = Default::default();
     let rows = 64;
@@ -83,13 +83,13 @@ pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
     let _held = selected.clone();
     check(
         "abs of a select",
-        to_host(ndarray_simd_workaround::abs(selected.clone())),
+        to_host(selected.clone().abs()),
         &host_selected,
         f64::abs,
     );
     check(
         "recip of a select",
-        to_host(ndarray_simd_workaround::recip(selected)),
+        to_host(selected.recip()),
         &host_selected,
         f64::recip,
     );
@@ -109,13 +109,13 @@ pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
     let _held = swapped.clone();
     check(
         "abs of a swap_dims",
-        to_host3(ndarray_simd_workaround::abs(swapped.clone())),
+        to_host3(swapped.clone().abs()),
         &host_swapped,
         f64::abs,
     );
     check(
         "recip of a swap_dims",
-        to_host3(ndarray_simd_workaround::recip(swapped)),
+        to_host3(swapped.recip()),
         &host_swapped,
         f64::recip,
     );
@@ -128,6 +128,36 @@ macro_rules! unary_kernels_on_non_standard_layouts {
         #[test]
         fn unary_kernels_on_non_standard_layouts() {
             common::unary_kernels_on_non_standard_layouts::<$B>();
+        }
+    };
+}
+
+/// The binary's float policy is `dtype`, and a host read and write keeps both the dtype and, at
+/// `f64`, full precision.
+pub fn float_policy_is<B: Backend>(dtype: skoro_backend::DType) {
+    use skoro_backend::{TensorData, host};
+
+    let device = Default::default();
+    assert_eq!(Tensor::<B, 2>::zeros([2, 3], &device).dtype(), dtype);
+
+    let value = 1.0 + 1e-12;
+    let tensor = Tensor::<B, 1>::from_data(TensorData::new(vec![value, 2.0], [2]), &device);
+    assert_eq!(tensor.dtype(), dtype);
+    let back = host::write::<B, f64, 1>(host::read(tensor.clone()), [2], &device, tensor.dtype());
+    assert_eq!(back.dtype(), dtype);
+    let read: Vec<f64> = host::read(back);
+    if dtype == skoro_backend::DType::F64 {
+        assert_eq!(read, vec![value, 2.0]);
+    }
+}
+
+#[allow(unused)]
+#[macro_export]
+macro_rules! float_policy_is {
+    ($B:ident, $dtype:ident) => {
+        #[test]
+        fn float_policy_is() {
+            common::float_policy_is::<$B>(skoro_backend::DType::$dtype);
         }
     };
 }

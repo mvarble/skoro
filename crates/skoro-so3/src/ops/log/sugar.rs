@@ -1,7 +1,4 @@
-use skoro_backend::{
-    Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, NdArrayBackend, NdArrayFloat,
-    NdArrayInt, NdArrayTensor, SharedArray,
-};
+use skoro_backend::{Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Flex};
 use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{map::register_map1, q::Q};
@@ -67,23 +64,13 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> SO3LogBackend<EuclideanD> for Cub
     }
 }
 
-impl<F, I> SO3LogBackend<Euclidean3> for NdArrayBackend<F, I>
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl SO3LogBackend<Euclidean3> for Flex {
     fn log(r: &Q<Self, SO3>) -> SkoroResult<Q<Self, Euclidean3>> {
         register_map1(Euclidean::<3>, SO3Log, r)
     }
 }
 
-impl<F, I> SO3LogBackend<EuclideanD> for NdArrayBackend<F, I>
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl SO3LogBackend<EuclideanD> for Flex {
     fn log(r: &Q<Self, SO3>) -> SkoroResult<Q<Self, EuclideanD>> {
         register_map1(EuclideanD(3), SO3Log, r)
     }

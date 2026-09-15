@@ -11,7 +11,7 @@ version = "0.0.0"
 approx = "0.5.1"
 burn = "0.21"
 burn-cubecl = "0.21"
-burn-ndarray = "0.21"
+burn-flex = "0.21"
 cubecl = "0.10"
 faer = { version = "0.24", default-features = false, features = ["std"] }
 ndarray = "0.17.2"

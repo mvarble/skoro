@@ -1,8 +1,8 @@
 //! Shared fixtures for the `skoro-graph` integration tests.
 //!
-//! One backend for the whole crate's tests: `NdArrayBackend<f64, i32>`. The f64 is not incidental
+//! One backend for the whole crate's tests: `Flex` under the `f64` float policy. The f64 is not incidental
 //! -- the forward-difference checks in `skoro_graph::test_utils` need the headroom, and mixing an
-//! f32 and an f64 NdArray backend in one test binary silently demotes the DType for both.
+//! f32 and an f64 float policy in one test binary is impossible: the first tensor locks it for both.
 //! Tensors are built through `TensorData` for the same reason: `Tensor::from_floats` rounds
 //! through f32 even on an f64 backend.
 
@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use skoro_backend::{Int, NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Int, Tensor, TensorData};
 use skoro_core::{id::Id, kind::Continuous, kind::Discrete, sampler::Sampler};
 use skoro_graph::{graph::Graph, operation::DiffGraphOperation, point_map::PointMap};
 use skoro_graph::{operation::DiscreteGraphOperation, quantity::QuantityType};
@@ -21,7 +21,8 @@ use skoro_operation::{
 };
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
-pub type B = NdArrayBackend<f64, i32>;
+pub type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 pub const DELTA: f64 = 1e-6;
 pub const EPSILON: f64 = 1e-5;

@@ -5,7 +5,7 @@
 //! one, from the same call site. Its inputs stay erased throughout, so a discrete distribution
 //! parameterized by a continuous logit works without either side knowing about the other.
 
-use skoro_backend::{Int, NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Int, Tensor, TensorData};
 use skoro_core::{
     any_tensor::AnyTensor,
     kind::{Continuous, Discrete},
@@ -13,7 +13,8 @@ use skoro_core::{
     sequence::SequenceMutator,
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn floats(data: Vec<f64>, batch: usize, components: usize) -> Tensor<B, 2> {
     Tensor::from_data(

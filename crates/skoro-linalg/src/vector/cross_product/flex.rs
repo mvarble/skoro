@@ -1,8 +1,5 @@
 use num_traits::Float;
-use skoro_backend::{
-    Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentVector,
-};
+use skoro_backend::{Backend, CotangentFrame, Flex, Point, TangentVector};
 use skoro_backend::{Element, host};
 use skoro_operation::{
     Input,
@@ -12,22 +9,16 @@ use skoro_operation::{
 
 use super::CrossProduct;
 
-impl<F, I> DiffOperation<NdArrayBackend<F, I>> for CrossProduct
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
-    type VjpState = [Option<Point<NdArrayBackend<F, I>>>; 2];
-    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 2];
+impl DiffOperation<Flex> for CrossProduct {
+    type VjpState = [Option<Point<Flex>>; 2];
+    type HvpState = [Option<TangentVector<Flex>>; 2];
 
     fn forward(
         &self,
-        inputs: Vec<Input<NdArrayBackend<F, I>>>,
-        diff_state: DiffModeState<NdArrayBackend<F, I>>,
-    ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::unwrap_float).collect();
+        inputs: Vec<Input<Flex>>,
+        diff_state: DiffModeState<Flex>,
+    ) -> DiffOperationForward<Flex, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<Flex>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [u, v] = inputs.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(cross_product(u, v)),
@@ -76,8 +67,8 @@ where
     fn vjp(
         &self,
         [v, u]: &Self::VjpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         match (v, u) {
             (Some(v), Some(u)) => vec![
                 Some(left_broadcast_cross_product(v.clone(), alpha.clone())),
@@ -93,8 +84,8 @@ where
         &self,
         vjp_state: &Self::VjpState,
         hvp_state: &Self::HvpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         let [udiff, vdiff] = vjp_state;
         let [du, dv] = hvp_state;
         vec![

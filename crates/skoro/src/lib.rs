@@ -29,7 +29,7 @@
 //! ```
 //! use skoro::prelude::*;
 //!
-//! type B = NdArrayBackend<f32, i32>;
+//! type B = Flex;
 //!
 //! let model = ModelClient::<B>::default();
 //! let a = model.add_parameter(Real);
@@ -60,7 +60,7 @@ pub use skoro_so3 as so3;
 /// ```
 pub mod prelude {
     // ----- backends & tensor essentials -----
-    pub use skoro_backend::{Backend, CubeBackend, NdArrayBackend, Point, Tensor, TensorData};
+    pub use skoro_backend::{Backend, CubeBackend, Flex, Point, Tensor, TensorData};
 
     // ----- errors -----
     pub use skoro_core::error::{SkoroError, SkoroResult};

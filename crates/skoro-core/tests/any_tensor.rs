@@ -6,14 +6,15 @@
 //! asserting. The second panics, because a caller that reached for the wrong kind has a bug the
 //! value cannot repair.
 
-use skoro_backend::{Int, NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Int, Tensor, TensorData};
 use skoro_core::{
     any_tensor::{AnyTensor, AnyTensorMap, QuantityValue},
     error::SkoroError,
     id::IdGenerator,
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn floats<const D: usize>(data: Vec<f64>, dims: [usize; D]) -> Tensor<B, D> {
     Tensor::from_data(TensorData::new(data, dims), &Default::default())

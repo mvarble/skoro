@@ -14,4 +14,3 @@ skoro-core.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
-burn-ndarray.workspace = true

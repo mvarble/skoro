@@ -10,7 +10,7 @@
 //! cannot dismantle the terms it was handed — is a `trybuild` case, since a test that
 //! compiles cannot assert that another does not.
 
-use skoro_backend::{NdArrayBackend, Point, TensorData};
+use skoro_backend::{Flex, Point, TensorData};
 use skoro_core::{
     error::{SkoroError, SkoroResult},
     id::Id,
@@ -29,7 +29,8 @@ use skoro_model::{
 use skoro_operation::{Input, ops::LiteralScalarMultiplication};
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn point(values: &[f64]) -> Input<B> {
     Input::float(Point::<B>::from_data(

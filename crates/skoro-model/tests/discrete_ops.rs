@@ -5,7 +5,7 @@ use skoro_core::error::SkoroResult;
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
-use skoro_backend::{DiscretePoint, NdArrayBackend, Point, TensorData};
+use skoro_backend::{DiscretePoint, Flex, Point, TensorData};
 use skoro_core::{
     discrete::{Boolean, Categorical, Integer},
     id::Id,
@@ -25,7 +25,7 @@ use skoro_operation::{
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
 };
 
-type B = NdArrayBackend<f32, i32>;
+type B = Flex;
 
 fn int_input(v: i32) -> Input<B> {
     Input::int(DiscretePoint::<B>::from_data(

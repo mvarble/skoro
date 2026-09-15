@@ -5,13 +5,14 @@
 //! `Discrete`. The methods here are the wrap/unwrap boundary between the two, and the property
 //! worth checking is that each refuses the other's tensors rather than reinterpreting them.
 
-use skoro_backend::{Int, NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Int, Tensor, TensorData};
 use skoro_core::{
     any_tensor::AnyTensor,
     kind::{Continuous, Discrete, Kind, QuantityKind},
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn floats(data: Vec<f64>, batch: usize, components: usize) -> Tensor<B, 2> {
     Tensor::from_data(

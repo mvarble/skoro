@@ -19,7 +19,7 @@
 //! directly instead, by the unit tests beside each `*_jacobian_coeffs` function.
 //!
 //! The reference is a table rather than a live call into `ops::*::ndarray`, because a backend test
-//! executable must contain exactly one backend at one precision — an `NdArray` tensor at `f32` and
+//! executable must contain exactly one backend at one precision — a `Flex` tensor at `f32` and
 //! one at `f64` in the same binary collapse to a single `DType`. Checking the GPU against a CPU
 //! reference in one process is precisely the arrangement that breaks.
 //!
@@ -48,7 +48,7 @@ pub const THETAS: [f64; 14] = [
     0.5, 1.0, 1.5, 2.0, 2.5, 3.0,
 ];
 
-/// `exp_hvp(θ·AXIS, VELOCITY, ALPHA)` evaluated on `NdArrayBackend<f64, i32>`, one row per
+/// `exp_hvp(θ·AXIS, VELOCITY, ALPHA)` evaluated on `Flex` under the `f64` float policy, one row per
 /// [`THETAS`] entry.
 #[rustfmt::skip]
 pub const EXP_HVP: [[f64; 3]; 14] = [
@@ -68,7 +68,7 @@ pub const EXP_HVP: [[f64; 3]; 14] = [
     [-0.8599696223443749, 0.6003496319895723, -0.12903504423150303],
 ];
 
-/// `log_hvp(θ·AXIS, VELOCITY, ALPHA)` evaluated on `NdArrayBackend<f64, i32>`, one row per
+/// `log_hvp(θ·AXIS, VELOCITY, ALPHA)` evaluated on `Flex` under the `f64` float policy, one row per
 /// [`THETAS`] entry. `log`'s coefficients are a different pair from `exp`'s and were broken in a
 /// different way, so they need their own probe.
 #[rustfmt::skip]

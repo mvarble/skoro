@@ -5,7 +5,7 @@
 //! is a free-standing factor over `z`, and `z` itself is generated from a Gaussian that the
 //! posterior never scores.
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_model::{
     ModelBuilderOps, ModelClientOps, distribution::Factor, hash_map_builders::points,
     map::register_map1, model::ModelClient, test_utils::into_vec,
@@ -14,7 +14,8 @@ use skoro_normal::distribution::Normal;
 use skoro_operation::ops::LiteralScalarMultiplication;
 use skoro_riemann::{euclidean::VectorD, real::Real};
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn row(values: &[f64]) -> Tensor<B, 2> {
     let n = values.len();

@@ -8,7 +8,7 @@
 //! exactly steady afterwards — a leak or a dangling record is invisible in one tick and
 //! unmissable over twelve.
 
-use skoro_backend::{NdArrayBackend, Point, TensorData};
+use skoro_backend::{Flex, Point, TensorData};
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
@@ -28,7 +28,8 @@ use skoro_riemann::{
     matrix::{EuclideanMatrixD, MatrixD},
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 const N: usize = 3; // state dimension
 const M: usize = 2; // measurement dimension

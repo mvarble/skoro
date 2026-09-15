@@ -1,10 +1,10 @@
 //! The Gaussian Fisher root, against host references.
 //!
-//! One backend for the binary (`NdArrayBackend<f64, i32>`), with tensors built through
+//! One backend for the binary (`Flex` under the `f64` float policy), with tensors built through
 //! `TensorData` so the tight tolerances below are not undone by an `f32` round trip. The host
 //! references are small dense row-major matrices, at most 3 × 3, handled by the helpers below.
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_core::{error::SkoroError, kind::Continuous};
 use skoro_graph::node::{MappedNode, Node};
 use skoro_linalg::{matrix::MatmulOps, tril::Tril};
@@ -27,7 +27,8 @@ use skoro_riemann::{
 };
 use skoro_se3::quantity::SE3;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// `L0 = [[1.5, 0], [-0.4, 0.8]]`, packed.
 const L0: [f64; 3] = [1.5, -0.4, 0.8];

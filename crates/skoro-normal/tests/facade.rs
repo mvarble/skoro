@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use skoro_backend::{NdArrayBackend, Point, TensorData};
+use skoro_backend::{Flex, Point, TensorData};
 use skoro_linalg::tril::Tril;
 use skoro_model::{ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q};
 use skoro_normal::{
@@ -22,7 +22,7 @@ use skoro_riemann::{
     euclidean::{EuclideanD, VectorD},
 };
 
-type B = NdArrayBackend<f32, i32>;
+type B = Flex;
 
 /// An adapter generic over *any* builder, which is the shape a producer of sub-models takes.
 fn add_unit_gaussian<C: ModelBuilderOps<B>>(

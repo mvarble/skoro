@@ -14,7 +14,7 @@
 //! could assert on it. That lives in `mod gating` of `skoro-operation/tests/tangent_concat.rs`,
 //! against the returned `Vec`s.
 
-use skoro_backend::{NdArrayBackend, Tensor};
+use skoro_backend::{Flex, Tensor};
 use skoro_model::{
     hash_map_builders::{cotangent_frames, points},
     map::register_map_slice,
@@ -28,7 +28,8 @@ use skoro_operation::ops::TangentConcat;
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
 use skoro_riemann::real::Real;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 const DELTA: f64 = 1e-6;
 const EPSILON: f64 = 1e-5;

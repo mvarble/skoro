@@ -7,12 +7,13 @@
 
 use std::collections::HashMap;
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_core::{error::SkoroError, id::Id};
 use skoro_graph::{graph::Graph, tangent_layout::TangentLayout};
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// A graph with a `Real`, a `EuclideanD(3)` and a `EuclideanD(2)` parameter.
 fn fixture() -> (Graph<B>, [Id; 3]) {

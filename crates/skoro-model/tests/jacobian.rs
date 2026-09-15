@@ -7,7 +7,7 @@
 //! both layouts, so `total()` differs from the block *count* and a slot index differs from
 //! a block index.
 
-use skoro_backend::{NdArrayBackend, Point, Tensor};
+use skoro_backend::{Flex, Point, Tensor};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
     ModelBuilderOps, TangentLayout,
@@ -21,7 +21,8 @@ use skoro_model::{
 use skoro_operation::{Input, ValueMap, ops::LiteralScalarMultiplication};
 use skoro_riemann::{euclidean::Euclidean, real::Real};
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 const BATCH: usize = 2;
 const D_IN: usize = 8;

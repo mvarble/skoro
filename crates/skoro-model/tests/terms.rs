@@ -2,7 +2,7 @@
 //! quantity still being generated, and a summand of the log-density `p` unless it was introduced
 //! by `add_proposal`. The weight is the difference, so `q + w == p` by construction.
 
-use skoro_backend::{NdArrayBackend, Point, Tensor, TensorData};
+use skoro_backend::{Flex, Point, Tensor, TensorData};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
@@ -15,7 +15,8 @@ use skoro_model::{
 use skoro_operation::{Input, ops::LiteralScalarMultiplication};
 use skoro_riemann::real::Real;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn row(value: f64) -> Tensor<B, 2> {
     Tensor::from_data(TensorData::new(vec![value], [1, 1]), &Default::default())

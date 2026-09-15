@@ -18,7 +18,7 @@
 //! The second half of the file is the collector itself: what a mark-and-sweep reclaims that the
 //! previous candidate-queue collector could not, and the one mark edge that is not a parent edge.
 
-use skoro_backend::{NdArrayBackend, Point};
+use skoro_backend::{Flex, Point};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
@@ -33,7 +33,8 @@ use skoro_operation::{
 };
 use skoro_riemann::{euclidean::EuclideanD, real::Real};
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// A mapped node over `blocks`, of the summed width. Any operation would do; `TangentConcat` is
 /// the one with no arity limit.

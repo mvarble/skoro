@@ -796,12 +796,12 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
         let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [alpha] = points.try_into().unwrap();
         match diff_state {
-            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(
-                skoro_backend::ndarray_simd_workaround::recip(alpha) * self.0,
-            ),
+            DiffModeState::ForwardOnly => {
+                DiffOperationForward::forward_only(alpha.recip() * self.0)
+            }
             DiffModeState::Jvp(tvecs) => {
                 let [dalpha] = tvecs.try_into().unwrap();
-                let invalpha = skoro_backend::ndarray_simd_workaround::recip(alpha);
+                let invalpha = alpha.recip();
                 DiffOperationForward::jvp(
                     invalpha.clone() * self.0,
                     dalpha.map(|dalpha| -(dalpha * self.0) * invalpha.square().unsqueeze_dim(2)),
@@ -809,7 +809,7 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
             }
             DiffModeState::Vjp(diffs) => {
                 let [alphadiff] = diffs.try_into().unwrap();
-                let invalpha = skoro_backend::ndarray_simd_workaround::recip(alpha);
+                let invalpha = alpha.recip();
                 DiffOperationForward::vjp(
                     invalpha.clone() * self.0,
                     if alphadiff { Some(invalpha) } else { None },
@@ -821,7 +821,7 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
             } => {
                 let [dalpha] = cvecs.try_into().unwrap();
                 let [alphadiff] = diffs.try_into().unwrap();
-                let invalpha = skoro_backend::ndarray_simd_workaround::recip(alpha);
+                let invalpha = alpha.recip();
                 DiffOperationForward::hvp(
                     invalpha.clone() * self.0,
                     dalpha

@@ -1,7 +1,4 @@
-use skoro_backend::{
-    Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, NdArrayBackend, NdArrayFloat,
-    NdArrayInt, NdArrayTensor, SharedArray,
-};
+use skoro_backend::{Backend, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Flex};
 use skoro_core::error::SkoroResult;
 use skoro_model::{map::register_map2, q::Q};
 use skoro_riemann::euclidean::{Euclidean, Euclidean3};
@@ -43,12 +40,7 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> CrossProductBackend for CubeBacke
     }
 }
 
-impl<F, I> CrossProductBackend for NdArrayBackend<F, I>
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl CrossProductBackend for Flex {
     fn cross_product(
         lhs: &Q<Self, Euclidean3>,
         rhs: &Q<Self, Euclidean3>,

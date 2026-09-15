@@ -1,21 +1,19 @@
-use num_traits::Float;
-
 use skoro_backend::{
-    CotangentFrame, CubeBackend, CubeFloat, CubeInt, CubeRuntime, NdArrayBackend, NdArrayFloat,
-    NdArrayInt, NdArrayTensor, Point, SharedArray, TangentVector, Tensor,
+    CotangentFrame, CubeBackend, CubeFloat, CubeInt, CubeRuntime, Flex, Point, TangentVector,
+    Tensor,
 };
 use skoro_linalg::{
     vector::cross_product::cube::cross_product as cube_cross,
     vector::cross_product::cube::left_broadcast_cross_product as cube_lbcross,
-    vector::cross_product::ndarray::cross_product as ndarray_cross,
-    vector::cross_product::ndarray::left_broadcast_cross_product as ndarray_lbcross,
+    vector::cross_product::flex::cross_product as host_cross,
+    vector::cross_product::flex::left_broadcast_cross_product as host_lbcross,
 };
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
     sum_opt_tensors,
 };
-use skoro_so3::ops::exp::{cube, ndarray};
+use skoro_so3::ops::exp::{cube, flex};
 
 use super::SE3Retraction;
 
@@ -266,27 +264,21 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> DiffOperation<CubeBackend<R, F, I
     }
 }
 
-impl<F, I> DiffOperation<NdArrayBackend<F, I>> for SE3Retraction
-where
-    F: NdArrayFloat + Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
+impl DiffOperation<Flex> for SE3Retraction {
     /// `(E, v)` when `(r, p)` is differentiable, and `(E, ω)` when `(ω, v)` is differentiable.
     type VjpState = (
-        Option<(Tensor<NdArrayBackend<F, I>, 3>, Point<NdArrayBackend<F, I>>)>,
-        Option<(Tensor<NdArrayBackend<F, I>, 3>, Point<NdArrayBackend<F, I>>)>,
+        Option<(Tensor<Flex, 3>, Point<Flex>)>,
+        Option<(Tensor<Flex, 3>, Point<Flex>)>,
     );
     /// `g = J(ω) dω`, then `dω`, then `dv`.
-    type HvpState = [Option<TangentVector<NdArrayBackend<F, I>>>; 3];
+    type HvpState = [Option<TangentVector<Flex>>; 3];
 
     fn forward(
         &self,
-        inputs: Vec<Input<NdArrayBackend<F, I>>>,
-        diff_state: DiffModeState<NdArrayBackend<F, I>>,
-    ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::unwrap_float).collect();
+        inputs: Vec<Input<Flex>>,
+        diff_state: DiffModeState<Flex>,
+    ) -> DiffOperationForward<Flex, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<Flex>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [rp, omegav] = inputs.try_into().unwrap();
         let b = rp.dims()[0];
         let r = rp.clone().slice_dim(1, 0..9);
@@ -298,7 +290,7 @@ where
             .clone()
             .matmul(v.clone().unsqueeze_dim(2))
             .squeeze_dim(2);
-        let expomega = ndarray::exp(omega.clone()).reshape([b, 3, 3]);
+        let expomega = flex::exp(omega.clone()).reshape([b, 3, 3]);
         let rexpomega = rmat.matmul(expomega.clone()).reshape([b, 9]);
         let output = Point::cat(vec![rexpomega, p_plus_rv], 1);
         match diff_state {
@@ -317,7 +309,7 @@ where
                                     expomega
                                         .clone()
                                         .transpose()
-                                        .matmul(b - ndarray_lbcross(v.clone(), a)),
+                                        .matmul(b - host_lbcross(v.clone(), a)),
                                 ],
                                 1,
                             )
@@ -327,7 +319,7 @@ where
                             let dv = domegav.slice_dim(1, 3..6);
                             Tensor::cat(
                                 vec![
-                                    ndarray::exp_jvp(omega.clone(), domega),
+                                    flex::exp_jvp(omega.clone(), domega),
                                     expomega.clone().transpose().matmul(dv),
                                 ],
                                 1,
@@ -357,7 +349,7 @@ where
                     .map(|domegav| domegav.clone().slice_dim(1, 0..3));
                 let dv = domegav.map(|domegav| domegav.slice_dim(1, 3..6));
                 let g = domega.as_ref().map(|domega| {
-                    ndarray::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
+                    flex::exp_jvp(omega.clone(), domega.clone().unsqueeze_dim(2)).squeeze_dim(2)
                 });
                 DiffOperationForward::hvp(
                     output,
@@ -375,7 +367,7 @@ where
                                     expomega
                                         .clone()
                                         .transpose()
-                                        .matmul((b - ndarray_cross(v.clone(), a)).unsqueeze_dim(2))
+                                        .matmul((b - host_cross(v.clone(), a)).unsqueeze_dim(2))
                                         .squeeze_dim(2),
                                 ],
                                 1,
@@ -411,21 +403,21 @@ where
     fn vjp(
         &self,
         (rp_state, omegav_state): &Self::VjpState,
-        alpharp: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpharp: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
         let alphap = alpharp.slice_dim(1, 3..6);
         vec![
             rp_state.as_ref().map(|(expomega, v)| {
                 let e_alphap = expomega.clone().matmul(alphap.clone());
                 let rot = expomega.clone().matmul(alphar.clone())
-                    + ndarray_lbcross(v.clone(), e_alphap.clone());
+                    + host_lbcross(v.clone(), e_alphap.clone());
                 CotangentFrame::cat(vec![rot, e_alphap], 1)
             }),
             omegav_state.as_ref().map(|(expomega, omega)| {
                 CotangentFrame::cat(
                     vec![
-                        ndarray::exp_vjp(omega.clone(), alphar.clone()),
+                        flex::exp_vjp(omega.clone(), alphar.clone()),
                         expomega.clone().matmul(alphap.clone()),
                     ],
                     1,
@@ -438,8 +430,8 @@ where
         &self,
         (rp_state, omegav_state): &Self::VjpState,
         [g, domega, dv]: &Self::HvpState,
-        alpharp: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpharp: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         let alphar = alpharp.clone().slice_dim(1, 0..3);
         let alphap = alpharp.slice_dim(1, 3..6);
         vec![
@@ -448,20 +440,20 @@ where
                 let eg_alphap = g.as_ref().map(|g| {
                     expomega
                         .clone()
-                        .matmul(ndarray_lbcross(g.clone(), alphap.clone()))
+                        .matmul(host_lbcross(g.clone(), alphap.clone()))
                 });
                 let rot = sum_opt_tensors([
                     g.as_ref().map(|g| {
                         expomega
                             .clone()
-                            .matmul(ndarray_lbcross(g.clone(), alphar.clone()))
+                            .matmul(host_lbcross(g.clone(), alphar.clone()))
                     }),
                     dv.as_ref().map(|dv| {
-                        ndarray_lbcross(dv.clone(), expomega.clone().matmul(alphap.clone()))
+                        host_lbcross(dv.clone(), expomega.clone().matmul(alphap.clone()))
                     }),
                     eg_alphap
                         .clone()
-                        .map(|eg_alphap| ndarray_lbcross(v.clone(), eg_alphap)),
+                        .map(|eg_alphap| host_lbcross(v.clone(), eg_alphap)),
                 ])
                 .unwrap_or_else(|| alphar.zeros_like());
                 let trans = eg_alphap.unwrap_or_else(|| alphap.zeros_like());
@@ -470,14 +462,14 @@ where
             omegav_state.as_ref().map(|(expomega, omega)| {
                 let rot = domega
                     .as_ref()
-                    .map(|domega| ndarray::exp_hvp(omega.clone(), domega.clone(), alphar.clone()))
+                    .map(|domega| flex::exp_hvp(omega.clone(), domega.clone(), alphar.clone()))
                     .unwrap_or_else(|| alphar.zeros_like());
                 let trans = g
                     .as_ref()
                     .map(|g| {
                         expomega
                             .clone()
-                            .matmul(ndarray_lbcross(g.clone(), alphap.clone()))
+                            .matmul(host_lbcross(g.clone(), alphap.clone()))
                     })
                     .unwrap_or_else(|| alphap.zeros_like());
                 CotangentFrame::cat(vec![rot, trans], 1)

@@ -10,7 +10,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use skoro_backend::{CotangentFrame, NdArrayBackend, Point, Tensor};
+use skoro_backend::{CotangentFrame, Flex, Point, Tensor};
 use skoro_model::{
     hash_map_builders::{cotangent_frames, points, tangents},
     map::register_map2,
@@ -22,7 +22,8 @@ use skoro_operation::{
 };
 use skoro_riemann::real::Real;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// A binary op that records the `diffs` it is handed during `DiffModeState::Hvp`, so a test can
 /// assert on the signal the framework actually delivers rather than on a downstream side effect.

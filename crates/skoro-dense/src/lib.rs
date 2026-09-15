@@ -26,7 +26,7 @@
 //! arrive already rounded to `f32` and `δ` is rounded back on the way out. What the host
 //! path buys is `f64` *inside* the solve, which is where the `κ²` conditioning of the
 //! normal equations lives. A filter that wants an `f64` state should run
-//! `NdArrayBackend<f64, i32>`, where this round trip is a `memcpy`.
+//! `Flex` under the `f64` float policy, where this round trip is a `memcpy`.
 
 pub mod dense;
 pub mod factor;

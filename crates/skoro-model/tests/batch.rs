@@ -11,7 +11,7 @@
 //! Nothing in the workspace exercised this before. `tests/jacobian.rs` runs at batch 2, but
 //! every input there is a `Parameter`, so the expansion path never executed.
 
-use skoro_backend::{NdArrayBackend, Tensor};
+use skoro_backend::{Flex, Tensor};
 use skoro_core::error::SkoroError;
 use skoro_model::{
     ModelClientOps, TangentLayout,
@@ -23,7 +23,8 @@ use skoro_model::{
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
 use skoro_riemann::real::Real;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 const BATCH: usize = 3;
 

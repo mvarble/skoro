@@ -8,7 +8,7 @@
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
-use skoro_backend::{NdArrayBackend, Point, TangentVector, Tensor, TensorData};
+use skoro_backend::{Flex, Point, TangentVector, Tensor, TensorData};
 use skoro_linalg::tril::Tril;
 use skoro_model::model::ModelClient;
 use skoro_operation::Input;
@@ -16,7 +16,7 @@ use skoro_riemann::euclidean::{Euclidean, EuclideanD, VectorD};
 
 use skoro_normal::distribution::{Normal, NormalSampler};
 
-pub type B = NdArrayBackend<f32, i32>;
+pub type B = Flex;
 
 #[test]
 fn sample_statistics() {

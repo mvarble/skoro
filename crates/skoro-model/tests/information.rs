@@ -6,7 +6,7 @@
 //! test binds a `1 × 1` root `C` of one kind to a term over a scalar `θ`, so the information over
 //! `θ` is exactly `C²`.
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_model::{
     ModelClientOps,
     distribution::Factor,
@@ -24,7 +24,8 @@ use skoro_riemann::{
     real::Real,
 };
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 fn row(value: f64) -> Tensor<B, 2> {
     Tensor::from_data(TensorData::new(vec![value], [1, 1]), &Default::default())

@@ -1,16 +1,16 @@
 #[allow(dead_code)]
 mod common;
 
-type B = skoro_backend::NdArrayBackend<f32, i32>;
+type B = skoro_backend::Flex;
 
 /// Rodrigues' formula and its derivatives, against forward differences at this backend's
 /// precision. The small-angle branch is where the closed form loses its denominator, so the
 /// tolerances are supplied per backend rather than shared.
 mod exp {
     super::test_exp!(
-        (skoro_so3::ops::exp::ndarray::exp, 1.0e-4),
-        (skoro_so3::ops::exp::ndarray::exp_jvp, 1.0e-4),
-        (skoro_so3::ops::exp::ndarray::exp_vjp, 1.0e-4),
+        (skoro_so3::ops::exp::flex::exp, 1.0e-4),
+        (skoro_so3::ops::exp::flex::exp_jvp, 1.0e-4),
+        (skoro_so3::ops::exp::flex::exp_vjp, 1.0e-4),
         (1.0e-3, 1e-3),
     );
 }
@@ -19,9 +19,9 @@ mod exp {
 /// may have drifted off the group, so it is checked over the same span of angles `exp` is.
 mod log {
     super::test_log!(
-        (skoro_so3::ops::log::ndarray::log, 1.0e-4),
-        (skoro_so3::ops::log::ndarray::log_jvp, 1.0e-4),
-        (skoro_so3::ops::log::ndarray::log_vjp, 1.0e-4),
+        (skoro_so3::ops::log::flex::log, 1.0e-4),
+        (skoro_so3::ops::log::flex::log_jvp, 1.0e-4),
+        (skoro_so3::ops::log::flex::log_vjp, 1.0e-4),
         (1.0e-3, 1e-2),
     );
 }
@@ -45,13 +45,13 @@ mod inverse_retraction {
 mod coefficients {
     super::test_hvp_reference!(
         exp_hvp_tracks_the_f64_reference,
-        skoro_so3::ops::exp::ndarray::exp_hvp,
+        skoro_so3::ops::exp::flex::exp_hvp,
         EXP_HVP,
         1e-6,
     );
     super::test_hvp_reference!(
         log_hvp_tracks_the_f64_reference,
-        skoro_so3::ops::log::ndarray::log_hvp,
+        skoro_so3::ops::log::flex::log_hvp,
         LOG_HVP,
         1e-6,
     );

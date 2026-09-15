@@ -8,14 +8,15 @@
 
 #![allow(dead_code)]
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
 };
 use skoro_riemann::DynManifold;
 
-pub type B = NdArrayBackend<f64, i32>;
+pub type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 pub const DELTA: f64 = 1e-6;
 pub const EPSILON: f64 = 1e-5;

@@ -1,10 +1,7 @@
 use num_traits::{Float, One};
-use skoro_backend::{
-    Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentFrame, TangentVector,
-};
+use skoro_backend::{Backend, CotangentFrame, Flex, Point, TangentFrame, TangentVector};
 use skoro_backend::{Element, host};
-use skoro_linalg::vector::cross_product::ndarray::cross_product_impl as cross_product;
+use skoro_linalg::vector::cross_product::flex::cross_product_impl as cross_product;
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -12,22 +9,16 @@ use skoro_operation::{
 
 use super::SO3Exp;
 
-impl<F, I> DiffOperation<NdArrayBackend<F, I>> for SO3Exp
-where
-    F: NdArrayFloat + Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
-    type VjpState = Option<Point<NdArrayBackend<F, I>>>;
-    type HvpState = Option<TangentVector<NdArrayBackend<F, I>>>;
+impl DiffOperation<Flex> for SO3Exp {
+    type VjpState = Option<Point<Flex>>;
+    type HvpState = Option<TangentVector<Flex>>;
 
     fn forward(
         &self,
-        inputs: Vec<Input<NdArrayBackend<F, I>>>,
-        diff_state: DiffModeState<NdArrayBackend<F, I>>,
-    ) -> DiffOperationForward<NdArrayBackend<F, I>, Self::VjpState, Self::HvpState> {
-        let inputs: Vec<Point<NdArrayBackend<F, I>>> =
-            inputs.into_iter().map(Input::unwrap_float).collect();
+        inputs: Vec<Input<Flex>>,
+        diff_state: DiffModeState<Flex>,
+    ) -> DiffOperationForward<Flex, Self::VjpState, Self::HvpState> {
+        let inputs: Vec<Point<Flex>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [omega] = inputs.try_into().unwrap();
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(exp(omega)),
@@ -61,8 +52,8 @@ where
     fn vjp(
         &self,
         state: &Self::VjpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         vec![state.clone().map(|omega| exp_vjp(omega, alpha))]
     }
 
@@ -70,8 +61,8 @@ where
         &self,
         vjp_state: &Self::VjpState,
         hvp_state: &Self::HvpState,
-        alpha: CotangentFrame<NdArrayBackend<F, I>>,
-    ) -> Vec<Option<CotangentFrame<NdArrayBackend<F, I>>>> {
+        alpha: CotangentFrame<Flex>,
+    ) -> Vec<Option<CotangentFrame<Flex>>> {
         vec![
             vjp_state
                 .as_ref()

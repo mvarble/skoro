@@ -10,12 +10,12 @@
 //! `ModelClientOps`, every estimator gains it silently, and this is the only thing that will
 //! notice.
 
-use skoro_backend::NdArrayBackend;
+use skoro_backend::Flex;
 use skoro_core::{error::SkoroResult, id::Id};
 use skoro_graph::node::Node;
 use skoro_model::ModelClientOps;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
 
 /// Bounded exactly as an estimator is: it evaluates and differentiates, and cannot grow or
 /// dismantle the model.

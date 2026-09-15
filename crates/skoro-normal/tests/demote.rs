@@ -7,7 +7,7 @@
 use skoro_model::ModelBuilderOps;
 use std::collections::HashMap;
 
-use skoro_backend::{CotangentFrame, NdArrayBackend, Point, TensorData};
+use skoro_backend::{CotangentFrame, Flex, Point, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_graph::node::Node;
 use skoro_linalg::{tril::Tril, vector::LinalgVectorOps};
@@ -17,7 +17,7 @@ use skoro_riemann::euclidean::{EuclideanD, VectorD};
 
 use skoro_normal::distribution::Normal;
 
-pub type B = NdArrayBackend<f32, i32>;
+pub type B = Flex;
 
 const DIM: usize = 3;
 

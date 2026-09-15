@@ -9,13 +9,9 @@ pub use burn::tensor::{
 pub use burn_cubecl::{
     CubeRuntime, FloatElement as CubeFloat, IntElement as CubeInt, tensor::CubeTensor,
 };
-pub use burn_ndarray::{
-    FloatNdArrayElement as NdArrayFloat, IntNdArrayElement as NdArrayInt, NdArrayTensor,
-    SharedArray,
-};
+pub use burn_flex::{Flex, FlexDevice};
 
 pub mod host;
-pub mod ndarray_simd_workaround;
 pub mod policy;
 
 mod private {
@@ -35,25 +31,14 @@ impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> private::Sealed for CubeBackend<R
 /// Support for cubecl backends.
 impl<R: CubeRuntime, F: CubeFloat, I: CubeInt> Backend for CubeBackend<R, F, I> {}
 
-/// Alias the ndarray backend, fixing bool type we do not use.
-pub type NdArrayBackend<F, I> = burn_ndarray::NdArray<F, I, i8>;
+impl private::Sealed for Flex {}
 
-impl<F, I> private::Sealed for NdArrayBackend<F, I>
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
-}
-
-/// Support for ndarray backend.
-impl<F, I> Backend for NdArrayBackend<F, I>
-where
-    F: NdArrayFloat + num_traits::Float,
-    I: NdArrayInt,
-    NdArrayTensor: From<SharedArray<F>> + From<SharedArray<I>>,
-{
-}
+/// Support for the Flex CPU backend.
+///
+/// Flex's `FloatElem` is always `f32`; an `f64` Flex is the same type under an `f64` float policy
+/// (see [`policy`]). Code that reads tensors on the host must therefore follow the tensor's dtype
+/// rather than `FloatElem` (see [`host`]).
+impl Backend for Flex {}
 
 /// When implementing kernels over the cubecl backends, this utility will help obtain cube
 /// primitives.

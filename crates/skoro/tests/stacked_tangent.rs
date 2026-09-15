@@ -14,7 +14,7 @@
 
 use approx::assert_abs_diff_eq;
 
-use skoro_backend::{NdArrayBackend, Tensor, TensorData};
+use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
@@ -26,7 +26,8 @@ use skoro_riemann::euclidean::{EuclideanD, VectorD};
 use skoro_se3::quantity::{SE3, SE3Pose};
 use skoro_so3::quantity::SO3Matrix;
 
-type B = NdArrayBackend<f64, i32>;
+type B = Flex;
+skoro_backend::f64_test_binary!(Flex);
 
 /// A pose rotated about z by `theta` and translated to `t`.
 fn pose(theta: f64, t: [f64; 3]) -> SE3Pose<f64> {

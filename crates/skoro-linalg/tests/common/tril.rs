@@ -19,8 +19,8 @@ use skoro_pointwise::PointwiseOps;
 /// `Tril::diag` gathers with `select(1, ..)`, which `burn-ndarray` returns in column-major
 /// layout, and `burn-ndarray`'s SIMD `abs` scrambles such an input once it has 32 or more
 /// elements. `Normal::factor` computes its log-determinant as `diag().abs().log().sum()`, so this
-/// is the composition that corrupted every `Normal` at a large enough batch. The fix lives in
-/// `skoro_backend::ndarray_simd_workaround`; this pins the symptom end to end. The batch is sized
+/// is the composition that corrupted every `Normal` at a large enough batch. Skoro moved to
+/// burn-flex, whose kernels are stride-aware; this pins the symptom end to end. The batch is sized
 /// past the threshold (`BATCH * N == 48`); anything under 32 elements passes even against the
 /// defect.
 pub fn diag_survives_abs_impl<B: Backend>()
