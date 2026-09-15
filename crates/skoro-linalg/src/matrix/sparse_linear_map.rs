@@ -108,7 +108,7 @@ impl SparseLinearMap {
         let dtype = x.dtype();
         let mut shape = x.dims();
         shape[1] = len;
-        let zeros = Tensor::zeros(shape, &device);
+        let zeros = Tensor::zeros(shape, (&device, dtype));
         let nnz = from.len();
         if nnz == 0 {
             return zeros;
@@ -190,7 +190,11 @@ impl<B: Backend> DiffOperation<B> for SparseLinearMap {
         // Linear, so the second-order term vanishes wherever the first-order one exists, shaped
         // like the input's cotangent.
         let [batch, _, frames] = omega.dims();
-        vec![state.then(|| Tensor::zeros([batch, self.cols, frames], &omega.device()))]
+        vec![
+            state.then(|| {
+                Tensor::zeros([batch, self.cols, frames], (&omega.device(), omega.dtype()))
+            }),
+        ]
     }
 }
 

@@ -75,7 +75,7 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [x] = inputs.try_into().unwrap();
-        let matrix = self.matrix.clone().to_device(&x.device());
+        let matrix = self.matrix.clone().to_device(&x.device()).cast(x.dtype());
         let transpose = matrix.clone().transpose();
         let y = x.matmul(transpose.clone());
         match diff_state {
@@ -100,7 +100,12 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
         omega: CotangentFrame<B>,
     ) -> Vec<Option<CotangentFrame<B>>> {
         vec![state.then(|| {
-            let transpose = self.matrix.clone().to_device(&omega.device()).transpose();
+            let transpose = self
+                .matrix
+                .clone()
+                .to_device(&omega.device())
+                .cast(omega.dtype())
+                .transpose();
             left_multiply_frame(omega, &transpose)
         })]
     }
@@ -115,7 +120,7 @@ impl<B: Backend> DiffOperation<B> for FixedLinearMap<B> {
         // shaped like the input's cotangent, `[batch, in, f]`, not like `omega`.
         let [batch, _, frames] = omega.dims();
         let cols = self.matrix.dims()[1];
-        vec![state.then(|| Tensor::zeros([batch, cols, frames], &omega.device()))]
+        vec![state.then(|| Tensor::zeros([batch, cols, frames], (&omega.device(), omega.dtype())))]
     }
 }
 

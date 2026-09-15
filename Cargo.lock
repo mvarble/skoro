@@ -5841,7 +5841,6 @@ dependencies = [
  "burn-cubecl",
  "burn-flex",
  "burn-wgpu",
- "num-traits",
 ]
 
 [[package]]

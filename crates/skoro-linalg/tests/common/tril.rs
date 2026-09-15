@@ -19,10 +19,10 @@ use skoro_pointwise::PointwiseOps;
 /// `Tril::diag` gathers with `select(1, ..)`, which `burn-ndarray` returns in column-major
 /// layout, and `burn-ndarray`'s SIMD `abs` scrambles such an input once it has 32 or more
 /// elements. `Normal::factor` computes its log-determinant as `diag().abs().log().sum()`, so this
-/// is the composition that corrupted every `Normal` at a large enough batch. Skoro moved to
-/// burn-flex, whose kernels are stride-aware; this pins the symptom end to end. The batch is sized
-/// past the threshold (`BATCH * N == 48`); anything under 32 elements passes even against the
-/// defect.
+/// is the composition that corrupted every `Normal` at a large enough batch. Skoro has since moved
+/// to burn-flex, whose stride-aware kernels handle this layout; the test still pins the
+/// composition end to end, on every backend. The batch (`BATCH * N == 48`) was sized past
+/// burn-ndarray's 32-element SIMD threshold and is kept large for the same reason.
 pub fn diag_survives_abs_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
