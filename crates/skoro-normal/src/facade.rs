@@ -6,7 +6,7 @@
 //! left here are the helpers that build the lower-triangular covariance factor `std_dev` for the
 //! common constant cases.
 
-use skoro_backend::{Backend, ElementConversion};
+use skoro_backend::Backend;
 use skoro_linalg::tril::Tril;
 use skoro_model::{ModelClientOps, q::Q};
 use skoro_riemann::euclidean::VectorD;
@@ -23,10 +23,10 @@ where
 {
     let n = diag.len();
     let k = n * (n + 1) / 2;
-    let mut packed = vec![B::FloatElem::from_elem(0.0); k];
+    let mut packed = vec![0.0f64; k];
     for (i, &d) in diag.iter().enumerate() {
         // Diagonal entry of row `i` in the row-major packed lower-triangular layout.
-        packed[i * (i + 3) / 2] = B::FloatElem::from_elem(d);
+        packed[i * (i + 3) / 2] = d;
     }
     client.add_constant(Tril(n), &VectorD::from_vec(packed))
 }
@@ -39,11 +39,10 @@ where
     C: ModelClientOps<B>,
 {
     let k = n * (n + 1) / 2;
-    let mut packed = vec![B::FloatElem::from_elem(0.0); k];
-    let s = B::FloatElem::from_elem(scale);
+    let mut packed = vec![0.0f64; k];
     for i in 0..n {
         // Diagonal entry of row `i` in the row-major packed lower-triangular layout.
-        packed[i * (i + 3) / 2] = s
+        packed[i * (i + 3) / 2] = scale;
     }
     client.add_constant(Tril(n), &VectorD::from_vec(packed))
 }

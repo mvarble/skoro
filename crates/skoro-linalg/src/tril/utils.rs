@@ -1,4 +1,4 @@
-use skoro_backend::{Backend, ElementConversion, Int, Tensor, TensorData};
+use skoro_backend::{Backend, ElementConversion, Int, Tensor, TensorData, host};
 
 #[inline]
 pub(super) fn k_to_n(k: usize) -> usize {
@@ -16,6 +16,7 @@ pub fn unpack<B: Backend, const D: usize, const D2: usize>(
     assert_eq!(D2, D + 1, "Output rank D2 must be exactly D + 1");
 
     let device = mat_packed.device();
+    let dtype = mat_packed.dtype();
     let dims = mat_packed.dims();
 
     // Extract the batch size 'b' and vector dimension `k`
@@ -27,18 +28,18 @@ pub fn unpack<B: Backend, const D: usize, const D2: usize>(
 
     // 1. Generate indices and mask
     let mut indices = Vec::<B::IntElem>::with_capacity(n * n);
-    let mut mask = Vec::<B::FloatElem>::with_capacity(n * n);
+    let mut mask = Vec::<f64>::with_capacity(n * n);
 
     for i in 0..n {
         for j in 0..n {
             if i >= j {
                 indices.push(B::IntElem::from_elem(i * (i + 1) / 2 + j));
-                mask.push(B::FloatElem::from_elem(1.0));
+                mask.push(1.0);
             } else {
                 // Out-of-bounds protection: just point to 0,
                 // it will be zeroed out by the mask anyway.
                 indices.push(B::IntElem::from_elem(0));
-                mask.push(B::FloatElem::from_elem(0.0));
+                mask.push(0.0);
             }
         }
     }
@@ -51,7 +52,7 @@ pub fn unpack<B: Backend, const D: usize, const D2: usize>(
     mask_shape[2] = n;
 
     // TensorData naturally consumes the 1D mask vec and applies it to the n-D shape
-    let mask_tensor = Tensor::<B, D2>::from_data(TensorData::new(mask, mask_shape), &device);
+    let mask_tensor = host::write::<B, f64, D2>(mask, mask_shape, &device, dtype);
 
     // 3. Dynamically construct the reshaped dimensions
     // From [b, n * n, f, ...] -> [b, n, n, f, ...]

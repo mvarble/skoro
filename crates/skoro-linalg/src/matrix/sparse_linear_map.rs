@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use burn::tensor::IndexingUpdateOp;
-use skoro_backend::{Backend, CotangentFrame, Int, Point, Tensor, TensorData};
+use skoro_backend::{Backend, CotangentFrame, Int, Point, Tensor, TensorData, host};
 use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_model::{map::register_map1, q::Q};
@@ -105,6 +105,7 @@ impl SparseLinearMap {
         len: usize,
     ) -> Tensor<B, D> {
         let device = x.device();
+        let dtype = x.dtype();
         let mut shape = x.dims();
         shape[1] = len;
         let zeros = Tensor::zeros(shape, &device);
@@ -120,11 +121,9 @@ impl SparseLinearMap {
         };
         let mut coefficient_shape = [1; D];
         coefficient_shape[1] = nnz;
-        let coefficients = Tensor::<B, 1>::from_data(
-            TensorData::new(self.entries.coefficients.clone(), [nnz]).convert::<B::FloatElem>(),
-            &device,
-        )
-        .reshape(coefficient_shape);
+        let coefficients =
+            host::write::<B, f64, 1>(self.entries.coefficients.clone(), [nnz], &device, dtype)
+                .reshape(coefficient_shape);
         // Several entries can write one output position; `Add` sums them.
         zeros.select_assign(
             1,

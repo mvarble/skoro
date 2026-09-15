@@ -95,10 +95,10 @@ impl Dense {
         })
     }
 
-    /// To `[1, m, n]`, converted back to the backend's float element.
+    /// To `[1, m, n]`, stored at the device's float policy.
     pub fn to_tensor<B: Backend>(&self, device: &B::Device) -> Tensor<B, 3> {
         Tensor::from_data(
-            TensorData::new(self.data.clone(), [1, self.rows, self.cols]).convert::<B::FloatElem>(),
+            TensorData::new(self.data.clone(), [1, self.rows, self.cols]),
             device,
         )
     }
@@ -125,8 +125,7 @@ impl Dense {
     /// To `[1, rows * cols]`, which for a column is `[1, n]`.
     pub fn to_vector<B: Backend>(&self, device: &B::Device) -> Tensor<B, 2> {
         Tensor::from_data(
-            TensorData::new(self.data.clone(), [1, self.rows * self.cols])
-                .convert::<B::FloatElem>(),
+            TensorData::new(self.data.clone(), [1, self.rows * self.cols]),
             device,
         )
     }
@@ -206,7 +205,7 @@ impl Dense {
             data.extend_from_slice(&column.data);
         }
         Ok(Tensor::from_data(
-            TensorData::new(data, [columns.len(), n]).convert::<B::FloatElem>(),
+            TensorData::new(data, [columns.len(), n]),
             device,
         ))
     }

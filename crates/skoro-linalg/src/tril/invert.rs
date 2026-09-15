@@ -1,6 +1,4 @@
-use skoro_backend::{
-    Backend, CotangentFrame, Element, ElementConversion, Point, Tensor, TensorData,
-};
+use skoro_backend::{Backend, CotangentFrame, Element, ElementConversion, Point, Tensor, host};
 use skoro_core::error::SkoroResult;
 use skoro_model::{map::register_map1, q::Q};
 use skoro_operation::{
@@ -86,12 +84,25 @@ where
     ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
         let inputs: Vec<Point<B>> = inputs.into_iter().map(Input::unwrap_float).collect();
         let [mat_packed] = inputs.try_into().unwrap();
-        let shape = mat_packed.shape();
-        let mat_data = mat_packed.clone().into_data().convert::<B::FloatElem>();
-        let mat_elems = mat_data.as_slice::<B::FloatElem>().unwrap();
-        let inv_mat_elems = invert_packed_lower_triangular(mat_elems, shape[0]);
-        let inv_mat_packed =
-            Tensor::from_data(TensorData::new(inv_mat_elems, shape), &mat_packed.device());
+        let dims = mat_packed.dims();
+        let (device, dtype) = (mat_packed.device(), mat_packed.dtype());
+        let inv_mat_packed = if host::is_f64(&mat_packed) {
+            let elems = host::read::<B, f64, 2>(mat_packed.clone());
+            host::write(
+                invert_packed_lower_triangular(&elems, dims[0]),
+                dims,
+                &device,
+                dtype,
+            )
+        } else {
+            let elems = host::read::<B, f32, 2>(mat_packed.clone());
+            host::write(
+                invert_packed_lower_triangular(&elems, dims[0]),
+                dims,
+                &device,
+                dtype,
+            )
+        };
         match diff_state {
             DiffModeState::ForwardOnly => DiffOperationForward::forward_only(inv_mat_packed),
             DiffModeState::Jvp(tvecs) => {

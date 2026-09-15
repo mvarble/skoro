@@ -73,10 +73,7 @@ pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
 
     // A `select` of columns 0 and 2 from a `[rows, 3]` tensor.
     let packed: Vec<f64> = (0..3 * rows).map(value).collect();
-    let tensor = Tensor::<B, 2>::from_data(
-        TensorData::new(packed.clone(), [rows, 3]).convert::<B::FloatElem>(),
-        &device,
-    );
+    let tensor = Tensor::<B, 2>::from_data(TensorData::new(packed.clone(), [rows, 3]), &device);
     let indices = Tensor::<B, 1, Int>::from_data(
         TensorData::new(vec![0i64, 2], [2]).convert::<B::IntElem>(),
         &device,
@@ -99,10 +96,7 @@ pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
 
     // A contiguous `[rows, 2, 2]` tensor with its last two axes swapped.
     let data: Vec<f64> = (0..4 * rows).map(value).collect();
-    let tensor = Tensor::<B, 3>::from_data(
-        TensorData::new(data.clone(), [rows, 2, 2]).convert::<B::FloatElem>(),
-        &device,
-    );
+    let tensor = Tensor::<B, 3>::from_data(TensorData::new(data.clone(), [rows, 2, 2]), &device);
     let swapped = tensor.swap_dims(1, 2);
     let mut host_swapped = vec![0.0; 4 * rows];
     for s in 0..rows {

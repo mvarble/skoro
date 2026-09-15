@@ -107,10 +107,10 @@ impl<B: Backend> QDiv<B, Real> for EuclideanD {
 impl<B: Backend> QLiteralMul<B> for EuclideanD {
     type OutputType = EuclideanD;
     type OpType = LiteralScalarMultiplication<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarMultiplication::new(float)
     }
 }
@@ -118,10 +118,10 @@ impl<B: Backend> QLiteralMul<B> for EuclideanD {
 impl<B: Backend> QLiteralDivRight<B> for EuclideanD {
     type OutputType = EuclideanD;
     type OpType = LiteralScalarDivisionRight<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarDivisionRight::new(float)
     }
 }
@@ -216,10 +216,10 @@ impl<B: Backend, const D: usize> QDiv<B, Real> for Euclidean<D> {
 impl<B: Backend, const D: usize> QLiteralMul<B> for Euclidean<D> {
     type OutputType = Euclidean<D>;
     type OpType = LiteralScalarMultiplication<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarMultiplication::new(float)
     }
 }
@@ -227,10 +227,10 @@ impl<B: Backend, const D: usize> QLiteralMul<B> for Euclidean<D> {
 impl<B: Backend, const D: usize> QLiteralDivRight<B> for Euclidean<D> {
     type OutputType = Euclidean<D>;
     type OpType = LiteralScalarDivisionRight<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarDivisionRight::new(float)
     }
 }

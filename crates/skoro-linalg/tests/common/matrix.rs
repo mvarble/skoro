@@ -9,10 +9,7 @@ use skoro_riemann::matrix::{EuclideanMatrix36, EuclideanMatrix62};
 
 use skoro_linalg::matrix::MatmulOps;
 
-pub fn left_broadcast_matmul_impl<B: Backend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn left_broadcast_matmul_impl<B: Backend>() {
     use skoro_linalg::matrix::left_broadcast_matmul;
     // [2, 4, 2]
     let a = Tensor::<B, 3>::from_floats(
@@ -49,10 +46,7 @@ where
     }
 }
 
-pub fn right_broadcast_matmul_impl<B: Backend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn right_broadcast_matmul_impl<B: Backend>() {
     use skoro_linalg::matrix::right_broadcast_matmul;
     // [2, 2, 4, 2]
     let a = Tensor::<B, 4>::from_floats(
@@ -99,10 +93,7 @@ where
     }
 }
 
-pub fn matmul_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn matmul_impl<B: Backend>(delta: f64, epsilon: f64) {
     let model = ModelClient::<B>::default();
     let a = model.add_parameter(EuclideanMatrix36 {});
     let b = model.add_parameter(EuclideanMatrix62 {});
@@ -143,7 +134,7 @@ where
         .matmul(bval.clone().reshape([batches, 6, 2]))
         .reshape([batches, 6]);
     let cval_actual = into_ndarray(cval_actual);
-    approx::assert_abs_diff_eq!(cval, cval_actual, epsilon = B::FloatElem::from_elem(1e-6));
+    approx::assert_abs_diff_eq!(cval, cval_actual, epsilon = f64::from_elem(1e-6));
 
     test_jvp_numerically(&a, &c, p.clone(), delta, epsilon);
     test_vjp_numerically(&a, &c, p.clone(), delta, epsilon);
@@ -159,10 +150,7 @@ where
 /// The map is non-square, repeats a position (whose entries must be summed), has a position whose
 /// entries cancel (which must be dropped), and leaves an output row and an input column empty. An
 /// empty map must still produce zeros of the right shape.
-pub fn sparse_linear_map_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn sparse_linear_map_impl<B: Backend>(delta: f64, epsilon: f64) {
     use skoro_linalg::matrix::{SparseLinearMap, sparse_linear_map};
     use skoro_riemann::euclidean::EuclideanD;
 
@@ -205,7 +193,7 @@ where
         .with_quantity(
             &x,
             Input::<B>::Float(Tensor::from_data(
-                TensorData::new(host_x.clone(), [batch, cols]).convert::<B::FloatElem>(),
+                TensorData::new(host_x.clone(), [batch, cols]),
                 &Default::default(),
             )),
         )

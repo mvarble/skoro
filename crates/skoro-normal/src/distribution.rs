@@ -3,7 +3,7 @@ use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_riemann::euclidean::EuclideanD;
 use std::marker::PhantomData;
 
-use skoro_backend::{Backend, ElementConversion, Point, Tensor};
+use skoro_backend::{Backend, Point, Tensor};
 use skoro_core::{id::Id, kind::Continuous, sampler::Sampler};
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_linalg::{
@@ -144,8 +144,8 @@ where
         &self.std_dev
     }
 
-    pub fn constant(&self) -> B::FloatElem {
-        B::FloatElem::from_elem(self.constant)
+    pub fn constant(&self) -> f64 {
+        self.constant
     }
 }
 

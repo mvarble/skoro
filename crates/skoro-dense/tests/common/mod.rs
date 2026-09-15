@@ -9,10 +9,7 @@ use skoro_core::error::SkoroError;
 use skoro_dense::dense::Dense;
 
 fn tensor<B: Backend, const D: usize>(data: Vec<f64>, shape: [usize; D]) -> Tensor<B, D> {
-    Tensor::from_data(
-        TensorData::new(data, shape).convert::<B::FloatElem>(),
-        &B::Device::default(),
-    )
+    Tensor::from_data(TensorData::new(data, shape), &B::Device::default())
 }
 
 fn into_vec<B: Backend, const D: usize>(t: Tensor<B, D>) -> Vec<f64> {

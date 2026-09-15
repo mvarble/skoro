@@ -68,10 +68,10 @@ where
     fn pack_value<D>(&self, data: &D) -> UnbatchedPoint<B>
     where
         D: 'static,
-        Self: Packable<B::FloatElem, D>,
+        Self: Packable<f64, D>,
     {
         let d = self.num_components();
-        let mut vec = vec![B::FloatElem::default(); d];
+        let mut vec = vec![0.0f64; d];
         self.pack(data, 0, &mut vec);
         Tensor::from_data(TensorData::new(vec, [d]), &B::Device::default())
     }
@@ -79,11 +79,11 @@ where
     fn pack_values<D>(&self, data: &[D]) -> Point<B>
     where
         D: 'static,
-        Self: Packable<B::FloatElem, D>,
+        Self: Packable<f64, D>,
     {
         let batches = data.len();
         let num_components = self.num_components();
-        let mut vec = vec![B::FloatElem::default(); batches * num_components];
+        let mut vec = vec![0.0f64; batches * num_components];
         for (i, d) in data.iter().enumerate() {
             self.pack(d, i * num_components, &mut vec);
         }

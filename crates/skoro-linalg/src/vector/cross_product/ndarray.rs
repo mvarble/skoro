@@ -1,8 +1,9 @@
 use num_traits::Float;
 use skoro_backend::{
     Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentVector, TensorData,
+    SharedArray, TangentVector,
 };
+use skoro_backend::{Element, host};
 use skoro_operation::{
     Input,
     diff::{DiffModeState, DiffOperation, DiffOperationForward},
@@ -119,10 +120,18 @@ pub fn cross_product_impl<F: Float>(a_x: F, a_y: F, a_z: F, b_x: F, b_y: F, b_z:
     )
 }
 
-pub fn cross_product<B>(u: Point<B>, v: Point<B>) -> Point<B>
+pub fn cross_product<B: Backend>(u: Point<B>, v: Point<B>) -> Point<B> {
+    if host::is_f64(&u) {
+        cross_product_typed::<B, f64>(u, v)
+    } else {
+        cross_product_typed::<B, f32>(u, v)
+    }
+}
+
+fn cross_product_typed<B, F>(u: Point<B>, v: Point<B>) -> Point<B>
 where
     B: Backend,
-    B::FloatElem: Float,
+    F: Float + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = u.dims();
@@ -133,10 +142,9 @@ where
 
     // unpack tensor data
     let device = u.device();
-    let u_data = u.into_data().convert::<B::FloatElem>();
-    let u_slice = u_data.as_slice::<B::FloatElem>().unwrap();
-    let v_data = v.into_data().convert::<B::FloatElem>();
-    let v_slice = v_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = u.dtype();
+    let u_slice: Vec<F> = host::read(u);
+    let v_slice: Vec<F> = host::read(v);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3);
@@ -157,13 +165,27 @@ where
     }
 
     // pack data
-    Point::from_data(TensorData::new(out_vec, [batch_size, 3]), &device)
+    host::write(out_vec, [batch_size, 3], &device, dtype)
 }
 
-pub fn left_broadcast_cross_product<B>(u: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B>
+pub fn left_broadcast_cross_product<B: Backend>(
+    u: Point<B>,
+    alpha: CotangentFrame<B>,
+) -> CotangentFrame<B> {
+    if host::is_f64(&u) {
+        left_broadcast_cross_product_typed::<B, f64>(u, alpha)
+    } else {
+        left_broadcast_cross_product_typed::<B, f32>(u, alpha)
+    }
+}
+
+fn left_broadcast_cross_product_typed<B, F>(
+    u: Point<B>,
+    alpha: CotangentFrame<B>,
+) -> CotangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float,
+    F: Float + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = u.dims();
@@ -174,10 +196,9 @@ where
 
     // unpack tensor data
     let device = u.device();
-    let u_data = u.into_data();
-    let u_slice = u_data.as_slice::<B::FloatElem>().unwrap();
-    let a_data = alpha.into_data();
-    let a_slice = a_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = u.dtype();
+    let u_slice: Vec<F> = host::read(u);
+    let a_slice: Vec<F> = host::read(alpha);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
@@ -213,8 +234,5 @@ where
     }
 
     // pack data
-    CotangentFrame::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }

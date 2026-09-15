@@ -1,6 +1,6 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
-use skoro_backend::{Backend, ElementConversion, ToElement};
+use skoro_backend::{Backend, ToElement};
 use skoro_core::error::SkoroResult;
 use skoro_graph::quantity::ContinuousQuantity;
 use skoro_operation::diff::DiffOperation;
@@ -152,8 +152,8 @@ macro_rules! impl_q_literal_binop {
         pub trait $trait<B: Backend>: ContinuousQuantity<B> {
             type OutputType: ContinuousQuantity<B>;
             type OpType: DiffOperation<B>;
-            fn quantity_type(&self, float: B::FloatElem) -> Self::OutputType;
-            fn op_type(&self, float: B::FloatElem) -> Self::OpType;
+            fn quantity_type(&self, float: f64) -> Self::OutputType;
+            fn op_type(&self, float: f64) -> Self::OpType;
         }
     };
 
@@ -169,7 +169,7 @@ macro_rules! impl_q_literal_binop {
             T: ContinuousQuantity<B> + $trait<B>,
             E: ToElement,
         {
-            let elem = B::FloatElem::from_elem(float);
+            let elem = float.to_f64();
             let t0 = q.get_quantity_type();
             let t = t0.quantity_type(elem);
             let op = t0.op_type(elem);

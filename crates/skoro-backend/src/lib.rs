@@ -4,7 +4,7 @@
 use burn::tensor::TensorPrimitive;
 
 pub use burn::tensor::{
-    Element, ElementConversion, Float, Int, Tensor, TensorData, cast::ToElement,
+    DType, Element, ElementConversion, Float, Int, Tensor, TensorData, cast::ToElement,
 };
 pub use burn_cubecl::{
     CubeRuntime, FloatElement as CubeFloat, IntElement as CubeInt, tensor::CubeTensor,
@@ -14,7 +14,9 @@ pub use burn_ndarray::{
     SharedArray,
 };
 
+pub mod host;
 pub mod ndarray_simd_workaround;
+pub mod policy;
 
 mod private {
     pub trait Sealed {}

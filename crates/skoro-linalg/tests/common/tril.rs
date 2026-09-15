@@ -26,7 +26,6 @@ use skoro_pointwise::PointwiseOps;
 pub fn diag_survives_abs_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     const N: usize = 6;
     const BATCH: usize = 8;
@@ -46,7 +45,7 @@ where
         .collect();
 
     // The i-th diagonal entry of a packed lower triangle sits at index i * (i + 3) / 2.
-    let expected: Vec<B::FloatElem> = (0..BATCH)
+    let expected: Vec<f64> = (0..BATCH)
         .flat_map(|b| (0..N).map(move |i| ((b * K + i * (i + 3) / 2 + 1) as f64).elem()))
         .collect();
 
@@ -62,14 +61,13 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         expected.as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 }
 
 pub fn vector_product_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
 
@@ -92,7 +90,7 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 23.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // JVP
@@ -110,12 +108,12 @@ where
     assert_abs_diff_eq!(
         into_vec(jvp.value).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 23.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&lv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.8, 4.6], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // VJP
@@ -123,17 +121,17 @@ where
     assert_abs_diff_eq!(
         into_vec(vjp.value).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 23.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 4.0, 5.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([3.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // HVP
@@ -146,22 +144,22 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.value).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 23.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&lv.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.8, 4.6], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([4.0, 4.0, 5.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([3.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // hd_L = pack(omega * dv^T) = pack([[1.0, 1.0]]^T * [[0.4, 0.5]]) = pack([[0.4, 0.5], [0.4, 0.5]])
@@ -169,20 +167,19 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.4, 0.4, 0.5], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     // hd_v = dL^T * omega = [[0.1, 0.2], [0.0, 0.3]] * [1.0, 1.0]^T = [0.3, 0.3]
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.3, 0.3], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 }
 
 pub fn invert_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
 
@@ -202,7 +199,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // JVP
@@ -218,7 +215,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&linv.id()).unwrap().clone()).as_slice(),
@@ -227,7 +224,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // VJP
@@ -239,7 +236,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
@@ -249,7 +246,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // HVP
@@ -266,7 +263,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&linv.id()).unwrap().clone()).as_slice(),
@@ -275,7 +272,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
@@ -285,7 +282,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
@@ -295,14 +292,13 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 }
 
 pub fn diag_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
 
@@ -318,7 +314,7 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // Jvp
@@ -330,12 +326,12 @@ where
     assert_abs_diff_eq!(
         into_vec(jvp.value).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&d.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.2, 0.4], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // Vjp
@@ -343,12 +339,12 @@ where
     assert_abs_diff_eq!(
         into_vec(vjp.value).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 0.0, 1.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 
     // Hvp
@@ -361,22 +357,22 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.value).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 3.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&d.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.2, 0.4], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.0, 0.0, 1.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&l.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.0, 0.0, 0.0], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-6),
+        epsilon = f64::from_elem(1e-6),
     );
 }
 
@@ -385,10 +381,9 @@ where
 /// The triangle is `3 × 3` and far from both the identity and the diagonal: a pullback that
 /// forgot its transposes — `−Y Ω Y` for `−Yᵀ Ω Yᵀ` — agrees with the true one on a diagonal
 /// fixture and nowhere else.
-pub fn invert_derivatives_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn invert_derivatives_impl<B: Backend>(delta: f64, epsilon: f64)
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let l = model.add_parameter(Tril(3));
@@ -421,7 +416,6 @@ where
 pub fn invert_agrees_with_dense_impl<B: Backend>()
 where
     Q<B, Tril>: TrilOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     // Row-major packed lower triangle: element (i, j≤i) is at `i(i+1)/2 + j`.
     const N: usize = 4;
@@ -459,8 +453,8 @@ where
         for j in 0..=i {
             assert_abs_diff_eq!(
                 packed_inverse[i * (i + 1) / 2 + j],
-                B::FloatElem::from_elem(dense_inverse.get(i, j)),
-                epsilon = B::FloatElem::from_elem(1e-5),
+                f64::from_elem(dense_inverse.get(i, j)),
+                epsilon = f64::from_elem(1e-5),
             );
         }
     }
@@ -479,7 +473,6 @@ where
 /// path to fall back on.
 pub fn inverse_retraction_round_trip_impl<B: Backend>()
 where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
     Tril: skoro_riemann::Manifold<B>,
 {
     use skoro_riemann::DynManifold;

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use skoro_backend::{Backend, CotangentFrame, Point, TangentVector, Tensor};
 
 use crate::{
@@ -460,11 +462,11 @@ impl ScalarDivision {
 
 /// Literal addition of a float on a (scalar) quantity.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralAddition<B: Backend>(B::FloatElem);
+pub struct LiteralAddition<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralAddition<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 
@@ -521,11 +523,11 @@ impl<B: Backend> DiffOperation<B> for LiteralAddition<B> {
 
 /// Literal subtraction of a float from a (scalar) quantity.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralSubtractionRight<B: Backend>(B::FloatElem);
+pub struct LiteralSubtractionRight<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralSubtractionRight<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 
@@ -582,11 +584,11 @@ impl<B: Backend> DiffOperation<B> for LiteralSubtractionRight<B> {
 
 /// Literal subtraction of (scalar) quantity from a float.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralSubtractionLeft<B: Backend>(B::FloatElem);
+pub struct LiteralSubtractionLeft<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralSubtractionLeft<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 
@@ -643,11 +645,11 @@ impl<B: Backend> DiffOperation<B> for LiteralSubtractionLeft<B> {
 
 /// Literal scalar multiplication on a vector space.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralScalarMultiplication<B: Backend>(B::FloatElem);
+pub struct LiteralScalarMultiplication<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralScalarMultiplication<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 
@@ -709,11 +711,11 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarMultiplication<B> {
 
 /// Literal scalar division on a vector space.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralScalarDivisionRight<B: Backend>(B::FloatElem);
+pub struct LiteralScalarDivisionRight<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralScalarDivisionRight<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 
@@ -774,11 +776,11 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionRight<B> {
 
 /// Division of a scalar quantity from a literal value.
 #[derive(Debug, Clone, Copy)]
-pub struct LiteralScalarDivisionLeft<B: Backend>(B::FloatElem);
+pub struct LiteralScalarDivisionLeft<B: Backend>(f64, PhantomData<B>);
 
 impl<B: Backend> LiteralScalarDivisionLeft<B> {
-    pub fn new(val: B::FloatElem) -> Self {
-        Self(val)
+    pub fn new(val: f64) -> Self {
+        Self(val, PhantomData)
     }
 }
 

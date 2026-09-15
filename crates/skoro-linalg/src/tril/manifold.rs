@@ -134,10 +134,10 @@ impl<B: Backend> QDiv<B, Real> for Tril {
 impl<B: Backend> QLiteralMul<B> for Tril {
     type OutputType = Tril;
     type OpType = LiteralScalarMultiplication<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarMultiplication::new(float)
     }
 }
@@ -145,10 +145,10 @@ impl<B: Backend> QLiteralMul<B> for Tril {
 impl<B: Backend> QLiteralDivRight<B> for Tril {
     type OutputType = Tril;
     type OpType = LiteralScalarDivisionRight<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         *self
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarDivisionRight::new(float)
     }
 }

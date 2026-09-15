@@ -22,7 +22,7 @@ pub type B = NdArrayBackend<f32, i32>;
 const DIM: usize = 3;
 
 /// `x ~ Normal(mean, diag(std_dev))` over `EuclideanD(3)`, with constant parameters.
-fn unit_model(std_dev: &[f32]) -> (ModelClient<B>, Q<B, EuclideanD>) {
+fn unit_model(std_dev: &[f64]) -> (ModelClient<B>, Q<B, EuclideanD>) {
     let model = ModelClient::<B>::new(Default::default());
     let mean = model.add_constant(EuclideanD(DIM), &VectorD::new(&[0.0, 0.0, 0.0]));
     // `Tril` packs the lower triangle row-major; a diagonal factor zeroes the rest.

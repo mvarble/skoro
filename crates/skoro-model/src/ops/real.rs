@@ -91,10 +91,10 @@ impl<B: Backend> QDiv<B, Real> for Real {
 impl<B: Backend> QLiteralAdd<B> for Real {
     type OutputType = Real;
     type OpType = LiteralAddition<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralAddition::new(float)
     }
 }
@@ -102,10 +102,10 @@ impl<B: Backend> QLiteralAdd<B> for Real {
 impl<B: Backend> QLiteralSubLeft<B> for Real {
     type OutputType = Real;
     type OpType = LiteralSubtractionLeft<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralSubtractionLeft::new(float)
     }
 }
@@ -113,10 +113,10 @@ impl<B: Backend> QLiteralSubLeft<B> for Real {
 impl<B: Backend> QLiteralSubRight<B> for Real {
     type OutputType = Real;
     type OpType = LiteralSubtractionRight<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralSubtractionRight::new(float)
     }
 }
@@ -124,10 +124,10 @@ impl<B: Backend> QLiteralSubRight<B> for Real {
 impl<B: Backend> QLiteralMul<B> for Real {
     type OutputType = Real;
     type OpType = LiteralScalarMultiplication<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarMultiplication::new(float)
     }
 }
@@ -135,10 +135,10 @@ impl<B: Backend> QLiteralMul<B> for Real {
 impl<B: Backend> QLiteralDivLeft<B> for Real {
     type OutputType = Real;
     type OpType = LiteralScalarDivisionLeft<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarDivisionLeft::new(float)
     }
 }
@@ -146,10 +146,10 @@ impl<B: Backend> QLiteralDivLeft<B> for Real {
 impl<B: Backend> QLiteralDivRight<B> for Real {
     type OutputType = Real;
     type OpType = LiteralScalarDivisionRight<B>;
-    fn quantity_type(&self, _: B::FloatElem) -> Self::OutputType {
+    fn quantity_type(&self, _: f64) -> Self::OutputType {
         Real
     }
-    fn op_type(&self, float: B::FloatElem) -> Self::OpType {
+    fn op_type(&self, float: f64) -> Self::OpType {
         LiteralScalarDivisionRight::new(float)
     }
 }

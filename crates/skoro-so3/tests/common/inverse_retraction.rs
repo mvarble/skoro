@@ -30,10 +30,9 @@ const R1: [f64; 9] = [
 ];
 
 #[allow(unused)]
-pub fn inverse_retract<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn inverse_retract<B: Backend>(delta: f64, epsilon: f64)
 where
     SO3: ContinuousQuantity<B> + AssociatedTangentVector<Euclidean<3>, B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let attitude = model.add_parameter(SO3);

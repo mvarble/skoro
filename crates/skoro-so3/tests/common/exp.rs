@@ -216,12 +216,7 @@ pub const ALPHAS: [[[f32; 3]; 2]; 9] = [
 
 #[inline(always)]
 #[allow(unused)]
-pub fn exp_forward<B: Backend>(
-    exp_forward: impl Fn(Tensor<B, 2>) -> Tensor<B, 2>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn exp_forward<B: Backend>(exp_forward: impl Fn(Tensor<B, 2>) -> Tensor<B, 2>, epsilon: f64) {
     let omega = tensor::<B, 2>(OMEGAS, &Default::default());
     let expomega = exp_forward(omega);
     let expomega = into_ndarray(expomega);
@@ -234,10 +229,8 @@ pub fn exp_forward<B: Backend>(
 #[allow(unused)]
 pub fn exp_jvp<B: Backend>(
     exp_jvp: impl Fn(Tensor<B, 2>, Tensor<B, 3>) -> Tensor<B, 3>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+    epsilon: f64,
+) {
     let omega = tensor::<B, 2>(OMEGAS, &Default::default());
     let v = tensor::<B, 3>(VS, &Default::default()).transpose();
     let dexpomegav = exp_jvp(omega, v);
@@ -251,10 +244,8 @@ pub fn exp_jvp<B: Backend>(
 #[allow(unused)]
 pub fn exp_vjp<B: Backend>(
     exp_vjp: impl Fn(Tensor<B, 2>, Tensor<B, 3>) -> Tensor<B, 3>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+    epsilon: f64,
+) {
     let omega = tensor::<B, 2>(OMEGAS, &Default::default());
     let v = tensor::<B, 3>(VS, &Default::default()).transpose();
     let dexptomegav = exp_vjp(omega, v);
@@ -266,11 +257,10 @@ pub fn exp_vjp<B: Backend>(
 
 #[inline(always)]
 #[allow(unused)]
-pub fn exp<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn exp<B: Backend>(delta: f64, epsilon: f64)
 where
     SO3: ContinuousQuantity<B>,
     Q<B, Euclidean<3>>: SO3ExpOps<B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let omega = model.add_parameter(Euclidean::<3>);

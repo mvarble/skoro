@@ -70,7 +70,9 @@ impl private::Sealed for Discrete {}
 
 impl<B: Backend> Kind<B> for Continuous {
     const KIND: QuantityKind = QuantityKind::Continuous;
-    type Elem = B::FloatElem;
+    /// Always `f64` on the host, whatever precision the backend stores: a packed value is uploaded
+    /// at the device's float policy, and read back converted from the tensor's own dtype.
+    type Elem = f64;
     type UnbatchedPoint = UnbatchedPoint<B>;
     type Point = Point<B>;
 
@@ -104,7 +106,8 @@ impl<B: Backend> Kind<B> for Continuous {
     fn to_elements(point: &Self::Point) -> Vec<Self::Elem> {
         point
             .to_data()
-            .to_vec::<B::FloatElem>()
+            .convert::<f64>()
+            .to_vec::<f64>()
             .expect("continuous points should have float elements")
     }
 }

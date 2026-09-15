@@ -118,7 +118,7 @@ mod bridges {
     #[test]
     fn discretization_bridge_cont_to_disc() {
         let model = ModelClient::<B>::default();
-        let x = model.add_constant(skoro_riemann::real::Real, &2.5f32);
+        let x = model.add_constant(skoro_riemann::real::Real, &2.5f64);
         let flag = x.is_non_negative().unwrap(); // 2.5 >= 0 -> true
 
         let out = model.evaluate_ids(&HashMap::new(), &[flag.id()]).unwrap();

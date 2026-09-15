@@ -32,11 +32,14 @@ impl<B: Backend> FixedLinearMap<B> {
 
     /// The map whose `rows × cols` matrix is `data`, in row-major order.
     ///
-    /// Built through `TensorData` so an `f64` backend keeps full precision. `device` is only where
-    /// the matrix starts: each application moves it to the input's device.
+    /// Built through `TensorData` and stored at the device's float policy, so an `f64` policy
+    /// keeps full precision. `device` is only where the matrix starts: each application moves it
+    /// to the input's device.
     pub fn from_row_major(rows: usize, cols: usize, data: &[f64], device: &B::Device) -> Self {
-        let data = TensorData::new(data.to_vec(), [rows, cols]).convert::<B::FloatElem>();
-        Self::new(Tensor::from_data(data, device))
+        Self::new(Tensor::from_data(
+            TensorData::new(data.to_vec(), [rows, cols]),
+            device,
+        ))
     }
 
     /// The matrix's `[out, in]` shape.

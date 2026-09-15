@@ -1,9 +1,9 @@
-use burn::Tensor;
 use num_traits::{Float, One};
 use skoro_backend::{
     Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentFrame, TangentVector, TensorData,
+    SharedArray, TangentFrame, TangentVector,
 };
+use skoro_backend::{Element, host};
 use skoro_linalg::vector::cross_product::ndarray::cross_product_impl as cross_product;
 use skoro_operation::{
     Input,
@@ -81,10 +81,18 @@ where
     }
 }
 
-pub fn exp<B>(omega: Point<B>) -> Point<B>
+pub fn exp<B: Backend>(omega: Point<B>) -> Point<B> {
+    if host::is_f64(&omega) {
+        exp_typed::<B, f64>(omega)
+    } else {
+        exp_typed::<B, f32>(omega)
+    }
+}
+
+fn exp_typed<B, F>(omega: Point<B>) -> Point<B>
 where
     B: Backend,
-    B::FloatElem: Float + One,
+    F: Float + One + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -94,8 +102,8 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 9);
@@ -107,7 +115,7 @@ where
         let w_z = batch[2];
         let th_sq = w_x * w_x + w_y * w_y + w_z * w_z;
         let ExpJacobianCoeffs { c1, c2, .. } = exp_jacobian_coeffs(th_sq);
-        let o = <B::FloatElem as One>::one();
+        let o = <F as One>::one();
         out_vec.push(o - c2 * (w_y * w_y + w_z * w_z));
         out_vec.push(-c1 * w_z + c2 * w_x * w_y);
         out_vec.push(c1 * w_y + c2 * w_x * w_z);
@@ -120,13 +128,21 @@ where
     }
 
     // pack data
-    Tensor::from_data(TensorData::new(out_vec, [batch_size, 9]), &device)
+    host::write(out_vec, [batch_size, 9], &device, dtype)
 }
 
-pub fn exp_jvp<B>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B>
+pub fn exp_jvp<B: Backend>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B> {
+    if host::is_f64(&omega) {
+        exp_jvp_typed::<B, f64>(omega, v)
+    } else {
+        exp_jvp_typed::<B, f32>(omega, v)
+    }
+}
+
+fn exp_jvp_typed<B, F>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One,
+    F: Float + One + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -137,10 +153,9 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let v_data = v.into_data();
-    let v_slice = v_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let v_slice: Vec<F> = host::read(v);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
@@ -184,16 +199,21 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
-pub fn exp_vjp<B>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B>
+pub fn exp_vjp<B: Backend>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B> {
+    if host::is_f64(&omega) {
+        exp_vjp_typed::<B, f64>(omega, alpha)
+    } else {
+        exp_vjp_typed::<B, f32>(omega, alpha)
+    }
+}
+
+fn exp_vjp_typed<B, F>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One,
+    F: Float + One + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -204,10 +224,9 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let a_data = alpha.into_data();
-    let a_slice = a_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let a_slice: Vec<F> = host::read(alpha);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
@@ -251,20 +270,29 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
-pub fn exp_hvp<B>(
+pub fn exp_hvp<B: Backend>(
+    omega: Point<B>,
+    v: TangentVector<B>,
+    alpha: CotangentFrame<B>,
+) -> CotangentFrame<B> {
+    if host::is_f64(&omega) {
+        exp_hvp_typed::<B, f64>(omega, v, alpha)
+    } else {
+        exp_hvp_typed::<B, f32>(omega, v, alpha)
+    }
+}
+
+fn exp_hvp_typed<B, F>(
     omega: Point<B>,
     v: TangentVector<B>,
     alpha: CotangentFrame<B>,
 ) -> CotangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One,
+    F: Float + One + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -281,12 +309,10 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let v_data = v.into_data();
-    let v_slice = v_data.as_slice::<B::FloatElem>().unwrap();
-    let a_data = alpha.into_data();
-    let a_slice = a_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let v_slice: Vec<F> = host::read(v);
+    let a_slice: Vec<F> = host::read(alpha);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
@@ -349,10 +375,7 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
 // SO(3) has a closed form for the Lie-group exponential map we use as our retraction operation.

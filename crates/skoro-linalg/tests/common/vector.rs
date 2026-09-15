@@ -10,10 +10,7 @@ use skoro_riemann::euclidean::Euclidean;
 
 use skoro_linalg::vector::{CrossProductBackend, CrossProductOps, LinalgVectorOps};
 
-pub fn norm_squared_impl<B: Backend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn norm_squared_impl<B: Backend>() {
     let model = ModelClient::<B>::default();
 
     let v = model.add_parameter(Euclidean::<3>);
@@ -32,7 +29,7 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         into_vec(tensor::<B, 1>([14.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // JVP
@@ -45,12 +42,12 @@ where
     assert_abs_diff_eq!(
         into_vec(jvp.value).as_slice(),
         into_vec(tensor::<B, 1>([14.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&f.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([2.8f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // VJP
@@ -58,7 +55,7 @@ where
     assert_abs_diff_eq!(
         into_vec(vjp.value).as_slice(),
         into_vec(tensor::<B, 1>([14.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -67,7 +64,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // HVP
@@ -80,12 +77,12 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.value).as_slice(),
         into_vec(tensor::<B, 1>([14.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&f.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([2.8f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -94,7 +91,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -103,14 +100,11 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 }
 
-pub fn norm_impl<B: Backend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn norm_impl<B: Backend>() {
     let model = ModelClient::<B>::default();
 
     let v = model.add_parameter(Euclidean::<3>);
@@ -130,7 +124,7 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         into_vec(tensor::<B, 1>([sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // JVP
@@ -143,12 +137,12 @@ where
     assert_abs_diff_eq!(
         into_vec(jvp.value).as_slice(),
         into_vec(tensor::<B, 1>([sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&f.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.4f64 / sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // VJP
@@ -156,7 +150,7 @@ where
     assert_abs_diff_eq!(
         into_vec(vjp.value).as_slice(),
         into_vec(tensor::<B, 1>([sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -165,7 +159,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // HVP
@@ -178,12 +172,12 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.value).as_slice(),
         into_vec(tensor::<B, 1>([sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&f.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([1.4f64 / sqrt14], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -192,7 +186,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -201,14 +195,11 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 }
 
-pub fn sum_impl<B: Backend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn sum_impl<B: Backend>() {
     let model = ModelClient::<B>::default();
 
     let v = model.add_parameter(Euclidean::<3>);
@@ -224,7 +215,7 @@ where
     assert_abs_diff_eq!(
         into_vec(eval).as_slice(),
         into_vec(tensor::<B, 1>([6.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64)
+        epsilon = f64::from_elem(1e-4f64)
     );
 
     // JVP
@@ -237,12 +228,12 @@ where
     assert_abs_diff_eq!(
         into_vec(jvp.value).as_slice(),
         into_vec(tensor::<B, 1>([6.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(jvp.tangents.get(&s.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.6f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // VJP
@@ -250,7 +241,7 @@ where
     assert_abs_diff_eq!(
         into_vec(vjp.value).as_slice(),
         into_vec(tensor::<B, 1>([6.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(vjp.cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -259,7 +250,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 
     // HVP
@@ -272,12 +263,12 @@ where
     assert_abs_diff_eq!(
         into_vec(hvp.value).as_slice(),
         into_vec(tensor::<B, 1>([6.0f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.tangents.get(&s.id()).unwrap().clone()).as_slice(),
         into_vec(tensor::<B, 1>([0.6f64], &Default::default())).as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord1_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -286,7 +277,7 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
     assert_abs_diff_eq!(
         into_vec(hvp.ord2_cotangents.get(&v.id()).unwrap().clone()).as_slice(),
@@ -295,14 +286,11 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 }
 
-pub fn cross_product_impl<B: Backend + CrossProductBackend>()
-where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn cross_product_impl<B: Backend + CrossProductBackend>() {
     let model = ModelClient::<B>::default();
 
     let a = model.add_parameter(Euclidean::<3>);
@@ -334,6 +322,6 @@ where
             &Default::default()
         ))
         .as_slice(),
-        epsilon = B::FloatElem::from_elem(1e-4f64),
+        epsilon = f64::from_elem(1e-4f64),
     );
 }

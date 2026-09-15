@@ -106,12 +106,7 @@ const DLOGT_R_VS: [[[f64; 3]; 2]; 9] = [
 ];
 
 #[allow(unused)]
-pub fn log_forward<B: Backend>(
-    log_forward: impl Fn(Tensor<B, 2>) -> Tensor<B, 2>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+pub fn log_forward<B: Backend>(log_forward: impl Fn(Tensor<B, 2>) -> Tensor<B, 2>, epsilon: f64) {
     let r = tensor::<B, 3>(EXP_OMEGAS, &Default::default()).reshape([9, 9]);
     let omega = log_forward(r);
     let omega = into_ndarray(omega);
@@ -124,10 +119,8 @@ pub fn log_forward<B: Backend>(
 #[allow(unused)]
 pub fn log_jvp<B: Backend>(
     log_jvp: impl Fn(Tensor<B, 2>, Tensor<B, 3>) -> Tensor<B, 3>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+    epsilon: f64,
+) {
     let omega = tensor::<B, 2>(OMEGAS, &Default::default());
     let v = tensor::<B, 3>(VS, &Default::default()).transpose();
     let dlogomegav = log_jvp(omega, v);
@@ -141,10 +134,8 @@ pub fn log_jvp<B: Backend>(
 #[allow(unused)]
 pub fn log_vjp<B: Backend>(
     log_vjp: impl Fn(Tensor<B, 2>, Tensor<B, 3>) -> Tensor<B, 3>,
-    epsilon: B::FloatElem,
-) where
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
-{
+    epsilon: f64,
+) {
     let omega = tensor::<B, 2>(OMEGAS, &Default::default());
     let v = tensor::<B, 3>(VS, &Default::default()).transpose();
     let dlogtomegav = log_vjp(omega, v);
@@ -156,11 +147,10 @@ pub fn log_vjp<B: Backend>(
 
 #[inline(always)]
 #[allow(unused)]
-pub fn log<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn log<B: Backend>(delta: f64, epsilon: f64)
 where
     SO3: ContinuousQuantity<B>,
     Q<B, SO3>: SO3LogOps<B, Euclidean<3>>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let r = model.add_parameter(SO3);

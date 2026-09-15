@@ -238,10 +238,9 @@ const INVERSE_OTHER_POSES: [[f64; 12]; 5] = [
 ];
 
 #[allow(unused)]
-pub fn retract_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn retract_impl<B: Backend>(delta: f64, epsilon: f64)
 where
     SE3: ContinuousQuantity<B> + AssociatedTangentVector<Euclidean<6>, B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let pose = model.add_parameter(SE3);
@@ -269,10 +268,9 @@ where
 }
 
 #[allow(unused)]
-pub fn inverse_retract_impl<B: Backend>(delta: B::FloatElem, epsilon: B::FloatElem)
+pub fn inverse_retract_impl<B: Backend>(delta: f64, epsilon: f64)
 where
     SE3: ContinuousQuantity<B> + AssociatedTangentVector<Euclidean<6>, B>,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let model = ModelClient::<B>::default();
     let pose = model.add_parameter(SE3);
@@ -340,7 +338,6 @@ where
 pub fn retract_flat_is_partial_impl<B: Backend>(delta: f64, _epsilon: f64)
 where
     SE3: ContinuousQuantity<B>,
-    B::FloatElem: PartialEq,
 {
     use skoro_core::kind::Continuous;
     use skoro_graph::{point_map::PointMap, quantity::QuantityType, tangent_layout::TangentLayout};
@@ -373,10 +370,11 @@ where
     assert!(
         before
             .into_data()
-            .to_vec::<B::FloatElem>()
+            .convert::<f64>()
+            .to_vec::<f64>()
             .unwrap()
             .iter()
-            .zip(after.into_data().to_vec::<B::FloatElem>().unwrap())
+            .zip(after.into_data().convert::<f64>().to_vec::<f64>().unwrap())
             .any(|(a, b)| *a != b),
         "the pose named by the layout should have moved"
     );
@@ -394,8 +392,16 @@ where
         .clone()
         .unwrap_float();
     assert_eq!(
-        quiet_before.into_data().to_vec::<B::FloatElem>().unwrap(),
-        quiet_after.into_data().to_vec::<B::FloatElem>().unwrap(),
+        quiet_before
+            .into_data()
+            .convert::<f64>()
+            .to_vec::<f64>()
+            .unwrap(),
+        quiet_after
+            .into_data()
+            .convert::<f64>()
+            .to_vec::<f64>()
+            .unwrap(),
         "a quantity outside the layout must not move"
     );
 }

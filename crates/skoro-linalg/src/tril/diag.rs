@@ -1,4 +1,6 @@
-use skoro_backend::{Backend, CotangentFrame, ElementConversion, Int, Point, Tensor, TensorData};
+use skoro_backend::{
+    Backend, CotangentFrame, DType, ElementConversion, Int, Point, Tensor, TensorData, host,
+};
 use skoro_core::error::SkoroResult;
 use skoro_core::pack::NumComponents;
 use skoro_model::{map::register_map1, q::Q};
@@ -31,14 +33,13 @@ fn diagonal<B: Backend, const D: usize>(tril: Tensor<B, D>) -> Tensor<B, D> {
     tril.select(1, indices)
 }
 
-fn packed_diagonal_mask<B: Backend>(n: usize, device: &B::Device) -> Tensor<B, 1> {
+fn packed_diagonal_mask<B: Backend>(n: usize, device: &B::Device, dtype: DType) -> Tensor<B, 1> {
     let k = n * (n + 1) / 2;
-    let mut mask = vec![B::FloatElem::from_elem(0.0); k];
+    let mut mask = vec![0.0f64; k];
     for i in 0..n {
-        let diag_idx = i * (i + 3) / 2;
-        mask[diag_idx] = B::FloatElem::from_elem(1.0);
+        mask[i * (i + 3) / 2] = 1.0;
     }
-    Tensor::<B, 1>::from_data(TensorData::new(mask, [k]).convert::<B::FloatElem>(), device)
+    host::write(mask, [k], device, dtype)
 }
 
 impl<B: Backend> DiffOperation<B> for TrilDiag {
@@ -68,7 +69,8 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
                 let tangent = dmat_packed.map(|dmat_packed| {
                     let [_, k] = dmat_packed.dims();
                     let n = k_to_n(k);
-                    let mask = packed_diagonal_mask(n, &dmat_packed.device()).reshape([1, k]);
+                    let mask = packed_diagonal_mask(n, &dmat_packed.device(), dmat_packed.dtype())
+                        .reshape([1, k]);
                     diagonal(dmat_packed * mask)
                 });
                 DiffOperationForward::hvp(diag, tangent, diffs[0], ())
@@ -86,20 +88,17 @@ impl<B: Backend> DiffOperation<B> for TrilDiag {
             let [_, n, _] = omega.dims();
             let k = n * (n + 1) / 2;
             let mut indices = vec![B::IntElem::from_elem(0); k];
-            let mut mask = vec![B::FloatElem::from_elem(0.0); k];
+            let mut mask = vec![0.0f64; k];
             for i in 0..n {
                 let diag_idx = i * (i + 3) / 2;
                 indices[diag_idx] = B::IntElem::from_elem(i);
-                mask[diag_idx] = B::FloatElem::from_elem(1.0);
+                mask[diag_idx] = 1.0;
             }
             let indices_tensor = Tensor::<B, 1, Int>::from_data(
                 TensorData::new(indices, [k]).convert::<B::IntElem>(),
                 &device,
             );
-            let mask_tensor = Tensor::<B, 3>::from_data(
-                TensorData::new(mask, [1, k, 1]).convert::<B::FloatElem>(),
-                &device,
-            );
+            let mask_tensor = host::write::<B, f64, 3>(mask, [1, k, 1], &device, omega.dtype());
             let expanded = omega.select(1, indices_tensor);
             vec![Some(expanded * mask_tensor)]
         } else {

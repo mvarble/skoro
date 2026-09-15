@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 
-use skoro_backend::{Backend, CotangentFrame, ElementConversion, TangentFrame, Tensor, TensorData};
+use skoro_backend::{Backend, CotangentFrame, TangentFrame, Tensor, TensorData};
 use skoro_core::id::Id;
 use skoro_operation::{Input, ValueMap};
 
@@ -27,34 +27,27 @@ use crate::graph::Graph;
 
 /// A `[1, dim, dim]` identity, batched to `batches`.
 fn identity_frames<B: Backend>(dim: usize, batches: usize) -> Tensor<B, 3> {
-    let mut data = vec![B::FloatElem::from_elem(0.0f64); dim * dim];
+    let mut data = vec![0.0f64; dim * dim];
     for i in 0..dim {
-        data[i * (dim + 1)] = B::FloatElem::from_elem(1.0f64);
+        data[i * (dim + 1)] = 1.0;
     }
-    Tensor::from_data(
-        TensorData::new(data, [1, dim, dim]).convert::<B::FloatElem>(),
-        &B::Device::default(),
-    )
-    .repeat_dim(0, batches)
+    Tensor::from_data(TensorData::new(data, [1, dim, dim]), &B::Device::default())
+        .repeat_dim(0, batches)
 }
 
 /// The `i`-th basis tangent vector, shaped `[batches, dim]`.
 fn basis_vector<B: Backend>(dim: usize, i: usize, batches: usize) -> Tensor<B, 2> {
-    let mut data = vec![B::FloatElem::from_elem(0.0f64); dim];
-    data[i] = B::FloatElem::from_elem(1.0f64);
-    Tensor::from_data(
-        TensorData::new(data, [1, dim]).convert::<B::FloatElem>(),
-        &B::Device::default(),
-    )
-    .repeat_dim(0, batches)
+    let mut data = vec![0.0f64; dim];
+    data[i] = 1.0;
+    Tensor::from_data(TensorData::new(data, [1, dim]), &B::Device::default()).repeat_dim(0, batches)
 }
 
 /// Flatten a tensor to its row-major elements, for comparison.
 ///
 /// Shapes are asserted separately by the callers; once they agree, the flat layouts do too, so
 /// the comparison does not need to carry the shape.
-pub fn into_vec<B: Backend, const D: usize>(t: Tensor<B, D>) -> Vec<B::FloatElem> {
-    t.into_data().convert::<B::FloatElem>().to_vec().unwrap()
+pub fn into_vec<B: Backend, const D: usize>(t: Tensor<B, D>) -> Vec<f64> {
+    t.into_data().convert::<f64>().to_vec().unwrap()
 }
 
 /// The batch axis of the point stored for `id`.
@@ -75,11 +68,10 @@ pub fn test_jvp_numerically<B>(
     in_id: Id,
     out_id: Id,
     mut point: ValueMap<B>,
-    delta: B::FloatElem,
-    epsilon: <B::FloatElem as approx::AbsDiffEq>::Epsilon,
+    delta: f64,
+    epsilon: f64,
 ) where
     B: Backend,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let intype = graph.get_manifold(in_id).expect("input must be continuous");
     let outtype = graph
@@ -135,11 +127,10 @@ pub fn test_vjp_numerically<B>(
     in_id: Id,
     out_id: Id,
     mut point: ValueMap<B>,
-    delta: B::FloatElem,
-    epsilon: <B::FloatElem as approx::AbsDiffEq>::Epsilon,
+    delta: f64,
+    epsilon: f64,
 ) where
     B: Backend,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let intype = graph.get_manifold(in_id).expect("input must be continuous");
     let outtype = graph
@@ -193,11 +184,10 @@ pub fn test_hvp_numerically<B>(
     in_id: Id,
     out_id: Id,
     point: ValueMap<B>,
-    delta: B::FloatElem,
-    epsilon: <B::FloatElem as approx::AbsDiffEq>::Epsilon,
+    delta: f64,
+    epsilon: f64,
 ) where
     B: Backend,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     test_hvp_cross_numerically(graph, in_id, in_id, out_id, point, delta, epsilon)
 }
@@ -217,11 +207,10 @@ pub fn test_hvp_cross_numerically<B>(
     read_id: Id,
     out_id: Id,
     point: ValueMap<B>,
-    delta: B::FloatElem,
-    epsilon: <B::FloatElem as approx::AbsDiffEq>::Epsilon,
+    delta: f64,
+    epsilon: f64,
 ) where
     B: Backend,
-    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
 {
     let seedtype = graph
         .get_manifold(seed_id)

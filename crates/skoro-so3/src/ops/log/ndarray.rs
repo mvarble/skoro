@@ -1,9 +1,9 @@
-use burn::Tensor;
 use num_traits::{Float, FromPrimitive, One};
 use skoro_backend::{
     Backend, CotangentFrame, NdArrayBackend, NdArrayFloat, NdArrayInt, NdArrayTensor, Point,
-    SharedArray, TangentFrame, TangentVector, TensorData,
+    SharedArray, TangentFrame, TangentVector,
 };
+use skoro_backend::{Element, host};
 use skoro_linalg::vector::cross_product::ndarray::cross_product_impl as cross_product;
 use skoro_operation::{
     Input,
@@ -86,10 +86,18 @@ where
     }
 }
 
-pub fn log<B>(r: Point<B>) -> Point<B>
+pub fn log<B: Backend>(r: Point<B>) -> Point<B> {
+    if host::is_f64(&r) {
+        log_typed::<B, f64>(r)
+    } else {
+        log_typed::<B, f32>(r)
+    }
+}
+
+fn log_typed<B, F>(r: Point<B>) -> Point<B>
 where
     B: Backend,
-    B::FloatElem: Float + One + FromPrimitive,
+    F: Float + One + FromPrimitive + Element,
 {
     // unpack data from inputs
     let [batch_size, nine] = r.dims();
@@ -99,19 +107,19 @@ where
 
     // unpack tensor data
     let device = r.device();
-    let r_data = r.into_data();
-    let r_slice = r_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = r.dtype();
+    let r_slice: Vec<F> = host::read(r);
 
     // Allocate output memory
     let mut omega_vec = Vec::with_capacity(batch_size * 3);
 
-    let one = <B::FloatElem as One>::one();
-    let half = <B::FloatElem as FromPrimitive>::from_f32(0.5).unwrap();
-    let eps = <B::FloatElem as FromPrimitive>::from_f32(1e-6).unwrap();
-    let twelve = <B::FloatElem as FromPrimitive>::from_f32(12.0).unwrap();
-    let neg_thresh = <B::FloatElem as FromPrimitive>::from_f32(-0.999).unwrap();
-    let two = <B::FloatElem as FromPrimitive>::from_f32(2.0).unwrap();
-    let zero = <B::FloatElem as FromPrimitive>::from_f32(0.0).unwrap();
+    let one = <F as One>::one();
+    let half = <F as FromPrimitive>::from_f32(0.5).unwrap();
+    let eps = <F as FromPrimitive>::from_f32(1e-6).unwrap();
+    let twelve = <F as FromPrimitive>::from_f32(12.0).unwrap();
+    let neg_thresh = <F as FromPrimitive>::from_f32(-0.999).unwrap();
+    let two = <F as FromPrimitive>::from_f32(2.0).unwrap();
+    let zero = <F as FromPrimitive>::from_f32(0.0).unwrap();
 
     for batch in r_slice.chunks_exact(9) {
         let r11 = batch[0];
@@ -189,13 +197,21 @@ where
         omega_vec.push(w_z);
     }
 
-    Tensor::from_data(TensorData::new(omega_vec, [batch_size, 3]), &device)
+    host::write(omega_vec, [batch_size, 3], &device, dtype)
 }
 
-pub fn log_jvp<B>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B>
+pub fn log_jvp<B: Backend>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B> {
+    if host::is_f64(&omega) {
+        log_jvp_typed::<B, f64>(omega, v)
+    } else {
+        log_jvp_typed::<B, f32>(omega, v)
+    }
+}
+
+fn log_jvp_typed<B, F>(omega: Point<B>, v: TangentFrame<B>) -> TangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One + FromPrimitive,
+    F: Float + One + FromPrimitive + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -206,14 +222,13 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let v_data = v.into_data();
-    let v_slice = v_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let v_slice: Vec<F> = host::read(v);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
-    let half = <B::FloatElem as FromPrimitive>::from_f32(0.5).unwrap();
+    let half = <F as FromPrimitive>::from_f32(0.5).unwrap();
 
     let batch_iter = omega_slice
         .chunks_exact(3)
@@ -254,16 +269,21 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
-pub fn log_vjp<B>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B>
+pub fn log_vjp<B: Backend>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B> {
+    if host::is_f64(&omega) {
+        log_vjp_typed::<B, f64>(omega, alpha)
+    } else {
+        log_vjp_typed::<B, f32>(omega, alpha)
+    }
+}
+
+fn log_vjp_typed<B, F>(omega: Point<B>, alpha: CotangentFrame<B>) -> CotangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One + FromPrimitive,
+    F: Float + One + FromPrimitive + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -274,14 +294,13 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let a_data = alpha.into_data();
-    let a_slice = a_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let a_slice: Vec<F> = host::read(alpha);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
-    let half = <B::FloatElem as FromPrimitive>::from_f32(0.5).unwrap();
+    let half = <F as FromPrimitive>::from_f32(0.5).unwrap();
 
     let batch_iter = omega_slice
         .chunks_exact(3)
@@ -322,20 +341,29 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
-pub fn log_hvp<B>(
+pub fn log_hvp<B: Backend>(
+    omega: Point<B>,
+    eta: TangentVector<B>,
+    alpha: CotangentFrame<B>,
+) -> CotangentFrame<B> {
+    if host::is_f64(&omega) {
+        log_hvp_typed::<B, f64>(omega, eta, alpha)
+    } else {
+        log_hvp_typed::<B, f32>(omega, eta, alpha)
+    }
+}
+
+fn log_hvp_typed<B, F>(
     omega: Point<B>,
     eta: TangentVector<B>,
     alpha: CotangentFrame<B>,
 ) -> CotangentFrame<B>
 where
     B: Backend,
-    B::FloatElem: Float + One + FromPrimitive,
+    F: Float + One + FromPrimitive + Element,
 {
     // unpack data from inputs
     let [batch_size, three] = omega.dims();
@@ -352,16 +380,14 @@ where
 
     // unpack tensor data
     let device = omega.device();
-    let omega_data = omega.into_data();
-    let omega_slice = omega_data.as_slice::<B::FloatElem>().unwrap();
-    let e_data = eta.into_data();
-    let e_slice = e_data.as_slice::<B::FloatElem>().unwrap();
-    let a_data = alpha.into_data();
-    let a_slice = a_data.as_slice::<B::FloatElem>().unwrap();
+    let dtype = omega.dtype();
+    let omega_slice: Vec<F> = host::read(omega);
+    let e_slice: Vec<F> = host::read(eta);
+    let a_slice: Vec<F> = host::read(alpha);
 
     // Allocate output memory
     let mut out_vec = Vec::with_capacity(batch_size * 3 * frame_size);
-    let half = <B::FloatElem as FromPrimitive>::from_f32(0.5).unwrap();
+    let half = <F as FromPrimitive>::from_f32(0.5).unwrap();
 
     let batch_iter = omega_slice
         .chunks_exact(3)
@@ -423,10 +449,7 @@ where
     }
 
     // pack data
-    Tensor::from_data(
-        TensorData::new(out_vec, [batch_size, 3, frame_size]),
-        &device,
-    )
+    host::write(out_vec, [batch_size, 3, frame_size], &device, dtype)
 }
 
 // SO(3) has a closed form for the Lie-group logarithm map has the following right-Jacobian which we
