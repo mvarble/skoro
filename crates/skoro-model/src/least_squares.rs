@@ -12,11 +12,16 @@ use crate::roles::RESIDUAL;
 
 /// The rows of `J`: a layout over every term's [`RESIDUAL`] binding, in term order.
 ///
-/// A term with no residual is skipped. A term with more than one is
-/// [`SkoroError::ShapeMismatch`].
+/// A term with no residual is skipped, as is a proposal-only term: it is no part of the objective.
+/// A term with more than one residual is [`SkoroError::ShapeMismatch`].
 pub fn residual_layout<B: Backend, C: ModelClientOps<B>>(client: &C) -> SkoroResult<TangentLayout> {
     let mut ids: Vec<Id> = Vec::new();
     for factor in client.factors() {
+        // Only the log-density's terms make up the sum of squares; a proposal-only term binds a
+        // `RESIDUAL` too, but it is no part of the objective.
+        if !factor.in_density {
+            continue;
+        }
         match client.bound(factor.density, RESIDUAL).as_slice() {
             [] => {}
             [residual] => ids.push(*residual),

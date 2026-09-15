@@ -76,7 +76,7 @@ pub mod prelude {
     pub use skoro_model::{ModelBuilderOps, ModelClientOps};
 
     // ----- what a builder declares about its factors -----
-    pub use skoro_graph::graph::{Term, TermKind};
+    pub use skoro_graph::graph::Term;
     pub use skoro_model::client_ops::FactorInfo;
     pub use skoro_model::distribution::Factor;
     pub use skoro_model::roles::{self, Role};

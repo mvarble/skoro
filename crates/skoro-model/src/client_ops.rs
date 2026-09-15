@@ -28,7 +28,7 @@ use skoro_graph::{
     compiler::{ForwardOutput, HvpForwardOutput, JvpForwardOutput, VjpForwardOutput},
     graph::{
         EvalOrder1, EvalOrder2, PointEvalOrder1, PointEvalOrder2, PointHvpEval, PointJvpEval,
-        PointVjpEval, Term, TermKind,
+        PointVjpEval, Term,
     },
     node::Node,
     point_map::PointMap,
@@ -51,7 +51,10 @@ pub struct FactorInfo {
     pub density: Id,
     /// The quantity the term is the log-density of; `None` for a free-standing factor.
     pub scored: Option<Id>,
-    pub kind: TermKind,
+    /// A summand of the model's log-density `p(x|z)`.
+    pub in_density: bool,
+    /// A summand of the generative model `q(x|z)`.
+    pub in_proposal: bool,
     /// The nodes bound under [`ARGUMENT`], in binding order.
     pub arguments: Vec<Id>,
 }
@@ -154,10 +157,16 @@ pub trait ModelClientOps<B: Backend> {
     /// One [`Term`] per term of the log-density, in term order.
     fn terms(&self) -> Vec<Term>;
 
-    /// The sum of the [`TermKind::Proposal`] terms at `points`.
+    /// The generative model `log q(x|z)` at `points`: the sum of every term with
+    /// [`Term::in_proposal`] set.
     fn log_proposal(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>>;
 
-    /// The sum of the [`TermKind::Weight`] terms at `points`.
+    /// The log-weight `log p(x|z) − log q(x|z)` at `points`, the discrepancy between the density
+    /// the model scores and the mechanism it generates from.
+    ///
+    /// This is a difference, not a sub-sum. It coincides with "the terms outside the proposal"
+    /// only when every proposal term is also a summand of the log-density; a proposal-only term
+    /// enters it negatively.
     fn log_weight(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>>;
 
     /// Fetch the quantity type associated with a quantity.
@@ -299,6 +308,22 @@ pub trait ModelClientOps<B: Backend> {
 pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// Add a stochastic quantity with the given conditional distribution.
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>;
+
+    /// Add a stochastic quantity whose density belongs to the *proposal* alone.
+    ///
+    /// The quantity is generated exactly as [`add_quantity`](Self::add_quantity)'s is — it is a
+    /// stochastic node with the distribution's sampler — but its density is a summand of
+    /// `q(x|z)` and not of `p(x|z)`. Whatever the posterior says about the quantity is attached
+    /// separately with [`add_factor`](Self::add_factor), and
+    /// [`log_weight`](ModelClientOps::log_weight) accounts for the difference.
+    ///
+    /// This is what lets a Monte-Carlo algorithm work over a distribution whose density is known
+    /// but which offers no sampler: propose from something it can draw from, and let the weight
+    /// correct.
+    fn add_proposal<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
         D: Distribution<B, K>;
@@ -590,7 +615,8 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
                 .map(|term| FactorInfo {
                     density: term.density,
                     scored: term.scored,
-                    kind: term.kind,
+                    in_density: term.in_density,
+                    in_proposal: term.in_proposal,
                     arguments: graph.bound(term.density, ARGUMENT),
                 })
                 .collect()
@@ -613,30 +639,35 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
     }
 
     fn log_proposal(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
-        log_density_of_kind(self, points, TermKind::Proposal)
+        // One lock for both the classification and the evaluation: reading `terms()` under a
+        // lock of its own and then evaluating under a second would sum a set the graph may no
+        // longer agree with.
+        self.server_call(|server| {
+            let graph = server.graph();
+            graph.log_density_terms(points, &term_ids(&graph.terms(), |t| t.in_proposal))
+        })
     }
 
     fn log_weight(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
-        log_density_of_kind(self, points, TermKind::Weight)
+        self.server_call(|server| {
+            let graph = server.graph();
+            let terms = graph.terms();
+            // Two compiled passes; the terms in both cancel to within rounding.
+            Ok(
+                graph.log_density_terms(points, &term_ids(&terms, |t| t.in_density))?
+                    - graph.log_density_terms(points, &term_ids(&terms, |t| t.in_proposal))?,
+            )
+        })
     }
 }
 
-/// The sum of the terms of one kind, classified and evaluated under a single read of the model.
-fn log_density_of_kind<B: Backend>(
-    client: &ModelClient<B>,
-    points: &ValueMap<B>,
-    kind: TermKind,
-) -> SkoroResult<Point<B>> {
-    client.server_call(|server| {
-        let graph = server.graph();
-        let ids: Vec<Id> = graph
-            .terms()
-            .into_iter()
-            .filter(|term| term.kind == kind)
-            .map(|term| term.density)
-            .collect();
-        graph.log_density_terms(points, &ids)
-    })
+/// The density ids of the terms `keep` selects, in term order.
+fn term_ids(terms: &[Term], keep: impl Fn(&Term) -> bool) -> Vec<Id> {
+    terms
+        .iter()
+        .filter(|term| keep(term))
+        .map(|term| term.density)
+        .collect()
 }
 
 impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
@@ -647,6 +678,15 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
         D: Distribution<B, K>,
     {
         ModelClient::add_quantity(self, distr)
+    }
+
+    #[inline(always)]
+    fn add_proposal<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        ModelClient::add_proposal(self, distr)
     }
 
     #[inline(always)]

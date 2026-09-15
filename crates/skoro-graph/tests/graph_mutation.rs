@@ -1428,7 +1428,6 @@ mod degenerate {
 mod bindings {
     use super::*;
     use skoro_graph::binding::Role;
-    use skoro_graph::graph::TermKind;
 
     const R1: Role = Role("r1");
     const R2: Role = Role("r2");
@@ -1542,7 +1541,7 @@ mod bindings {
     }
 
     #[test]
-    fn terms_classify_proposal_and_weight() {
+    fn terms_classify_density_and_proposal() {
         let mut graph = Graph::<B>::new();
         let x = stochastic(&mut graph, vec![]);
         let x_density = summed(&mut graph, vec![x]);
@@ -1568,12 +1567,18 @@ mod bindings {
             vec![Some(x), Some(y), None]
         );
         assert_eq!(
-            terms.iter().map(|t| t.kind).collect::<Vec<_>>(),
-            vec![TermKind::Proposal, TermKind::Weight, TermKind::Weight]
+            terms
+                .iter()
+                .map(|t| (t.in_density, t.in_proposal))
+                .collect::<Vec<_>>(),
+            vec![(true, true), (true, false), (true, false)],
+            "a live stochastic quantity's density is in both; an observed one's and a \
+             free-standing factor are in the log-density alone"
         );
 
         graph.observe::<_, Real, _>(x, &2.0f64).unwrap();
-        assert_eq!(graph.terms()[0].kind, TermKind::Weight);
+        let observed = graph.terms()[0];
+        assert_eq!((observed.in_density, observed.in_proposal), (true, false));
         graph.validate_indices().unwrap();
     }
 

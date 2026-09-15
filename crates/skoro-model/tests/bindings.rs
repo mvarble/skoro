@@ -16,7 +16,6 @@ use skoro_core::{
     id::Id,
     kind::Continuous,
 };
-use skoro_graph::graph::TermKind;
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
     distribution::{Distribution, Factor, Sampler},
@@ -129,7 +128,10 @@ mod through_add_quantity {
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, bound.density);
         assert_eq!(factors[0].scored, Some(bound.x.id()));
-        assert_eq!(factors[0].kind, TermKind::Proposal);
+        assert_eq!(
+            (factors[0].in_density, factors[0].in_proposal),
+            (true, true)
+        );
         assert_eq!(
             factors[0].arguments,
             bound.model.bound(bound.density, ARGUMENT)
@@ -287,7 +289,11 @@ mod through_add_factor {
         assert_eq!(factors.len(), 1);
         assert_eq!(factors[0].density, term.id());
         assert_eq!(factors[0].scored, None);
-        assert_eq!(factors[0].kind, TermKind::Weight);
+        assert_eq!(
+            (factors[0].in_density, factors[0].in_proposal),
+            (true, false),
+            "a free-standing factor is a summand of the log-density and of nothing else"
+        );
         assert_eq!(factors[0].arguments, vec![a.id(), b.id()]);
         assert_eq!(model.bound(term.id(), RESIDUAL), vec![r.id()]);
         assert_eq!(

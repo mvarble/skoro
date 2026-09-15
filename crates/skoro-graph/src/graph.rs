@@ -17,7 +17,7 @@ use skoro_operation::{Input, ValueMap, ops::TangentConcat};
 use skoro_riemann::euclidean::EuclideanD;
 use skoro_riemann::real::Real;
 
-pub use crate::term::{Term, TermKind};
+pub use crate::term::Term;
 
 use crate::binding::{Bindings, Role};
 use crate::compiler::{
@@ -62,7 +62,9 @@ pub struct Graph<B: Backend> {
     nodes: HashMap<Id, Node<B>>,
     /// Children edge data (parent edge data is local)
     children: HashMap<Id, HashSet<Id>>,
-    /// Log-likelihood terms
+    /// Every log-likelihood term, in marking order — the summands of the log-density `p` and
+    /// the proposal-only ones alike. [`density_term_ids`](Self::density_term_ids) is the
+    /// former; this is the arena that removal, garbage collection and validation all work over.
     log_likelihoods: Vec<Id>,
     /// The density scoring of a given stochastic quantity (reverse direction is local)
     stochastic_to_log_density: HashMap<Id, Id>,
@@ -198,14 +200,43 @@ impl<B: Backend> Graph<B> {
         self.children.get(&id)
     }
 
-    /// The log-density terms that together score the model.
+    /// Every term of the model, in marking order.
+    ///
+    /// This is the whole arena: a summand of the log-density `p`, a proposal-only summand of
+    /// the generative model `q`, or (once its quantity is observed) neither. For the terms
+    /// [`log_density`](Self::log_density) actually sums, see
+    /// [`density_term_ids`](Self::density_term_ids).
     pub fn log_likelihoods(&self) -> &[Id] {
         &self.log_likelihoods
     }
 
-    /// Whether `id` is a likelihood term.
+    /// Whether `id` is a likelihood term of this graph — of `p`, of `q`, or of both.
     pub fn is_scoring(&self, id: Id) -> bool {
         self.log_likelihoods.contains(&id)
+    }
+
+    /// Whether `id` is a term that is a summand of the model's log-density.
+    ///
+    /// `false` for a proposal-only term, and for any id that is not a term at all. Read
+    /// straight off the node, as [`stochastic_of`](Self::stochastic_of) is.
+    pub fn in_log_density(&self, id: Id) -> bool {
+        matches!(
+            self.nodes.get(&id),
+            Some(Node::LogLikelihood(LogLikelihoodNode {
+                in_log_density: true,
+                ..
+            }))
+        )
+    }
+
+    /// The terms [`log_density`](Self::log_density) sums: [`log_likelihoods`](Self::log_likelihoods)
+    /// restricted to those [`in_log_density`](Self::in_log_density), in term order.
+    pub fn density_term_ids(&self) -> Vec<Id> {
+        self.log_likelihoods
+            .iter()
+            .copied()
+            .filter(|id| self.in_log_density(*id))
+            .collect()
     }
 
     /// Whether `id` is a node this graph built for itself and never handed out — an anchor or
@@ -326,6 +357,8 @@ impl<B: Backend> Graph<B> {
     /// - `children` is the exact reverse of every node's `parent_ids`, with no empty sets left
     ///   behind;
     /// - every id in `log_likelihoods` names a [`Node::LogLikelihood`], and names it once;
+    /// - every proposal-only term scores a stochastic quantity — a term out of the log-density
+    ///   that is also free-standing would be a summand of the proposal that nothing generates;
     /// - `stochastic_to_log_density` is the exact inverse of the density nodes'
     ///   [`stochastic_id`](LogLikelihoodNode::stochastic_id);
     /// - a density that scores a quantity is among the likelihood terms but a free-standing
@@ -374,6 +407,19 @@ impl<B: Backend> Graph<B> {
             }
             if self.log_likelihoods[..i].contains(id) {
                 return Err(format!("log_likelihoods names {id:?} more than once"));
+            }
+            if matches!(
+                self.nodes.get(id),
+                Some(Node::LogLikelihood(LogLikelihoodNode {
+                    in_log_density: false,
+                    stochastic_id: None,
+                    ..
+                }))
+            ) {
+                return Err(format!(
+                    "log_likelihoods[{i}] = {id:?} is proposal-only but scores nothing; a summand \
+                     of the proposal must be the density of the quantity it generates"
+                ));
             }
         }
 
@@ -754,7 +800,36 @@ impl<B: Backend> Graph<B> {
     /// The same cannot be said about log-likelihoods, which may simply be importance-sampling
     /// factors that may depend on more than one quantity at a time and do not describe the
     /// likelihoods of any specific marginal distribution.
+    ///
+    /// One-to-one is about *pairing*, not about scoring: it says every stochastic quantity has
+    /// exactly one density node, not that every such density is a summand of the model's
+    /// log-density. [`mark_log_proposal`](Self::mark_log_proposal) makes the same pairing for a
+    /// term that belongs to the generative model alone.
     pub fn mark_log_density(&mut self, id: Id, stochastic_id: Id) -> SkoroResult<()> {
+        self.mark_log_density_impl(id, stochastic_id, true)
+    }
+
+    /// Mark a mapped quantity as the *proposal-only* density for the stochastic quantity.
+    ///
+    /// Identical to [`mark_log_density`](Self::mark_log_density) — same one-to-one pairing, same
+    /// guards, same errors — except that the term is not a summand of the model's log-density.
+    /// It scores the quantity under the generative mechanism `q(x|z)` only, so
+    /// [`log_density`](Self::log_density) skips it while
+    /// [`terms`](Self::terms) still reports it with `in_proposal` set.
+    ///
+    /// Promoting an existing free-standing likelihood factor this way moves it *out* of the
+    /// log-density: the factor keeps its identity and its place in term order, but stops being
+    /// a summand of `p`.
+    pub fn mark_log_proposal(&mut self, id: Id, stochastic_id: Id) -> SkoroResult<()> {
+        self.mark_log_density_impl(id, stochastic_id, false)
+    }
+
+    fn mark_log_density_impl(
+        &mut self,
+        id: Id,
+        stochastic_id: Id,
+        in_log_density: bool,
+    ) -> SkoroResult<()> {
         // If it already is the log-density for the stochastic quantity, this is a no-op; if it
         // already is the log-density of another stochastic quantity, we would break the one-to-one
         // correspondence invariant.
@@ -782,6 +857,7 @@ impl<B: Backend> Graph<B> {
                     return Err(SkoroError::DuplicateDensity { stochastic_id });
                 }
                 node.stochastic_id = Some(stochastic_id);
+                node.in_log_density = in_log_density;
                 self.stochastic_to_log_density.insert(stochastic_id, id);
                 // No `log_likelihoods.push` here: the node was already a likelihood term, so it
                 // is already named in the arena. Promoting it to a density does not add a factor,
@@ -807,6 +883,7 @@ impl<B: Backend> Graph<B> {
                             quantity_type: node.quantity_type,
                             value: node.value,
                             stochastic_id: Some(stochastic_id),
+                            in_log_density,
                         }),
                     );
                     Ok(())
@@ -860,6 +937,7 @@ impl<B: Backend> Graph<B> {
                             value: node.value,
                             quantity_type: node.quantity_type,
                             stochastic_id: None,
+                            in_log_density: true,
                         }),
                     );
                     Ok(())
@@ -875,6 +953,15 @@ impl<B: Backend> Graph<B> {
         out
     }
 
+    /// Retire a term, turning it back into an ordinary [`Node::Mapped`].
+    ///
+    /// Term membership goes with the node type: a mapped node is a summand of nothing, so
+    /// [`in_log_density`](crate::node::LogLikelihoodNode::in_log_density) is dropped rather than
+    /// remembered. Re-marking the node with
+    /// [`mark_log_likelihood`](Self::mark_log_likelihood) therefore brings it back as a summand
+    /// of the log-density, even if it had been proposal-only. That is consistent with this
+    /// method retiring a factor rather than suspending it; use
+    /// [`mark_log_proposal`](Self::mark_log_proposal) to restore a proposal-only term.
     pub fn unmark_log_likelihood(&mut self, id: Id) -> SkoroResult<()> {
         let out = match self.nodes.remove(&id) {
             None => Err(SkoroError::NodeNotFound { id }),
@@ -1440,31 +1527,33 @@ impl<B: Backend> Graph<B> {
 
     /// One [`Term`] per id in [`log_likelihoods`](Self::log_likelihoods), in that order.
     ///
-    /// A term is a [`TermKind::Proposal`] when it scores a node that is currently
-    /// [`Node::Stochastic`]; every other term (an observed quantity's density, a free-standing
-    /// factor) is a [`TermKind::Weight`].
+    /// A term is [`in_density`](Term::in_density) as its node records, and
+    /// [`in_proposal`](Term::in_proposal) when it scores a node that is currently
+    /// [`Node::Stochastic`].
     pub fn terms(&self) -> Vec<Term> {
         self.log_likelihoods
             .iter()
             .map(|&density| {
                 let scored = self.stochastic_of(density);
-                let kind = match scored.and_then(|s| self.nodes.get(&s)) {
-                    Some(Node::Stochastic(_)) => TermKind::Proposal,
-                    _ => TermKind::Weight,
-                };
+                let in_proposal =
+                    matches!(scored.and_then(|s| self.nodes.get(&s)), Some(Node::Stochastic(_)));
                 Term {
                     density,
                     scored,
-                    kind,
+                    in_density: self.in_log_density(density),
+                    in_proposal,
                 }
             })
             .collect()
     }
 
-    /// [`log_density`](Self::log_density) restricted to `terms`.
+    /// The sum of the named terms' log-densities at `points`.
     ///
-    /// An empty slice yields zeros of shape `[batch, 1]`. Returns
-    /// [`SkoroError::NotLogLikelihood`] for an id that is not among the likelihood terms.
+    /// Every id must be in [`log_likelihoods`](Self::log_likelihoods) (else
+    /// [`SkoroError::NotLogLikelihood`]), but nothing more is required of them: the caller
+    /// chooses the set, and it need not be a subset of the model's log-density — this is how
+    /// the proposal `q(x|z)` is summed. An empty slice yields zeros of shape `[batch, 1]`,
+    /// batch taken from `points` exactly as [`log_density`](Self::log_density) does.
     pub fn log_density_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
         if let Some(id) = terms.iter().find(|id| !self.log_likelihoods.contains(id)) {
             return Err(SkoroError::NotLogLikelihood { id: *id });
@@ -1502,22 +1591,26 @@ impl<B: Backend> Graph<B> {
     }
 
     /// Evaluate the log-density of the model at the specified values.
+    ///
+    /// Proposal-only terms are not summands of the model's log-density and are skipped; a model
+    /// built entirely from proposals has a log-density of zero.
     pub fn log_density(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>> {
-        self.sum_terms(points, &self.log_likelihoods)
+        self.sum_terms(points, &self.density_term_ids())
     }
 
     /// The evaluation of [`log_density`](Self::log_density) with the first-order gradient
     /// calculation.
     pub fn log_density_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>> {
-        let compiled_sequence = self.compile_backward_from(&self.log_likelihoods);
+        let density_terms = self.density_term_ids();
+        let compiled_sequence = self.compile_backward_from(&density_terms);
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
             1
         };
 
-        let cotangents: HashMap<Id, CotangentFrame<B>> = self
-            .log_likelihoods
+        let cotangents: HashMap<Id, CotangentFrame<B>> =
+            density_terms
             .iter()
             .map(|id| (*id, Tensor::ones([batch_size, 1, 1], &Default::default())))
             .collect();
@@ -1531,7 +1624,7 @@ impl<B: Backend> Graph<B> {
             },
         })?;
         let mut log_density = Point::zeros([batch_size, 1], &Default::default());
-        for log_likelihood_id in &self.log_likelihoods {
+        for log_likelihood_id in &density_terms {
             log_density = log_density
                 + vjp_output
                     .primal
@@ -1560,21 +1653,22 @@ impl<B: Backend> Graph<B> {
         points: &ValueMap<B>,
         tangents: &HashMap<Id, TangentVector<B>>,
     ) -> SkoroResult<PointEvalOrder2<B>> {
-        let compiled_sequence = self.compile_backward_from(&self.log_likelihoods);
+        let density_terms = self.density_term_ids();
+        let compiled_sequence = self.compile_backward_from(&density_terms);
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
             1
         };
 
-        let ord1_cotangents: HashMap<Id, CotangentFrame<B>> = self
-            .log_likelihoods
+        let ord1_cotangents: HashMap<Id, CotangentFrame<B>> =
+            density_terms
             .iter()
             .map(|id| (*id, Tensor::ones([batch_size, 1, 1], &Default::default())))
             .collect();
 
-        let ord2_cotangents: HashMap<Id, CotangentFrame<B>> = self
-            .log_likelihoods
+        let ord2_cotangents: HashMap<Id, CotangentFrame<B>> =
+            density_terms
             .iter()
             .map(|id| (*id, Tensor::zeros([batch_size, 1, 1], &Default::default())))
             .collect();
@@ -1590,7 +1684,7 @@ impl<B: Backend> Graph<B> {
             },
         })?;
         let mut log_density = Point::zeros([batch_size, 1], &Default::default());
-        for log_likelihood_id in &self.log_likelihoods {
+        for log_likelihood_id in &density_terms {
             log_density = log_density
                 + hvp_output
                     .primal

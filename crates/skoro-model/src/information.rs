@@ -35,7 +35,8 @@ pub struct InformationBlock<B: Backend> {
 
 /// One [`InformationBlock`] per term that binds a [`FISHER_ROOT`], in term order.
 ///
-/// Terms without a root are skipped. Returns [`SkoroError::ShapeMismatch`] for a term with more
+/// Terms without a root are skipped, and so are proposal-only terms, whose density the model does
+/// not score. Returns [`SkoroError::ShapeMismatch`] for a term with more
 /// than one root or with no arguments, [`SkoroError::QuantityTypeMismatch`] for a root that is
 /// not an `EuclideanMatrixD`, and [`SkoroError::LayoutDimensionMismatch`] for a root whose
 /// column count is not the arguments' total dimension. The first two are checked for every term
@@ -48,6 +49,12 @@ pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
     // Every term with a root, as (density, root, arguments), checked before anything is compiled.
     let mut terms = Vec::new();
     for factor in client.factors() {
+        // A proposal-only term is not a summand of the log-density, so it contributes no
+        // expected information — even though it binds a `FISHER_ROOT` like any other factor.
+        // Skipping it here also keeps its arguments out of the union layout below.
+        if !factor.in_density {
+            continue;
+        }
         let root_id = match client.bound(factor.density, FISHER_ROOT).as_slice() {
             [] => continue,
             [root] => *root,

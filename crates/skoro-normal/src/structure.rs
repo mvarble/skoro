@@ -36,6 +36,10 @@ pub struct GaussianBlock {
 impl GaussianBlock {
     /// The Gaussian view of `factor`, or `None` unless its term binds exactly one [`RESIDUAL`],
     /// one [`LOCATION`] and one [`WHITENING`].
+    ///
+    /// Says nothing about whether the model's log-density scores the factor — pass a
+    /// proposal-only [`FactorInfo`] and you get its Gaussian structure just the same. That is
+    /// deliberate: [`all`](Self::all) is the one that takes a side.
     pub fn of<B: Backend, C: ModelClientOps<B>>(client: &C, factor: &FactorInfo) -> Option<Self> {
         let single = |ids: Vec<Id>| match ids.as_slice() {
             [id] => Some(*id),
@@ -49,15 +53,23 @@ impl GaussianBlock {
         })
     }
 
-    /// The Gaussian blocks among the model's terms, in term order — the row order of `J`,
-    /// restricted to the terms that bind a location and a whitening.
+    /// The Gaussian blocks among the model's *log-density* terms, in term order — the row order of
+    /// `J`, restricted to the terms that bind a location and a whitening.
     ///
     /// Derived from the bindings on every call rather than kept as a parallel list, so a retired
     /// term's block simply stops appearing.
+    ///
+    /// Proposal-only terms are skipped, matching
+    /// [`residual_layout`](skoro_model::least_squares::residual_layout) and
+    /// [`information_blocks`](skoro_model::information::information_blocks): a term the
+    /// posterior does not score is no part of an objective assembled from these blocks. To see
+    /// every Gaussian term, proposals included, walk
+    /// [`factors`](ModelClientOps::factors) yourself and call [`of`](Self::of).
     pub fn all<B: Backend, C: ModelClientOps<B>>(client: &C) -> Vec<Self> {
         client
             .factors()
             .iter()
+            .filter(|factor| factor.in_density)
             .filter_map(|factor| Self::of(client, factor))
             .collect()
     }

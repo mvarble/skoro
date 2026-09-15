@@ -436,3 +436,48 @@ fn the_gaussian_root_map_stores_only_its_nonzeros() {
     assert_eq!(map.dims(), [36_000, 120]);
     assert_eq!(map.nnz(), 1_585);
 }
+
+/// A proposal-only term is not a summand of the model's log-density, so it contributes no
+/// expected information — even though a Gaussian proposal binds `FISHER_ROOT` and `RESIDUAL`
+/// exactly as a scored Gaussian does. Without a density filter in `information_blocks` the
+/// proposal's root would be stacked in and every information matrix in the model would be wrong.
+#[test]
+fn a_proposal_contributes_no_information() {
+    let build = |propose: bool| {
+        let model = ModelClient::<B>::default();
+        let mu = model.add_constant(EuclideanD(2), &VectorD::new(&[0.5, -0.5]));
+        let l_packed = [1.4, 0.3, 0.8];
+        let l = model.add_constant(Tril(2), &VectorD::new(&l_packed));
+        let x = model.add_quantity(Normal::new(mu, l)).unwrap();
+
+        let mut values = points().with_quantity(&x, row(&[0.2, 0.1]));
+        // An unrelated quantity the posterior does not score, generated from its own Gaussian.
+        let proposed = if propose {
+            let nu = model.add_constant(EuclideanD(2), &VectorD::new(&[1.0, 2.0]));
+            let m = model.add_constant(Tril(2), &VectorD::new(&[0.9, -0.2, 1.1]));
+            let z = model.add_proposal(Normal::new(nu, m)).unwrap();
+            values = values.with_quantity(&z, row(&[0.7, -0.3]));
+            Some(z)
+        } else {
+            None
+        };
+
+        let free = model.tangent_layout(&[x.id()]).unwrap();
+        let values = values.build();
+        let info = information(&model, &values, &free).unwrap();
+        let root = information_root(&model, &values, &free).unwrap();
+        drop(proposed);
+        (info.dims(), into_vec(info), root.dims(), into_vec(root))
+    };
+
+    let (info_dims, info, root_dims, root) = build(false);
+    let (info_dims_with, info_with, root_dims_with, root_with) = build(true);
+
+    assert_eq!(info_dims_with, info_dims);
+    assert_close(&info_with, &info, 1e-12);
+    assert_eq!(
+        root_dims_with, root_dims,
+        "the proposal must contribute no rows to the information root"
+    );
+    assert_close(&root_with, &root, 1e-12);
+}

@@ -167,6 +167,17 @@ impl<B: Backend> ModelServer<B> {
         self.graph.mark_log_density(density.id, stochastic.id)
     }
 
+    /// Mark a mapped quantity as the proposal-only density for the stochastic quantity: a
+    /// summand of the generative model `q(x|z)` but not of the log-density. See
+    /// [`Graph::mark_log_proposal`](skoro_graph::graph::Graph::mark_log_proposal).
+    pub fn mark_proposal<T>(
+        &mut self,
+        density: &Q<B, Real>,
+        stochastic: &Q<B, T>,
+    ) -> SkoroResult<()> {
+        self.graph.mark_log_proposal(density.id, stochastic.id)
+    }
+
     /// Mark a mapped quantity as a likelihood.
     pub fn mark_likelihood(&mut self, likelihood: &Q<B, Real>) -> SkoroResult<()> {
         self.graph.mark_log_likelihood(likelihood.id)
@@ -747,6 +758,29 @@ impl<B: Backend> ModelClient<B> {
         K: Kind<B>,
         D: Distribution<B, K>,
     {
+        self.add_quantity_with(distr, true)
+    }
+
+    /// Adds a stochastic quantity whose density scores it under the *proposal* only.
+    ///
+    /// The quantity is generated exactly as [`add_quantity`](Self::add_quantity)'s is, but its
+    /// density is a summand of `q(x|z)` and not of `p(x|z)`. What the posterior says about the
+    /// quantity, if anything, is supplied separately with
+    /// [`add_factor`](Self::add_factor) — which is the point: it lets a model sample from a
+    /// distribution it can draw from while scoring one it can only evaluate.
+    pub(crate) fn add_proposal<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
+        self.add_quantity_with(distr, false)
+    }
+
+    fn add_quantity_with<K, D>(&self, distr: D, in_log_density: bool) -> SkoroResult<Q<B, D::Qty>>
+    where
+        K: Kind<B>,
+        D: Distribution<B, K>,
+    {
         // add stochastic quantity
         let mut server = self.server.write().unwrap();
         let id = server.add_stochastic(&distr)?;
@@ -755,7 +789,7 @@ impl<B: Backend> ModelClient<B> {
         // maybe slow, but currently the price for ergonomic interface: we need to drop the server
         // to build the factor (or else deadlock will occur).
         drop(server);
-        match self.record_factor(&distr, &x) {
+        match self.record_factor(&distr, &x, in_log_density) {
             Ok(()) => Ok(x),
             Err(error) => {
                 // Nothing outside this call can reach `x` or anything built from it yet, so its
@@ -770,9 +804,15 @@ impl<B: Backend> ModelClient<B> {
         }
     }
 
-    /// Build `distr`'s factor over `x` and record it: the density mark, the `ARGUMENT` bindings to
-    /// `x` and to each parent, and every binding the factor declares.
-    fn record_factor<K, D>(&self, distr: &D, x: &Q<B, D::Qty>) -> SkoroResult<()>
+    /// Build `distr`'s factor over `x` and record it: the density mark (of the log-density, or of
+    /// the proposal alone when `in_log_density` is false), the `ARGUMENT` bindings to `x` and to
+    /// each parent, and every binding the factor declares.
+    fn record_factor<K, D>(
+        &self,
+        distr: &D,
+        x: &Q<B, D::Qty>,
+        in_log_density: bool,
+    ) -> SkoroResult<()>
     where
         K: Kind<B>,
         D: Distribution<B, K>,
@@ -783,7 +823,11 @@ impl<B: Backend> ModelClient<B> {
         // again, slow... but now we mark the mapped quantity as a density and record its
         // bindings. `factor` is still alive here, so nothing it binds can have been collected.
         let mut server = self.server.write().unwrap();
-        server.mark_density(&factor.log_density, x)?;
+        if in_log_density {
+            server.mark_density(&factor.log_density, x)?;
+        } else {
+            server.mark_proposal(&factor.log_density, x)?;
+        }
         let arguments: Vec<Id> = std::iter::once(x.id)
             .chain(distr.parent_ids().iter().copied())
             .collect();
