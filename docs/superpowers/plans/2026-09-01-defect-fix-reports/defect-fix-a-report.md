@@ -3,6 +3,10 @@
 **Status: DONE.** Both `vjp` and `hvp` were wrong. `hvp` needed **three** changes, not the one
 transpose the brief anticipated.
 
+After merging the other machine's `sequential`, the code in the tree is that machine's independent
+fix of the same defect (`4970b04`), which agrees with the derivation below; this report's own patch
+was dropped as a duplicate.
+
 ---
 
 ## 1. The `vjp` fix

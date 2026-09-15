@@ -2,6 +2,12 @@
 
 **Branch:** `sequential` · **Date:** 2026-09-02
 
+**Status (after merging the other machine's `sequential`):** the defect is real and confirmed, but
+the fix that shipped is `skoro_backend::ndarray_simd_workaround` (`86c70a8`), which covers `abs`
+and `recip` at their call sites in `PointwiseAbs` and `LiteralScalarDivisionLeft` — not the
+`diag.rs` normalization described below, which is no longer in the tree. The end-to-end
+regression test `diag_survives_abs` was kept. `github-issue-abs-simd.md` is the upstream report.
+
 ---
 
 ## Step 1 — Repro confirmed firsthand
