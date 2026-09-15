@@ -5892,6 +5892,7 @@ dependencies = [
  "skoro-graph",
  "skoro-model",
  "skoro-operation",
+ "skoro-pointwise",
  "skoro-riemann",
 ]
 

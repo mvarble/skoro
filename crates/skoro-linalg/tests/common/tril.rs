@@ -1,5 +1,5 @@
 use approx::assert_abs_diff_eq;
-use skoro_backend::{Backend, ElementConversion};
+use skoro_backend::{Backend, ElementConversion, TensorData};
 use skoro_model::{
     hash_map_builders::{points, tangent_frames},
     model::ModelClient,
@@ -10,6 +10,59 @@ use skoro_operation::Input;
 use skoro_riemann::euclidean::Euclidean;
 
 use skoro_linalg::tril::{Tril, TrilOps};
+use skoro_pointwise::PointwiseOps;
+
+/// Regression: the packed diagonal must survive a following elementwise `abs`.
+///
+/// `Tril::diag` gathers with `select(1, ..)`, which `burn-ndarray` returns in column-major
+/// layout, and `burn-ndarray`'s SIMD `abs` scrambles such an input once it has 32 or more
+/// elements. `Normal::factor` computes its log-determinant as `diag().abs().log().sum()`, so this
+/// is the composition that corrupted every `Normal` at a large enough batch. The fix lives in
+/// `skoro_backend::ndarray_simd_workaround`; this pins the symptom end to end. The batch is sized
+/// past the threshold (`BATCH * N == 48`); anything under 32 elements passes even against the
+/// defect.
+pub fn diag_survives_abs_impl<B: Backend>()
+where
+    Q<B, Tril>: TrilOps<B>,
+    B::FloatElem: approx::AbsDiffEq<B::FloatElem, Epsilon = B::FloatElem> + Copy,
+{
+    const N: usize = 6;
+    const BATCH: usize = 8;
+    const K: usize = N * (N + 1) / 2;
+
+    let model = ModelClient::<B>::default();
+    let l = model.add_parameter(Tril(N));
+    let d = l.diag().unwrap().abs().unwrap();
+
+    // Every entry distinct, with alternating signs so that `abs` is genuinely exercised
+    // and any reordering of the result is detectable.
+    let packed: Vec<f64> = (0..BATCH * K)
+        .map(|i| {
+            let v = (i + 1) as f64;
+            if i % 2 == 0 { -v } else { v }
+        })
+        .collect();
+
+    // The i-th diagonal entry of a packed lower triangle sits at index i * (i + 3) / 2.
+    let expected: Vec<B::FloatElem> = (0..BATCH)
+        .flat_map(|b| (0..N).map(move |i| ((b * K + i * (i + 3) / 2 + 1) as f64).elem()))
+        .collect();
+
+    let points = points().with_tensor(
+        l.id(),
+        Input::<B>::Float(tensor::<B, 2>(
+            TensorData::new(packed, [BATCH, K]),
+            &Default::default(),
+        )),
+    );
+
+    let eval = d.evaluate(&points).unwrap();
+    assert_abs_diff_eq!(
+        into_vec(eval).as_slice(),
+        expected.as_slice(),
+        epsilon = B::FloatElem::from_elem(1e-6),
+    );
+}
 
 pub fn vector_product_impl<B: Backend>()
 where
