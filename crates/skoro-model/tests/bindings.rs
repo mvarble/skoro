@@ -199,10 +199,7 @@ mod through_add_quantity {
             .build();
         assert_eq!(scalar(bound.model.log_density(&values).unwrap()), 1.5);
 
-        bound
-            .model
-            .remove_closure(&[bound.residual.id()])
-            .unwrap();
+        bound.model.remove_closure(&[bound.residual.id()]).unwrap();
 
         assert!(!contains(&bound.model, bound.residual.id()));
         assert!(!contains(&bound.model, bound.density));
@@ -224,7 +221,10 @@ mod through_add_quantity {
         let theta = elsewhere.add_parameter(EuclideanD(2));
         let residual =
             register_map1(EuclideanD(2), LiteralScalarMultiplication::new(3.0), &theta).unwrap();
-        assert!(contains(&model, residual.id()), "the foreign id collides with a node here");
+        assert!(
+            contains(&model, residual.id()),
+            "the foreign id collides with a node here"
+        );
         let before = model.graph_node_count();
 
         let result = model.add_quantity(BoundDistr {
@@ -327,7 +327,10 @@ mod through_add_factor {
         let (theta, term) = a_term(&model);
         let elsewhere = ModelClient::<B>::default();
         let foreign = elsewhere.add_parameter(EuclideanD(2));
-        assert!(contains(&model, foreign.id()), "the foreign id collides with a node here");
+        assert!(
+            contains(&model, foreign.id()),
+            "the foreign id collides with a node here"
+        );
 
         assert!(matches!(
             model.add_factor(Factor::new(term.clone()).bind(RESIDUAL, &foreign), &[theta.id()]),

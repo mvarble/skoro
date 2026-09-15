@@ -18,8 +18,8 @@ use skoro_backend::{NdArrayBackend, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp,
-    model::ModelClient, q::Q, test_utils::into_vec,
+    ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp, model::ModelClient, q::Q,
+    test_utils::into_vec,
 };
 use skoro_normal::joint::{JointNormal, add_joint_factor};
 use skoro_riemann::euclidean::{EuclideanD, VectorD};
@@ -654,9 +654,7 @@ mod information {
         );
         add_joint_factor(&model, &factor).unwrap();
 
-        let free = model
-            .tangent_layout(&[pose_q.id(), point_q.id()])
-            .unwrap();
+        let free = model.tangent_layout(&[pose_q.id(), point_q.id()]).unwrap();
         let info = information(&model, at.as_ref(), &free).unwrap();
         assert_eq!(info.dims(), [1, 9, 9]);
         let info = into_vec(info);

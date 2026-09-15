@@ -286,9 +286,7 @@ fn covariance_information_matches_the_score_covariance() {
         .with_quantity(&x, sampled)
         .with_quantity(&l, l_batch)
         .build();
-    let scores = into_vec(
-        model.log_density_ord1(&values).unwrap().cotangents[&l.id()].clone(),
-    );
+    let scores = into_vec(model.log_density_ord1(&values).unwrap().cotangents[&l.id()].clone());
     assert_eq!(scores.len(), n * 3);
 
     let mut score_covariance = [0.0; 9];
@@ -353,7 +351,10 @@ fn se3_root_is_sized_by_dimension() {
     assert_eq!(root_type, EuclideanMatrixD(42, 33));
 
     let arguments = model.bound(density, ARGUMENT);
-    assert_eq!(model.tangent_layout(&arguments).unwrap().total(), 6 + 6 + 21);
+    assert_eq!(
+        model.tangent_layout(&arguments).unwrap().total(),
+        6 + 6 + 21
+    );
 }
 
 /// A constant covariance makes the root a constant, folded when it is built; a free one does not.
@@ -373,7 +374,10 @@ fn a_constant_covariance_folds_the_root() {
     let constant = model.add_constant(Tril(2), &VectorD::new(&[1.0, 0.0, 1.0]));
     assert!(root_of(constant), "a constant covariance folds the root");
     let free = model.add_parameter(Tril(2));
-    assert!(!root_of(free), "a free covariance leaves it to be evaluated");
+    assert!(
+        !root_of(free),
+        "a free covariance leaves it to be evaluated"
+    );
 }
 
 /// A covariance factor sized for a different dimension is refused when the quantity is added.

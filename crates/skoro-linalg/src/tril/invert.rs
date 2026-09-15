@@ -166,10 +166,8 @@ where
                 left_broadcast_matmul(conj_dmat, omega_mat.clone()),
                 inv_t.clone(),
             );
-            let s1 = right_broadcast_matmul(
-                conjugate(inv_t.clone(), omega_mat),
-                dmat_t.matmul(inv_t),
-            );
+            let s1 =
+                right_broadcast_matmul(conjugate(inv_t.clone(), omega_mat), dmat_t.matmul(inv_t));
             vec![Some(pack(s0 + s1))]
         } else {
             vec![None]

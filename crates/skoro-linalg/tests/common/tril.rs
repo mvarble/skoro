@@ -4,7 +4,9 @@ use skoro_model::{
     hash_map_builders::{points, tangent_frames},
     model::ModelClient,
     q::Q,
-    test_utils::{into_vec, tensor, test_hvp_numerically, test_jvp_numerically, test_vjp_numerically},
+    test_utils::{
+        into_vec, tensor, test_hvp_numerically, test_jvp_numerically, test_vjp_numerically,
+    },
 };
 use skoro_operation::Input;
 use skoro_riemann::euclidean::Euclidean;

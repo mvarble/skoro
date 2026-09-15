@@ -885,7 +885,10 @@ impl<B: Backend> ModelClient<B> {
     /// log-density or any node it binds belongs to another model.
     pub fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
         self.check_factor_model(&factor)?;
-        self.server.write().unwrap().add_factor(&factor, arguments)?;
+        self.server
+            .write()
+            .unwrap()
+            .add_factor(&factor, arguments)?;
         Ok(factor.log_density)
     }
 

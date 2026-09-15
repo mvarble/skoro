@@ -794,9 +794,9 @@ impl<B: Backend> DiffOperation<B> for LiteralScalarDivisionLeft<B> {
         let points: Vec<Point<B>> = points.into_iter().map(Input::unwrap_float).collect();
         let [alpha] = points.try_into().unwrap();
         match diff_state {
-            DiffModeState::ForwardOnly => {
-                DiffOperationForward::forward_only(skoro_backend::ndarray_simd_workaround::recip(alpha) * self.0)
-            }
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(
+                skoro_backend::ndarray_simd_workaround::recip(alpha) * self.0,
+            ),
             DiffModeState::Jvp(tvecs) => {
                 let [dalpha] = tvecs.try_into().unwrap();
                 let invalpha = skoro_backend::ndarray_simd_workaround::recip(alpha);

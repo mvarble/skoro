@@ -86,18 +86,26 @@ fn a_sliding_window_grows_and_retires_without_leaking() {
     );
 
     // t = 0: the prior and its first measurement.
-    let x = model.add_quantity(Normal::new(prior_mean.clone(), dyn_cov.clone())).unwrap();
+    let x = model
+        .add_quantity(Normal::new(prior_mean.clone(), dyn_cov.clone()))
+        .unwrap();
     let z_mean = matmul(&h_mat, &x).unwrap();
-    let z = model.add_quantity(Normal::new(z_mean.clone(), z_cov.clone())).unwrap();
+    let z = model
+        .add_quantity(Normal::new(z_mean.clone(), z_cov.clone()))
+        .unwrap();
     model.observe(&z, &VectorD::new(&[0.0; M])).unwrap();
     let mut window = vec![(x, z)];
 
     let mut last_node_count = None;
     for _ in 1..TICKS {
         let x_mean = matmul(&f_mat, &window.last().unwrap().0).unwrap();
-        let x = model.add_quantity(Normal::new(x_mean.clone(), dyn_cov.clone())).unwrap();
+        let x = model
+            .add_quantity(Normal::new(x_mean.clone(), dyn_cov.clone()))
+            .unwrap();
         let z_mean = matmul(&h_mat, &x).unwrap();
-        let z = model.add_quantity(Normal::new(z_mean.clone(), z_cov.clone())).unwrap();
+        let z = model
+            .add_quantity(Normal::new(z_mean.clone(), z_cov.clone()))
+            .unwrap();
         model.observe(&z, &VectorD::new(&[0.0; M])).unwrap();
         window.push((x, z));
 

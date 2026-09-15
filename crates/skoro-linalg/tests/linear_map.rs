@@ -44,13 +44,17 @@ fn forward_matches_the_host_product() {
     let x = model.add_parameter(EuclideanD(2));
     let y = linear_map(&x, EuclideanD(3), k()).unwrap();
 
-    let values = points().with_quantity(&x, tensor(X.to_vec(), [2, 2])).build();
+    let values = points()
+        .with_quantity(&x, tensor(X.to_vec(), [2, 2]))
+        .build();
     let got = y.evaluate(&values).unwrap();
     assert_eq!(got.dims(), [2, 3]);
     let got = into_vec(got);
     for batch in 0..2 {
         for row in 0..3 {
-            let want: f64 = (0..2).map(|col| K[row * 2 + col] * X[batch * 2 + col]).sum();
+            let want: f64 = (0..2)
+                .map(|col| K[row * 2 + col] * X[batch * 2 + col])
+                .sum();
             assert!((got[batch * 3 + row] - want).abs() < 1e-12);
         }
     }
@@ -62,7 +66,9 @@ fn jacobian_is_the_matrix() {
     let x = model.add_parameter(EuclideanD(2));
     let y = linear_map(&x, EuclideanD(3), k()).unwrap();
 
-    let values = points().with_quantity(&x, tensor(X.to_vec(), [2, 2])).build();
+    let values = points()
+        .with_quantity(&x, tensor(X.to_vec(), [2, 2]))
+        .build();
     let inputs = model.tangent_layout(&[x.id()]).unwrap();
     let outputs = model.tangent_layout(&[y.id()]).unwrap();
 
@@ -85,10 +91,18 @@ fn hvp_is_zero() {
     let x = model.add_parameter(EuclideanD(2));
     let y = linear_map(&x, EuclideanD(3), k()).unwrap();
 
-    let values = points().with_quantity(&x, tensor(X.to_vec(), [2, 2])).build();
+    let values = points()
+        .with_quantity(&x, tensor(X.to_vec(), [2, 2]))
+        .build();
     let tangents = HashMap::from([(x.id(), tensor(vec![0.3, -1.1, 2.0, 0.5], [2, 2]))]);
-    let ord1 = HashMap::from([(y.id(), tensor(vec![1.0, -2.0, 0.5, 3.0, 0.25, -1.0], [2, 3, 1]))]);
-    let ord2 = HashMap::from([(y.id(), Tensor::<B, 3>::zeros([2, 3, 1], &Default::default()))]);
+    let ord1 = HashMap::from([(
+        y.id(),
+        tensor(vec![1.0, -2.0, 0.5, 3.0, 0.25, -1.0], [2, 3, 1]),
+    )]);
+    let ord2 = HashMap::from([(
+        y.id(),
+        Tensor::<B, 3>::zeros([2, 3, 1], &Default::default()),
+    )]);
 
     let out = y.evaluate_hvp(&values, &tangents, &ord1, &ord2).unwrap();
     let second = out
@@ -103,7 +117,9 @@ fn hvp_is_zero() {
     let omega = [1.0, -2.0, 0.5, 3.0, 0.25, -1.0];
     for batch in 0..2 {
         for col in 0..2 {
-            let want: f64 = (0..3).map(|row| K[row * 2 + col] * omega[batch * 3 + row]).sum();
+            let want: f64 = (0..3)
+                .map(|row| K[row * 2 + col] * omega[batch * 3 + row])
+                .sum();
             assert!((first[batch * 2 + col] - want).abs() < 1e-12);
         }
     }
@@ -115,7 +131,9 @@ fn derivatives_agree_with_finite_differences() {
     let x = model.add_parameter(EuclideanD(2));
     let y = linear_map(&x, EuclideanD(3), k()).unwrap();
 
-    let values = points().with_quantity(&x, tensor(X.to_vec(), [2, 2])).build();
+    let values = points()
+        .with_quantity(&x, tensor(X.to_vec(), [2, 2]))
+        .build();
     test_jvp_numerically(&x, &y, values.clone(), 1e-6, 1e-5);
     test_vjp_numerically(&x, &y, values.clone(), 1e-6, 1e-5);
     test_hvp_numerically(&x, &y, values, 1e-6, 1e-5);

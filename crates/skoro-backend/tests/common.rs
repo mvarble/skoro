@@ -52,7 +52,11 @@ pub fn unary_kernels_on_non_standard_layouts<B: Backend>() {
     // and `recip` stays well conditioned.
     let value = |i: usize| {
         let magnitude = 0.5 + (i as f64 * 0.53).sin().abs();
-        if i.is_multiple_of(2) { magnitude } else { -magnitude }
+        if i.is_multiple_of(2) {
+            magnitude
+        } else {
+            -magnitude
+        }
     };
     let check = |what: &str, got: Vec<f64>, inputs: &[f64], f: fn(f64) -> f64| {
         assert_eq!(got.len(), inputs.len(), "{what}");

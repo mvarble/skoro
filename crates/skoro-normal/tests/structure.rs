@@ -271,8 +271,14 @@ mod bindings {
         let fresh_a = distr_a.whitened_residual(&a).unwrap();
         let fresh_b = distr_b.whitened_residual(&b).unwrap();
         for (block, fresh) in [
-            (blocks[0], vector(model.evaluate(&values, &fresh_a).unwrap())),
-            (blocks[1], vector(model.evaluate(&values, &fresh_b).unwrap())),
+            (
+                blocks[0],
+                vector(model.evaluate(&values, &fresh_a).unwrap()),
+            ),
+            (
+                blocks[1],
+                vector(model.evaluate(&values, &fresh_b).unwrap()),
+            ),
         ] {
             let bound = values_of(&model, &values, block.residual);
             assert_eq!(bound.len(), fresh.len());
@@ -317,7 +323,10 @@ mod bindings {
 
         let factors = model.factors();
         assert_eq!(factors.len(), 1);
-        assert_eq!(model.bound(factors[0].density, NORMALIZER_PARENT), vec![cov.id()]);
+        assert_eq!(
+            model.bound(factors[0].density, NORMALIZER_PARENT),
+            vec![cov.id()]
+        );
 
         // The bound density is the model's whole log-density, this being its only factor.
         let values = points().with_quantity(&x, point(&[3.5, -0.25])).build();
@@ -401,7 +410,10 @@ mod retirement {
         assert_eq!(before.len(), 3);
         assert_eq!(residual_layout(&model).unwrap().total(), 6);
         let residual_of = |density: Id| model.bound(density, RESIDUAL)[0];
-        let survivors = [residual_of(before[0].density), residual_of(before[2].density)];
+        let survivors = [
+            residual_of(before[0].density),
+            residual_of(before[2].density),
+        ];
 
         model.remove_closure(&[b.id()]).unwrap();
         model.cleanup();

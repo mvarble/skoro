@@ -134,7 +134,14 @@ pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
     let ids: Vec<Id> = outputs.ids().collect();
     let out = client.evaluate_ids_jvp(points, &seeds, &ids)?;
     let j = outputs.flatten_frames(&out.tangents, batch, inputs.total(), &device)?;
-    Ok(fill_leaf_rows(j, &out.primal, inputs, outputs, batch, &device))
+    Ok(fill_leaf_rows(
+        j,
+        &out.primal,
+        inputs,
+        outputs,
+        batch,
+        &device,
+    ))
 }
 
 /// The same `J ∈ [batch, Out.total(), In.total()]`, by one reverse pass with
@@ -168,5 +175,12 @@ pub fn jacobian_vjp<B: Backend, C: ModelClientOps<B>>(
     let out = client.evaluate_ids_vjp(points, &seeds, &ids)?;
     let transposed = inputs.flatten_frames(&out.cotangents, batch, outputs.total(), &device)?;
     let j = transposed.swap_dims(1, 2);
-    Ok(fill_leaf_rows(j, &out.primal, inputs, outputs, batch, &device))
+    Ok(fill_leaf_rows(
+        j,
+        &out.primal,
+        inputs,
+        outputs,
+        batch,
+        &device,
+    ))
 }
