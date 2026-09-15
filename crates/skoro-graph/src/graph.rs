@@ -1535,8 +1535,10 @@ impl<B: Backend> Graph<B> {
             .iter()
             .map(|&density| {
                 let scored = self.stochastic_of(density);
-                let in_proposal =
-                    matches!(scored.and_then(|s| self.nodes.get(&s)), Some(Node::Stochastic(_)));
+                let in_proposal = matches!(
+                    scored.and_then(|s| self.nodes.get(&s)),
+                    Some(Node::Stochastic(_))
+                );
                 Term {
                     density,
                     scored,
@@ -1609,8 +1611,7 @@ impl<B: Backend> Graph<B> {
             1
         };
 
-        let cotangents: HashMap<Id, CotangentFrame<B>> =
-            density_terms
+        let cotangents: HashMap<Id, CotangentFrame<B>> = density_terms
             .iter()
             .map(|id| (*id, Tensor::ones([batch_size, 1, 1], &Default::default())))
             .collect();
@@ -1661,14 +1662,12 @@ impl<B: Backend> Graph<B> {
             1
         };
 
-        let ord1_cotangents: HashMap<Id, CotangentFrame<B>> =
-            density_terms
+        let ord1_cotangents: HashMap<Id, CotangentFrame<B>> = density_terms
             .iter()
             .map(|id| (*id, Tensor::ones([batch_size, 1, 1], &Default::default())))
             .collect();
 
-        let ord2_cotangents: HashMap<Id, CotangentFrame<B>> =
-            density_terms
+        let ord2_cotangents: HashMap<Id, CotangentFrame<B>> = density_terms
             .iter()
             .map(|id| (*id, Tensor::zeros([batch_size, 1, 1], &Default::default())))
             .collect();
