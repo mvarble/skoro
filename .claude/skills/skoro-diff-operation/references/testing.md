@@ -70,11 +70,11 @@ On `f32`, `(1e-3, 1e-1)` is realistic.
 
 ## Cover every backend
 
-Each op has independent `ndarray` and `cube` impls. A test on one compiles the other but never runs
-it. Wire up `ndarray_f64`, `ndarray_f32`, and `wgpu_f32` entry points. The GPU path found a real
+Each op has independent `flex` and `cube` impls. A test on one compiles the other but never runs
+it. Wire up `flex_f64`, `flex_f32`, and `wgpu_f32` entry points. The GPU path found a real
 kernel bug (`left_broadcast_cross_product` ignoring the frame stride) that no CPU test could.
 
-To localise a cube/ndarray disagreement, call `DiffOperation::forward` directly on both backends
+To localise a cube/flex disagreement, call `DiffOperation::forward` directly on both backends
 with identical inputs and diff the flattened outputs mode by mode. That pinpoints which mode and
 which block diverges far faster than reading kernels.
 

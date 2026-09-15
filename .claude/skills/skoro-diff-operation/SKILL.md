@@ -35,7 +35,7 @@ A frame is how skoro propagates many gradient signals at once. Most of the time 
 free: a frame-shaped `matmul` against a `[b, n, n]` operator does the right thing on all columns
 simultaneously. When you need a per-column cross product against a fixed `[b, 3]` vector, use
 `left_broadcast_cross_product(u, alpha)` = `u × alpha_col`
-(`crates/skoro-linalg/src/vector/cross_product/ndarray.rs:163`), **not** `cross_product`, which is
+(`crates/skoro-linalg/src/vector/cross_product/flex.rs`), **not** `cross_product`, which is
 `[b,3] × [b,3]` (line 127).
 
 ## The four modes
@@ -147,14 +147,14 @@ depends only on the tangent argument and never on the pose.
    _contributions to the same block_; `Tensor::cat` assembles _different blocks_. Confusing them
    gives a shape error at best and a silently wrong answer at worst.)
 8. Rank-3 frame paths and rank-2 vector paths both handled.
-9. Both the `ndarray` and `cube` impls updated — they are separate `impl` blocks and drift silently,
+9. Both the `flex` and `cube` impls updated — they are separate `impl` blocks and drift silently,
    since a test on one backend compiles but never exercises the other.
 10. Verified numerically — see `references/testing.md`.
 
 ## Known traps, all found the hard way
 
-- The `ndarray` and `cube` impls of the same op are independent and _did_ diverge: the SE(3)
-  retraction's cube branch `cat`'d its output blocks correctly while the ndarray branch summed them.
+- The `flex` and `cube` impls of the same op are independent and _did_ diverge: the SE(3)
+  retraction's cube branch `cat`'d its output blocks correctly while the CPU branch (then on ndarray) summed them.
 - A near-identity fixture hides transposes. `E` vs `Eᵀ` and `Δr` vs `Δrᵀ` are both invisible when
   the rotation is close to `I`, and `J⁻¹(ω) ≈ I` hides a missing Jacobian factor. Use fixtures far
   from the identity (~1 rad).

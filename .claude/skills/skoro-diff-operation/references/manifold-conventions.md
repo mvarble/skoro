@@ -39,9 +39,9 @@ zero, so only cross-block tests can validate it.
 ## `exp` / `log` primitive conventions — the asymmetry that causes bugs
 
 `J(ω)` is the right Jacobian of `SO(3)`, defined by `Exp(ω + δ) = Exp(ω) Exp(J(ω)δ + o(δ))`.
-Coefficients: `exp_jacobian_coeffs` in `crates/skoro-so3/src/ops/exp/ndarray.rs`, transcribed into
+Coefficients: `exp_jacobian_coeffs` in `crates/skoro-so3/src/ops/exp/flex.rs`, transcribed into
 `ops/exp/cube.rs` for the GPU. `Log` has its own, unrelated pair in `log_jacobian_coeffs`
-(`ops/log/{ndarray,cube}.rs`) — same idea, different Jacobian, different series.
+(`ops/log/{flex,cube}.rs`) — same idea, different Jacobian, different series.
 
 All four branch between a truncated Taylor series and the closed trig forms at a cutoff that
 **depends on the float width** — sharing one cutoff across `f32` and `f64` leaves `f32` evaluating
@@ -74,7 +74,7 @@ The asymmetry follows:
 
 The reference implementations state the convention: `SO3Exp::forward` stores the raw tangent as its
 `HvpState`, while `SO3Log::forward` stores `eta = log_jvp(ω, dr)`
-(`crates/skoro-so3/src/ops/log/ndarray.rs`, `Hvp` branch).
+(`crates/skoro-so3/src/ops/log/flex.rs`, `Hvp` branch).
 
 This bug is invisible near `ω = 0`, where `J⁻¹(ω) ≈ I`. It shipped in both `SO3InverseRetraction`
 and `SE3InverseRetraction` behind a fixture whose two attitudes were 0.01 rad apart.

@@ -2,7 +2,7 @@
 
 Status: steps **3.1–3.3 are implemented**, and F4 is resolved (documentation only, §3.4).
 Deferred bindings (§3.5) are **postponed** and not planned for some time. Of the lesser
-observations (§2.5), items 1, 2 and 4 are implemented; 3, 5 and 6 remain open.
+observations (§2.5), items 1, 2, 4 and 5 are implemented; 3 and 6 remain open.
 
 Context: the factor-bindings work
 (`docs/superpowers/specs/2026-09-01-factor-bindings-and-fisher-root-spec.md`,
@@ -124,7 +124,8 @@ groups. It is still not the Gauss–Newton matrix at the current `x`.
 
    §1.3's "facts about the current code" are also stale now. The spec should be amended, or given a
    changelog section, so it stays a reliable reference.
-5. **`skoro_backend::ndarray_simd_workaround`** must be retired with the ndarray backend. There are
+5. **`skoro_backend::ndarray_simd_workaround`** (**done**: removed when the CPU backend moved to
+   burn-flex, whose unary kernels are stride-aware) had to be retired with the ndarray backend. There are
    two call sites (`PointwiseAbs`, `LiteralScalarDivisionLeft`), and the backend regression test
    `unary_kernels_on_non_standard_layouts` can keep running with the plain methods as a
    backend-agnostic layout check.
@@ -520,5 +521,4 @@ Each phase is additive until D3, which is the only behavioural change: a root is
 2. F4: decided, option (a) (§3.4).
 3. Deferred bindings: decided, wait. Not for some time; §3.5.1 lists what would reopen it, and
    §3.5.7 the questions that would then need answers.
-4. Lesser observations (§2.5): items 1, 2 and 4 are done; 3 is unscheduled; 5 waits for the flex
-   backend; 6 is separate `skoro-so3` work.
+4. Lesser observations (§2.5): items 1, 2 and 4 are done; 3 is unscheduled; 5 is done (burn-flex); 6 is separate `skoro-so3` work.

@@ -9,7 +9,7 @@ Skoro is designed to bridge the gap between hierarchical probabilistic modeling,
 It breaks this domain down into a few distinct crates:
 
 - **`skoro-backend`**: A hardware abstraction layer built on top of `burn`.
-  Skoro explicitly ignores `burn`'s automatic differentiation engine, using it strictly for high-performance tensor execution (CPU via `ndarray` and GPU via `cubecl`).
+  Skoro explicitly ignores `burn`'s automatic differentiation engine, using it strictly for high-performance tensor execution (CPU via `burn-flex` and GPU via `cubecl`).
   It provides geometric type aliases like `Point<B>`, `TangentVector<B>`, and `TangentFrame<B>` representing batched elements via shape conventions over `burn`'s `Tensor`.
 
 - **`skoro-core`**: The foundational types and traits, including ID management (`Id`, `IdGenerator`), traits for packing user types into tensor backends (`Packable` / `NumComponents` / `Cardinality`), traits for sampling stochastic tensors (`Sampler`), and the indexed sequence abstraction (`SequenceMutator`).
