@@ -41,7 +41,13 @@ Goals:
 - **Respects the model's lock discipline:** builders build through the client, so no lock is held
   while they run.
 - **Idempotent and race-safe:** concurrent readers settle on one node.
-- **No compiler change** (R10 still holds).
+- **No compiler change** (R10 still holds). Re-checked after the compiler work in
+  [graph-compiler.md](graph-compiler.md), which added a compiled-program cache, a cut-aware
+  traversal and a `Given` step kind: the compiler still never reads a binding, so this design
+  is untouched by all three. The cache is the only part worth a second thought, and it keys on
+  `(epoch, cuts, targets)` with every graph mutator bumping the epoch — so a binding realized
+  lazily would invalidate like any other mutation, without this design having to know the cache
+  exists.
 
 Non-goals:
 

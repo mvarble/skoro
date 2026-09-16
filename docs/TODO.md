@@ -27,7 +27,11 @@ bumped at the end of `remove`, abandons it without invalidating the compiled-seq
 
 Both error returns require `stochastic_to_log_density` to name a node that is absent or is not
 a `LogLikelihood`, which `validate_indices` exists to rule out, so no constructible call reaches
-them today. Found while auditing mutators for the cache in `graph-compiler.md` §1; the sibling
+them today. That argument holds at *entry*, though, and `remove` calls this from inside its
+deletion loop -- so the window to think about is the one where the batch is half-applied and the
+indices are transiently incoherent by construction. Nothing reaches it there either, because
+`remove` retires a density only for a stochastic node whose density lies outside the batch, but
+that is the reasoning a fix would have to preserve. Found while auditing mutators for the cache in `graph-compiler.md` §1; the sibling
 gaps in `remove` and `register_children` were reachable and were fixed there. Left alone here
 because a fix without a failing test to drive it would be speculative.
 

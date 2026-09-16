@@ -357,16 +357,18 @@ forward closure, in a deterministic order.
 
 ---
 
-## Documentation this invalidates
+## Documentation this invalidated
 
-Repointing is part of the work, not tidying after it. Two of these are the authoring contract.
+Repointing was part of the work, not tidying after it, and two of these are the authoring
+contract. All of them are done.
 
-| File | Why |
+| File | What changed |
 |---|---|
-| `.claude/skills/skoro-diff-operation/SKILL.md:102` | Cites `crates/skoro-graph/src/compiler.rs:467` for "only surfaces `Parameter`/`Sampler` slots". Already stale — the loops are `364-394` and `483-495` — and §2 changes what they surface. |
-| `.claude/skills/skoro-diff-operation/references/testing.md:109` | The same stale citation. |
-| [skoro.md](skoro.md) §5 | "No compiled-program cache" retires after §1; the gap-ledger rows for cut compilation and for two-pass `log_weight` retire after §2 and §3. |
-| [skoro.md](skoro.md) §4.3 | Reword per §2.6 above. |
-| [roadmap.md](roadmap.md) | Remove what ships. Block-sparse `J` and sparse solvers stay. |
-| [deferred-bindings.md](deferred-bindings.md) §3.5.2 | Asserts "No compiler change (R10 still holds)". Bindings are still never read by the compiler, so it survives — **say so explicitly** rather than leaving a finished design silently contradicted. |
-| `readme.md:27-29` | Already promises sub-DAG compilation; extend the sentence to name cuts. |
+| `.claude/skills/skoro-diff-operation/SKILL.md` | Cited `compiler.rs:467` for "only surfaces `Parameter`/`Sampler` slots" — already stale, and §2 changed what they surface. Repointed by name. Its `is_differentiable_parent` citation went the same way, and now mentions the cut override from §2.3. |
+| `.claude/skills/skoro-diff-operation/references/testing.md` | The same stale citation, repointed by name. |
+| [skoro.md](skoro.md) §5 | The compiled-cache, cut-compilation and two-pass-`log_weight` rows retired. What replaced the first: block-sparse `J` and sparse solvers, still open. What is new: `jacobian_*` cannot take an interior column, which §2.6 made expressible without changing the API. |
+| [skoro.md](skoro.md) §4.3 | Reworded from a compiler restriction to an API one, per §2.6. |
+| [roadmap.md](roadmap.md) | Cut compilation and `log_weight` fusion removed; block-sparse `J` and sparse solvers kept, now joined by widening `jacobian_*`. |
+| [deferred-bindings.md](deferred-bindings.md) §3.5.2 | Asserted "No compiler change (R10 still holds)". Re-checked and still true — the compiler reads no bindings — and the note now says so against a compiler that has since changed, rather than leaving a finished design silently uncorroborated. |
+| `readme.md` | Its sub-DAG sentence gained a clause naming cuts. |
+| [TODO.md](TODO.md) | Gained `retire_density_of`'s atomicity, found while auditing mutators for §1 and not fixed. |

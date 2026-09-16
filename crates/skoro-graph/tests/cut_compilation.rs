@@ -535,3 +535,51 @@ fn a_cut_matches_the_same_graph_with_a_free_node_in_its_place() {
         common::EPSILON,
     );
 }
+
+/// A valid cut does not excuse a stale target.
+///
+/// The two validations are separate layers: `compile_between` checks the cuts up front, and the
+/// lowering loop checks each visited node as it arrives. A cut that exists gets past the first
+/// and must not mask the second.
+#[test]
+fn a_valid_cut_does_not_excuse_a_missing_target() {
+    let mut m = Arithmetic::new();
+    let gone = m.graph.add_parameter(Real);
+    m.graph.remove(&[gone]).unwrap();
+
+    let err = m.graph.compile_between(&[m.sum], &[gone]).unwrap_err();
+
+    assert!(matches!(err, SkoroError::NodeNotFound { id } if id == gone));
+}
+
+/// Cut programs share the cap with uncut ones.
+///
+/// They share one map, so they share the bound. A cut program is no cheaper to hold than an
+/// uncut one -- it holds the same boxed operations, just fewer of them.
+#[test]
+fn cut_programs_are_bounded_too() {
+    let mut graph = Graph::<B>::new();
+    let root = graph.add_parameter(Real);
+    let mut ids = vec![root];
+    for _ in 0..skoro_graph::graph::MAX_CACHED_SEQUENCES {
+        let next = *ids.last().unwrap();
+        ids.push(
+            graph
+                .add_mapped(Real, DiffGraphOperation(Addition), vec![next, next])
+                .unwrap(),
+        );
+    }
+    let tip = *ids.last().unwrap();
+
+    // Each distinct cut is a distinct program over the same targets.
+    let first = graph.compile_between(&[ids[0]], &[tip]).unwrap();
+    for id in &ids[1..] {
+        graph.compile_between(&[*id], &[tip]).unwrap();
+    }
+
+    let first_again = graph.compile_between(&[ids[0]], &[tip]).unwrap();
+    assert!(
+        !Arc::ptr_eq(&first, &first_again),
+        "cut programs count against the same cap as uncut ones"
+    );
+}
