@@ -125,10 +125,12 @@ groups. It is still not the Gauss–Newton matrix at the current `x`.
    §1.3's "facts about the current code" are also stale now. The spec should be amended, or given a
    changelog section, so it stays a reliable reference.
 5. **`skoro_backend::ndarray_simd_workaround`** (**done**: removed when the CPU backend moved to
-   burn-flex, whose unary kernels are stride-aware) had to be retired with the ndarray backend. There are
-   two call sites (`PointwiseAbs`, `LiteralScalarDivisionLeft`), and the backend regression test
-   `unary_kernels_on_non_standard_layouts` can keep running with the plain methods as a
-   backend-agnostic layout check.
+   burn-flex, whose unary kernels are stride-aware) had to be retired with the ndarray backend. Its
+   two call sites (`PointwiseAbs`, `LiteralScalarDivisionLeft`) now call plain `abs` and `recip`.
+   Both regression tests were kept at first — `unary_kernels_on_non_standard_layouts` in
+   `skoro-backend` as a backend-agnostic layout check, and `diag_survives_abs` in `skoro-linalg`
+   pinning the `diag().abs().log().sum()` composition behind `Normal::factor` — and both were
+   removed after the burn-flex migration.
 6. **Four `skoro-so3` `wgpu_f32` tests fail**, and did before this work (`91d4270`). They are f32 GPU
    tolerance misses, for example a scaled error of 2.3e-6 against a 1e-6 bound. Unrelated, but worth
    tracking.

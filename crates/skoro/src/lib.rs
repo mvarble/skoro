@@ -3,7 +3,7 @@
 //! Skoro is a probabilistic modeling library designed for speed, modularity, and extensibility.
 //! It bridges hierarchical probabilistic modeling, a bespoke automatic-differentiation engine
 //! (first- and second-order, manifold-aware), and high-performance tensor execution on
-//! [`burn`](https://burn.dev) backends (CPU via `ndarray`, GPU via `cubecl`).
+//! [`burn`](https://burn.dev) backends (CPU via `flex`, GPU via `cubecl`).
 //!
 //! This is the top-level umbrella crate. It re-exports every workspace crate
 //! under its short name and provides a curated [`prelude`] with the types most
