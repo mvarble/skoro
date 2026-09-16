@@ -652,10 +652,13 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         self.server_call(|server| {
             let graph = server.graph();
             let terms = graph.terms();
-            // Two compiled passes; the terms in both cancel to within rounding.
-            Ok(
-                graph.log_density_terms(points, &term_ids(&terms, |t| t.in_density))?
-                    - graph.log_density_terms(points, &term_ids(&terms, |t| t.in_proposal))?,
+            // One compiled pass over the union of the two sides. Summing them separately
+            // compiled a second program to walk most of the same graph, and the terms in both
+            // then cancelled to within rounding rather than exactly.
+            graph.log_density_terms_signed(
+                points,
+                &term_ids(&terms, |t| t.in_density),
+                &term_ids(&terms, |t| t.in_proposal),
             )
         })
     }

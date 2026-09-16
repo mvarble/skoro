@@ -1,9 +1,9 @@
 # Roadmap
 
-Work that two shipped specs deliberately put out of scope. Except where a bullet says
-otherwise, none of it is planned or designed; this is a list of what was consciously left
-undone, not a backlog anyone has committed to. The exception is the compiler work, which has a
-design and is partly built — [graph-compiler.md](graph-compiler.md).
+Work that two shipped specs deliberately put out of scope. None of what remains here is planned
+or designed; this is a list of what was consciously left undone, not a backlog anyone has
+committed to. The compiler entries have since been built and are recorded in
+[graph-compiler.md](graph-compiler.md); what is left of them is noted where they stood.
 
 ## From the proposal-only terms work
 
@@ -16,8 +16,6 @@ What that change stopped short of:
 - **Joint proposals over several quantities at once.** A proposal-only term scores exactly one
   stochastic quantity, which follows from `in_proposal` being derived rather than stored. The
   extension is to store `in_proposal` beside `in_density`; `Term` already has the shape for it.
-- **Fusing `log_weight` into a single compiled pass.** Two passes recompute the joint terms,
-  which cancel to within rounding. Designed — [graph-compiler.md](graph-compiler.md) §3.2.
 - **Any importance sampler, resampling scheme, or weight accumulator.** The weight is now
   expressible; nothing consumes it yet.
 

@@ -8,12 +8,6 @@ once their work landed. Recover any of it from `git show 2948f6d:docs/superpower
 
 What is actually left:
 
-## 0. The graph compiler — designed, in progress
-
-Caching, cut compilation, and three small step improvements.
-[graph-compiler.md](graph-compiler.md) holds the design, the execution order, and the
-verification. It is the only item here with work scheduled against it.
-
 ## 1. `ModelServer::add_factor` cannot check model identity
 
 `ModelClient::add_factor` (`crates/skoro-model/src/model.rs:886`) refuses a `Factor` built

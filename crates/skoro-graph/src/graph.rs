@@ -1699,14 +1699,91 @@ impl<B: Backend> Graph<B> {
         self.sum_terms(points, terms)
     }
 
+    /// The sum of `plus`'s log-densities less `minus`'s, in one compiled pass.
+    ///
+    /// `log_weight = Σ in_density − Σ in_proposal` is the caller this exists for. The two sets
+    /// overlap almost entirely, and a term in both cancels to within rounding -- so summing
+    /// them separately compiled a second program to walk most of the same graph and produce
+    /// numbers that were about to be subtracted away. One program over the union costs one
+    /// traversal, and the cancellation becomes exact rather than nearly exact.
+    ///
+    /// Every id on either side must be a likelihood term, else
+    /// [`SkoroError::NotLogLikelihood`]. Two empty sides give zeros of shape `[batch, 1]`,
+    /// batch taken from `points` exactly as [`log_density`](Self::log_density) does.
+    pub fn log_density_terms_signed(
+        &self,
+        points: &ValueMap<B>,
+        plus: &[Id],
+        minus: &[Id],
+    ) -> SkoroResult<Point<B>> {
+        // One pass builds the union and validates, in the order the caller named things, so a
+        // rejection reports the first offending id rather than an arbitrary one.
+        let mut union: Vec<Id> = Vec::with_capacity(plus.len() + minus.len());
+        for id in plus.iter().chain(minus) {
+            if !self.log_likelihoods.contains(id) {
+                return Err(SkoroError::NotLogLikelihood { id: *id });
+            }
+            if !union.contains(id) {
+                union.push(*id);
+            }
+        }
+
+        let compiled_sequence = self.compile_backward_from(&union)?;
+        let batch_size = Self::batch_size_of(points);
+        let forward_output = compiled_sequence.forward(ForwardInput {
+            points,
+            options: ForwardOptions {
+                batch_size,
+                use_model_samplers: false,
+            },
+        })?;
+
+        let term_value = |id: &Id| {
+            forward_output
+                .evaluations
+                .get(id)
+                .expect("Log-likelihood should be evaluated.")
+                .0
+                .clone()
+                .unwrap_float()
+        };
+        let mut total = Point::zeros([batch_size, 1], &Default::default());
+        for id in plus {
+            total = total + term_value(id);
+        }
+        for id in minus {
+            total = total - term_value(id);
+        }
+        Ok(total)
+    }
+
+    /// The batch axis the supplied points imply, defaulting to one when there are none.
+    fn batch_size_of(points: &ValueMap<B>) -> usize {
+        points
+            .iter()
+            .next()
+            .map(|(_, point)| point.dims()[0])
+            .unwrap_or(1)
+    }
+
+    /// How many compiled programs the cache is currently holding.
+    ///
+    /// Reads the cache's real state rather than counting compiles, which is enough to check
+    /// that a caller compiles one program and not two. Behind `test-utils` because no
+    /// production caller has a reason to look.
+    #[cfg(feature = "test-utils")]
+    pub fn cached_program_count(&self) -> usize {
+        self.compiled
+            .lock()
+            .expect("compiled-sequence cache poisoned")
+            .sequences
+            .len()
+    }
+
     /// Evaluate and sum `terms`, which the caller has checked are likelihood terms.
     fn sum_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
         let compiled_sequence = self.compile_backward_from(terms)?;
-        let batch_size = if let Some((_, point)) = points.iter().next() {
-            point.dims()[0]
-        } else {
-            1
-        };
+        let batch_size = Self::batch_size_of(points);
         let forward_output = compiled_sequence.forward(ForwardInput {
             points,
             options: ForwardOptions {

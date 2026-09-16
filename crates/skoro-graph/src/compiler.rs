@@ -78,6 +78,8 @@ impl<B: Backend> CompiledStep<B> {
 
 pub struct CompiledSequence<B: Backend> {
     pub steps: Vec<CompiledStep<B>>,
+    /// For each slot, the index of the last step that reads it. See [`Self::last_use`].
+    last_use: Vec<usize>,
     _phantom: PhantomData<B>,
 }
 
@@ -188,12 +190,73 @@ pub struct HvpForwardOutput<B: Backend> {
     pub ord2_cotangents: HashMap<Id, CotangentFrame<B>>,
 }
 
+/// The index of the last step that reads each slot.
+///
+/// Reads are gathered from *every* step kind, not only operations: `input_indices` is on
+/// `DynSequenceSampler` as well as `DynSequenceOperation`, and a sampler step reads the point
+/// sequence when it draws. A slot nothing reads gets its own index, which is right -- its value
+/// is cloned into the output as the step runs, and the slot is dead immediately after.
+fn compute_last_use<B: Backend>(steps: &[CompiledStep<B>]) -> Vec<usize> {
+    let mut last_use: Vec<usize> = (0..steps.len()).collect();
+    for (index, step) in steps.iter().enumerate() {
+        let inputs: &[usize] = match step {
+            CompiledStep::Operation { op, .. } => op.input_indices(),
+            CompiledStep::Sampler { sampler, .. } => sampler.input_indices(),
+            CompiledStep::Constant { .. }
+            | CompiledStep::Parameter { .. }
+            | CompiledStep::Given { .. } => &[],
+        };
+        for &input in inputs {
+            // Steps are visited in ascending order and an input always precedes its consumer,
+            // so the last write wins without a `max`.
+            last_use[input] = index;
+        }
+    }
+    last_use
+}
+
+/// Free every slot that step `index` was the last to read.
+///
+/// Restricted to operation slots. A leaf's slot is read again after `tape.backward`, by the
+/// cotangent collection that shapes the zero cotangent of a leaf reaching no target from the
+/// supplied point's dims and device -- so releasing one would panic there rather than save
+/// anything, since a leaf's value is the caller's tensor and is alive regardless.
+#[inline(always)]
+fn release_dead_points<B: Backend>(
+    steps: &[CompiledStep<B>],
+    last_use: &[usize],
+    index: usize,
+    point_seq: &mut [Option<Input<B>>],
+) {
+    let inputs: &[usize] = match &steps[index] {
+        CompiledStep::Operation { op, .. } => op.input_indices(),
+        CompiledStep::Sampler { sampler, .. } => sampler.input_indices(),
+        CompiledStep::Constant { .. }
+        | CompiledStep::Parameter { .. }
+        | CompiledStep::Given { .. } => &[],
+    };
+    for &slot in inputs.iter().chain(std::iter::once(&index)) {
+        if last_use[slot] == index && matches!(steps[slot], CompiledStep::Operation { .. }) {
+            point_seq[slot] = None;
+        }
+    }
+}
+
 impl<B: Backend> CompiledSequence<B> {
     pub fn new(steps: Vec<CompiledStep<B>>) -> Self {
         Self {
+            last_use: compute_last_use(&steps),
             steps,
             _phantom: PhantomData,
         }
+    }
+
+    /// For each slot, the index of the last step that reads it.
+    ///
+    /// Indices are into [`steps`](Self::steps): slot `i` holds the value step `i` produces. A
+    /// slot whose entry is its own index is read by nothing.
+    pub fn last_use(&self) -> &[usize] {
+        &self.last_use
     }
 
     pub fn forward(&self, input: ForwardInput<'_, B>) -> SkoroResult<ForwardOutput<B>> {
@@ -234,6 +297,7 @@ impl<B: Backend> CompiledSequence<B> {
                     )?;
                 }
             };
+            release_dead_points(&self.steps, &self.last_use, index, &mut point_seq);
         }
         Ok(out)
     }
@@ -308,6 +372,7 @@ impl<B: Backend> CompiledSequence<B> {
                     )?;
                 }
             };
+            release_dead_points(&self.steps, &self.last_use, index, &mut point_seq);
         }
         Ok(out)
     }
@@ -376,6 +441,7 @@ impl<B: Backend> CompiledSequence<B> {
                     )?;
                 }
             };
+            release_dead_points(&self.steps, &self.last_use, index, &mut point_seq);
         }
         tape.backward(&mut cotangent_seq);
         for (index, step) in self.steps.iter().enumerate() {
@@ -496,6 +562,7 @@ impl<B: Backend> CompiledSequence<B> {
                     )?;
                 }
             };
+            release_dead_points(&self.steps, &self.last_use, index, &mut point_seq);
         }
         tape.backward(&mut ord1_cotangent_seq, &mut ord2_cotangent_seq);
         for (index, step) in self.steps.iter().enumerate() {

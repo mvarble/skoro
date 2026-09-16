@@ -1,23 +1,26 @@
 # The graph compiler: caching, cut compilation, and step improvements
 
-The design and execution order for three changes to `skoro-graph`'s compiler. It is the first
-thing in this directory committed *before* its work landed rather than after, so it is written
-forward and amended as each section ships. Three of the gaps in [skoro.md](skoro.md) §5 and two
-[roadmap.md](roadmap.md) items are what it closes.
+Three changes to `skoro-graph`'s compiler: a compiled-program cache, cut compilation, and two
+small step improvements. **All three have shipped.**
 
-**Status: §1 and §2 shipped. §3 not started.**
+This is the first document in this directory that was committed *before* its work rather than
+after, so it is written forward — as a design and an execution order — and was amended section
+by section as each one landed. It is left in that shape rather than rewritten into a
+description, because the reasoning about what *would* go wrong is the part worth keeping: two
+of its three sections exist to prevent a failure that returns correct values and silently wrong
+derivatives, and both are now pinned by mutation-tested cases named in the verification below.
 
-## What the compiler does today
+## What the compiler did before
 
-`Graph::compile_backward_from(&[Id])` (`crates/skoro-graph/src/graph.rs:2239`) is the only
-compile entry point in the workspace. It does backward reachability from a target set
-(`topological_sort`, `graph.rs:2205`), lowers every reachable node to exactly one
-`CompiledStep`, and hands back a `CompiledSequence` that all four passes — `forward`,
-`jvp_forward`, `vjp_forward`, `hvp_forward` (`compiler.rs:182/224/298/398`) — run over. One
-sequence serves all four; the pass is chosen by which method the caller invokes, not by
-anything in the artifact.
+`Graph::compile_backward_from(&[Id])` was the only compile entry point in the workspace. It did
+backward reachability from a target set (`topological_sort`), lowered every reachable node to
+exactly one `CompiledStep`, and returned a `CompiledSequence` that all four passes — `forward`,
+`jvp_forward`, `vjp_forward`, `hvp_forward` — ran over. One sequence serves all four; the pass
+is chosen by which method the caller invokes, not by anything in the artifact. That part is
+unchanged, and deliberately so.
 
-Three things follow, and this document addresses each:
+Line numbers below are as they stood when each section was written, and are not maintained;
+names are. Three things followed, and this document addresses each:
 
 1. **Nothing is cached.** All ten internal call sites build a fresh sequence and drop it.
    `information_blocks` compiles twice per call, and a solver loop pays that every iteration.
@@ -224,8 +227,9 @@ put the rest of that argument under test.
 ### 3.1 Slot liveness
 
 Each slot's last consuming step is computed at compile time and stored on `CompiledSequence`
-(`last_use: Vec<usize>`, a pure function of `steps`). Each pass sets `point_seq[i] = None`
-once index `i` is past its last use. Two rules, easy to conflate:
+(`last_use: Vec<usize>`, a pure function of `steps`, exposed as `CompiledSequence::last_use`).
+Each pass releases a slot at the step that was the last to read it. Two rules, easy to
+conflate:
 
 - **Gather uses from every step kind.** `SequenceMutator::input_indices()` is on
   `DynSequenceSampler` as well as `DynSequenceOperation`, and a `Sampler` step reads
@@ -331,17 +335,25 @@ forward closure, in a deterministic order.
 
 ### §3
 
-- **Liveness:** unit-test the last-use computation as a pure function on a step list — that is
-  the testable surface; the semantics are guarded by the existing suite. Add one long-chain
-  evaluation and confirm it still matches.
-- **`log_weight`:** `crates/skoro-model/tests/terms.rs:79, 111, 148, 156` and
-  `crates/skoro-normal/tests/proposal.rs:75, 95` must pass unchanged, plus one new test
-  asserting the fused path compiles **once**, via the §1 counter.
+`crates/skoro-graph/tests/slot_liveness.rs` and `crates/skoro-graph/tests/signed_terms.rs`.
+
+- **Liveness.** `last_use` is a public accessor rather than a test-only observer — it is a real
+  fact about a compiled program, and asserting on it needs no counter. Four cases: a chain
+  releases each link at its only consumer; a shared slot lives until its *last* reader; a slot
+  nothing reads dies where it is born; a sampler's inputs count as reads. Three mutations, three
+  distinct catches: releasing one step early fails eight tests across the workspace, releasing
+  leaf slots too fails the zero-cotangent test alone, and dropping the sampler branch from the
+  read-gathering fails the sampler test alone.
+- **`log_weight`.** `crates/skoro-model/tests/terms.rs` and
+  `crates/skoro-normal/tests/proposal.rs` pass unchanged. "Compiles once" is counted, not
+  inferred: the cache holds one program per distinct target list, so `cached_program_count`
+  (behind `test-utils`, reading the cache's real state) distinguishes one compile from two.
+  Reverting to a program per side fails it with 2 against 1.
 - **Long-horizon:** `crates/skoro-normal/tests/window.rs` runs twelve ticks of
   mutate-then-evaluate and already asserts that factor count, `J` rows, and node count hold
-  steady. Add: the cache is **cleared** each tick. Not "does not grow without bound" — the
-  window adds and removes every tick, so that assertion would be vacuous here; the overflow
-  test above is what covers growth.
+  steady. It was left as it is: the window adds and removes every tick, so under the
+  bump-on-everything rule the cache is cleared each tick and any growth assertion there is
+  vacuous. §1's overflow test is what covers growth.
 
 ---
 

@@ -395,7 +395,6 @@ unless noted.
 | No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
 | No residual-vector assembly to match `jacobian_*` | Every least-squares step must hand-roll its `r` in the layout's order (§4.1) | Not recorded; found while writing this |
 | Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
-| `log_weight` is two compiled passes, not one | Nothing — correctness is fine, the joint terms cancel to rounding | `graph-compiler.md` §3.2 — designed |
 | Deferred bindings | Expensive-root families, very large models | `docs/deferred-bindings.md` — designed, postponed |
 
 ### 5.1 The sampling gap, in detail
