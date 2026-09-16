@@ -1,7 +1,9 @@
 # Roadmap
 
-Work that two shipped specs deliberately put out of scope. None of it is planned or designed;
-this is a list of what was consciously left undone, not a backlog anyone has committed to.
+Work that two shipped specs deliberately put out of scope. Except where a bullet says
+otherwise, none of it is planned or designed; this is a list of what was consciously left
+undone, not a backlog anyone has committed to. The one exception so far is the compiler work,
+which has a design in [graph-compiler.md](graph-compiler.md).
 
 ## From the proposal-only terms work
 
@@ -15,7 +17,7 @@ What that change stopped short of:
   stochastic quantity, which follows from `in_proposal` being derived rather than stored. The
   extension is to store `in_proposal` beside `in_density`; `Term` already has the shape for it.
 - **Fusing `log_weight` into a single compiled pass.** Two passes recompute the joint terms,
-  which cancel to within rounding.
+  which cancel to within rounding. Designed — [graph-compiler.md](graph-compiler.md) §3.2.
 - **Any importance sampler, resampling scheme, or weight accumulator.** The weight is now
   expressible; nothing consumes it yet.
 
@@ -30,9 +32,10 @@ needs. What that change stopped short of:
   `coverage::require_role(&model, FISHER_ROOT)` refuses a model whose scored terms do not all bind
   a root, which is what keeps `information_root` and the gradient it is solved against covering the
   same terms. `docs/fisher-scoring.md` §7 states the condition and §8 the failure it prevents.
-- **Cut compilation** — compiling a sub-program that stops at a set of intermediate nodes — and
-  with it a `support(id)` query, block-sparse Jacobian storage, sparse solvers, and a
-  compiled-program cache.
+- **Cut compilation** — compiling a sub-program that stops at a set of intermediate nodes —
+  with a `support(id)` query and a compiled-program cache. Designed —
+  [graph-compiler.md](graph-compiler.md). **Block-sparse Jacobian storage and sparse solvers
+  stay here**: that document deliberately leaves them out.
 - **Lazily built bindings from a stored distribution object.** Designed since, and postponed;
   see [deferred-bindings.md](deferred-bindings.md).
 - **Any change to sampling, `observe`, `stacked_tangent`, or the discrete kind.**

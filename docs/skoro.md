@@ -373,7 +373,7 @@ does get raw access to them. See §6.
 
 ## 5. Gap ledger
 
-Ordered by what each gap blocks rather than by size. Recorded in `docs/superpowers/roadmap.md`
+Ordered by what each gap blocks rather than by size. Recorded in `docs/roadmap.md`
 unless noted.
 
 | Gap | Blocks | Status |
@@ -381,14 +381,15 @@ unless noted.
 | No RNG seeding; no per-quantity sampling | Any MCMC or SMC — no reproducibility, no per-chain RNG | Not recorded anywhere; found by search |
 | No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
-| No cut compilation, `support(id)`, block-sparse `J`, sparse solvers, compiled cache | Large models, rather than any one algorithm | `roadmap.md` |
+| No cut compilation, `support(id)`, compiled cache | Large models, rather than any one algorithm | `graph-compiler.md` — designed, in progress |
+| No block-sparse `J`, no sparse solvers | The same, at a scale past a dense `J` | `roadmap.md` |
 | No Schur complement / marginal precision | Marginalization's computation half (§3.3) | Was the old doc's GAP 2 |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
 | No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
 | No residual-vector assembly to match `jacobian_*` | Every least-squares step must hand-roll its `r` in the layout's order (§4.1) | Not recorded; found while writing this |
 | Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
-| `log_weight` is two compiled passes, not one | Nothing — correctness is fine, the joint terms cancel to rounding | `roadmap.md` |
-| Deferred bindings | Expensive-root families, very large models | `docs/superpowers/deferred-bindings.md` — designed, postponed |
+| `log_weight` is two compiled passes, not one | Nothing — correctness is fine, the joint terms cancel to rounding | `graph-compiler.md` §3.2 — designed |
+| Deferred bindings | Expensive-root families, very large models | `docs/deferred-bindings.md` — designed, postponed |
 
 ### 5.1 The sampling gap, in detail
 
@@ -416,7 +417,7 @@ rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 
 ### 5.3 Open items tracked elsewhere
 
-`docs/superpowers/TODO.md` holds three, not duplicated here: `ModelServer::add_factor` cannot check
+`docs/TODO.md` holds three, not duplicated here: `ModelServer::add_factor` cannot check
 model identity (it has no `server_id`, unlike the client method); four `skoro-so3` `wgpu_f32`
 tolerance misses, pre-existing and GPU-only; and deferred bindings.
 

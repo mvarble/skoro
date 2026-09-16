@@ -1,11 +1,18 @@
 # Open work
 
-Everything else that was in this directory is done and committed. The two specs
-(factor bindings / Fisher roots, and proposal-only terms) were implemented in full; their
-plans and defect reports were removed once their work landed. Recover any of it from
-`git show 2948f6d:docs/superpowers/...`.
+This file and its neighbours used to live in `docs/superpowers/`, split off from `docs/` by a
+workflow that no longer exists; they were moved up and the directory deleted. Everything else
+that was in it is done and committed — the two specs (factor bindings / Fisher roots, and
+proposal-only terms) were implemented in full, and their plans and defect reports were removed
+once their work landed. Recover any of it from `git show 2948f6d:docs/superpowers/...`.
 
 What is actually left:
+
+## 0. The graph compiler — designed, in progress
+
+Caching, cut compilation, and three small step improvements.
+[graph-compiler.md](graph-compiler.md) holds the design, the execution order, and the
+verification. It is the only item here with work scheduled against it.
 
 ## 1. `ModelServer::add_factor` cannot check model identity
 
