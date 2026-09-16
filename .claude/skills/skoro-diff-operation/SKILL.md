@@ -98,10 +98,11 @@ If `hvp` needs state that `VjpState` legitimately lacks (because that input is c
 `HvpState` — don't widen `VjpState`.
 
 `crates/skoro-model/tests/hvp_diff_gating.rs` guards both directions with a spy op. Note the first
-test asserts on the flags the framework delivers, not on returned cotangents: the collection pass
-(`crates/skoro-graph/src/compiler.rs:467`) only surfaces `Parameter`/`Sampler` slots, so a
-cotangent wrongly computed for a constant is discarded before it is observable. The cost of the
-"too loose" bug is wasted work, not wrong output — it cannot be caught downstream.
+test asserts on the flags the framework delivers, not on returned cotangents: the collection passes
+in `crates/skoro-graph/src/compiler.rs` — one at the end of `vjp_forward`, one at the end of
+`hvp_forward` — surface only `Parameter`, `Given` and `Sampler` slots, so a cotangent wrongly
+computed for a constant is discarded before it is observable. The cost of the "too loose" bug is
+wasted work, not wrong output — it cannot be caught downstream.
 
 ## Designing `VjpState` / `HvpState`
 

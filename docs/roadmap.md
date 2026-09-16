@@ -2,8 +2,8 @@
 
 Work that two shipped specs deliberately put out of scope. Except where a bullet says
 otherwise, none of it is planned or designed; this is a list of what was consciously left
-undone, not a backlog anyone has committed to. The one exception so far is the compiler work,
-which has a design in [graph-compiler.md](graph-compiler.md).
+undone, not a backlog anyone has committed to. The exception is the compiler work, which has a
+design and is partly built — [graph-compiler.md](graph-compiler.md).
 
 ## From the proposal-only terms work
 
@@ -32,10 +32,11 @@ needs. What that change stopped short of:
   `coverage::require_role(&model, FISHER_ROOT)` refuses a model whose scored terms do not all bind
   a root, which is what keeps `information_root` and the gradient it is solved against covering the
   same terms. `docs/fisher-scoring.md` §7 states the condition and §8 the failure it prevents.
-- **Cut compilation** — compiling a sub-program that stops at a set of intermediate nodes —
-  with a `support(id)` query and a compiled-program cache. Designed —
-  [graph-compiler.md](graph-compiler.md). **Block-sparse Jacobian storage and sparse solvers
-  stay here**: that document deliberately leaves them out.
+- **Block-sparse Jacobian storage, and sparse solvers.** What is left of this entry: cut
+  compilation, `support(id)` and the compiled-program cache shipped — see
+  [graph-compiler.md](graph-compiler.md) — and that document deliberately leaves these two out.
+  Also still open is letting `jacobian_*` take an interior column now that
+  `compile_between` makes one expressible.
 - **Lazily built bindings from a stored distribution object.** Designed since, and postponed;
   see [deferred-bindings.md](deferred-bindings.md).
 - **Any change to sampling, `observe`, `stacked_tangent`, or the discrete kind.**

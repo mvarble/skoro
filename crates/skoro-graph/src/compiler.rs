@@ -23,6 +23,22 @@ pub enum CompiledStep<B: Backend> {
         id: Id,
         quantity_type: Arc<dyn DynQuantityType<B>>,
     },
+    /// A cut boundary: a node whose value the caller supplies in place of computing it.
+    ///
+    /// It stands for a node that *does* have parents -- a mapped quantity, a log-density, a
+    /// stochastic draw -- which the cut has pruned from the sequence. Supplied like a
+    /// [`Constant`](Self::Constant) and differentiated like a [`Parameter`](Self::Parameter):
+    /// the cotangent passes collect at it, because from the compiled program's point of view it
+    /// is a free variable.
+    ///
+    /// Lowering a cut to `Constant` instead is the mistake this kind exists to prevent. A
+    /// constant is not a differentiable input, so every consumer below one gets
+    /// `constant_inputs`, which keeps it off the tape -- and the pass then returns correct
+    /// values with the derivatives silently missing.
+    Given {
+        id: Id,
+        quantity_type: Arc<dyn DynQuantityType<B>>,
+    },
     Sampler {
         id: Id,
         sampler: Box<dyn DynSequenceSampler<B>>,
@@ -53,6 +69,7 @@ impl<B: Backend> CompiledStep<B> {
         match self {
             Self::Constant { id, .. }
             | Self::Parameter { id, .. }
+            | Self::Given { id, .. }
             | Self::Sampler { id, .. }
             | Self::Operation { id, .. } => *id,
         }
@@ -364,6 +381,7 @@ impl<B: Backend> CompiledSequence<B> {
         for (index, step) in self.steps.iter().enumerate() {
             match step {
                 CompiledStep::Parameter { id, quantity_type }
+                | CompiledStep::Given { id, quantity_type }
                 | CompiledStep::Sampler {
                     id, quantity_type, ..
                 } => {
@@ -482,7 +500,9 @@ impl<B: Backend> CompiledSequence<B> {
         tape.backward(&mut ord1_cotangent_seq, &mut ord2_cotangent_seq);
         for (index, step) in self.steps.iter().enumerate() {
             match step {
-                CompiledStep::Parameter { id, .. } | CompiledStep::Sampler { id, .. } => {
+                CompiledStep::Parameter { id, .. }
+                | CompiledStep::Given { id, .. }
+                | CompiledStep::Sampler { id, .. } => {
                     if let Some(cotangent) = ord1_cotangent_seq[index].take() {
                         out.ord1_cotangents.insert(*id, cotangent);
                     }
@@ -530,7 +550,11 @@ fn non_op_forward<B: Backend>(
                 .insert(*id, input.clone(), quantity_type.clone());
             point_seq[index] = Some(input);
         }
-        CompiledStep::Parameter { id, quantity_type } => {
+        // A cut boundary reads exactly as a parameter does. It is supplied, it is reported as
+        // a variable rather than a constant, and it takes a seed -- the only difference is
+        // which graph node it stands for, which the sequence has already forgotten.
+        CompiledStep::Parameter { id, quantity_type }
+        | CompiledStep::Given { id, quantity_type } => {
             let input = if let Some(parameter) = points.get(id) {
                 parameter.ensure_batch(options.batch_size)?
             } else {

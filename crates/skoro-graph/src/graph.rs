@@ -92,10 +92,22 @@ pub struct Graph<B: Backend> {
     bindings: Bindings,
 }
 
+/// What identifies a compiled program.
+///
+/// `targets` is verbatim: `topological_sort` seeds its stack with them and pops LIFO, so their
+/// order fixes the step order and therefore every slot index. `cuts` is sorted and deduped,
+/// because a cut only *terminates* the traversal and never seeds it -- only its membership can
+/// change the program.
+#[derive(PartialEq, Eq, Hash)]
+struct CacheKey {
+    cuts: Vec<Id>,
+    targets: Vec<Id>,
+}
+
 /// The cache's contents, and the epoch they were compiled at.
 struct CompiledCache<B: Backend> {
     epoch: u64,
-    sequences: HashMap<Vec<Id>, Arc<CompiledSequence<B>>>,
+    sequences: HashMap<CacheKey, Arc<CompiledSequence<B>>>,
 }
 
 impl<B: Backend> Default for CompiledCache<B> {
@@ -160,6 +172,48 @@ fn is_differentiable_parent<B: Backend>(node: &Node<B>) -> bool {
             quantity_type.kind() == QuantityKind::Continuous
         }
     }
+}
+
+/// Whether a node lowers to [`CompiledStep::Given`] when it is cut.
+///
+/// Only the kinds that have parents to sever. A parameter, a constant and an observation are
+/// already leaves of any program that reaches them, so cutting at one has nothing to do and
+/// lowering it differently would only make "cut at a leaf is a no-op" untrue.
+fn cut_lowers_to_given<B: Backend>(node: &Node<B>) -> bool {
+    match node {
+        Node::Mapped(_) | Node::LogLikelihood(_) | Node::Stochastic(_) => true,
+        Node::Parameter(_) | Node::Constant(_) | Node::Observed(_) => false,
+    }
+}
+
+/// The quantity type a node's step carries once compiled.
+///
+/// The same as the node's own, except for a log-density: the `LogLikelihood` arm of the
+/// lowering forces `Real`, because that is what the kind guarantees. A cut standing for one has
+/// to agree with the step it replaced, or the same node would report two different types
+/// depending on whether the program was cut.
+fn compiled_quantity_type<B: Backend>(node: &Node<B>) -> Arc<dyn DynQuantityType<B>> {
+    match node {
+        Node::LogLikelihood(_) => Arc::new(DynContinuous(Real)),
+        Node::Constant(ConstantNode { quantity_type, .. })
+        | Node::Parameter(ParameterNode { quantity_type, .. })
+        | Node::Stochastic(StochasticNode { quantity_type, .. })
+        | Node::Observed(ObservedNode { quantity_type, .. })
+        | Node::Mapped(MappedNode { quantity_type, .. }) => quantity_type.clone(),
+    }
+}
+
+/// Whether a parent feeds a differentiable input, given whether the cut has made it a leaf.
+///
+/// A cut node's differentiability comes from the cut, not from the node: a mapped quantity
+/// carrying a constant fold is not a differentiable input *as a mapped quantity*, but as a
+/// supplied free variable it is. Getting this wrong is invisible in the forward values and
+/// fatal to the derivatives.
+fn is_differentiable_input<B: Backend>(node: &Node<B>, cut: bool) -> bool {
+    if cut && cut_lowers_to_given(node) {
+        return node.is_continuous();
+    }
+    is_differentiable_parent(node)
 }
 
 /// Extract a continuous evaluation from a forward output, erroring if the node
@@ -2291,6 +2345,14 @@ impl<B: Backend> Graph<B> {
     /// In other words, we hand this function Ids of target nodes we want our operations to *end*,
     /// and it will return an ordered vector of Ids of nodes which we walk to get there.
     pub fn topological_sort(&self, targets: &[Id]) -> Vec<Id> {
+        self.topological_sort_between(&HashSet::new(), targets)
+    }
+
+    /// [`topological_sort`](Self::topological_sort), stopping at `cuts`.
+    ///
+    /// A node in `cuts` is emitted but its parents are not pushed, so the walk ends there and
+    /// everything above it is left out of the order entirely.
+    fn topological_sort_between(&self, cuts: &HashSet<Id>, targets: &[Id]) -> Vec<Id> {
         let mut visited = HashSet::new();
         let mut ordered = Vec::new();
         let mut stack = Vec::new();
@@ -2307,7 +2369,9 @@ impl<B: Backend> Graph<B> {
             if first_visit {
                 stack.push((current, false));
 
-                if let Some(node) = self.nodes.get(&current) {
+                if let Some(node) = self.nodes.get(&current)
+                    && !cuts.contains(&current)
+                {
                     for &parent in node.parent_ids().iter().rev() {
                         if !visited.contains(&parent) {
                             stack.push((parent, true));
@@ -2323,6 +2387,34 @@ impl<B: Backend> Graph<B> {
         ordered
     }
 
+    /// Every node `id` can reach by following child edges, itself included, in id order.
+    ///
+    /// The forward counterpart of [`topological_sort`](Self::topological_sort), and the query a
+    /// caller needs to choose a cut: `support` says what a change to `id` could affect, so it
+    /// says what a program cut at `id` still has to compute.
+    ///
+    /// Sorted rather than left in traversal order. `children` is a `HashSet`, so unlike the
+    /// backward walk -- which gets its determinism free from `parent_ids` being a `Vec` -- a
+    /// forward walk has none to inherit. An id that is not a node supports nothing.
+    pub fn support(&self, id: Id) -> Vec<Id> {
+        if !self.nodes.contains_key(&id) {
+            return Vec::new();
+        }
+        let mut seen = HashSet::new();
+        let mut queue = VecDeque::from([id]);
+        while let Some(current) = queue.pop_front() {
+            if !seen.insert(current) {
+                continue;
+            }
+            if let Some(children) = self.children.get(&current) {
+                queue.extend(children.iter().copied());
+            }
+        }
+        let mut out: Vec<Id> = seen.into_iter().collect();
+        out.sort_unstable();
+        out
+    }
+
     /// Compile a subgraph into a sequence of operations, reusing an earlier compile when the
     /// graph has not changed since.
     ///
@@ -2336,6 +2428,48 @@ impl<B: Backend> Graph<B> {
     /// targets and pops LIFO, so their order fixes the step order and therefore every slot
     /// index; sorting or deduping the key would hand one caller another's slot layout.
     pub fn compile_backward_from(&self, targets: &[Id]) -> SkoroResult<Arc<CompiledSequence<B>>> {
+        self.compile_between(&[], targets)
+    }
+
+    /// Compile a sub-program that stops at `cuts` instead of walking back to every ancestor.
+    ///
+    /// The traversal is the same backward reachability, except that it does not descend past a
+    /// node named in `cuts`: that node becomes a leaf of the program and the caller supplies its
+    /// value in `points`, exactly as for a parameter. Everything above it is pruned.
+    ///
+    /// A cut is a *differentiable* leaf. One standing for a mapped node lowers to
+    /// [`CompiledStep::Given`], the cotangent passes collect at it, and the consumers below it
+    /// keep their differentiable inputs -- which is why cutting above a constant fold un-folds
+    /// what lies below. Lowering it to a constant instead would drop those consumers from the
+    /// tape and return correct values with the derivatives silently missing.
+    ///
+    /// A cut that is already a leaf -- a parameter, a constant, an observation -- has no parents
+    /// to sever and lowers unchanged, so cutting at one is a no-op. A cut no target reaches is
+    /// ignored. A cut that is not a node is [`SkoroError::NodeNotFound`], checked before
+    /// anything is compiled.
+    ///
+    /// Compiled programs are cached; see
+    /// [`compile_backward_from`](Self::compile_backward_from).
+    pub fn compile_between(
+        &self,
+        cuts: &[Id],
+        targets: &[Id],
+    ) -> SkoroResult<Arc<CompiledSequence<B>>> {
+        // Checked up front rather than on arrival: a cut off every path is never visited, and a
+        // caller who named a stale one should hear about it either way.
+        for id in cuts {
+            if !self.nodes.contains_key(id) {
+                return Err(SkoroError::NodeNotFound { id: *id });
+            }
+        }
+        let mut sorted_cuts: Vec<Id> = cuts.to_vec();
+        sorted_cuts.sort_unstable();
+        sorted_cuts.dedup();
+        let key = CacheKey {
+            cuts: sorted_cuts,
+            targets: targets.to_vec(),
+        };
+
         let mut cache = self
             .compiled
             .lock()
@@ -2343,25 +2477,30 @@ impl<B: Backend> Graph<B> {
         if cache.epoch != self.epoch {
             cache.sequences.clear();
             cache.epoch = self.epoch;
-        } else if let Some(sequence) = cache.sequences.get(targets) {
+        } else if let Some(sequence) = cache.sequences.get(&key) {
             return Ok(sequence.clone());
         }
 
         // Compiled outside the `Entry` API deliberately: it can fail, and a vacant entry must
         // not be filled with a program that did not build.
-        let sequence = Arc::new(self.compile_uncached(targets)?);
+        let cut_set: HashSet<Id> = key.cuts.iter().copied().collect();
+        let sequence = Arc::new(self.compile_uncached(&cut_set, targets)?);
 
         // Epoch invalidation bounds staleness, not size.
         if cache.sequences.len() >= MAX_CACHED_SEQUENCES {
             cache.sequences.clear();
         }
-        cache.sequences.insert(targets.to_vec(), sequence.clone());
+        cache.sequences.insert(key, sequence.clone());
         Ok(sequence)
     }
 
-    fn compile_uncached(&self, targets: &[Id]) -> SkoroResult<CompiledSequence<B>> {
+    fn compile_uncached(
+        &self,
+        cuts: &HashSet<Id>,
+        targets: &[Id],
+    ) -> SkoroResult<CompiledSequence<B>> {
         // get the nodes in the order they appear
-        let ids = self.topological_sort(targets);
+        let ids = self.topological_sort_between(cuts, targets);
 
         // initialize states we fold over
         let mut steps = Vec::new();
@@ -2374,6 +2513,20 @@ impl<B: Backend> Graph<B> {
             // holding a target across a `remove` reaches here. That is an error with a name,
             // not a panic.
             let node = self.nodes.get(&id).ok_or(SkoroError::NodeNotFound { id })?;
+
+            // A cut boundary replaces whatever the node would otherwise have lowered to. It has
+            // to: a `Sampler` step holds its parents' slot indices and a mapped node's operation
+            // holds its own, and the cut has just pruned those slots out of the sequence.
+            if cuts.contains(&id) && cut_lowers_to_given(node) {
+                steps.push(CompiledStep::Given {
+                    id,
+                    quantity_type: compiled_quantity_type(node),
+                });
+                id_to_index.insert(id, max_index);
+                max_index += 1;
+                continue;
+            }
+
             match node {
                 Node::Constant(ConstantNode {
                     id,
@@ -2391,7 +2544,7 @@ impl<B: Backend> Graph<B> {
                         value: value.clone(),
                         quantity_type: quantity_type.clone(),
                     });
-                    id_to_index.insert(id, max_index);
+                    id_to_index.insert(*id, max_index);
                     max_index += 1;
                 }
                 Node::Parameter(ParameterNode { id, quantity_type }) => {
@@ -2399,7 +2552,7 @@ impl<B: Backend> Graph<B> {
                         id: *id,
                         quantity_type: quantity_type.clone(),
                     });
-                    id_to_index.insert(id, max_index);
+                    id_to_index.insert(*id, max_index);
                     max_index += 1;
                 }
                 Node::Mapped(MappedNode {
@@ -2416,8 +2569,9 @@ impl<B: Backend> Graph<B> {
                     let input_diffs: Vec<bool> = parent_ids
                         .iter()
                         .map(|id| {
-                            is_differentiable_parent(
+                            is_differentiable_input(
                                 self.nodes.get(id).expect("Parent node should be in graph."),
+                                cuts.contains(id),
                             )
                         })
                         .collect();
@@ -2431,7 +2585,7 @@ impl<B: Backend> Graph<B> {
                         value: value.clone(),
                         quantity_type: quantity_type.clone(),
                     });
-                    id_to_index.insert(id, max_index);
+                    id_to_index.insert(*id, max_index);
                     max_index += 1;
                 }
                 Node::LogLikelihood(LogLikelihoodNode {
@@ -2448,8 +2602,9 @@ impl<B: Backend> Graph<B> {
                     let input_diffs: Vec<bool> = parent_ids
                         .iter()
                         .map(|id| {
-                            is_differentiable_parent(
+                            is_differentiable_input(
                                 self.nodes.get(id).expect("Parent node should be in graph."),
+                                cuts.contains(id),
                             )
                         })
                         .collect();
@@ -2463,7 +2618,7 @@ impl<B: Backend> Graph<B> {
                         value: value.clone(),
                         quantity_type: Arc::new(DynContinuous(Real)),
                     });
-                    id_to_index.insert(id, max_index);
+                    id_to_index.insert(*id, max_index);
                     max_index += 1;
                 }
                 Node::Stochastic(StochasticNode {
@@ -2483,7 +2638,7 @@ impl<B: Backend> Graph<B> {
                         sampler: sampler.lower(input_indices, max_index),
                         quantity_type: quantity_type.clone(),
                     });
-                    id_to_index.insert(id, max_index);
+                    id_to_index.insert(*id, max_index);
                     max_index += 1;
                 }
             };

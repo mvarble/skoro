@@ -5,7 +5,7 @@ thing in this directory committed *before* its work landed rather than after, so
 forward and amended as each section ships. Three of the gaps in [skoro.md](skoro.md) §5 and two
 [roadmap.md](roadmap.md) items are what it closes.
 
-**Status: §1 shipped. §2 and §3 not started.**
+**Status: §1 and §2 shipped. §3 not started.**
 
 ## What the compiler does today
 
@@ -204,10 +204,18 @@ a forward walk has none. **Sort before emitting**, and say so in the doc comment
 
 ### 2.6 What this does to §4.3
 
-`Given` makes an interior mapped node expressible as a Jacobian column. The conservative
-branch is taken: `jacobian_vjp` and `jacobian_jvp` keep taking leaf columns, and
-[skoro.md](skoro.md) §4.3 is reworded from "impossible" to "not what the default API does —
-`compile_between` is how you ask for it." Widening `jacobian.rs` is separate, later work.
+`Given` makes an interior mapped node expressible as a Jacobian column. The conservative branch
+is taken: `jacobian_vjp` and `jacobian_jvp` keep taking leaf columns, and [skoro.md](skoro.md)
+§4.3 is reworded from "impossible" to "not what the default API does — `compile_between` is how
+you ask for it." Widening `jacobian.rs` is separate, later work, and it is now a row in the gap
+ledger rather than a standing restriction.
+
+One consequence worth stating plainly: because `jacobian.rs` still compiles uncut, **nothing in
+the tree can hand `fill_leaf_rows` a `Given` yet**. The argument in §2.4 that `variables` is the
+right map for one — that an identity block is correct for a free input — is reasoned, not
+exercised. The test that covers it today asserts at the compiler level, that a cut value is
+reported among the variables and not among the constants. Widening `jacobian.rs` is what would
+put the rest of that argument under test.
 
 ---
 
@@ -291,21 +299,35 @@ for that test.
 Every invalidation test was mutation-tested: with the bump removed from `touch()`, all eight
 fail; with the cap removed, the eviction test fails. None of them is vacuous.
 
-### §2 — the load-bearing test
+### §2 — the load-bearing tests
 
-**Compile the same derivative twice — once uncut, once cut at an interior mapped node with its
-forward value supplied — and assert equality.** This is what catches the silent dropped-term
-mode. Finite differences alone will not: a cut that drops a term is *self-consistently* wrong.
+`crates/skoro-graph/tests/cut_compilation.rs`. Two tests carry the feature, and both were
+mutation-tested:
 
-Then, through a cut, run all four numeric harnesses from
-`crates/skoro-graph/src/test_utils.rs`: `test_jvp_numerically`, `test_vjp_numerically`,
-`test_hvp_numerically`, and `test_hvp_cross_numerically`. The cross one is not optional — the
-SE(3) lesson is that a VJP ignoring an input makes the diagonal check vacuously pass.
-Workspace pairing: `DELTA = 1e-6`, `EPSILON = 1e-5`.
+- **Cutting above a fold clears `constant_inputs` on the consumer**, and a VJP through that cut
+  reaches the boundary. Reverting the cut-aware differentiability fails exactly these two and
+  nothing else — which is the silent failure mode demonstrated rather than described.
+- **A cut pass composes with the pass below it.** Differentiating in one reverse pass, and
+  differentiating to the cut then pushing that cotangent through the lower half, must agree.
+  Dropping `Given` from the cotangent collection fails this and the VJP test, and nothing else.
+  Finite differences alone would not catch it: a cut that drops a term is *self-consistently*
+  wrong.
 
-Also: a cut at a node that is already a `Parameter` behaves identically to no cut; a cut at a
-node with no path to any target is pruned rather than emitted; `support` returns a
-deterministic order across runs.
+The numeric harnesses in `crates/skoro-graph/src/test_utils.rs` cannot be pointed at a cut
+program — they drive `Graph::evaluate_*`, which compile uncut, and adding cut-aware evaluation
+entry points is scope this section does not need. They reach the feature through an equality
+instead: **a cut at a node gives the same first- and second-order derivatives as replacing that
+node with a free variable**, and the free-variable graph is then checked against forward
+differences by `test_vjp_numerically` and `test_hvp_numerically` at the workspace pairing
+`DELTA = 1e-6`, `EPSILON = 1e-5`. Comparing both orders matters: a cut that reached the tape for
+the first derivative but dropped the second would pass every other test in the file.
+
+Also covered: a cut at a `Parameter` is a no-op; a cut off every path is ignored; a cut at a
+stochastic node replaces its sampler, because a `Sampler` step holds parent slot indices the cut
+has just pruned; a cut with no supplied value is `MissingPoint`; a cut naming no node is
+`NodeNotFound`; cut order and repetition are not part of the cache key while target order is;
+`compile_backward_from` is the empty-cut case and shares its cache entry; and `support` is the
+forward closure, in a deterministic order.
 
 ### §3
 

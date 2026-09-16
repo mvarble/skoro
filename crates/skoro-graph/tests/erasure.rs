@@ -402,6 +402,7 @@ mod compiled {
                 CompiledStep::Constant { .. } => "constant",
                 CompiledStep::Parameter { .. } => "parameter",
                 CompiledStep::Sampler { .. } => "sampler",
+                CompiledStep::Given { .. } => "given",
                 CompiledStep::Operation { .. } => "operation",
             })
             .collect();

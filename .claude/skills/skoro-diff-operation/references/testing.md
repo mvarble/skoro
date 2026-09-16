@@ -105,9 +105,9 @@ which is what exposed the missing cross-block coverage.
 ## Framework-contract tests
 
 Some invariants are not observable through returned cotangents. Cotangents wrongly computed for a
-constant are discarded by the collection pass
-(`crates/skoro-graph/src/compiler.rs:467` only surfaces `Parameter`/`Sampler` slots), so a missing
-short-circuit costs work but produces identical output.
+constant are discarded by the collection passes at the end of `vjp_forward` and `hvp_forward` in
+`crates/skoro-graph/src/compiler.rs`, which surface only `Parameter`, `Given` and `Sampler` slots,
+so a missing short-circuit costs work but produces identical output.
 
 Test those with a spy `DiffOperation` that records what the framework handed it — see
 `hvp_mode_reports_per_input_differentiability` in `crates/skoro-model/tests/hvp_diff_gating.rs`.

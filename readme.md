@@ -25,6 +25,7 @@ It breaks this domain down into a few distinct crates:
   This represents the hierarchical structure of a user's model through its cascade of conditional distributions.
   The graph allows us to sequence operations like random sampling and likelihood calculations.
   Evaluation is not limited to end-to-end state-to-density evaluations; subsets of the DAG can be selected, compiled into a sequential program, and evaluated.
+  A compile can also be *cut*: given a frontier of interior nodes whose values the caller supplies, it stops there instead of walking back to every ancestor, and still differentiates with respect to that frontier.
   Beside the parent edges, the graph stores **bindings**: labelled reference edges `(from, role, to)` from a log-density term to the nodes that play a role for it.
   The compiler never reads a binding, but removal and garbage collection treat one as a reference: `remove` refuses to take a bound node from under its term, and `remove_closure` takes the term with it.
   A graph carries two densities over the same nodes: the posterior `p(x|z)` it scores, and the generative model `q(x|z)` it samples from.

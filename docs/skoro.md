@@ -337,10 +337,17 @@ This one deserves the prominence its own module gives it, because it fails silen
 
 > **Jacobian columns must be `Parameter` / `Stochastic` leaves.**
 
-`vjp_forward` collects cotangents only at `CompiledStep::Parameter` / `Sampler`, so nothing else can
-be a column. A mapped-node column yields a **zero column** — and that is indistinguishable from the
-legitimate case of a leaf that simply has no path to any row, which is an ordinary occurrence. It is
-the one failure mode there that no return value announces.
+`vjp_forward` collects cotangents only at the leaf steps, so nothing else can be a column of a
+Jacobian these functions assemble. A mapped-node column yields a **zero column** — and that is
+indistinguishable from the legitimate case of a leaf that simply has no path to any row, which is an
+ordinary occurrence. It is the one failure mode there that no return value announces.
+
+The restriction is now the API's, not the compiler's. `CompiledStep::Given` is a leaf that collects
+cotangents and may stand for a mapped node, so `compile_between` can differentiate with respect to
+an interior quantity — see [graph-compiler.md](graph-compiler.md) §2. What `jacobian_vjp` and
+`jacobian_jvp` do is compile uncut, which is why the rule above still holds of *them*. Widening them
+to take a cut frontier is separate work, and until it lands the sentence in bold is the one to
+follow.
 
 For a filter chain this is natural: `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped. But **a state
 chain built entirely out of mapped nodes cannot be differentiated block-to-block.** A correlated
@@ -381,8 +388,8 @@ unless noted.
 | No RNG seeding; no per-quantity sampling | Any MCMC or SMC — no reproducibility, no per-chain RNG | Not recorded anywhere; found by search |
 | No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
-| No cut compilation, `support(id)`, compiled cache | Large models, rather than any one algorithm | `graph-compiler.md` — designed, in progress |
-| No block-sparse `J`, no sparse solvers | The same, at a scale past a dense `J` | `roadmap.md` |
+| No block-sparse `J`, no sparse solvers | Large models, rather than any one algorithm | `roadmap.md` |
+| `jacobian_*` cannot take an interior column | Block-to-block differentiation of an all-mapped chain (§4.3) | `graph-compiler.md` §2.6 — `compile_between` makes it expressible; the API is unchanged |
 | No Schur complement / marginal precision | Marginalization's computation half (§3.3) | Was the old doc's GAP 2 |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
 | No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
