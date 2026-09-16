@@ -48,7 +48,7 @@ It breaks this domain down into a few distinct crates:
 - **`skoro-linalg`**: Backend-agnostic linear algebra primitives (`Matmul`, `Transpose`, `CrossProduct`, vector norms) and the lower-triangular matrix manifold (`Tril`), used e.g. for covariance factors.
   `FixedLinearMap` / `linear_map` apply a host-supplied matrix as a differentiable operation, which is how a builder without access to constants — a distribution — puts a known matrix into the graph; the matrix follows its input to whatever device that lives on.
   `SparseLinearMap` / `sparse_linear_map` do the same for a large, sparse matrix, storing only its nonzero entries and building its indices on the input's device; the Gaussian Fisher root is built this way.
-  These are _differentiable graph operations_; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §3.3 explains why they run on the host rather than on the backend.
+  These are _differentiable graph operations_; the dense factorizations an EKF or Levenberg-Marquardt iteration needs (Cholesky, triangular solve, QR least-squares) are a separate concern, and `docs/skoro.md` §4.2 explains why they run on the host rather than on the backend.
 
 - **`skoro-so3`**: The SO(3) rotation group (`SO3`, `SO3Matrix`) with differentiable `exp` (Rodrigues' formula), `log`, retraction, compose, rotate/unrotate, and invert operations.
 
@@ -59,6 +59,6 @@ It breaks this domain down into a few distinct crates:
   A Gaussian conditional enters a model through `client.add_quantity(Normal::new(mean, std_dev))`. Its factor binds the whitened residual `r = L⁻¹(x ⊖ μ)`, binds `μ` and `L` separately so a filter can read `H = ∂μ/∂x` and `R = L Lᵀ` apart, and binds a Fisher information root over `[x, μ, L]`. `GaussianBlock` is the read side of those bindings, and `JointNormal` / `add_joint_factor` attach a joint factor over quantities the model already holds.
 
 - **`skoro-dense`**: Host-resident dense linear algebra in `f64`, one matrix at a time, backed by `faer`: Cholesky, triangular and SPD solves, and a column-pivoted-QR least squares.
-  A leaf crate depending on nothing else in the workspace, so only the estimators pay for it. `docs/skoro.md` §3.3 explains why this runs on the host rather than on the backend.
+  A leaf crate depending on nothing else in the workspace, so only the estimators pay for it. `docs/skoro.md` §4.2 explains why this runs on the host rather than on the backend.
 
 - **`skoro`**: The top-level umbrella crate aggregating the workspace and re-exporting the sub-crates (`skoro::dense`, `skoro::prelude`).

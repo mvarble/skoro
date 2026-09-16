@@ -18,7 +18,7 @@
 //!
 //! The boundary is two tensors wide: `J` on the way in and `δ` on the way out. Everything
 //! between them is host `f64` and has no representation in the graph
-//! (`docs/skoro.md` §3.3).
+//! (`docs/skoro.md` §4.2).
 //!
 //! ## What this is not
 //!

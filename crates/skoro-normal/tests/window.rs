@@ -1,8 +1,8 @@
 //! A sliding window over a chain model, grown and retired tick by tick through the
-//! builder — the model-side half of `docs/skoro.md` §2's loop.
+//! builder — the model-side half of the loop in `docs/skoro.md` §3.
 //!
-//! What is asserted is the bookkeeping, not the statistics (nothing marginalizes yet —
-//! that is GAP 2): each tick demotes the blanket member, replaces its conditional with a
+//! What is asserted is the bookkeeping, not the statistics — nothing marginalizes yet, and
+//! §3.3 is what is missing: each tick demotes the blanket member, replaces its conditional with a
 //! joint factor over it, and retires the oldest state-measurement pair with everything
 //! below it. The records, the row count of `J`, and the graph's size must all hold
 //! exactly steady afterwards — a leak or a dangling record is invisible in one tick and

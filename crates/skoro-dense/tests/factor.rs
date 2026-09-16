@@ -164,7 +164,7 @@ mod least_squares {
         );
     }
 
-    /// The damping identity `docs/skoro.md` §3.3 rests on:
+    /// The damping identity `docs/skoro.md` §4.2 rests on:
     /// `(JᵀJ + λI) δ = −Jᵀr` **is** `min ‖[J; √λ I] δ − [−r; 0]‖`.
     ///
     /// On a well-conditioned `J` the two routes must agree, which is what licenses a

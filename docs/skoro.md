@@ -1,0 +1,446 @@
+# Skoro: what is built, and what inference still needs
+
+This file replaces a document of the same name that was deleted incidentally in `785ff1a`
+("Cleaning up graph operations and invoking tests"). Recover the old text with
+`git show 785ff1a^:docs/skoro.md` — 798 lines, worth reading once for its argument and not
+otherwise, since it is stale in both directions: it names `NlsStructure`, `ResidualCertificate`,
+`record_joint` and a `skoro-levenberg-marquardt` crate that are nowhere in the tree, while four of
+its five gaps and its one defect have since closed. **Its section numbering is deliberately not
+preserved**; the comments that cited it have been repointed here.
+
+Organized by what a caller can rely on rather than by the crate stack. §1 and §2 are the surfaces
+that exist and are tested. §3 is marginalization, where the split between what is built and what is
+not is unusually clean. §4 is the estimator's view. §5 is the gap ledger, ordered by which algorithm
+each gap blocks. §6 records where the in-tree documentation has drifted from the code.
+
+Every claim below names a path. Every claim that something *does not exist* was checked, not
+assumed, and §5 gives the searches.
+
+---
+
+## 1. What model-building guarantees today
+
+### 1.1 The two objects, and the two tiers
+
+`ModelServer<B>` owns the graph; `ModelClient<B>` is a cheap cloneable handle to it
+(`crates/skoro-model/src/model.rs`). The only routes from a client to the `Graph` itself are
+`ModelClient::server_call` and `server_call_mut`, so everything else goes through one of two traits.
+
+That split is the load-bearing design decision of the model tier, and its reason is worth quoting
+(`crates/skoro-model/src/client_ops.rs`, on `ModelBuilderOps`):
+
+> Deliberately separate from `ModelClientOps` rather than folded into it. If the two were one
+> trait, "a client that can evaluate a model" and "a client that can add anything to a model"
+> would be the same bound — so an estimator, which needs only the first, could not be given
+> the first without the second. That split is what `remove` / `remove_closure` sit on either side
+> of.
+
+The pair on either side of it:
+
+| | Tier | Behaviour |
+| --- | --- | --- |
+| `remove` | `ModelClientOps` | Leaf-only, all-or-nothing. Refuses a node a survivor still points into (`NodeStillReferenced`) **or still binds** (`NodeStillBound`). Will not break a reference. |
+| `remove_closure` | `ModelBuilderOps` | Takes the downward closure, and the referrers with it. Cannot fail on a live child. |
+
+An estimator holding only `ModelClientOps` therefore cannot silently delete a factor it was handed.
+The tier boundary is pinned by a compile-fail test,
+`crates/skoro-model/tests/compile_fail/remove_closure_is_not_a_client_op.rs`, asserted from
+`tests/bindings.rs`.
+
+### 1.2 Ownership
+
+A `Q<B, T>` is the ownership token; a bare `Id` is a weak reference. `cleanup` is a mark-and-sweep
+whose roots are the ids live handles name plus the graph's likelihood terms, following parent edges,
+bindings, and the scored-quantity edge. Three properties follow, all documented on
+`ModelServer::cleanup`:
+
+- Nothing has to *report* an orphaning. Reachability is a property of the graph, recomputed, not an
+  event a mutation must hand back.
+- Every node kind is collectable — a `Constant` or `Parameter` nothing reaches is garbage exactly as
+  a `Mapped` node is.
+- The sweep cannot fail.
+
+It runs at the mutations that *reduce* reachability (`remove`, `remove_closure`,
+`demote_to_parameter`) and deliberately not on the way in, because sweeping before every `add_*`
+makes building an `n`-node model cost `O(n²)`. A workload that only grows holds its garbage until it
+asks; `graph_node_count` is the bound such a caller watches.
+
+An `Id` kept across a `cleanup()` may name nothing afterwards, which every id-taking method reports
+as `NodeNotFound`.
+
+### 1.3 What a distribution is
+
+`Distribution<B, K>` (`crates/skoro-model/src/distribution.rs`) requires exactly four methods —
+`quantity_type`, `sampler`, `parent_ids`, `factor` — and mentions no binding role. `factor` returns
+a `Factor<B>`: a log-density node plus whatever `(Role, Handle)` pairs its builder chose to declare.
+The model binds `ARGUMENT` to the scored quantity and each of `parent_ids()` itself, so a
+distribution declares only the other roles, or none.
+
+**`Normal<B, M>` is the only implementation in library code.** Every other impl in the tree is a
+test double, and `JointNormal` is not one at all — it is a free-standing factor, because a
+distribution is a conditional over *one* quantity type. Two consequences that shape everything
+downstream:
+
+- Anything non-Gaussian is a bespoke `Distribution` today.
+- A bespoke distribution that offers no Fisher root is legal, and §2.3 is how a consumer finds out.
+
+`add_quantity` is atomic: if `distr.factor(&x)` fails, the partially added quantity and everything
+its factor built are removed before the error returns (`model.rs`, `add_quantity_with`).
+
+### 1.4 Batch pinning
+
+Two calls pin a model to a batch size, after which any other batch is an error rather than a
+broadcast:
+
+- `add_batched_constant` — one value per row.
+- `stacked_tangent` — its frozen linearization anchors are batch-pinned constants, so a batch of `N`
+  independent problems carries `N` independent linearization points.
+
+Everything else broadcasts. This is worth knowing before a filter is written against a batch of
+one and then run against many.
+
+---
+
+## 2. What introspection exposes
+
+### 2.1 The house rule
+
+There are no capability flags, no `supports_*` predicates, and no capability traits anywhere in the
+workspace. This is a decision, not an omission — a `GaussianModelClientOps` bound once existed and
+was removed. From `crates/skoro-normal/tests/facade.rs`:
+
+> What the old `GaussianModelClientOps` bound expressed — "this client can add Gaussians" — was
+> never a claim about what a model *contained*, and every client that can grow a model can add one.
+
+And from the `client_ops` module header:
+
+> Neither says anything about what a model *contains* — for that, read its terms and their
+> bindings, through `ModelClientOps::factors` and `ModelClientOps::bound`.
+
+So: a model's shape is read off its terms and bindings at runtime. There is no type-level
+description of a model, and `ModelClientOps` is deliberately not dyn-compatible — every consumer is
+statically generic over it.
+
+### 2.2 The reading surface
+
+| Call | Returns | What it answers |
+| --- | --- | --- |
+| `factors()` | `Vec<FactorInfo>` | Every term, in term order, with `density`, `scored`, `in_density`, `in_proposal`, `arguments` |
+| `terms()` | `Vec<Term>` | The same without the `ARGUMENT` join |
+| `bound(id, role)` | `Vec<Id>` | What `id` bound under one role, in binding order |
+| `bindings_of(id)` | `Vec<(Role, Id)>` | Everything `id` declared, without knowing the roles up front |
+| `log_density_of(&q)` | `Option<Id>` | The term scoring a stochastic quantity |
+| `graph_node_count()` | `usize` | The bound a retention policy watches |
+| `tangent_layout(&ids)` | `TangentLayout` | Flat tangent coordinates, in the caller's order |
+
+The roles a term may carry are constants in `crates/skoro-model/src/roles.rs`: `ARGUMENT`,
+`RESIDUAL`, `NORMALIZER_PARENT`, `LOCATION`, `WHITENING`, `FISHER_ROOT`. A `Role` is a newtype over
+`&'static str`, and lives in `skoro-core` so that `SkoroError` can name one.
+
+### 2.3 The idiom: arity is the capability test
+
+Every reader matches on the arity of a `bound` call — `[] => skip`, `[x] => use`,
+`_ => Err(ShapeMismatch)`. Two packagings of that idiom exist, and they are complements:
+
+- `GaussianBlock::of` (`crates/skoro-normal/src/structure.rs`) turns three such calls into an
+  `Option`: `Some` when a term binds exactly one each of `RESIDUAL`, `LOCATION`, `WHITENING`. It
+  answers "is this term Gaussian-shaped?"
+- `coverage::terms_missing(client, role)` and `coverage::require_role(client, role)`
+  (`crates/skoro-model/src/coverage.rs`) answer the inverse: which scored terms a reader *cannot*
+  see.
+
+The second exists because the skipping is silent. `information_blocks` drops a term with no
+`FISHER_ROOT`, `residual_layout` a term with no `RESIDUAL`, and `GaussianBlock::all` any term that
+is not Gaussian-shaped — and in all three cases what comes back describes a sub-model with nothing in
+the returned value saying so. Paired with a gradient, which sums over every term, the result is a
+well-conditioned solve of the wrong system; the solve is `D×D` against `D` however many terms
+contributed rows, so no shape check downstream can catch it. `require_role` is the precondition an
+algorithm asserts before it assembles anything; `docs/fisher-scoring.md` §7 states the condition and
+§8 the failure it prevents.
+
+### 2.4 Erasure, and the runtime queries it leaves
+
+The build API is typed (`Q<B, T>`, where `T` is a `PhantomData` tag); the arena is erased. Nodes hold
+`Arc<dyn DynQuantityType<B>>`, and that trait is where the genuine runtime reflection lives
+(`crates/skoro-graph/src/quantity.rs`):
+
+- `kind()` — the continuous/discrete discriminator.
+- `as_manifold() -> Option<&dyn DynManifold<B>>` — `None` for a discrete quantity.
+- `inverse_retraction_op() -> Option<Box<dyn DynGraphOperation<B>>>` — the escape hatch that lets a
+  factor be built over quantities whose manifolds are known only at run time, which is what
+  `stacked_tangent` uses.
+- `cardinality() -> Option<usize>` — `Some` only for finite discrete support.
+- `as_any()` for downcasting, used by `information_blocks` to check that a bound Fisher root really
+  is an `EuclideanMatrixD`.
+
+### 2.5 One trap
+
+`TangentLayout` is **not** revalidated against the graph after construction
+(`crates/skoro-graph/src/tangent_layout.rs`). Reusing one across `add_*`, `remove`, or
+`demote_to_parameter` is a caller error, and it is not detected. Layouts are also laid out by
+*manifold dimension*, never storage size: `SO3` occupies 3 slots and `SE3` 6, not 9 and 12.
+
+---
+
+## 3. Marginalization: the expression half is done, the computation half does not exist
+
+This is the cleanest split in the library, and the one most worth knowing before planning work.
+
+### 3.1 What is built and tested
+
+Retiring a quantity from a model means three things: sever its distribution, express what it leaves
+behind as a factor over its Markov blanket, and reclaim what is now unreachable. All three work.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `demote_to_parameter` | `graph.rs`, `model.rs`, `client_ops.rs` | Strips a quantity's sampler, parents and own density, keeping its `Id`, type, and every child edge. **Returns the parents it severed**, since only a caller tracking handles can decide if they are now garbage. |
+| `stacked_tangent` | `graph.rs` (builder tier) | `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` as one `EuclideanD(Σdᵢ)`. Builds `2k+1` nodes; each `pᵢ` is a frozen batch-pinned constant in a private arena. |
+| `JointNormal` / `add_joint_factor` | `crates/skoro-normal/src/joint.rs` | A Gaussian over several existing quantities, linearized at a frozen point, entering the model as a free-standing factor over them. |
+| `whitening_from_precision` | `crates/skoro-dense/src/factor.rs` | Turns a precision `Λ` into the `W` with `WᵀW = Λ`, packed for a `Tril`, plus its log-determinant. The host crossing a marginal needs. |
+| `remove_closure` | `client_ops.rs` (builder tier) | Retires the cone, taking referrers with it. |
+| `cleanup` | `model.rs` | Reclaims whatever that made unreachable. |
+
+`crates/skoro-normal/tests/window.rs` runs the whole loop: a linear-Gaussian chain with a
+three-member window over twelve ticks, each tick demoting the blanket member, attaching a joint
+factor over it, and retiring the oldest state-measurement pair with everything below it. The factor
+count, the row count of `J`, and the graph's node count must all hold exactly steady afterwards —
+"a leak or a dangling record is invisible in one tick and unmissable over twelve."
+
+### 3.2 The product manifold was never needed
+
+The deleted document called a **product manifold** the blocker here: a joint over a blanket holding
+more than one quantity has no `Distribution` to describe it, and `Normal<B, M>` is a single
+manifold. The code settled this, and the answer is no product manifold is required.
+
+What a joint factor needs is a joint *tangent*, and stacking each member's own `x ⊖ p` gives one
+without merging anything: the members keep their ids, their storage, and their other children. A
+product manifold would have to re-home them into a single quantity, which is exactly what
+`demote_to_parameter` exists to avoid. `crates/skoro/tests/stacked_tangent.rs` demonstrates it over
+a heterogeneous blanket — it lives in the umbrella crate because it is the only one that can see
+`SE3` and `Tril` alongside `ModelClient`.
+
+The load-bearing property there is dimension, not storage. An `SE3` member contributes 6 columns and
+never 12, so a blanket of `SE3` + `EuclideanD(3)` stacks to 9 rather than 15. Getting it wrong yields
+a well-shaped residual that no downstream shape check would reject.
+
+### 3.3 What is absent
+
+**There is no Schur complement anywhere in the tree, no `marginal_precision`, and no estimator.**
+`window.rs` supplies a fixed constant whitening in place of a computed precision, which is precisely
+why its header says it asserts "the bookkeeping, not the statistics."
+
+The remaining work is:
+
+1. The Schur complement `Λ_survivor = Λ_bb − Λ_ba Λ_aa⁻¹ Λ_ab` over `Dense`. Every primitive it
+   needs — `spd_solve`, `matmul`, `transpose` — exists.
+2. Whatever produces `Λ` at an estimate, which is the same thing as §4's missing estimator: a Laplace
+   marginal is `Λ = JᵀJ` in tangent coordinates at `θ̂`.
+
+With the standing precondition that the Laplace marginal is **exact** for a linear-Gaussian model
+and an approximation otherwise.
+
+### 3.4 Two obligations nothing can check
+
+- **`JointNormal`'s block order.** `ids` fixes the order the tangents stack in, and `W` must be
+  expressed in those same coordinates. Nothing verifies the correspondence, because nothing can — a
+  `Tril` of the right width is a valid whitening for any ordering.
+- **A joint factor binds no `LOCATION` or `WHITENING`**, having no single mean node. So
+  `GaussianBlock` cannot see it, and a filter reading `H = ∂μ/∂x` and `R = L Lᵀ` off the bindings
+  will skip it silently — see §2.3.
+
+Also note that `whitening_from_precision` costs an inversion that cancels analytically but not
+numerically, and `Λ` is ill-conditioned exactly when the blanket is under-constrained, which is the
+case a marginal over a poorly observed window produces. `NotPositiveDefinite` is the honest failure
+there, and it is returned rather than becoming `NaN`s.
+
+---
+
+## 4. What an estimator still needs
+
+### 4.1 The step loop already composes
+
+Nothing is missing from the *primitives* of a damped Gauss-Newton or Fisher-scoring step. The loop
+is expressible today:
+
+```rust
+// Objective structure, read off the bindings.
+require_role(&model, FISHER_ROOT)?;              // no term silently omitted (§2.3)
+let rows = residual_layout(&model)?;             // skoro_model::least_squares
+let free = model.tangent_layout(&ids)?;          // the columns: Parameter/Stochastic leaves
+
+// A PointMap is what retracts, and `as_ref()` is its ValueMap view for evaluation.
+let mut at = point_map().with_quantity(&x, x0).build();   // skoro_model::hash_map_builders
+
+// Curvature: either the Gauss-Newton Jacobian of the residuals, or the Fisher root.
+let j = jacobian_vjp(&model, at.as_ref(), &free, &rows)?; // [batch, D_out, D_in]
+let a = information_root(&model, at.as_ref(), &free)?;    // [batch, Σk,   D_in]
+
+// Host solve, damped by row augmentation (§4.2).
+let jd = Dense::from_tensor(j)?;
+let damping = Dense::scaled_identity(free.total(), lambda.sqrt());
+let step = lstsq(&jd.vstack(&damping)?, &rhs)?;
+
+// Step on the manifolds.
+at = at.retract_flat(&free, step.to_vector(&device))?;
+```
+
+`retract_flat` applies each block through its own manifold's retraction, which is the only
+manifold-aware step in the iteration — everything above it is arithmetic in ℝⁿ.
+
+The `rhs` is elided above because it is the one piece with no helper. There is a
+`jacobian_vjp` that assembles `J` over a layout, but **nothing that assembles `r` over the same
+layout**: a caller evaluates the residual nodes with `evaluate_ids` and flattens them itself,
+by `TangentLayout::flatten_vectors` or by hand. The layout that ordered the rows of `J` is the
+layout the residual must agree with, and keeping them in step is unassisted.
+
+### 4.2 Crossing to the host
+
+`J` and `δ` are the only tensor-typed values in the iteration; everything between them is host
+`f64` and has no representation in the graph. `Dense::split_tensor` moves a whole batch across in
+**one** transfer and then slices host-side — the obvious alternative, `narrow` per row, is `N` device
+reads, and on a cube backend each one fences the queue.
+
+The step is column-pivoted QR on the row-augmented system:
+
+```
+(JᵀJ + λI) δ = −Jᵀr    ⟺    min ‖[J; √λI] δ − [−r; 0]‖
+```
+
+The right-hand form is solved directly, so the iteration runs at condition `κ` rather than `κ²`, **at
+every damping value** rather than only at `λ = 0`. Forming `JᵀJ` would square the conditioning;
+avoiding it is the entire argument for the host boundary, since `burn` has no QR.
+
+This is also the fence that keeps the two triangular-solve implementations apart, and deliberately:
+`TrilInvert` is a *differentiable graph operation* on every backend and stays there, while
+`skoro-dense` is host `f64` for the estimators. `crates/skoro-linalg/tests/common/tril.rs` is the
+check that they have not drifted — the packed forward substitution and the host triangular solve must
+compute the same inverse.
+
+Two limits on the boundary:
+
+- **A host `f64` solve is not `f64` end to end.** Under an `f32` float policy the Jacobian arrives
+  already rounded and `δ` is rounded back. What it buys is `f64` *inside* the solve, which is where
+  the conditioning lives. A filter that wants an `f64` state runs `Flex` under the `f64` policy,
+  where the round trip is a `memcpy`.
+- **A `Dense` is exactly one matrix.** `from_tensor` rejects a `[b, m, n]` with `b != 1` as
+  `BatchNotSingleton` rather than silently taking slice 0. A batched solver reaches the
+  factorizations through `split_tensor` / `split_vector` / `stack_vector`, so the batch axis is
+  handled *around* the factorizations — and `N` problems means `N` host round trips per iteration.
+
+`lstsq` commits an algorithm to the host path deliberately: burn 0.21 has no QR, so unlike the other
+factorizations it could not be reimplemented on `Tensor<B, 3>` behind the same name.
+
+### 4.3 The structural trap
+
+This one deserves the prominence its own module gives it, because it fails silently
+(`crates/skoro-model/src/jacobian.rs`):
+
+> **Jacobian columns must be `Parameter` / `Stochastic` leaves.**
+
+`vjp_forward` collects cotangents only at `CompiledStep::Parameter` / `Sampler`, so nothing else can
+be a column. A mapped-node column yields a **zero column** — and that is indistinguishable from the
+legitimate case of a leaf that simply has no path to any row, which is an ordinary occurrence. It is
+the one failure mode there that no return value announces.
+
+For a filter chain this is natural: `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped. But **a state
+chain built entirely out of mapped nodes cannot be differentiated block-to-block.** A correlated
+joint is no exception, and needs no exception: it is modelled as a likelihood factor over `Parameter`
+leaves, and those are ordinary columns.
+
+Rows are unrestricted — any continuous node works, and leaf rows are filled in by `jacobian.rs`
+rather than by either pass, since `∂x/∂x` is the identity and neither pass would seed it.
+
+### 4.4 What is missing around the loop
+
+- **No `Estimator` abstraction**, and no line search, trust region, damping schedule, or convergence
+  test. `lstsq` gives the undamped step and documents damping as the caller's job.
+- **No compiled-program cache.** `information_blocks` compiles twice per call — one reverse pass over
+  the union of the terms' arguments, one evaluation of every root — and a solver loop pays that every
+  iteration. Nothing caches a compiled program.
+- **No dense second-order assembly.** `log_density_ord2`, `evaluate_hvp` and friends are reachable
+  from `ModelClientOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
+  basis, and there is **no `hessian_*` mirroring `jacobian_jvp` / `jacobian_vjp`**. Materializing a
+  Hessian is a `D_in`-call loop the caller writes, with none of `jacobian.rs`'s layout flattening or
+  leaf-row fill-in. Note that `information*` is the *Fisher* information, not the Hessian.
+- **No sparsity anywhere.** `Dense::matmul` is a triple loop with a zero-skip; there is no LU, SVD,
+  eigendecomposition, iterative solver, or sparse storage.
+
+One thing that is *not* missing, contrary to its own documentation: the directional
+`_jvp` / `_vjp` / `_hvp` primitives are on `ModelClientOps`, so an estimator bounded on the read tier
+does get raw access to them. See §6.
+
+---
+
+## 5. Gap ledger
+
+Ordered by what each gap blocks rather than by size. Recorded in `docs/superpowers/roadmap.md`
+unless noted.
+
+| Gap | Blocks | Status |
+| --- | --- | --- |
+| No RNG seeding; no per-quantity sampling | Any MCMC or SMC — no reproducibility, no per-chain RNG | Not recorded anywhere; found by search |
+| No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
+| Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
+| No cut compilation, `support(id)`, block-sparse `J`, sparse solvers, compiled cache | Large models, rather than any one algorithm | `roadmap.md` |
+| No Schur complement / marginal precision | Marginalization's computation half (§3.3) | Was the old doc's GAP 2 |
+| No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
+| No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
+| No residual-vector assembly to match `jacobian_*` | Every least-squares step must hand-roll its `r` in the layout's order (§4.1) | Not recorded; found while writing this |
+| Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
+| `log_weight` is two compiled passes, not one | Nothing — correctness is fine, the joint terms cancel to rounding | `roadmap.md` |
+| Deferred bindings | Expensive-root families, very large models | `docs/superpowers/deferred-bindings.md` — designed, postponed |
+
+### 5.1 The sampling gap, in detail
+
+It is the least documented and the most blocking, so it is worth stating precisely. Generation is
+whole-model only: `generate(batch_size)` and `generate_from(points, batch_size)`. **There is no way
+to sample a single quantity by id**, and no RNG control at all — `NormalSampler::sample` calls
+`Tensor::random` with no seed parameter, and nothing in the workspace threads a seed or a generator.
+An MCMC implementation could not make a run reproducible or give each chain its own stream.
+
+What *does* exist is the proposal/target split: `add_proposal` puts a term in `q` and not in `p`, and
+`log_weight` is their difference — "a difference, not a sub-sum", since a proposal-only term enters
+it negatively. `crates/skoro-normal/tests/proposal.rs` composes importance sampling end to end from
+those primitives, scoring by hand on the host. It is a demonstration that the pieces compose, not a
+reusable sampler: no weight accumulator, no resampling, no ESS.
+
+### 5.2 Searches behind the "does not exist" claims
+
+```
+rg -i 'schur|marginal_precision'                       # 0
+rg -i 'seed_rng|set_seed|B::seed'                      # 0
+rg 'fn hessian'                                        # 0
+rg -i 'hmc|nuts|leapfrog|metropolis|resampl|particle'  # 2, both prose
+rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
+```
+
+### 5.3 Open items tracked elsewhere
+
+`docs/superpowers/TODO.md` holds three, not duplicated here: `ModelServer::add_factor` cannot check
+model identity (it has no `server_id`, unlike the client method); four `skoro-so3` `wgpu_f32`
+tolerance misses, pre-existing and GPU-only; and deferred bindings.
+
+---
+
+## 6. Where the in-tree documentation is stale
+
+Observations, with paths. Repairing them is separate work this document does not do.
+
+- **`client_ops.rs`, on `ModelClientOps`** — says it mirrors the client surface "excluding the
+  lower-level `_jvp`/`_vjp`/`_hvp` directional primitives, which remain inherent methods for now."
+  They are not excluded; they are declared on the trait and implemented for `ModelClient`. An
+  estimator bounded on the read tier does get them.
+- **`skoro-dense`** — both `lib.rs` and `factor.rs` say "five" entry points. There are six:
+  `whitening_from_precision` came later. It is also **not in the prelude**
+  (`crates/skoro/src/lib.rs` exports `cholesky`, `lstsq`, `solve_lower`, `solve_upper`, `spd_solve`
+  only), although it is exactly the host crossing a marginalization needs — reaching it means naming
+  `skoro_dense::factor::whitening_from_precision`.
+- **`ModelServer::demote_to_parameter`** — its closing paragraph says the graph reports each thing
+  the demotion orphaned, "because none of them is an event a later pass could reconstruct." The
+  mark-and-sweep `cleanup` it calls documents the opposite, and is right: reachability is recomputed,
+  not reported.
+- **`ModelServer::cleanup`** — refers to "the previous candidate-queue collector" as context. That
+  collector is gone; the reference will read as a live comparison to someone who never saw it.
+- **`graph.rs`, on `stacked_tangent`** — a dropped clause: "This is what lets a single factor score a
+  runtime collection of *several* quantities at once, joint likelihood over a Markov blanket needs
+  and which no distribution can express".

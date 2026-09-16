@@ -1,9 +1,10 @@
 //! A joint residual over a **heterogeneous** Markov blanket, without a product manifold.
 //!
-//! This is the case `docs/skoro.md` §4.1 calls the blocker for GAP 2: *"if the blanket holds more
-//! than one quantity, there is no way to express a joint over several manifolds"*. The claim these
-//! tests make is that a product manifold was never needed — stacking the members' **tangents**
-//! into one `EuclideanD` is enough, and the members keep their own ids, storage, and children.
+//! A blanket holding more than one quantity was long taken to need a product manifold, on the
+//! grounds that there is otherwise no way to express a joint over several manifolds. The claim
+//! these tests make is that one was never needed — stacking the members' **tangents** into one
+//! `EuclideanD` is enough, and the members keep their own ids, storage, and children.
+//! `docs/skoro.md` §3.2 records the correction.
 //!
 //! It lives in the umbrella crate because it is the only one that can see `SE3` and `Tril` at the
 //! same time as `ModelClient`; the individual pieces are tested in their own crates.

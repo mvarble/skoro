@@ -5,11 +5,11 @@
 //! than one quantity that joint has no [`Distribution`](skoro_model::distribution::Distribution)
 //! to describe it — a distribution is a conditional over *one* quantity type.
 //!
-//! `docs/skoro.md` §4.1 reads that as needing a **product manifold**. It does not. What the factor
-//! needs is a joint *tangent*, and stacking each member's own `x ⊖ p` gives one without merging
-//! anything: the members keep their ids, their storage, and their other children. A product
-//! manifold would have to re-home them into a single quantity, which is exactly what
-//! `demote_to_parameter` exists to avoid.
+//! It needs no **product manifold**, though that was long assumed. What the factor needs is a
+//! joint *tangent*, and stacking each member's own `x ⊖ p` gives one without merging anything:
+//! the members keep their ids, their storage, and their other children. A product manifold would
+//! have to re-home them into a single quantity, which is exactly what `demote_to_parameter`
+//! exists to avoid. `docs/skoro.md` §3.2 records the correction.
 
 use skoro_backend::Backend;
 use skoro_core::{error::SkoroResult, id::Id};
