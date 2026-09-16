@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use skoro_backend::{
     Backend, CotangentFrame, CotangentVector, Point, TangentFrame, TangentVector, Tensor,
@@ -54,10 +54,23 @@ use crate::sampler::{DynGraphSampler, GraphSampler};
 ///
 /// Inverses of some of these maps (child-to-parents, log-likelihod-to-quantity) are stored in the
 /// node data itself. This structure demands coherence which renders the fields private.
-#[derive(Clone)]
 pub struct Graph<B: Backend> {
     /// Generator for unique IDs of nodes
     id_generator: IdGenerator,
+    /// Bumped by every mutator. The compiled-sequence cache keys on it.
+    ///
+    /// A target list alone cannot key a compiled sequence: `observe`, `unobserve`,
+    /// `demote_to_parameter`, `remove` and the constant fold all change a node's kind or its
+    /// folded value *at a fixed `Id`*, which flips `constant_inputs` on every consumer. The
+    /// same targets must be able to compile to a different program.
+    epoch: u64,
+    /// Compiled sequences for this epoch, keyed by the target list.
+    ///
+    /// Behind a `Mutex` because the evaluation methods take `&self` -- `ModelClient` reaches
+    /// the graph through a read lock, and a compile is a read as far as the caller is
+    /// concerned. Sharing an `Arc` is sound: the four passes take `&self` and allocate every
+    /// mutable slot vector locally.
+    compiled: Mutex<CompiledCache<B>>,
     /// Arena of all nodes
     nodes: HashMap<Id, Node<B>>,
     /// Children edge data (parent edge data is local)
@@ -77,6 +90,42 @@ pub struct Graph<B: Backend> {
     /// Labelled reference edges from a node (typically a log-density term) to others. Read by
     /// inference algorithms and by garbage collection; never by the compiler.
     bindings: Bindings,
+}
+
+/// The cache's contents, and the epoch they were compiled at.
+struct CompiledCache<B: Backend> {
+    epoch: u64,
+    sequences: HashMap<Vec<Id>, Arc<CompiledSequence<B>>>,
+}
+
+impl<B: Backend> Default for CompiledCache<B> {
+    fn default() -> Self {
+        Self {
+            epoch: 0,
+            sequences: HashMap::new(),
+        }
+    }
+}
+
+/// Hand-written because the cache is not `Clone`, and because a clone should not inherit one.
+///
+/// The clone is a separate arena that will be mutated separately; carrying entries across would
+/// be the same staleness the epoch exists to prevent, one indirection further out.
+impl<B: Backend> Clone for Graph<B> {
+    fn clone(&self) -> Self {
+        Self {
+            id_generator: self.id_generator.clone(),
+            epoch: self.epoch,
+            compiled: Mutex::new(CompiledCache::default()),
+            nodes: self.nodes.clone(),
+            children: self.children.clone(),
+            log_likelihoods: self.log_likelihoods.clone(),
+            stochastic_to_log_density: self.stochastic_to_log_density.clone(),
+            pinnable: self.pinnable.clone(),
+            private_nodes: self.private_nodes.clone(),
+            bindings: self.bindings.clone(),
+        }
+    }
 }
 
 impl<B: Backend> Default for Graph<B> {
@@ -126,6 +175,14 @@ fn take_float<B: Backend>(out: &mut ForwardOutput<B>, id: Id) -> SkoroResult<Poi
     }
 }
 
+/// The largest number of compiled sequences a graph holds at once.
+///
+/// Epoch invalidation bounds staleness, not size: target lists are caller-supplied, so key
+/// cardinality is caller-controlled. Past this, the whole map is cleared rather than evicted one
+/// entry at a time -- one branch, and no recency bookkeeping for a case rare enough that
+/// thrashing does not matter.
+pub const MAX_CACHED_SEQUENCES: usize = 64;
+
 impl<B: Backend> Graph<B> {
     /// Create a new probabilistic execution graph.
     pub fn new() -> Self {
@@ -134,6 +191,8 @@ impl<B: Backend> Graph<B> {
             children: HashMap::new(),
             log_likelihoods: Vec::new(),
             id_generator: IdGenerator::new(),
+            epoch: 0,
+            compiled: Mutex::new(CompiledCache::default()),
             stochastic_to_log_density: HashMap::new(),
             pinnable: HashSet::new(),
             private_nodes: HashSet::new(),
@@ -156,7 +215,7 @@ impl<B: Backend> Graph<B> {
             return Err(SkoroError::NodeNotFound { id: to });
         }
         self.bindings.bind(from, role, to);
-        self.debug_validate_indices();
+        self.touch();
         Ok(())
     }
 
@@ -513,6 +572,19 @@ impl<B: Backend> Graph<B> {
         }
     }
 
+    /// Record that the graph changed: bump the epoch, then re-check the derived indices.
+    ///
+    /// Every `&mut self` method ends here. The rule has no exceptions -- not even `bind`, whose
+    /// edges the compiler provably never reads, and not even the `add_*` family, whose freshly
+    /// issued ids provably cannot be ancestors of anything already compiled. Both of those are
+    /// real invariants, but an invariant that has to be defended forever is worth less than a
+    /// rule with nothing to remember, and no workload this cache exists for mutates between
+    /// evaluations anyway.
+    fn touch(&mut self) {
+        self.epoch = self.epoch.wrapping_add(1);
+        self.debug_validate_indices();
+    }
+
     /// Add a fixed, immutable quantity, continuous or discrete.
     pub fn add_constant<K, T, D>(&mut self, quantity_type: T, value: &D) -> Id
     where
@@ -586,7 +658,7 @@ impl<B: Backend> Graph<B> {
                 quantity_type,
             }),
         );
-        self.debug_validate_indices();
+        self.touch();
         Ok(id)
     }
 
@@ -603,7 +675,7 @@ impl<B: Backend> Graph<B> {
         let id = self.id_generator.issue_id();
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
-        self.debug_validate_indices();
+        self.touch();
         id
     }
 
@@ -648,7 +720,7 @@ impl<B: Backend> Graph<B> {
                 quantity_type,
             }),
         );
-        self.debug_validate_indices();
+        self.touch();
         Ok(id)
     }
 
@@ -786,7 +858,7 @@ impl<B: Backend> Graph<B> {
                 value,
             }),
         );
-        self.debug_validate_indices();
+        self.touch();
         Ok(id)
     }
 
@@ -896,7 +968,7 @@ impl<B: Backend> Graph<B> {
                 Err(SkoroError::NotMapped { id })
             }
         };
-        self.debug_validate_indices();
+        self.touch();
         out
     }
 
@@ -949,7 +1021,7 @@ impl<B: Backend> Graph<B> {
                 Err(SkoroError::NotMapped { id })
             }
         };
-        self.debug_validate_indices();
+        self.touch();
         out
     }
 
@@ -989,7 +1061,7 @@ impl<B: Backend> Graph<B> {
                 Err(SkoroError::NotLogLikelihood { id })
             }
         };
-        self.debug_validate_indices();
+        self.touch();
         out
     }
 
@@ -1250,7 +1322,7 @@ impl<B: Backend> Graph<B> {
                 _ => {}
             };
         }
-        self.debug_validate_indices();
+        self.touch();
         Ok(())
     }
 
@@ -1317,7 +1389,7 @@ impl<B: Backend> Graph<B> {
         };
         self.pinnable.remove(&id);
         self.clear_cached_descendants(id);
-        self.debug_validate_indices();
+        self.touch();
         Ok(())
     }
 
@@ -1403,7 +1475,7 @@ impl<B: Backend> Graph<B> {
             orphaned.push(dens_id);
         }
         self.clear_cached_descendants(id);
-        self.debug_validate_indices();
+        self.touch();
         Ok(orphaned)
     }
 
@@ -1480,7 +1552,7 @@ impl<B: Backend> Graph<B> {
             };
             out.push(node);
         }
-        self.debug_validate_indices();
+        self.touch();
         Ok(out)
     }
 
@@ -1565,7 +1637,7 @@ impl<B: Backend> Graph<B> {
 
     /// Evaluate and sum `terms`, which the caller has checked are likelihood terms.
     fn sum_terms(&self, points: &ValueMap<B>, terms: &[Id]) -> SkoroResult<Point<B>> {
-        let compiled_sequence = self.compile_backward_from(terms);
+        let compiled_sequence = self.compile_backward_from(terms)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1604,7 +1676,7 @@ impl<B: Backend> Graph<B> {
     /// calculation.
     pub fn log_density_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>> {
         let density_terms = self.density_term_ids();
-        let compiled_sequence = self.compile_backward_from(&density_terms);
+        let compiled_sequence = self.compile_backward_from(&density_terms)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1655,7 +1727,7 @@ impl<B: Backend> Graph<B> {
         tangents: &HashMap<Id, TangentVector<B>>,
     ) -> SkoroResult<PointEvalOrder2<B>> {
         let density_terms = self.density_term_ids();
-        let compiled_sequence = self.compile_backward_from(&density_terms);
+        let compiled_sequence = self.compile_backward_from(&density_terms)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1725,7 +1797,7 @@ impl<B: Backend> Graph<B> {
         batch_size: usize,
     ) -> SkoroResult<ForwardOutput<B>> {
         let ids: Vec<Id> = self.nodes.keys().copied().collect();
-        let compiled_sequence = self.compile_backward_from(&ids);
+        let compiled_sequence = self.compile_backward_from(&ids)?;
         compiled_sequence.forward(ForwardInput {
             points,
             options: ForwardOptions {
@@ -1737,7 +1809,7 @@ impl<B: Backend> Graph<B> {
 
     /// Simple interface for evaluating multiple mapped quantities.
     pub fn evaluate_ids(&self, points: &ValueMap<B>, ids: &[Id]) -> SkoroResult<ForwardOutput<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1760,7 +1832,7 @@ impl<B: Backend> Graph<B> {
         tangents: &HashMap<Id, TangentFrame<B>>,
         ids: &[Id],
     ) -> SkoroResult<JvpForwardOutput<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1784,7 +1856,7 @@ impl<B: Backend> Graph<B> {
         cotangents: &HashMap<Id, CotangentFrame<B>>,
         ids: &[Id],
     ) -> SkoroResult<VjpForwardOutput<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1810,7 +1882,7 @@ impl<B: Backend> Graph<B> {
         ord2_cotangents: &HashMap<Id, CotangentFrame<B>>,
         ids: &[Id],
     ) -> SkoroResult<HvpForwardOutput<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1834,7 +1906,7 @@ impl<B: Backend> Graph<B> {
         points: &ValueMap<B>,
         ids: &[Id],
     ) -> SkoroResult<EvalOrder1<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -1872,7 +1944,7 @@ impl<B: Backend> Graph<B> {
         tangents: &HashMap<Id, TangentVector<B>>,
         ids: &[Id],
     ) -> SkoroResult<EvalOrder2<B>> {
-        let compiled_sequence = self.compile_backward_from(ids);
+        let compiled_sequence = self.compile_backward_from(ids)?;
         let batch_size = if let Some((_, point)) = points.iter().next() {
             point.dims()[0]
         } else {
@@ -2235,8 +2307,43 @@ impl<B: Backend> Graph<B> {
         ordered
     }
 
-    /// Compile a subgraph into a sequence of operations.
-    pub fn compile_backward_from(&self, targets: &[Id]) -> CompiledSequence<B> {
+    /// Compile a subgraph into a sequence of operations, reusing an earlier compile when the
+    /// graph has not changed since.
+    ///
+    /// Two calls with the same targets against an unmutated graph return the same `Arc`. Any
+    /// mutation bumps the epoch, which drops every entry -- so a returned sequence is a
+    /// snapshot, and holding one across a mutation keeps the *old* program alive rather than
+    /// silently seeing the new one. That is the right default: a sequence is already a
+    /// snapshot, since it is indices and boxed closures with no path back to the arena.
+    ///
+    /// The key is the target slice verbatim. `topological_sort` seeds its stack with the
+    /// targets and pops LIFO, so their order fixes the step order and therefore every slot
+    /// index; sorting or deduping the key would hand one caller another's slot layout.
+    pub fn compile_backward_from(&self, targets: &[Id]) -> SkoroResult<Arc<CompiledSequence<B>>> {
+        let mut cache = self
+            .compiled
+            .lock()
+            .expect("compiled-sequence cache poisoned");
+        if cache.epoch != self.epoch {
+            cache.sequences.clear();
+            cache.epoch = self.epoch;
+        } else if let Some(sequence) = cache.sequences.get(targets) {
+            return Ok(sequence.clone());
+        }
+
+        // Compiled outside the `Entry` API deliberately: it can fail, and a vacant entry must
+        // not be filled with a program that did not build.
+        let sequence = Arc::new(self.compile_uncached(targets)?);
+
+        // Epoch invalidation bounds staleness, not size.
+        if cache.sequences.len() >= MAX_CACHED_SEQUENCES {
+            cache.sequences.clear();
+        }
+        cache.sequences.insert(targets.to_vec(), sequence.clone());
+        Ok(sequence)
+    }
+
+    fn compile_uncached(&self, targets: &[Id]) -> SkoroResult<CompiledSequence<B>> {
         // get the nodes in the order they appear
         let ids = self.topological_sort(targets);
 
@@ -2247,7 +2354,10 @@ impl<B: Backend> Graph<B> {
 
         // visit each node and prepare the sequence
         for id in ids {
-            let node = self.nodes.get(&id).unwrap();
+            // `topological_sort` tolerates an unknown id and emits it verbatim, so a caller
+            // holding a target across a `remove` reaches here. That is an error with a name,
+            // not a panic.
+            let node = self.nodes.get(&id).ok_or(SkoroError::NodeNotFound { id })?;
             match node {
                 Node::Constant(ConstantNode {
                     id,
@@ -2363,7 +2473,7 @@ impl<B: Backend> Graph<B> {
             };
         }
 
-        CompiledSequence::new(steps)
+        Ok(CompiledSequence::new(steps))
     }
 }
 

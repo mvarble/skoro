@@ -1,9 +1,11 @@
 # The graph compiler: caching, cut compilation, and step improvements
 
-Planned, not yet implemented. This is the design and the execution order for three changes to
-`skoro-graph`'s compiler; it is the first thing in this directory that is committed *before*
-its work lands rather than after. Three of the gaps in [skoro.md](skoro.md) §5 and two
+The design and execution order for three changes to `skoro-graph`'s compiler. It is the first
+thing in this directory committed *before* its work landed rather than after, so it is written
+forward and amended as each section ships. Three of the gaps in [skoro.md](skoro.md) §5 and two
 [roadmap.md](roadmap.md) items are what it closes.
+
+**Status: §1 shipped. §2 and §3 not started.**
 
 ## What the compiler does today
 
@@ -257,12 +259,20 @@ than asserting "all green."
 ### §1 — new tests in `crates/skoro-graph/tests/`
 
 Behavioral and precision-agnostic, so a plain topic-named integration test file, not a
-per-backend binary. The observer they need — a compile counter or `compiled_len()` — goes
-behind `skoro-graph`'s existing **`test-utils`** feature. Not `testing`: that is
-`skoro-model`'s, and enabling the wrong one is a silent miss.
+per-backend binary: `crates/skoro-graph/tests/compiler_cache.rs`.
 
-- **Hit:** N `evaluate_ids` calls with the same targets compile once.
-- **Miss on target change:** different target lists get separate entries.
+They need **no observer at all**, which is better than the compile counter this document first
+called for. `compile_backward_from` returns an `Arc`, so `Arc::ptr_eq` asks the question a cache
+actually exists to answer — "did the caller get the *same* artifact back" — directly, and no
+test-only state goes into `Graph`. Eviction is asked the same way: request a key, push past the
+cap, request it again, and assert it is a *different* `Arc`. `MAX_CACHED_SEQUENCES` is public
+for that test.
+
+- **Hit:** two compiles of the same targets return the same `Arc`.
+- **Miss on target change:** different target lists get different `Arc`s, and the first stays
+  live.
+- **Target order is part of the key:** `[prod, sq]` and `[sq, prod]` are different programs,
+  asserted against the emitted step order so the test cannot go vacuous.
 - **Invalidation, table-driven over all 31 `&mut self` sites:** compile, mutate, compile,
   assert the cache cleared. `observe`/`unobserve`/`demote_to_parameter`/`remove` are checked
   for *correctness* too, not just for the count — assert the recompiled sequence's
@@ -272,7 +282,14 @@ behind `skoro-graph`'s existing **`test-utils`** feature. Not `testing`: that is
 - **Overflow:** more than `MAX_CACHED_SEQUENCES` distinct target lists in one epoch clears the
   map rather than growing it.
 - **`Clone` starts empty.**
-- **`NodeNotFound`:** `evaluate_ids` with a removed id returns the error instead of panicking.
+- **`NodeNotFound`:** compiling a removed target returns the error instead of panicking.
+- **Reuse:** the cache is the first thing in the tree that hands one artifact to two callers, so
+  two properties that were previously implementation details become contract. A reused sequence
+  must evaluate each set of points on its own merits — any surviving slot state would show as
+  the previous call's answer — and two threads must be able to run one sequence at once.
+
+Every invalidation test was mutation-tested: with the bump removed from `touch()`, all eight
+fail; with the cap removed, the eviction test fails. None of them is vacuous.
 
 ### §2 — the load-bearing test
 

@@ -365,7 +365,7 @@ mod compiled {
     #[test]
     fn a_compiled_sequence_reports_its_steps() {
         let m = Arithmetic::new();
-        let sequence = m.graph.compile_backward_from(&[m.sq]);
+        let sequence = m.graph.compile_backward_from(&[m.sq]).unwrap();
 
         // `a`, `b`, `sum`, `sq` -- `prod` is outside `sq`'s cone.
         assert_eq!(sequence.steps.len(), 4);
@@ -394,7 +394,7 @@ mod compiled {
             )
             .unwrap();
 
-        let sequence = graph.compile_backward_from(&[m]);
+        let sequence = graph.compile_backward_from(&[m]).unwrap();
         let kinds: Vec<&str> = sequence
             .steps
             .iter()
@@ -418,7 +418,7 @@ mod compiled {
             .unwrap();
         graph.observe::<_, Real, _>(s, &3.0f64).unwrap();
 
-        let sequence = graph.compile_backward_from(&[s]);
+        let sequence = graph.compile_backward_from(&[s]).unwrap();
         assert!(matches!(sequence.steps[0], CompiledStep::Constant { .. }));
 
         let out = graph.generate(1).unwrap();
