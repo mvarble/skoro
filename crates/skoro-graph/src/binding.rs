@@ -9,15 +9,10 @@ use std::collections::{HashMap, HashSet};
 
 use skoro_core::id::Id;
 
-/// A labelled edge kind. Two roles compare equal iff their strings are identical.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Role(pub &'static str);
-
-impl std::fmt::Display for Role {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0)
-    }
-}
+/// The label on a binding. Defined in `skoro-core` so that
+/// [`SkoroError`](skoro_core::error::SkoroError) can name one, and re-exported here because this
+/// is the module whose edges carry it.
+pub use skoro_core::role::Role;
 
 /// The bindings of a graph: every `(from, role, to)` triple recorded so far, plus the reverse
 /// index [`referrers_of`](Bindings::referrers_of) needs.

@@ -7,9 +7,13 @@
 use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_core::{error::SkoroError, kind::Continuous};
 use skoro_graph::node::{MappedNode, Node};
-use skoro_linalg::{matrix::MatmulOps, tril::Tril};
+use skoro_linalg::{
+    matrix::{MatmulOps, matmul},
+    tril::Tril,
+};
 use skoro_model::{
     ModelBuilderOps, ModelClientOps,
+    coverage::{require_role, terms_missing},
     hash_map_builders::points,
     information::{information, information_root},
     jacobian::jacobian_vjp,
@@ -18,6 +22,7 @@ use skoro_model::{
 };
 use skoro_normal::{
     distribution::Normal,
+    facade::constant_covariance_identity,
     information::{gaussian_root_map, gaussian_root_matrix},
 };
 use skoro_pointwise::PointwiseOps;
@@ -485,4 +490,49 @@ fn a_proposal_contributes_no_information() {
         "the proposal must contribute no rows to the information root"
     );
     assert_close(&root_with, &root, 1e-12);
+}
+
+/// A hierarchical Gaussian built from repeated `add_quantity` needs no Fisher bookkeeping: every
+/// `Normal` binds a root whatever kind of node its mean is, so the chain is fully covered.
+///
+/// The chain is the shape `window.rs` grows a tick at a time — a state, a mapped mean over it, a
+/// second state, a measurement — which is the case an estimator actually meets. `require_role`
+/// passing is the machine-checkable form of "the information covers the whole log-density", and
+/// it is the precondition a Fisher step pairs with a gradient over the same terms.
+#[test]
+fn a_hierarchical_gaussian_has_no_gaps() {
+    let model = ModelClient::<B>::default();
+    let prior_mean = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
+    let cov = constant_covariance_identity(&model, 2);
+    let f_mat = model.add_constant(
+        EuclideanMatrixD(2, 2),
+        &MatrixD::new(2, 2, &[2.0, 0.0, 0.0, 2.0]),
+    );
+
+    let x0 = model
+        .add_quantity(Normal::new(prior_mean, cov.clone()))
+        .unwrap();
+    let x1_mean = matmul(&f_mat, &x0).unwrap();
+    let x1 = model
+        .add_quantity(Normal::new(x1_mean, cov.clone()))
+        .unwrap();
+    let z_mean = matmul(&f_mat, &x1).unwrap();
+    let z = model.add_quantity(Normal::new(z_mean, cov)).unwrap();
+    z.observe(&VectorD::new(&[0.1, -0.1])).unwrap();
+
+    assert_eq!(model.factors().len(), 3);
+    assert_eq!(require_role(&model, FISHER_ROOT), Ok(()));
+    assert!(terms_missing(&model, FISHER_ROOT).is_empty());
+
+    // And the assembled root really does carry a block per term: 3 + 9 rows each, over the
+    // two free states' 4 tangent coordinates.
+    let values = points()
+        .with_quantity(&x0, row(&[0.0, 0.0]))
+        .with_quantity(&x1, row(&[0.0, 0.0]))
+        .build();
+    let free = model.tangent_layout(&[x0.id(), x1.id()]).unwrap();
+    assert_eq!(
+        information_root(&model, &values, &free).unwrap().dims(),
+        [1, 3 * (2 + 2 * 2), 4]
+    );
 }

@@ -26,7 +26,10 @@ Bindings and Fisher roots landed: a term carries labelled reference edges to oth
 needs. What that change stopped short of:
 
 - **A Fisher-scoring or Levenberg–Marquardt solver loop.** The information is assembled; no
-  optimizer drives it.
+  optimizer drives it. Its one non-obvious precondition is now machine-checkable:
+  `coverage::require_role(&model, FISHER_ROOT)` refuses a model whose scored terms do not all bind
+  a root, which is what keeps `information_root` and the gradient it is solved against covering the
+  same terms. `docs/fisher-scoring.md` §7 states the condition and §8 the failure it prevents.
 - **Cut compilation** — compiling a sub-program that stops at a set of intermediate nodes — and
   with it a `support(id)` query, block-sparse Jacobian storage, sparse solvers, and a
   compiled-program cache.

@@ -6,6 +6,8 @@
 //!
 //! - the recoverable error type ([`error`]),
 //!
+//! - the label on a binding's reference edge ([`role`]),
+//!
 //! - the continuous/discrete kind tags ([`kind`]),
 //!
 //! - flat-buffer packing of data ([`pack`]),
@@ -24,5 +26,6 @@ pub mod error;
 pub mod id;
 pub mod kind;
 pub mod pack;
+pub mod role;
 pub mod sampler;
 pub mod sequence;

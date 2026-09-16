@@ -12,7 +12,7 @@ It breaks this domain down into a few distinct crates:
   Skoro explicitly ignores `burn`'s automatic differentiation engine, using it strictly for high-performance tensor execution (CPU via `burn-flex` and GPU via `cubecl`).
   It provides geometric type aliases like `Point<B>`, `TangentVector<B>`, and `TangentFrame<B>` representing batched elements via shape conventions over `burn`'s `Tensor`.
 
-- **`skoro-core`**: The foundational types and traits, including ID management (`Id`, `IdGenerator`), traits for packing user types into tensor backends (`Packable` / `NumComponents` / `Cardinality`), traits for sampling stochastic tensors (`Sampler`), and the indexed sequence abstraction (`SequenceMutator`).
+- **`skoro-core`**: The foundational types and traits, including ID management (`Id`, `IdGenerator`), traits for packing user types into tensor backends (`Packable` / `NumComponents` / `Cardinality`), traits for sampling stochastic tensors (`Sampler`), the indexed sequence abstraction (`SequenceMutator`), and the binding label `Role` — which lives here rather than beside the graph's edges so that `SkoroError` can name one.
 
 - **`skoro-operation`**: The custom automatic differentiation engine.
   Since probabilistic inference algorithms (like Hamiltonian Monte Carlo, Extended Kalman Filters, or MAP estimation with Fisher information) often require both first-order (Jacobian, Vector-Jacobian Product) and second-order (Hessian, Hessian-Vector Product) derivatives natively aware of non-linear manifolds, Skoro has a bespoke differentiation system.
@@ -40,6 +40,8 @@ It breaks this domain down into a few distinct crates:
   A bare `Id` is a weak reference by comparison — it may name nothing after a `cleanup()`.
   A `Distribution` returns a `Factor`: its log-density plus the bindings it declares under the roles in `roles` (`ARGUMENT`, `RESIDUAL`, `LOCATION`, `WHITENING`, `NORMALIZER_PARENT`, `FISHER_ROOT`), recorded once when the quantity is added; a free-standing factor is attached the same way with `add_factor`.
   Inference algorithms read back the bindings they need: `least_squares::residual_layout` gathers each term's `RESIDUAL` as the rows of `J`, and `information` assembles the expected (Fisher) information from each term's `FISHER_ROOT`, a matrix node `C` with `CᵀC` equal to the term's expected information over its arguments.
+  These readers — and `skoro-normal`'s `GaussianBlock::all` — skip a term that bound nothing under the role they want — a distribution need not offer a Fisher root, and one with no closed-form expected information should not — so what they assemble can cover a subset of the log-density without saying so.
+  `coverage::terms_missing` names those terms and `coverage::require_role` refuses over them, which is how a consumer that pairs a curvature with a gradient keeps the two over the same terms.
   `add_quantity` adds a quantity the model both generates and scores; `add_proposal` adds one it generates without scoring, leaving the posterior's account of it to a separate `add_factor`.
   `ModelClientOps::{log_density, log_proposal, log_weight}` evaluate `p`, `q` and their difference, and each `FactorInfo` reports which of the two it belongs to — objective-assembling readers such as `residual_layout` and `information_blocks` use that to skip the terms `p` does not contain.
 

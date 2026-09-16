@@ -14,6 +14,7 @@
 
 mod cleanup;
 pub mod client_ops;
+pub mod coverage;
 pub mod discrete;
 pub mod distribution;
 pub mod hash_map_builders;

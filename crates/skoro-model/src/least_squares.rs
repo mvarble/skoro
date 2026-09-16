@@ -14,6 +14,11 @@ use crate::roles::RESIDUAL;
 ///
 /// A term with no residual is skipped, as is a proposal-only term: it is no part of the objective.
 /// A term with more than one residual is [`SkoroError::ShapeMismatch`].
+///
+/// As with [`information_blocks`](crate::information::information_blocks), skipping means the
+/// layout can describe a sub-objective without saying so.
+/// [`require_role`](crate::coverage::require_role) is the guard for a caller that needs every
+/// scored term represented.
 pub fn residual_layout<B: Backend, C: ModelClientOps<B>>(client: &C) -> SkoroResult<TangentLayout> {
     let mut ids: Vec<Id> = Vec::new();
     for factor in client.factors() {

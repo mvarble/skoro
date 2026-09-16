@@ -12,6 +12,7 @@
 use skoro_core::{
     error::{SkoroError, SkoroResult},
     id::IdGenerator,
+    role::Role,
 };
 
 fn some_id() -> skoro_core::id::Id {
@@ -125,6 +126,13 @@ fn every_variant() -> Vec<(SkoroError, &'static str)> {
             "not a sum of squares",
         ),
         (SkoroError::ModelMismatch { lhs: id, rhs: id }, "same model"),
+        (
+            SkoroError::MissingBinding {
+                id,
+                role: Role("fisher_root"),
+            },
+            "fisher_root",
+        ),
     ]
 }
 
@@ -173,6 +181,10 @@ mod messages {
             SkoroError::ManifoldMismatch { id },
             SkoroError::DuplicateLayoutId { id },
             SkoroError::IdNotInLayout { id },
+            SkoroError::MissingBinding {
+                id,
+                role: Role("fisher_root"),
+            },
         ] {
             let rendered = error.to_string();
             assert!(

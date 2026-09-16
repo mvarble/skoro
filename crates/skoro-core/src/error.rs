@@ -16,6 +16,7 @@
 use std::fmt;
 
 use crate::id::Id;
+use crate::role::Role;
 
 /// A recoverable error produced when interfacing with a Skoro model.
 ///
@@ -99,6 +100,12 @@ pub enum SkoroError {
     NormalizerNotConstant { density: Id, parent: Id },
     /// References to quantities from different models were supplied to an MappedNode builder.
     ModelMismatch { lhs: Id, rhs: Id },
+    /// A log-density term binds nothing under a role its consumer requires.
+    ///
+    /// The readers that assemble an objective from the terms' bindings skip such a term rather
+    /// than failing — see `skoro_model::coverage` — so this is raised only by a consumer that
+    /// has declared it cannot proceed on a partial model.
+    MissingBinding { id: Id, role: Role },
 }
 
 impl fmt::Display for SkoroError {
@@ -256,6 +263,9 @@ impl fmt::Display for SkoroError {
                     f,
                     "An operation can only be applied to quantity references from the same model; model-client {lhs:?} does not match {rhs:?}."
                 )
+            }
+            SkoroError::MissingBinding { id, role } => {
+                write!(f, "term {id:?} binds nothing under the role {role}")
             }
         }
     }

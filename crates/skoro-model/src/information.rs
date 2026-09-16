@@ -36,7 +36,13 @@ pub struct InformationBlock<B: Backend> {
 /// One [`InformationBlock`] per term that binds a [`FISHER_ROOT`], in term order.
 ///
 /// Terms without a root are skipped, and so are proposal-only terms, whose density the model does
-/// not score. Returns [`SkoroError::ShapeMismatch`] for a term with more
+/// not score. The skip is deliberate — a model may mix terms whose expected information is known
+/// with terms that offer none — but it means the blocks then cover a *sub*-model, and nothing in
+/// the returned value says so. A caller that cannot accept that calls
+/// [`require_role`](crate::coverage::require_role) first; one that wants to report the omissions
+/// reads them from [`terms_missing`](crate::coverage::terms_missing), or diffs its own
+/// [`factor`](InformationBlock::factor) ids against
+/// [`factors`](ModelClientOps::factors). Returns [`SkoroError::ShapeMismatch`] for a term with more
 /// than one root or with no arguments, [`SkoroError::QuantityTypeMismatch`] for a root that is
 /// not an `EuclideanMatrixD`, and [`SkoroError::LayoutDimensionMismatch`] for a root whose
 /// column count is not the arguments' total dimension. The first two are checked for every term
@@ -150,7 +156,11 @@ pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
 
 /// The blocks stacked along the row axis: `[batch, Σk, free.total()]`.
 ///
-/// Returns [`SkoroError::ShapeMismatch`] if no term binds a root.
+/// Returns [`SkoroError::ShapeMismatch`] if no term binds a root. A model where only *some* terms
+/// do is not an error here: it yields a root of those terms alone, per
+/// [`information_blocks`]. Pair this with [`require_role`](crate::coverage::require_role) whenever
+/// the root has to cover the whole log-density — as it must when it is solved against a gradient,
+/// since the gradient sums over every term.
 pub fn information_root<B: Backend, C: ModelClientOps<B>>(
     client: &C,
     points: &ValueMap<B>,
@@ -171,6 +181,9 @@ pub fn information_root<B: Backend, C: ModelClientOps<B>>(
 
 /// The expected information `AᵀA` over `free`, `A` the [`information_root`]:
 /// `[batch, free.total(), free.total()]`.
+///
+/// The information of the terms that bind a root, which is the model's own only when every scored
+/// term does; see [`information_blocks`] and [`require_role`](crate::coverage::require_role).
 pub fn information<B: Backend, C: ModelClientOps<B>>(
     client: &C,
     points: &ValueMap<B>,

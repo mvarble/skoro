@@ -88,6 +88,9 @@ pub mod prelude {
     };
     pub use skoro_model::least_squares::residual_layout;
 
+    // ----- whether those readers cover the whole model -----
+    pub use skoro_model::coverage::{require_role, terms_missing};
+
     // ----- distributions -----
     pub use skoro_core::sampler::Sampler;
     pub use skoro_model::distribution::Distribution;

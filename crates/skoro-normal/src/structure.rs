@@ -65,6 +65,13 @@ impl GaussianBlock {
     /// posterior does not score is no part of an objective assembled from these blocks. To see
     /// every Gaussian term, proposals included, walk
     /// [`factors`](ModelClientOps::factors) yourself and call [`of`](Self::of).
+    ///
+    /// A scored term that is not Gaussian-shaped is also skipped, and the returned list does not
+    /// say which. That is the same silence as the other two readers': a caller reading these
+    /// blocks positionally beside a row layout should confirm the model holds no term it cannot
+    /// see, with [`terms_missing`](skoro_model::coverage::terms_missing) over
+    /// [`WHITENING`] or
+    /// [`require_role`](skoro_model::coverage::require_role).
     pub fn all<B: Backend, C: ModelClientOps<B>>(client: &C) -> Vec<Self> {
         client
             .factors()

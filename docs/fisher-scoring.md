@@ -299,6 +299,13 @@ contribution to the curvature. A free-standing joint factor, on the other hand, 
 over which an expectation could be taken, and its contribution is by convention the Gauss–Newton matrix
 $W^\top W$ of its whitened residual, in the sense of Proposition 2.
 
+One condition is easy to lose sight of. The sum in Proposition 4 runs over the terms of $\log p$, but
+`information_blocks` can only stack the terms that *declare* a root: a term that binds no
+`FISHER_ROOT` is skipped, because there is nothing to stack for it. The two agree exactly when every
+scored term carries a root, and `require_role(&model, FISHER_ROOT)` is the check that they do. Where
+they disagree, $A^\top A$ is the information of the sub-model formed by the rooted terms — a
+well-defined matrix, but not $\mathcal I(\theta)$.
+
 ## 7. The Algorithm
 
 In practice Fisher scoring is combined with damping. Given a current iterate, a damping parameter
@@ -315,7 +322,15 @@ $$
 The right-hand side is the gradient of $\log p$ and not of $\ell$, because skoro differentiates the
 log-density; the resulting step is the same as $-\mathcal I^{-1} \nabla \ell$ when $\lambda = 0$. The
 gradient is available from `log_density_ord1`, the root from `information_root`, and the step from the
-retraction of the free quantities (`PointMap::retract_flat`). After each step, $\lambda$ is decreased
+retraction of the free quantities (`PointMap::retract_flat`).
+
+The iteration has a precondition, and it is the asymmetry between those first two. $\nabla \log p$ sums
+over *every* term of the log-density, while $A^\top A$ covers only the terms that bound a Fisher root
+(Section 6). The displayed system is therefore the Fisher step only when every scored term carries a
+root; otherwise it sets the curvature of one problem against the gradient of another. An
+implementation asserts the condition with `require_role(&model, FISHER_ROOT)` before it assembles
+anything, or enumerates the offending terms with `terms_missing`; neither is optional, because no
+shape check downstream will catch the mismatch. After each step, $\lambda$ is decreased
 if $\log p$ improved and increased otherwise. A large $\lambda$ turns the step into a short gradient
 step, and a small one recovers Fisher scoring, so this adaptive scheme is the Levenberg–Marquardt
 method with the information in place of the Gauss–Newton matrix. It is what removes the overshoot seen
@@ -347,6 +362,15 @@ If the data do not constrain some direction of $\theta$, the information is sing
 direction and the undamped system has no unique solution. Damping restores a well-posed system, but a
 persistently singular information matrix indicates that the parameters are not identifiable from the
 data, which is a modeling issue that no solver can remove.
+
+A distinct failure, and a quieter one, is a model not all of whose terms offer a root. Every
+distribution skoro ships binds one, but a bespoke distribution need not, and one that has no
+closed-form expected information should not. Such a term is skipped rather than refused, so the
+symptom is not a singular matrix or a raised error: it is a well-conditioned solve of the wrong
+system, since the gradient retains the term the curvature dropped. A partially rooted model does not
+yield a worse step toward the same optimum — it yields a step toward a different one. This is the
+failure `require_role` exists to make impossible, and the reason it belongs before the first
+assembly rather than in a diagnostic after a poor iteration.
 
 For quantities on curved manifolds, skoro's Gaussian root uses the block $[W, -W]$ for $(x, \mu)$. This
 block assumes that the derivatives of $v = x \ominus \mu$ with respect to $x$ and $\mu$ are $I$ and

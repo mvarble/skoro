@@ -42,4 +42,10 @@ pub const WHITENING: Role = Role("whitening");
 /// A root is either exact or accurate to a stated order, and its builder documents which. The
 /// Gaussian root (`skoro_normal::information`), for instance, is exact on flat manifolds and
 /// second-order accurate in the dispersion on groups.
+///
+/// A term may bind none: a distribution whose expected information has no closed form simply does
+/// not declare one, and [`information_blocks`](crate::information::information_blocks) skips it
+/// rather than failing. [`terms_missing`](crate::coverage::terms_missing) and
+/// [`require_role`](crate::coverage::require_role) are how a consumer discovers that, since an
+/// absent root is otherwise indistinguishable from a covered model.
 pub const FISHER_ROOT: Role = Role("fisher_root");
