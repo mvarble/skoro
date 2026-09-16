@@ -1484,6 +1484,15 @@ impl<B: Backend> Graph<B> {
     /// Returns an error if a node does not exist, or is still referenced as a parent of a node that
     /// is not also being removed.
     pub fn remove(&mut self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        // Every id must exist before any of them is taken. Checked here rather than in the
+        // removal loop below, where the `nodes.remove` miss used to surface: that left the
+        // batch half-applied behind an error, and -- because `touch` is at the end -- half
+        // applied without bumping the epoch, so a sequence compiled beforehand stayed live.
+        for id in ids {
+            if !self.nodes.contains_key(id) {
+                return Err(SkoroError::NodeNotFound { id: *id });
+            }
+        }
         // Validate no dangling pointers.
         for id in ids {
             if let Some(children) = self.children.get(id)
@@ -1511,9 +1520,10 @@ impl<B: Backend> Graph<B> {
             // which the loop above already proved is empty of survivors. Edges into this node
             // from its parents are `unregister_children`'s job, below.
             self.children.remove(id);
-            let Some(node) = self.nodes.remove(id) else {
-                return Err(SkoroError::NodeNotFound { id: *id });
-            };
+            let node = self
+                .nodes
+                .remove(id)
+                .expect("existence checked before any removal");
             self.private_nodes.remove(id);
             self.bindings.remove_source(*id);
             self.bindings.remove_target(*id);
@@ -2075,9 +2085,18 @@ impl<B: Backend> Graph<B> {
     }
 
     fn register_children(&mut self, id: Id, parent_ids: &[Id]) -> SkoroResult<()> {
+        // Both checks below run before the mutation loop, so a rejected call leaves no
+        // half-registered edges behind. The existence check used to sit *inside* that loop,
+        // which meant `[good, missing]` registered `good`'s edge to an id that never became a
+        // node -- and returned the error without reaching `touch`, so nothing learned of it.
+        for &parent_id in parent_ids {
+            if !self.nodes.contains_key(&parent_id) {
+                return Err(SkoroError::DanglingParent { parent_id });
+            }
+        }
+
         // Two parents pinning *different* batch sizes describe a node that can never be
-        // evaluated, so reject it here rather than at the first pass. Checked before the
-        // mutation loop below, so a rejected call leaves no half-registered edges behind.
+        // evaluated, so reject it here rather than at the first pass.
         //
         // Deliberately partial: a parent whose batch is pinned only indirectly -- through a
         // mapped node that did not fold, because it has a free variable above it -- reports no
@@ -2101,9 +2120,6 @@ impl<B: Backend> Graph<B> {
         }
 
         for &parent_id in parent_ids {
-            if !self.nodes.contains_key(&parent_id) {
-                return Err(SkoroError::DanglingParent { parent_id });
-            }
             match self.children.entry(parent_id) {
                 Entry::Occupied(mut entry) => entry.get_mut().insert(id),
                 Entry::Vacant(entry) => entry.insert(HashSet::new()).insert(id),

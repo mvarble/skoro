@@ -380,3 +380,106 @@ fn a_cached_sequence_can_be_evaluated_from_two_threads() {
         assert_eq!(handle.join().unwrap(), vec![expected]);
     }
 }
+
+/// The load-bearing half of the test above, which four threads on a three-node graph are too
+/// small to establish by racing: the type is shareable at all.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<CompiledSequence<B>>();
+};
+
+// Partial mutation.
+//
+// `touch()` sits at the end of each mutator, so a method that mutates and *then* returns an
+// error would leave the graph changed with the epoch unmoved -- a cached sequence compiled
+// before the call would still be served afterwards. The fix is for such a method not to exist:
+// a mutator either completes or changes nothing.
+
+/// `remove` validates the whole batch before it deletes any of it.
+///
+/// Removing `[good, missing]` used to delete `good` and then fail on `missing`, leaving the
+/// caller an error and a graph that had already lost a node. Beyond the atomicity, that path
+/// returned without bumping the epoch, so a sequence compiled beforehand stayed live.
+#[test]
+fn a_removal_naming_a_missing_node_changes_nothing() {
+    let mut graph = Graph::<B>::new();
+    let good = graph.add_parameter(Real);
+    // Stale by construction: issued, then removed.
+    let missing = graph.add_parameter(Real);
+    graph.remove(&[missing]).unwrap();
+    let keeper = graph.add_parameter(Real);
+    let before = graph.compile_backward_from(&[keeper]).unwrap();
+
+    let Err(err) = graph.remove(&[good, missing]) else {
+        panic!("removing a missing node should fail");
+    };
+
+    assert!(matches!(err, SkoroError::NodeNotFound { id } if id == missing));
+    assert!(
+        graph.contains(good),
+        "the batch failed, so nothing in it should have been removed"
+    );
+    let after = graph.compile_backward_from(&[keeper]).unwrap();
+    assert!(
+        Arc::ptr_eq(&before, &after),
+        "nothing changed, so the cached sequence should still stand"
+    );
+}
+
+/// `add_mapped` naming a parent that does not exist registers no edges at all.
+///
+/// `register_children` checked each parent's existence *inside* its write loop, so a call
+/// naming `[good, missing]` left `good` holding a child edge to an id that never became a
+/// node -- a dangling index, and one the epoch never learned about because the error returned
+/// before `touch`.
+#[test]
+fn a_mapped_node_with_a_missing_parent_registers_no_edges() {
+    let mut graph = Graph::<B>::new();
+    let good = graph.add_parameter(Real);
+    let missing = graph.add_parameter(Real);
+    graph.remove(&[missing]).unwrap();
+
+    let before = graph.compile_backward_from(&[good]).unwrap();
+    let err = graph
+        .add_mapped(
+            Real,
+            DiffGraphOperation(InertOperation),
+            vec![good, missing],
+        )
+        .unwrap_err();
+
+    assert!(matches!(err, SkoroError::DanglingParent { parent_id } if parent_id == missing));
+    assert!(
+        graph.children_of(good).is_none_or(|kids| kids.is_empty()),
+        "the call failed, so `good` should have gained no child"
+    );
+    graph.validate_indices().expect("indices stay coherent");
+    let after = graph.compile_backward_from(&[good]).unwrap();
+    assert!(
+        Arc::ptr_eq(&before, &after),
+        "nothing changed, so the cached sequence should still stand"
+    );
+}
+
+/// `evaluate_ids` cannot be served a program the graph has since outgrown.
+///
+/// The cache is reached through `compile_backward_from`, and every evaluation entry point goes
+/// through that one door -- but the door is what the other tests exercise directly. This is the
+/// same question asked at the layer the payoff actually runs through: seed the cache, change
+/// what the program means, and check the answer moved.
+#[test]
+fn evaluating_after_a_mutation_does_not_reuse_the_old_program() {
+    let mut m = Arithmetic::new();
+    let pts = points([(m.a, 3.0), (m.b, 5.0)]);
+
+    // Seed the entry for these targets.
+    let first = m.graph.evaluate(&pts, m.sum).unwrap();
+    assert_eq!(into_vec(first), vec![8.0]);
+
+    // `a` becomes a constant 10 at the same `Id`, so `sum` is now 15 -- and `a`'s supplied
+    // point is ignored, because an observation lowers to a `Constant` step.
+    m.graph.observe::<_, Real, _>(m.a, &10.0f64).unwrap();
+
+    let second = m.graph.evaluate(&pts, m.sum).unwrap();
+    assert_eq!(into_vec(second), vec![15.0]);
+}
