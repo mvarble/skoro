@@ -3,7 +3,7 @@
 //! A binding `(density, role, node)` says that `node` plays `role` for the log-density term
 //! `density`. A distribution declares its bindings once, through
 //! [`Factor`](crate::distribution::Factor), and any inference algorithm reads back the ones it
-//! needs through [`ModelClientOps::bound`](crate::client_ops::ModelClientOps::bound).
+//! needs through [`ModelReaderOps::bound`](crate::client_ops::ModelReaderOps::bound).
 
 pub use skoro_graph::binding::Role;
 

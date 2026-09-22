@@ -19,11 +19,12 @@ code is written against two traits rather than the concrete client:
 
 | Trait | Can | Typical holder |
 | --- | --- | --- |
-| `ModelClientOps` | evaluate and differentiate; read terms and bindings; add constants and parameters; `observe`, `demote_to_parameter`; `remove` a leaf | an estimator or sampler |
-| `ModelBuilderOps` | everything above, plus add density terms (`add_quantity`, `add_proposal`, `add_factor`), `stacked_tangent`, and `remove_closure` | code that builds models |
+| `ModelReaderOps` | evaluate, differentiate and generate; read terms and bindings; add constants | an estimator or sampler |
+| `ModelBuilderOps` | everything above, plus anything that changes the model: add density terms (`add_quantity`, `add_proposal`, `add_factor`) and parameters, `observe`, `demote_to_parameter`, `stacked_tangent`, `remove` and `remove_closure` | code that builds or conditions models |
 
 > [!DECISION] Two tiers
-> An estimator can be handed a model whose density terms it cannot add to or tear down. See
+> An estimator can be handed a model it cannot change: it cannot add or remove terms, observe, or
+> demote. See
 > [Client tiers](../../design/client-tiers/).
 
 ## Quantities

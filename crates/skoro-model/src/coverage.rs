@@ -19,10 +19,10 @@ use skoro_core::{
     role::Role,
 };
 
-use crate::client_ops::ModelClientOps;
+use crate::client_ops::ModelReaderOps;
 
 /// The scored terms that bind nothing under `role`: summands of the log-density `p` for which
-/// [`bound`](ModelClientOps::bound) is empty, in term order.
+/// [`bound`](ModelReaderOps::bound) is empty, in term order.
 ///
 /// Empty means every summand of `p` carries the role, so what the corresponding reader assembles
 /// covers the whole model. A non-empty result means it covers a sub-model, while the gradient it
@@ -31,7 +31,7 @@ use crate::client_ops::ModelClientOps;
 ///
 /// Proposal-only terms are never reported. They are no part of `p`, so they are expected to
 /// contribute nothing, exactly as in the readers this checks.
-pub fn terms_missing<B: Backend, C: ModelClientOps<B>>(client: &C, role: Role) -> Vec<Id> {
+pub fn terms_missing<B: Backend, C: ModelReaderOps<B>>(client: &C, role: Role) -> Vec<Id> {
     client
         .factors()
         .into_iter()
@@ -57,7 +57,7 @@ pub fn terms_missing<B: Backend, C: ModelClientOps<B>>(client: &C, role: Role) -
 /// roots. Call [`terms_missing`] to report every gap instead of the first.
 ///
 /// [`information_blocks`]: crate::information::information_blocks
-pub fn require_role<B: Backend, C: ModelClientOps<B>>(client: &C, role: Role) -> SkoroResult<()> {
+pub fn require_role<B: Backend, C: ModelReaderOps<B>>(client: &C, role: Role) -> SkoroResult<()> {
     match terms_missing(client, role).first() {
         Some(&id) => Err(SkoroError::MissingBinding { id, role }),
         None => Ok(()),

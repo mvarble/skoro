@@ -3,7 +3,7 @@
 //! The high-level, user-facing model interface. A [`model::ModelServer`] wraps a
 //! [`skoro_graph::graph::Graph`]; a [`model::ModelClient`] is a cheap, cloneable
 //! handle to it. Quantities are returned as typed proxies [`q::Q`]. The
-//! [`ModelClientOps`] trait factors the distribution-agnostic client surface;
+//! [`ModelReaderOps`] trait factors the distribution-agnostic client surface;
 //! [`distribution::Distribution`] registers conditional distributions
 //! (continuous or discrete, via the shared kind parameter); [`map`]'s
 //! `register_mapN` and the [`ops`] / [`discrete`] modules expose deterministic
@@ -28,7 +28,7 @@ pub mod point_map_access;
 pub mod q;
 pub mod roles;
 
-pub use client_ops::{ModelBuilderOps, ModelClientOps};
+pub use client_ops::{ModelBuilderOps, ModelReaderOps};
 
 /// The flattened tangent-space layout the [`jacobian`] functions index by, re-exported
 /// from `skoro-graph` so a caller assembling dense matrices needs only this crate.

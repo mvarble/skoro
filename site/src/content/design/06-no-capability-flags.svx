@@ -25,7 +25,7 @@ read at run time from its terms and bindings. Every reader matches on the arity 
 - Readers skip silently, so a skipped term produces a well-conditioned solve of the **wrong**
   system. `require_role` is the precondition an algorithm must assert before it assembles
   anything.
-- `ModelClientOps` is not dyn-compatible; every consumer is statically generic over it.
+- `ModelReaderOps` is not dyn-compatible; every consumer is statically generic over it.
 
 > [!DECISION] The quote that settled it
 > What the old `GaussianModelClientOps` bound expressed ("this client can add Gaussians") was

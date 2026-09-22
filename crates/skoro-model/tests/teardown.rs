@@ -1,14 +1,14 @@
 //! Retiring a cone of the model: `remove_closure` from the client side.
 //!
-//! `ModelClientOps::remove` is leaf-only and all-or-nothing — it refuses a batch any survivor
+//! `ModelBuilderOps::remove` is leaf-only and all-or-nothing — it refuses a batch any survivor
 //! still points into — so retiring a state means computing the downward closure by hand at every
 //! call site. `ModelBuilderOps::remove_closure` is that walk, done once.
 //!
 //! Two things are checked here that are not checked at the graph layer, because neither is
 //! visible from a `Graph`:
 //!
-//! - the closure is reachable through the **builder** trait and not the client one, which is what
-//!   keeps an estimator that holds only `ModelClientOps` from deleting a cone of its own evidence. The
+//! - removal is reachable through the **builder** trait and not the read one, which is what
+//!   keeps an estimator that holds only `ModelReaderOps` from deleting any of its own evidence. The
 //!   negative half is a `trybuild` case, since a test that compiles cannot assert that another
 //!   does not;
 //! - `cleanup()` survives it. A closure removal deliberately takes nodes the caller *does* hold a
@@ -21,7 +21,7 @@
 use skoro_backend::{Flex, Point};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     distribution::{Distribution, Factor, Sampler},
     map::{register_map_slice, register_map1},
     model::ModelClient,
@@ -72,7 +72,7 @@ mod closures {
         let top = concat(&[&ab]);
 
         // `remove` is the primitive that will not do this: `a` still has a child.
-        assert!(ModelClientOps::remove(&model, &[a.id()]).is_err());
+        assert!(ModelBuilderOps::remove(&model, &[a.id()]).is_err());
 
         let removed = ModelBuilderOps::remove_closure(&model, &[a.id()]).unwrap();
         assert_eq!(
@@ -318,7 +318,7 @@ mod reachability {
         assert_eq!(node_count(&model), 4);
 
         // Taking the tip orphans the whole chain between it and `root`, which is still held.
-        ModelClientOps::remove(&model, &[top_id]).unwrap();
+        ModelBuilderOps::remove(&model, &[top_id]).unwrap();
 
         assert_eq!(node_count(&model), 1, "only the held root survives");
         for id in [a_id, b_id, top_id] {

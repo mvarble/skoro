@@ -5,7 +5,7 @@
 use skoro_backend::{Flex, Point, Tensor, TensorData};
 use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,
     map::register_map1,
@@ -65,7 +65,7 @@ fn proposal_plus_weight_is_the_log_density() {
     let model = ModelClient::<B>::default();
     let x = model.add_quantity(Linear).unwrap();
     let y = model.add_quantity(Linear).unwrap();
-    y.observe(&1.5f64).unwrap();
+    model.observe(&y, &1.5f64).unwrap();
     let a = model.add_parameter(Real);
     let term = register_map1(Real, LiteralScalarMultiplication::new(-3.0), &a).unwrap();
     model.add_factor(Factor::new(term), &[a.id()]).unwrap();
@@ -99,9 +99,9 @@ fn observing_moves_a_term_out_of_the_proposal() {
     };
 
     assert_eq!(flags_of(&model), (true, true));
-    x.observe(&0.5f64).unwrap();
+    model.observe(&x, &0.5f64).unwrap();
     assert_eq!(flags_of(&model), (true, false));
-    x.unobserve().unwrap();
+    model.unobserve(&x).unwrap();
     assert_eq!(flags_of(&model), (true, true));
 }
 

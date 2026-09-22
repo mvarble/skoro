@@ -15,7 +15,7 @@ use skoro_core::id::Id;
 use skoro_linalg::tril::{Tril, TrilOps};
 use skoro_linalg::vector::LinalgVectorOps;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     hash_map_builders::points,
     least_squares::residual_layout,
     model::ModelClient,

@@ -1,9 +1,7 @@
-use dashmap::DashMap;
 use lazy_static::lazy_static;
-use std::any::Any;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::marker::PhantomData;
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, RwLock};
 
 use skoro_backend::{Backend, CotangentFrame, Point, TangentFrame, TangentVector};
 use skoro_core::kind::Kind;
@@ -38,10 +36,6 @@ use crate::{
 lazy_static! {
     /// Global Id generator of model servers.
     static ref SERVER_GENERATOR: IdGenerator = IdGenerator::new();
-    /// Global registry of model servers, holding `Weak` references so that a
-    /// server is reclaimed as soon as the last `ModelClient` is dropped. The
-    /// `Id` key lets clients identify servers across FFI boundaries.
-    static ref MODEL_SERVERS: DashMap<Id, Weak<dyn Any + Send + Sync>> = DashMap::new();
 }
 
 /// The stateful engine wrapping the probabilistic DAG.
@@ -267,11 +261,11 @@ impl<B: Backend> ModelServer<B> {
     /// Refuses a node that a node outside the batch still binds
     /// ([`SkoroError::NodeStillBound`]), for the same reason it refuses one another node still
     /// points into as a parent: this is the primitive that will not break a reference, and a
-    /// binding is a reference. That refusal is what keeps `remove` safe on
-    /// [`ModelClientOps`](crate::client_ops::ModelClientOps), which an estimator holds — a bound
-    /// residual is childless, so without the check a `remove` could silently leave a term
-    /// binding a node that is gone. Retiring a factor is
-    /// [`remove_closure`](Self::remove_closure), one tier up.
+    /// binding is a reference. A bound residual is childless, so without the check a `remove`
+    /// could silently leave a term binding a node that is gone. Retiring a factor is
+    /// [`remove_closure`](Self::remove_closure), which takes the referents instead. Both are
+    /// on [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps): never breaking a reference is
+    /// a guarantee about the graph, and removing a node still changes the model.
     ///
     /// The removal is also a collection point: anything it orphaned is swept before
     /// returning, so the model is clean after every retire.
@@ -286,8 +280,7 @@ impl<B: Backend> ModelServer<B> {
     ///
     /// See [`Graph::remove_closure`](skoro_graph::graph::Graph::remove_closure). Unlike
     /// [`remove`](Self::remove) this cannot fail on a still-referenced node, because it takes
-    /// the referents too — which is why it is reachable from
-    /// [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps) and not from the client tier.
+    /// the referents too.
     ///
     /// The removal is also a collection point: nodes the closure orphaned but did not
     /// take — everything *upstream* of the roots, like a retired factor's body — unwind
@@ -655,26 +648,11 @@ impl<B: Backend> ModelClient<B> {
     pub fn new(device: B::Device) -> Self {
         let server_id = SERVER_GENERATOR.issue_id();
         let server = Arc::new(RwLock::new(ModelServer::<B>::new(device)));
-        let any_arc: Arc<dyn Any + Send + Sync> = server.clone();
-        MODEL_SERVERS.insert(server_id, Arc::downgrade(&any_arc));
         Self {
             server_id,
             server,
             _phantom: PhantomData,
         }
-    }
-
-    /// Re-attach a client to an existing server by its `Id`. Returns `None` if the server has been
-    /// dropped (all prior clients released it).
-    pub fn from_id(server_id: Id) -> Option<Self> {
-        let weak = MODEL_SERVERS.get(&server_id)?.clone();
-        let any_arc = weak.upgrade()?;
-        let server = any_arc.downcast::<RwLock<ModelServer<B>>>().ok()?;
-        Some(Self {
-            server_id,
-            server,
-            _phantom: PhantomData,
-        })
     }
 
     /// Call a function which requires shared reference to server.
@@ -684,15 +662,19 @@ impl<B: Backend> ModelClient<B> {
     }
 
     /// Call a function which requires exclusive reference to server.
-    pub fn server_call_mut<O, F: FnOnce(&mut ModelServer<B>) -> O>(&self, function: F) -> O {
+    ///
+    /// Private: a `&mut ModelServer` reaches every mutation there is, so a public route to one
+    /// would get around any bound a caller was handed the model under. Changes go through
+    /// [`ModelBuilderOps`](crate::client_ops::ModelBuilderOps).
+    fn server_call_mut<O, F: FnOnce(&mut ModelServer<B>) -> O>(&self, function: F) -> O {
         let mut server = self.server.write().unwrap();
         function(&mut server)
     }
 
     // `get_server` deliberately does not exist. Handing out the `Arc<RwLock<..>>` gave
     // every caller a `&mut ModelServer`, and so a route around any facade that had been
-    // careful about what it exposed. `server_call` / `server_call_mut` cover the same
-    // ground while keeping the lock scope visible at the call site.
+    // careful about what it exposed. `server_call` covers the read half while keeping the
+    // lock scope visible at the call site; the write half stays in this crate.
 
     /// Add a fixed, immutable quantity to the graph of the model server,
     /// continuous or discrete.
@@ -875,7 +857,7 @@ impl<B: Backend> ModelClient<B> {
 
     /// Record a binding: `to` plays `role` for `from`. See [`ModelServer::bind`].
     pub fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
-        self.server.write().unwrap().bind(from, role, to)
+        self.server_call_mut(|server| server.bind(from, role, to))
     }
 
     /// Attach a free-standing likelihood factor over `arguments`, with the bindings it
@@ -914,36 +896,36 @@ impl<B: Backend> ModelClient<B> {
         T: QuantityType<B, K> + Packable<K::Elem, D>,
         D: 'static,
     {
-        self.server.write().unwrap().observe::<K, T, D>(q, value)
+        self.server_call_mut(|server| server.observe::<K, T, D>(q, value))
     }
 
     /// Undo the effects of [`observe`](Self::observe).
     pub fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
-        self.server.write().unwrap().unobserve(q)
+        self.server_call_mut(|server| server.unobserve(q))
     }
 
     /// Demote a stochastic quantity to a free parameter, keeping its identity.
     ///
     /// See [`ModelServer::demote_to_parameter`].
     pub fn demote_to_parameter<T>(&self, tag: &Q<B, T>) -> SkoroResult<()> {
-        self.server.write().unwrap().demote_to_parameter(tag)
+        self.server_call_mut(|server| server.demote_to_parameter(tag))
     }
 
     /// Removes quantities, verifying they have no children which would be kept in the graph.
     pub fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        self.server.write().unwrap().remove(ids)
+        self.server_call_mut(|server| server.remove(ids))
     }
 
     /// Remove `roots` together with everything downstream of them.
     ///
     /// See [`ModelServer::remove_closure`].
     pub fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        self.server.write().unwrap().remove_closure(roots)
+        self.server_call_mut(|server| server.remove_closure(roots))
     }
 
     /// Remove all non-likelihood mapped quantities which have no more references.
     pub fn cleanup(&self) {
-        self.server.write().unwrap().cleanup();
+        self.server_call_mut(|server| server.cleanup());
     }
 
     /// Get the quantity type associated with a quantity.
@@ -1172,20 +1154,33 @@ impl<B: Backend> Clone for ModelClient<B> {
     }
 }
 
-impl<B: Backend> Drop for ModelClient<B> {
-    fn drop(&mut self) {
-        // If we are the last strong reference, purge the (now-dangling) `Weak` from the registry to
-        // keep the map from growing unbounded. Any race with a concurrent clone is benign: the
-        // worst case is a dead `Weak` left in the map, which `from_id` handles by checking
-        // `upgrade()`.
-        if Arc::strong_count(&self.server) == 1 {
-            MODEL_SERVERS.remove(&self.server_id);
-        }
-    }
-}
-
 impl<B: Backend> PartialEq for ModelClient<B> {
     fn eq(&self, other: &Self) -> bool {
         self.server_id == other.server_id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use skoro_backend::Flex;
+
+    use super::*;
+
+    type B = Flex;
+
+    /// The server lives exactly as long as some client holds it.
+    #[test]
+    fn construct_and_drop_releases_server() {
+        let client = ModelClient::<B>::new(Default::default());
+        let server = Arc::downgrade(&client.server);
+
+        let clone = client.clone();
+        drop(clone);
+        // Original still alive, so the server is too.
+        assert!(server.upgrade().is_some());
+
+        drop(client);
+        // All strong refs gone, so the server has been reclaimed.
+        assert!(server.upgrade().is_none());
     }
 }

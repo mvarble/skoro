@@ -1,0 +1,11 @@
+error[E0599]: no method named `add_parameter` found for reference `&M` in the current scope
+  --> tests/compile_fail/add_parameter_is_not_a_read_op.rs:15:11
+   |
+15 |     model.add_parameter(Real)
+   |           ^^^^^^^^^^^^^ method not found in `&M`
+   |
+   = help: items from traits can only be used if the type parameter is bounded by the trait
+help: the following trait defines an item `add_parameter`, perhaps you need to restrict type parameter `M` with it:
+   |
+13 | fn an_estimator<M: ModelReaderOps<B> + ModelBuilderOps</* B */>>(model: &M) -> Q<B, Real> {
+   |                                      ++++++++++++++++++++++++++

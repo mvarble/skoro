@@ -8,7 +8,7 @@
 
 use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_model::{
-    ModelClientOps,
+    ModelReaderOps,
     distribution::Factor,
     hash_map_builders::points,
     information::{information, information_blocks, information_root},

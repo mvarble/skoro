@@ -243,7 +243,7 @@ conflate:
 
 ### 3.2 Fusing `log_weight`
 
-`ModelClientOps::log_weight` (`crates/skoro-model/src/client_ops.rs:650-659`) calls
+`ModelReaderOps::log_weight` (`crates/skoro-model/src/client_ops.rs:650-659`) calls
 `graph.log_density_terms` twice and subtracts; each call reaches `sum_terms`
 (`graph.rs:1566`) and compiles. A signed sibling —
 `Graph::log_density_terms_signed(points, plus, minus)` — compiles once over the union, runs

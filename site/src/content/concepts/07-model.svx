@@ -12,10 +12,12 @@ order: 7
 only routes from a client to the graph itself are `server_call` and `server_call_mut`. Everything
 else goes through two traits:
 
-- `ModelClientOps`: evaluate, differentiate, read terms and bindings, add constants and
-  parameters, `observe`, `demote_to_parameter`, and `remove` a leaf.
-- `ModelBuilderOps: ModelClientOps`: also add density terms (quantities, proposals, factors),
-  `stacked_tangent`, and `remove_closure`.
+- `ModelReaderOps`: evaluate, differentiate, generate, read terms and bindings, and add
+  constants. Nothing on it changes the density, the proposal, the free and observed set, or the
+  batch sizes the model accepts.
+- `ModelBuilderOps: ModelReaderOps`: everything that does. Add density terms (quantities,
+  proposals, factors) and parameters, `observe`, `demote_to_parameter`, `stacked_tangent`,
+  `remove` and `remove_closure`.
 
 > [!DECISION]
 > See [Client tiers](../../design/client-tiers/).

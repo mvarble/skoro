@@ -61,7 +61,7 @@ use skoro_core::{error::SkoroResult, id::Id};
 use skoro_graph::{compiler::ForwardOutput, tangent_layout::TangentLayout};
 use skoro_operation::ValueMap;
 
-use crate::client_ops::ModelClientOps;
+use crate::client_ops::ModelReaderOps;
 
 /// Batch size and device, chosen the same way the evaluation pass chooses its batch size.
 pub(crate) fn batch_and_device<B: Backend>(points: &ValueMap<B>) -> (usize, B::Device) {
@@ -123,7 +123,7 @@ fn fill_leaf_rows<B: Backend>(
 ///
 /// See the [module documentation](self) for the constraint that columns must be leaves,
 /// for how leaf rows are filled, and for what a column that reaches no row does.
-pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
+pub fn jacobian_jvp<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     inputs: &TangentLayout,
@@ -163,7 +163,7 @@ pub fn jacobian_jvp<B: Backend, C: ModelClientOps<B>>(
 ///
 /// See the [module documentation](self) for the constraint that columns must be leaves,
 /// for how leaf rows are filled, and for what a column that reaches no row does.
-pub fn jacobian_vjp<B: Backend, C: ModelClientOps<B>>(
+pub fn jacobian_vjp<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     inputs: &TangentLayout,

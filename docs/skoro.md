@@ -29,23 +29,30 @@ assumed, and §5 gives the searches.
 That split is the load-bearing design decision of the model tier, and its reason is worth quoting
 (`crates/skoro-model/src/client_ops.rs`, on `ModelBuilderOps`):
 
-> Deliberately separate from `ModelClientOps` rather than folded into it. If the two were one
-> trait, "a client that can evaluate a model" and "a client that can add anything to a model"
-> would be the same bound — so an estimator, which needs only the first, could not be given
-> the first without the second. That split is what `remove` / `remove_closure` sit on either side
-> of.
+> Every call that changes the log-density `p`, the proposal `q`, the set of free or observed
+> quantities, or the batch sizes the model accepts is here: adding terms and parameters,
+> observing, demoting, and removing. `ModelReaderOps` may add nodes, but only ones that change
+> none of those.
 
-The pair on either side of it:
+The line is drawn by what a call changes, not by whether it can break a reference. `observe`,
+`demote_to_parameter`, `add_parameter` and a leaf `remove` cannot break a reference, and each
+changes the model being estimated, so all of them are builder calls. `Q` has no `observe` for the
+same reason: a `Q` carries a full client, so a method on it would reach past a read bound.
 
-| | Tier | Behaviour |
-| --- | --- | --- |
-| `remove` | `ModelClientOps` | Leaf-only, all-or-nothing. Refuses a node a survivor still points into (`NodeStillReferenced`) **or still binds** (`NodeStillBound`). Will not break a reference. |
-| `remove_closure` | `ModelBuilderOps` | Takes the downward closure, and the referrers with it. Cannot fail on a live child. |
+The two removals differ only in how they treat references:
 
-An estimator holding only `ModelClientOps` therefore cannot silently delete a factor it was handed.
-The tier boundary is pinned by a compile-fail test,
-`crates/skoro-model/tests/compile_fail/remove_closure_is_not_a_client_op.rs`, asserted from
+| | Behaviour |
+| --- | --- |
+| `remove` | Leaf-only, all-or-nothing. Refuses a node a survivor still points into (`NodeStillReferenced`) **or still binds** (`NodeStillBound`). Will not break a reference. |
+| `remove_closure` | Takes the downward closure, and the referrers with it. Cannot fail on a live child. |
+
+An estimator holding only `ModelReaderOps` therefore cannot change the model it was handed. Each
+negative claim is a compile-fail case in `crates/skoro-model/tests/compile_fail/`, asserted from
 `tests/bindings.rs`.
+
+There is deliberately no tier between the two. Marginalizing is demotion, a joint factor over the
+blanket, and a closure removal (§3), and a tier that granted the first alone would permit a demoted
+quantity with nothing compensating for it.
 
 ### 1.2 Ownership
 
@@ -115,10 +122,10 @@ was removed. From `crates/skoro-normal/tests/facade.rs`:
 And from the `client_ops` module header:
 
 > Neither says anything about what a model *contains* — for that, read its terms and their
-> bindings, through `ModelClientOps::factors` and `ModelClientOps::bound`.
+> bindings, through `ModelReaderOps::factors` and `ModelReaderOps::bound`.
 
 So: a model's shape is read off its terms and bindings at runtime. There is no type-level
-description of a model, and `ModelClientOps` is deliberately not dyn-compatible — every consumer is
+description of a model, and `ModelReaderOps` is deliberately not dyn-compatible — every consumer is
 statically generic over it.
 
 ### 2.2 The reading surface
@@ -193,7 +200,7 @@ behind as a factor over its Markov blanket, and reclaim what is now unreachable.
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| `demote_to_parameter` | `graph.rs`, `model.rs`, `client_ops.rs` | Strips a quantity's sampler, parents and own density, keeping its `Id`, type, and every child edge. **Returns the parents it severed**, since only a caller tracking handles can decide if they are now garbage. |
+| `demote_to_parameter` | `graph.rs`, `model.rs`, `client_ops.rs` (builder tier) | Strips a quantity's sampler, parents and own density, keeping its `Id`, type, and every child edge. **Returns the parents it severed**, since only a caller tracking handles can decide if they are now garbage. |
 | `stacked_tangent` | `graph.rs` (builder tier) | `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` as one `EuclideanD(Σdᵢ)`. Builds `2k+1` nodes; each `pᵢ` is a frozen batch-pinned constant in a private arena. |
 | `JointNormal` / `add_joint_factor` | `crates/skoro-normal/src/joint.rs` | A Gaussian over several existing quantities, linearized at a frozen point, entering the model as a free-standing factor over them. |
 | `whitening_from_precision` | `crates/skoro-dense/src/factor.rs` | Turns a precision `Λ` into the `W` with `WᵀW = Λ`, packed for a `Tril`, plus its log-determinant. The host crossing a marginal needs. |
@@ -365,16 +372,15 @@ rather than by either pass, since `∂x/∂x` is the identity and neither pass w
   the union of the terms' arguments, one evaluation of every root — and a solver loop pays that every
   iteration. Nothing caches a compiled program.
 - **No dense second-order assembly.** `log_density_ord2`, `evaluate_hvp` and friends are reachable
-  from `ModelClientOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
+  from `ModelReaderOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
   basis, and there is **no `hessian_*` mirroring `jacobian_jvp` / `jacobian_vjp`**. Materializing a
   Hessian is a `D_in`-call loop the caller writes, with none of `jacobian.rs`'s layout flattening or
   leaf-row fill-in. Note that `information*` is the *Fisher* information, not the Hessian.
 - **No sparsity anywhere.** `Dense::matmul` is a triple loop with a zero-skip; there is no LU, SVD,
   eigendecomposition, iterative solver, or sparse storage.
 
-One thing that is *not* missing, contrary to its own documentation: the directional
-`_jvp` / `_vjp` / `_hvp` primitives are on `ModelClientOps`, so an estimator bounded on the read tier
-does get raw access to them. See §6.
+One thing that is *not* missing: the directional `_jvp` / `_vjp` / `_hvp` primitives are on
+`ModelReaderOps`, so an estimator bounded on the read tier does get raw access to them.
 
 ---
 
@@ -433,10 +439,6 @@ tolerance misses, pre-existing and GPU-only; and deferred bindings.
 
 Observations, with paths. Repairing them is separate work this document does not do.
 
-- **`client_ops.rs`, on `ModelClientOps`** — says it mirrors the client surface "excluding the
-  lower-level `_jvp`/`_vjp`/`_hvp` directional primitives, which remain inherent methods for now."
-  They are not excluded; they are declared on the trait and implemented for `ModelClient`. An
-  estimator bounded on the read tier does get them.
 - **`skoro-dense`** — both `lib.rs` and `factor.rs` say "five" entry points. There are six:
   `whitening_from_precision` came later. It is also **not in the prelude**
   (`crates/skoro/src/lib.rs` exports `cholesky`, `lstsq`, `solve_lower`, `solve_upper`, `spd_solve`

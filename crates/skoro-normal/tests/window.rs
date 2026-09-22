@@ -11,7 +11,7 @@
 use skoro_backend::{Flex, Point, TensorData};
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     hash_map_builders::{point_map, points},
     least_squares::residual_layout,
     model::ModelClient,

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use skoro_backend::{Flex, Point, TensorData};
 use skoro_linalg::tril::Tril;
-use skoro_model::{ModelBuilderOps, ModelClientOps, model::ModelClient, q::Q};
+use skoro_model::{ModelBuilderOps, ModelReaderOps, model::ModelClient, q::Q};
 use skoro_normal::{
     distribution::Normal,
     facade::{constant_covariance_diagonal, constant_covariance_identity},

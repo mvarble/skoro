@@ -16,7 +16,7 @@ fn fixed_linear_map_follows_its_input_device() {
     use skoro_backend::{Tensor, TensorData};
     use skoro_linalg::matrix::{FixedLinearMap, linear_map};
     use skoro_model::{
-        ModelClientOps,
+        ModelReaderOps,
         hash_map_builders::points,
         jacobian::{jacobian_jvp, jacobian_vjp},
         model::ModelClient,

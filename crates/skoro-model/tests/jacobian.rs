@@ -343,7 +343,7 @@ fn a_constant_or_observed_node_that_is_a_row_and_a_column_is_zero() {
     let model = Model::new();
     let c = model.client.add_constant(Real, &3.0f64);
     let o = model.client.add_quantity(Linear).unwrap();
-    o.observe(&1.5f64).unwrap();
+    model.client.observe(&o, &1.5f64).unwrap();
     let points = model.points();
     let ids = [model.x.id(), c.id(), o.id()];
     let (inputs, outputs) = (layout(&model.client, &ids), layout(&model.client, &ids));

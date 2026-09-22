@@ -1,7 +1,7 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use skoro_backend::{Backend, CotangentFrame, Point, TangentFrame, TangentVector};
-use skoro_core::{error::SkoroResult, id::Id, kind::Kind, pack::Packable};
+use skoro_core::{error::SkoroResult, id::Id, kind::Kind};
 use skoro_graph::{
     graph::{PointEvalOrder1, PointEvalOrder2, PointHvpEval, PointJvpEval, PointVjpEval},
     quantity::{ContinuousQuantity, QuantityType},
@@ -81,28 +81,11 @@ impl<B: Backend, T> Q<B, T> {
     pub fn id(&self) -> Id {
         self.id
     }
-
-    /// Render the quantity unobserved.
-    #[inline(always)]
-    pub fn unobserve(&self) -> SkoroResult<()> {
-        self.client.unobserve(self)
-    }
 }
 
 /// Methods available on quantities of either kind. The kind parameter `K` is
 /// inferred from the concrete quantity type `M`.
 impl<B: Backend, T> Q<B, T> {
-    /// Render the quantity observed at the specified value.
-    #[inline(always)]
-    pub fn observe<K, D>(&self, value: &D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K> + Packable<K::Elem, D>,
-        D: 'static,
-    {
-        self.client.observe(self, value)
-    }
-
     /// Get the quantity type within the graph.
     ///
     /// This panics if the node's stored type does not match `M`; since a `Q<B,
@@ -232,7 +215,9 @@ impl<B: Backend> std::fmt::Debug for Handle<B> {
     }
 }
 
-// `add_factor` and `bind` deliberately do not live here. Attaching an arbitrary factor to
-// any real-valued quantity would let a holder of a `Q` handed out by a restricted model
-// widen that model behind its back. They are on `ModelBuilderOps` instead, which a
-// restricting facade can decline to implement.
+// `add_factor`, `bind`, `observe` and `unobserve` deliberately do not live here. A `Q`
+// carries a full client, so anything on it is reachable by whoever was handed the quantity,
+// whatever bound they were given the model under. Attaching a factor would let them widen the
+// model behind its back, and observing would let them re-condition it -- an estimator handed
+// the quantities it solves for could fix one of them. They are on `ModelBuilderOps` instead,
+// which a read-bounded caller does not have.

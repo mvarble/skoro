@@ -1,23 +1,25 @@
 //! The distribution-agnostic client capability trait.
 //!
-//! [`ModelClientOps`] factors out the model-interface surface that has nothing
-//! to do with which conditional distributions a model supports: adding
-//! deterministic/free quantities, observing, evaluation, and generation.
-//! [`ModelBuilderOps`] adds the calls that *grow* a model.
+//! The two tiers are drawn by what a call changes, not by what it builds.
+//! [`ModelReaderOps`] evaluates, differentiates, generates from and inspects a
+//! model, and may add nodes that change none of the log-density, the proposal,
+//! the free and observed set, or the accepted batch sizes. [`ModelBuilderOps`]
+//! holds every call that changes one of those: adding terms and parameters,
+//! observing, demoting, and removing.
 //!
 //! All quantity-construction methods are *kind-generic*: the same
-//! [`add_constant`](ModelClientOps::add_constant),
-//! [`add_parameter`](ModelClientOps::add_parameter), and
-//! [`observe`](ModelClientOps::observe) serve continuous and discrete
+//! [`add_constant`](ModelReaderOps::add_constant),
+//! [`add_parameter`](ModelBuilderOps::add_parameter), and
+//! [`observe`](ModelBuilderOps::observe) serve continuous and discrete
 //! quantities alike, with the kind inferred from the quantity type. Only the
 //! genuinely kind-specific surface is bounded: manifold/derivative methods
 //! require [`ContinuousQuantity`].
 //!
-//! Code that is generic over "some client one can drive a model through" should
-//! bound on `ModelClientOps`; code that also builds should bound on
-//! [`ModelBuilderOps`]. Neither says anything about what a model *contains* —
-//! for that, read its terms and their bindings, through
-//! [`ModelClientOps::factors`] and [`ModelClientOps::bound`].
+//! Code that only reads a model -- an estimator -- should bound on
+//! `ModelReaderOps`; code that changes it should bound on [`ModelBuilderOps`].
+//! Neither says anything about what a model *contains* — for that, read its
+//! terms and their bindings, through [`ModelReaderOps::factors`] and
+//! [`ModelReaderOps::bound`].
 
 use std::collections::HashMap;
 
@@ -59,12 +61,13 @@ pub struct FactorInfo {
     pub arguments: Vec<Id>,
 }
 
-/// Distribution-agnostic operations available on any model client.
+/// The read tier: evaluate, differentiate, generate from, and inspect a model without changing it.
 ///
-/// This is intentionally "pragmatic and broad": it mirrors the common model-building and evaluation
-/// surface of [`ModelClient`] (excluding the lower-level `_jvp`/`_vjp`/`_hvp` directional
-/// primitives, which remain inherent methods for now).
-pub trait ModelClientOps<B: Backend> {
+/// This is the bound an estimator takes. It may add nodes -- a constant, a mapped expression, and
+/// in general anything that changes neither the log-density `p`, the proposal `q`, the set of
+/// free or observed quantities, nor the batch sizes the model accepts. Anything that does change
+/// one of those is on [`ModelBuilderOps`].
+pub trait ModelReaderOps<B: Backend> {
     // ----- quantity construction -----
 
     /// Add a fixed, immutable quantity, continuous or discrete.
@@ -74,50 +77,12 @@ pub trait ModelClientOps<B: Backend> {
         T: QuantityType<B, K> + Packable<K::Elem, D>,
         D: 'static;
 
-    /// Add a fixed, immutable quantity that differs across the batch: one value per batch row,
-    /// in order, rather than one value broadcast to every row.
-    ///
-    /// A batch is a set of *independent* problems, so this is how each row gets its own
-    /// constant -- its own linearization point, its own observation. The cost is that the value
-    /// pins the batch: a model holding a batch-`n` constant can only be evaluated at batch `n`,
-    /// and any other batch size is an error rather than a broadcast. Use
-    /// [`add_constant`](Self::add_constant) for a value shared by every row.
-    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K> + Packable<K::Elem, D>,
-        D: 'static;
-
-    /// Add a free quantity, intended to be inferred, continuous or discrete.
-    fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
-    where
-        T: QuantityType<B, K>,
-        K: Kind<B>;
-
-    // ----- conditioning / mutation -----
-
-    /// Impose a posterior by observing a quantity at a value.
-    fn observe<K, T, D>(&self, q: &Q<B, T>, value: &D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K> + Packable<K::Elem, D>,
-        D: 'static;
-
-    /// Undo the effect of [`observe`](Self::observe).
-    fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
-
-    /// Demote a stochastic quantity to a free parameter, keeping its identity.
-    ///
-    /// The quantity loses its sampler, its parents, and its own log-density, but keeps its `Id`
-    /// and quantity type, so every quantity depending on it stays valid. This is how a quantity
-    /// is re-rooted when its marginal does not factorize and the joint is supplied instead as a
-    /// likelihood factor over several quantities.
-    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
-
-    /// Remove quantities (which must have no retained children).
-    fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>>;
+    // ----- housekeeping -----
 
     /// Garbage-collect unreferenced mapped quantities.
+    ///
+    /// Semantics-preserving: nothing a term or a live handle reaches is taken, so the model's
+    /// densities and free set are the same afterwards.
     fn cleanup(&self);
 
     /// A [`TangentLayout`] over quantities of this model, in the given order.
@@ -135,14 +100,14 @@ pub trait ModelClientOps<B: Backend> {
     ///
     /// A sliding window retires by policy rather than by bookkeeping, and "how big has this
     /// got" is the question the policy asks. It is a count, not a handle, so it sits on the
-    /// client tier.
+    /// read tier.
     fn graph_node_count(&self) -> usize;
 
     /// The log-density node scoring a stochastic quantity, if it has one.
     ///
     /// A builder that has just added a quantity needs this to name the term it created:
     /// `add_quantity` returns the quantity, and the density it built is reachable only through the
-    /// graph. Read-only, so it sits on the client tier.
+    /// graph. Read-only, so it sits on the read tier.
     fn log_density_of<T>(&self, q: &Q<B, T>) -> Option<Id>;
 
     /// One [`FactorInfo`] per term of the log-density, in term order.
@@ -294,18 +259,81 @@ pub trait ModelClientOps<B: Backend> {
     ) -> SkoroResult<HvpForwardOutput<B>>;
 }
 
-/// Capability: this client can grow the model with stochastic quantities and free-standing
-/// likelihood factors.
+/// Capability: this client can change the model.
 ///
-/// Deliberately separate from [`ModelClientOps`] rather than folded into it. If the two were one
-/// trait, "a client that can evaluate a model" and "a client that can add anything to a model"
-/// would be the same bound — so an estimator, which needs only the first, could not be given
-/// the first without the second. That split is what `remove` / `remove_closure` sit on either side
-/// of.
+/// Every call that changes the log-density `p`, the proposal `q`, the set of free or observed
+/// quantities, or the batch sizes the model accepts is here: adding terms and parameters,
+/// observing, demoting, and removing. [`ModelReaderOps`] may add nodes, but only ones that change
+/// none of those.
+///
+/// Deliberately separate from [`ModelReaderOps`] rather than folded into it. `ModelClient` takes
+/// `&self` everywhere and is freely cloned, so `&mut` guards nothing; a bound is the only
+/// compile-time way to hand an estimator a model it cannot change. If the two were one trait,
+/// "a client that can evaluate a model" and "a client that can change a model" would be the same
+/// bound — so an estimator, which needs only the first, could not be given the first without the
+/// second.
+///
+/// There is deliberately no tier between the two. Marginalizing is `demote_to_parameter`, then a
+/// joint factor over the blanket, then `remove_closure`, and a tier that granted the first
+/// without the others would permit exactly the half-done state to avoid: a demoted quantity with
+/// nothing to compensate for it. Marginalization belongs here, as one operation.
 ///
 /// Note what this trait is not: implementing it says nothing about what a model *contains*. What a
-/// model contains is read from its terms and their bindings, via [`ModelClientOps::factors`].
-pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
+/// model contains is read from its terms and their bindings, via [`ModelReaderOps::factors`].
+pub trait ModelBuilderOps<B: Backend>: ModelReaderOps<B> {
+    // ----- free and batched quantities -----
+
+    /// Add a free quantity, intended to be inferred, continuous or discrete.
+    ///
+    /// A builder call because it grows the free set: every estimator's unknowns are defined by
+    /// it.
+    fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
+    where
+        T: QuantityType<B, K>,
+        K: Kind<B>;
+
+    /// Add a fixed, immutable quantity that differs across the batch: one value per batch row,
+    /// in order, rather than one value broadcast to every row.
+    ///
+    /// A batch is a set of *independent* problems, so this is how each row gets its own
+    /// constant -- its own linearization point, its own observation. The cost is that the value
+    /// pins the batch: a model holding a batch-`n` constant can only be evaluated at batch `n`,
+    /// and any other batch size is an error rather than a broadcast. Use
+    /// [`add_constant`](ModelReaderOps::add_constant) for a value shared by every row.
+    ///
+    /// Pinning changes which evaluations the whole model accepts, which is why this is a builder
+    /// call and `add_constant` is not.
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static;
+
+    // ----- conditioning -----
+
+    /// Impose a posterior by observing a quantity at a value.
+    fn observe<K, T, D>(&self, q: &Q<B, T>, value: &D) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static;
+
+    /// Undo the effect of [`observe`](Self::observe).
+    fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
+
+    /// Demote a stochastic quantity to a free parameter, keeping its identity.
+    ///
+    /// The quantity loses its sampler, its parents, and its own log-density, but keeps its `Id`
+    /// and quantity type, so every quantity depending on it stays valid. This is how a quantity
+    /// is re-rooted when its marginal does not factorize and the joint is supplied instead as a
+    /// likelihood factor over several quantities.
+    ///
+    /// It deletes a term of the log-density, so it is a builder call even though it cannot break
+    /// a reference.
+    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()>;
+
+    // ----- density terms -----
+
     /// Add a stochastic quantity with the given conditional distribution.
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
@@ -318,7 +346,7 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// stochastic node with the distribution's sampler — but its density is a summand of
     /// `q(x|z)` and not of `p(x|z)`. Whatever the posterior says about the quantity is attached
     /// separately with [`add_factor`](Self::add_factor), and
-    /// [`log_weight`](ModelClientOps::log_weight) accounts for the difference.
+    /// [`log_weight`](ModelReaderOps::log_weight) accounts for the difference.
     ///
     /// This is what lets a Monte-Carlo algorithm work over a distribution whose density is known
     /// but which offers no sampler: propose from something it can draw from, and let the weight
@@ -333,8 +361,9 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     ///
     /// This is how a factor scores several quantities at once without a product manifold;
     /// see [`Graph::stacked_tangent`](skoro_graph::graph::Graph::stacked_tangent) for what it
-    /// builds and why the anchors are frozen. It sits on the *builder* tier because it grows
-    /// the model — it adds `2k + 1` nodes — and for no other reason.
+    /// builds and why the anchors are frozen. It sits on the *builder* tier because its anchors
+    /// are batch-pinned constants, and pinning changes which evaluations the whole model accepts.
+    /// That it adds `2k + 1` nodes is not the reason; the read tier may add nodes.
     fn stacked_tangent(&self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Q<B, EuclideanD>>;
 
     /// Attach a free-standing likelihood factor over `arguments`, bound as its
@@ -345,18 +374,23 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     /// Record a binding: `to` plays `role` for `from`.
     fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()>;
 
+    // ----- removal -----
+
+    /// Remove quantities (which must have no retained children).
+    ///
+    /// Leaf-only and all-or-nothing: it refuses a node a survivor still points into or still
+    /// binds, so it never leaves a dangling reference. That is a guarantee about the graph, not
+    /// about the model: removing a parameter shrinks the free set and removing an unbound term
+    /// changes the density, so it is a builder call all the same.
+    fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>>;
+
     /// Remove `roots` together with everything downstream of them.
     ///
-    /// The teardown half of a sliding window. [`ModelClientOps::remove`] is leaf-only and
+    /// The teardown half of a sliding window. [`remove`](Self::remove) is leaf-only and
     /// all-or-nothing: it rejects a batch any survivor still points into, so retiring a state
-    /// means computing the downward closure by hand at every call site. This is that walk.
-    ///
-    /// **Why this is a builder capability and `remove` is not.** `remove` refuses to break a
-    /// reference, so an estimator holding only [`ModelClientOps`] cannot silently delete a
-    /// factor it was handed. This one deliberately does the opposite: it takes the referents
-    /// too, and cannot fail on a live child. Deciding that a whole cone of the model is
-    /// finished is the same order of authority as adding a factor, so it sits with the other
-    /// calls that shape the model rather than with the ones that only read it.
+    /// means computing the downward closure by hand at every call site. This is that walk. It
+    /// deliberately does the opposite of `remove`: it takes the referents too, and cannot fail
+    /// on a live child.
     ///
     /// A term bound to any node in the cone goes with it, and anything the removal
     /// orphaned upstream — a retired factor's body, the anchors of a stacked tangent — is
@@ -364,7 +398,7 @@ pub trait ModelBuilderOps<B: Backend>: ModelClientOps<B> {
     fn remove_closure(&self, roots: &[Id]) -> SkoroResult<Vec<Node<B>>>;
 }
 
-impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
+impl<B: Backend> ModelReaderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn add_constant<K, T, D>(&self, quantity_type: T, value: &D) -> Q<B, T>
     where
@@ -373,50 +407,6 @@ impl<B: Backend> ModelClientOps<B> for ModelClient<B> {
         D: 'static,
     {
         ModelClient::add_constant(self, quantity_type, value)
-    }
-
-    #[inline(always)]
-    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K> + Packable<K::Elem, D>,
-        D: 'static,
-    {
-        ModelClient::add_batched_constant(self, quantity_type, values)
-    }
-
-    #[inline(always)]
-    fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K>,
-    {
-        ModelClient::add_parameter(self, quantity_type)
-    }
-
-    #[inline(always)]
-    fn observe<K, T, D>(&self, q: &Q<B, T>, value: &D) -> SkoroResult<()>
-    where
-        K: Kind<B>,
-        T: QuantityType<B, K> + Packable<K::Elem, D>,
-        D: 'static,
-    {
-        ModelClient::observe(self, q, value)
-    }
-
-    #[inline(always)]
-    fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
-        ModelClient::unobserve(self, q)
-    }
-
-    #[inline(always)]
-    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
-        ModelClient::demote_to_parameter(self, q)
-    }
-
-    #[inline(always)]
-    fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
-        ModelClient::remove(self, ids)
     }
 
     #[inline(always)]
@@ -675,6 +665,45 @@ fn term_ids(terms: &[Term], keep: impl Fn(&Term) -> bool) -> Vec<Id> {
 
 impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     #[inline(always)]
+    fn add_parameter<K, T>(&self, quantity_type: T) -> Q<B, T>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K>,
+    {
+        ModelClient::add_parameter(self, quantity_type)
+    }
+
+    #[inline(always)]
+    fn add_batched_constant<K, T, D>(&self, quantity_type: T, values: &[D]) -> SkoroResult<Q<B, T>>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        ModelClient::add_batched_constant(self, quantity_type, values)
+    }
+
+    #[inline(always)]
+    fn observe<K, T, D>(&self, q: &Q<B, T>, value: &D) -> SkoroResult<()>
+    where
+        K: Kind<B>,
+        T: QuantityType<B, K> + Packable<K::Elem, D>,
+        D: 'static,
+    {
+        ModelClient::observe(self, q, value)
+    }
+
+    #[inline(always)]
+    fn unobserve<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
+        ModelClient::unobserve(self, q)
+    }
+
+    #[inline(always)]
+    fn demote_to_parameter<T>(&self, q: &Q<B, T>) -> SkoroResult<()> {
+        ModelClient::demote_to_parameter(self, q)
+    }
+
+    #[inline(always)]
     fn add_quantity<K, D>(&self, distr: D) -> SkoroResult<Q<B, D::Qty>>
     where
         K: Kind<B>,
@@ -705,6 +734,11 @@ impl<B: Backend> ModelBuilderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn bind(&self, from: Id, role: Role, to: Id) -> SkoroResult<()> {
         ModelClient::bind(self, from, role, to)
+    }
+
+    #[inline(always)]
+    fn remove(&self, ids: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+        ModelClient::remove(self, ids)
     }
 
     #[inline(always)]

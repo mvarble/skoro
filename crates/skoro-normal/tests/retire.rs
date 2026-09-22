@@ -2,7 +2,7 @@
 //!
 //! A Gaussian factor's residual and Fisher root hang off its term by binding, with no handle of
 //! their own. These tests pin the ways a term leaves — demotion and closure removal — and the one
-//! way it must not: a client-tier `remove` taking a bound node out from under it. Each checks that
+//! way it must not: a leaf `remove` taking a bound node out from under it. Each checks that
 //! the rows of `J`, the factors and the log-density agree about the model afterwards.
 //!
 //! There is no test here for replacing a distribution in place: `update_quantity` went with
@@ -13,7 +13,7 @@ use skoro_backend::{Flex, Point, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_linalg::matrix::matmul;
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     hash_map_builders::points,
     least_squares::residual_layout,
     model::ModelClient,
@@ -77,8 +77,8 @@ mod retirement {
 
     /// The way a factor is meant to be retired: a closure at the quantity it scores.
     ///
-    /// One tier up from `remove`, and it takes the referents rather than refusing — which is the
-    /// whole distinction between the two. The term, its residual and its Fisher root all go, and
+    /// Unlike `remove`, it takes the referents rather than refusing — which is the whole
+    /// distinction between the two. The term, its residual and its Fisher root all go, and
     /// the objective and `J` shrink together.
     #[test]
     fn retiring_a_scored_quantity_takes_the_factor_and_its_bindings() {
@@ -107,7 +107,7 @@ mod retirement {
     }
 }
 
-/// Client-tier `remove` refuses the nodes a term binds. The Fisher root is childless, so nothing
+/// Leaf `remove` refuses the nodes a term binds. The Fisher root is childless, so nothing
 /// about the parent edges would stop its removal, and taking it would leave the term binding a node
 /// that is gone; the binding is what refuses it. `remove` is the primitive that refuses to break a
 /// reference.
@@ -128,7 +128,7 @@ mod rejections {
 
         let root = model.bound(density, FISHER_ROOT)[0];
         assert_eq!(
-            ModelClientOps::remove(&model, &[root]).map(|removed| removed.len()),
+            ModelBuilderOps::remove(&model, &[root]).map(|removed| removed.len()),
             Err(SkoroError::NodeStillBound {
                 id: root,
                 by: density
@@ -140,7 +140,7 @@ mod rejections {
         // which runs first, refuses it before the binding is consulted.
         let residual = model.bound(density, RESIDUAL)[0];
         assert!(matches!(
-            ModelClientOps::remove(&model, &[residual]),
+            ModelBuilderOps::remove(&model, &[residual]),
             Err(SkoroError::NodeStillReferenced { id, .. }) if id == residual
         ));
 

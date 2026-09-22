@@ -14,7 +14,7 @@
 use skoro_backend::{Flex, Tensor};
 use skoro_core::error::SkoroError;
 use skoro_model::{
-    ModelClientOps, TangentLayout,
+    ModelReaderOps, TangentLayout,
     hash_map_builders::{point_map, points},
     jacobian::jacobian_vjp,
     model::ModelClient,

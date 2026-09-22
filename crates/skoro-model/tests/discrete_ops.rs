@@ -290,7 +290,7 @@ mod quantities {
         assert_eq!(data, vec![1, 1]);
 
         // Observation works through the unified `observe` (packed into int storage).
-        z.observe(&false).unwrap();
+        model.observe(&z, &false).unwrap();
 
         // The log-pmf evaluates through the ordinary log-density path.
         let ld = model.log_density(&HashMap::new()).unwrap();

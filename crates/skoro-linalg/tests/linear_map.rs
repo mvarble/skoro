@@ -10,7 +10,7 @@ use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_core::error::SkoroError;
 use skoro_linalg::matrix::{FixedLinearMap, SparseLinearMap, linear_map, sparse_linear_map};
 use skoro_model::{
-    ModelClientOps,
+    ModelReaderOps,
     hash_map_builders::points,
     jacobian::{jacobian_jvp, jacobian_vjp},
     model::ModelClient,

@@ -12,7 +12,7 @@ use skoro_linalg::{
     tril::Tril,
 };
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     coverage::{require_role, terms_missing},
     hash_map_builders::points,
     information::{information, information_root},
@@ -213,7 +213,7 @@ fn observed_gaussian_information_is_h_transpose_precision_h() {
     let l_packed = [1.2, 0.1, 0.9, -0.2, 0.3, 1.1];
     let l = model.add_constant(Tril(3), &VectorD::new(&l_packed));
     let y = model.add_quantity(Normal::new(mu.clone(), l)).unwrap();
-    y.observe(&VectorD::new(&[0.9, 1.0, 1.1])).unwrap();
+    model.observe(&y, &VectorD::new(&[0.9, 1.0, 1.1])).unwrap();
 
     let values = points().with_quantity(&theta, row(&[0.3, -0.2])).build();
     let free = model.tangent_layout(&[theta.id()]).unwrap();
@@ -258,7 +258,7 @@ fn covariance_information_matches_the_trace_formula() {
     let mu = model.add_constant(EuclideanD(2), &VectorD::new(&[0.0, 0.0]));
     let l = model.add_parameter(Tril(2));
     let x = model.add_quantity(Normal::new(mu, l.clone())).unwrap();
-    x.observe(&VectorD::new(&[0.3, -0.6])).unwrap();
+    model.observe(&x, &VectorD::new(&[0.3, -0.6])).unwrap();
 
     let values = points().with_quantity(&l, row(&L0)).build();
     let free = model.tangent_layout(&[l.id()]).unwrap();
@@ -518,7 +518,7 @@ fn a_hierarchical_gaussian_has_no_gaps() {
         .unwrap();
     let z_mean = matmul(&f_mat, &x1).unwrap();
     let z = model.add_quantity(Normal::new(z_mean, cov)).unwrap();
-    z.observe(&VectorD::new(&[0.1, -0.1])).unwrap();
+    model.observe(&z, &VectorD::new(&[0.1, -0.1])).unwrap();
 
     assert_eq!(model.factors().len(), 3);
     assert_eq!(require_role(&model, FISHER_ROOT), Ok(()));

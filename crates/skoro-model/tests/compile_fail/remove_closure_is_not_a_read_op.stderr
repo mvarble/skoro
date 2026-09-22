@@ -1,11 +1,11 @@
 error[E0599]: no method named `remove_closure` found for reference `&M` in the current scope
-  --> tests/compile_fail/remove_closure_is_not_a_client_op.rs:26:11
+  --> tests/compile_fail/remove_closure_is_not_a_read_op.rs:18:11
    |
-26 |     model.remove_closure(roots)
+18 |     model.remove_closure(roots)
    |           ^^^^^^^^^^^^^^ method not found in `&M`
    |
    = help: items from traits can only be used if the type parameter is bounded by the trait
 help: the following trait defines an item `remove_closure`, perhaps you need to restrict type parameter `M` with it:
    |
-22 | fn an_estimator<M: ModelClientOps<B> + ModelBuilderOps</* B */>>(model: &M, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
+17 | fn an_estimator<M: ModelReaderOps<B> + ModelBuilderOps</* B */>>(model: &M, roots: &[Id]) -> SkoroResult<Vec<Node<B>>> {
    |                                      ++++++++++++++++++++++++++

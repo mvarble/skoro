@@ -12,7 +12,7 @@ use skoro_core::{
     kind::Continuous,
 };
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     coverage::{require_role, terms_missing},
     distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,

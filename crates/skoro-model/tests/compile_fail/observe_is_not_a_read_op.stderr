@@ -1,0 +1,11 @@
+error[E0599]: no method named `observe` found for reference `&M` in the current scope
+  --> tests/compile_fail/observe_is_not_a_read_op.rs:14:11
+   |
+14 |     model.observe(x, &1.0f64)
+   |           ^^^^^^^ method not found in `&M`
+   |
+   = help: items from traits can only be used if the type parameter is bounded by the trait
+help: the following trait defines an item `observe`, perhaps you need to restrict type parameter `M` with it:
+   |
+13 | fn an_estimator<M: ModelReaderOps<B> + ModelBuilderOps</* B */>>(model: &M, x: &Q<B, Real>) -> SkoroResult<()> {
+   |                                      ++++++++++++++++++++++++++

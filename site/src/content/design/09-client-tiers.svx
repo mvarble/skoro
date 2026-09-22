@@ -1,34 +1,75 @@
 ---
 title: Client tiers
-summary: Why evaluating a model and adding density terms to it are separate traits, ModelClientOps and ModelBuilderOps, so an estimator can be given one without the other.
+summary: Why reading a model and changing it are separate traits, ModelReaderOps and ModelBuilderOps, drawn by what a call changes rather than by what it builds, so an estimator can be given one without the other.
 order: 9
 ---
 
 ## Context
 
-An estimator needs to evaluate and differentiate a model. It should not be able to add factors
-to it or tear it down.
+An estimator needs to evaluate and differentiate a model. It should not be able to change the model
+it is estimating: add or delete terms, fix one of its unknowns by observing it, or re-root a
+quantity.
+
+`ModelClient` takes `&self` everywhere, is freely cloned, and holds its graph behind a lock, so
+`&mut` guards nothing. A trait bound is the only compile-time way to hand out a model that cannot
+be changed.
+
+The tiers were first drawn around structure: a call went on the builder tier if it could break a
+reference. That put `observe`, `demote_to_parameter`, `add_parameter` and a leaf `remove` on the
+estimator's side, and every one of them changes the model. `demote_to_parameter` deletes a density
+term outright.
 
 ## Decision
 
-The client surface is split into two traits. `ModelClientOps` evaluates, differentiates and reads
-the model. It can also add constants and parameters, `observe`, `demote_to_parameter`, and remove
-leaves. `ModelBuilderOps: ModelClientOps` adds density terms (`add_quantity`, `add_proposal`,
-`add_factor`), `stacked_tangent`, and `remove_closure`.
+The tiers are drawn by what a call changes. The read tier may add nodes, but may not change:
+
+- the log-density `p`,
+- the proposal `q`,
+- the set of free or observed quantities,
+- or the batch sizes the model accepts.
+
+Anything that changes one of those is on the builder tier.
 
 ```
-{../../../../crates/skoro-model/src/client_ops.rs:300..307}
+{../../../../crates/skoro-model/src/client_ops.rs:262..283}
 ```
 
-| | Tier | Behaviour |
+| Call | Tier | Why |
 | --- | --- | --- |
-| `remove` | `ModelClientOps` | Leaf-only, all-or-nothing. Refuses a node that is still referenced or still bound. |
-| `remove_closure` | `ModelBuilderOps` | Takes the downward closure and its referrers. Cannot fail on a live child. |
+| `evaluate*`, `log_density*`, `log_proposal`, `log_weight`, `generate*` | `ModelReaderOps` | Read the model. |
+| `factors`, `terms`, `bound`, `bindings_of`, `tangent_layout` | `ModelReaderOps` | Inspect the model. |
+| `add_constant` | `ModelReaderOps` | Adds a node, changes nothing else. |
+| `cleanup` | `ModelReaderOps` | Takes only what nothing reaches. |
+| `add_quantity`, `add_proposal`, `add_factor`, `bind` | `ModelBuilderOps` | Add terms. |
+| `add_parameter` | `ModelBuilderOps` | Grows the free set. |
+| `observe`, `unobserve` | `ModelBuilderOps` | Change the free and observed set. |
+| `demote_to_parameter` | `ModelBuilderOps` | Deletes a term. |
+| `add_batched_constant`, `stacked_tangent` | `ModelBuilderOps` | Pin the batch for the whole model. |
+| `remove` | `ModelBuilderOps` | Leaf-only; never breaks a reference, but still removes a parameter or a term. |
+| `remove_closure` | `ModelBuilderOps` | Takes the downward closure and its referrers. |
+
+`Q` has no `observe`, for the same reason it has no `add_factor`. A `Q` carries a full client, so
+anything on it is reachable by whoever holds the quantity, whatever bound the model came under.
+
+There is no tier between the two. Marginalizing is `demote_to_parameter`, then a joint factor
+over the blanket, then `remove_closure`. A tier that granted demotion without the rest would
+permit the half-done state: a demoted quantity with nothing compensating for it. Marginalization
+belongs on the builder tier as one operation.
 
 ## Consequences
 
-- An estimator holding only `ModelClientOps` cannot silently delete a factor it was handed.
-- The boundary is pinned by a compile-fail test
-  (`crates/skoro-model/tests/compile_fail/remove_closure_is_not_a_client_op.rs`).
+- An estimator holding only `ModelReaderOps` cannot change the model it was handed, through the
+  client or through a `Q`.
+- Every negative claim is a compile-fail test in `crates/skoro-model/tests/compile_fail/`, one per
+  call: `observe`, `demote_to_parameter`, `add_parameter`, `remove`, `remove_closure`, and
+  `Q::observe`.
+- The bound guards generic code only. Code holding a concrete `ModelClient` can do anything.
+  There is no other way in: `server_call_mut` is private, and there is no route from a server's
+  `Id` back to its client, so seeing a quantity is not a way to reach the model behind it.
 - Neither trait says anything about what a model *contains*; see
   [Arity is the capability test](../no-capability-flags/).
+
+> [!DECISION] "Can it break a reference?" was the wrong question
+> Observing, demoting and adding a parameter cannot break a reference, and each one changes the
+> model being estimated. The question is whether a call changes the model, not whether it damages
+> the graph.

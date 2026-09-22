@@ -8,7 +8,7 @@
 
 use skoro_backend::Backend;
 use skoro_linalg::tril::Tril;
-use skoro_model::{ModelClientOps, q::Q};
+use skoro_model::{ModelReaderOps, q::Q};
 use skoro_riemann::euclidean::VectorD;
 
 /// Build a constant lower-triangular covariance factor `Q<B, Tril>` whose diagonal is `diag` and
@@ -19,7 +19,7 @@ use skoro_riemann::euclidean::VectorD;
 pub fn constant_covariance_diagonal<B, C>(client: &C, diag: &[f64]) -> Q<B, Tril>
 where
     B: Backend,
-    C: ModelClientOps<B>,
+    C: ModelReaderOps<B>,
 {
     let n = diag.len();
     let k = n * (n + 1) / 2;
@@ -36,7 +36,7 @@ where
 pub fn constant_covariance_isotropic<B, C>(client: &C, scale: f64, n: usize) -> Q<B, Tril>
 where
     B: Backend,
-    C: ModelClientOps<B>,
+    C: ModelReaderOps<B>,
 {
     let k = n * (n + 1) / 2;
     let mut packed = vec![0.0f64; k];
@@ -52,7 +52,7 @@ where
 pub fn constant_covariance_identity<B, C>(client: &C, n: usize) -> Q<B, Tril>
 where
     B: Backend,
-    C: ModelClientOps<B>,
+    C: ModelReaderOps<B>,
 {
     constant_covariance_isotropic(client, 1.0, n)
 }

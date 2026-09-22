@@ -97,21 +97,6 @@ mod nodes {
     use super::*;
 
     #[test]
-    fn construct_and_drop_releases_server() {
-        let client = ModelClient::<B>::new(Default::default());
-        let saved_id: Id = client.server_id;
-
-        let clone = client.clone();
-        drop(clone);
-        // Original still alive — `from_id` must succeed.
-        assert!(ModelClient::<B>::from_id(saved_id).is_some());
-
-        drop(client);
-        // All strong refs gone — `from_id` must now fail.
-        assert!(ModelClient::<B>::from_id(saved_id).is_none());
-    }
-
-    #[test]
     fn add_constant_and_parameter_round_trip() {
         let client = ModelClient::<B>::new(Default::default());
 
@@ -159,7 +144,7 @@ mod nodes {
     }
 }
 
-/// `Q::observe` moves a node to `Observed` and `unobserve` returns it to `Stochastic`, leaving
+/// `observe` moves a node to `Observed` and `unobserve` returns it to `Stochastic`, leaving
 /// everything else untouched. Both directions are checked, because a transition that only worked
 /// one way would strand a quantity the first time a window retired it.
 mod observation {
@@ -183,24 +168,24 @@ mod observation {
     }
 
     #[test]
-    fn q_observe_transitions_node_to_observed() {
+    fn observe_transitions_node_to_observed() {
         let client = ModelClient::<B>::new(Default::default());
         let q = client.add_quantity(DummyDistribution).unwrap();
-        // `Q::observe` — compiler infers `M` from `self: &Q<B, M>`.
-        q.observe(&5.0).unwrap();
+        // The kind is inferred from the quantity type of `q`.
+        client.observe(&q, &5.0).unwrap();
         assert_observed(&client, q.id(), 5.0);
-        q.observe(&10.0).unwrap();
+        client.observe(&q, &10.0).unwrap();
         assert_observed(&client, q.id(), 10.0);
     }
 
     #[test]
-    fn q_unobserve_returns_node_to_stochastic() {
+    fn unobserve_returns_node_to_stochastic() {
         let client = ModelClient::<B>::new(Default::default());
         let q = client.add_quantity(DummyDistribution).unwrap();
-        q.observe(&5.0).unwrap();
+        client.observe(&q, &5.0).unwrap();
         assert_observed(&client, q.id(), 5.0);
 
-        q.unobserve().unwrap();
+        client.unobserve(&q).unwrap();
         client.server_call(|server| {
             assert!(
                 matches!(server.graph().node(q.id()), Some(Node::Stochastic(_))),
@@ -216,7 +201,7 @@ mod observation {
         // which *is* idempotent: demotion asks for a state ("be a free variable") while this
         // asks for a transition, and only the first is meaningful when it has already happened.
         assert!(matches!(
-            q.unobserve(),
+            client.unobserve(&q),
             Err(SkoroError::NotObservable { id }) if id == q.id()
         ));
         client.server_call(|server| {

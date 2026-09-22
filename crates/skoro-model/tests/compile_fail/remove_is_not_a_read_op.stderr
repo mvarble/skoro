@@ -1,0 +1,5 @@
+error[E0576]: cannot find method or associated constant `remove` in trait `ModelReaderOps`
+  --> tests/compile_fail/remove_is_not_a_read_op.rs:17:31
+   |
+17 |     <M as ModelReaderOps<B>>::remove(model, ids)
+   |                               ^^^^^^ not found in `ModelReaderOps`

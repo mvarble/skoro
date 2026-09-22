@@ -7,7 +7,7 @@
 
 use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps, distribution::Factor, hash_map_builders::points,
+    ModelBuilderOps, ModelReaderOps, distribution::Factor, hash_map_builders::points,
     map::register_map1, model::ModelClient, test_utils::into_vec,
 };
 use skoro_normal::distribution::Normal;

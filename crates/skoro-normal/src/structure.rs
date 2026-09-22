@@ -15,7 +15,7 @@
 use skoro_backend::Backend;
 use skoro_core::id::Id;
 use skoro_model::{
-    ModelClientOps,
+    ModelReaderOps,
     client_ops::FactorInfo,
     roles::{LOCATION, RESIDUAL, WHITENING},
 };
@@ -40,7 +40,7 @@ impl GaussianBlock {
     /// Says nothing about whether the model's log-density scores the factor — pass a
     /// proposal-only [`FactorInfo`] and you get its Gaussian structure just the same. That is
     /// deliberate: [`all`](Self::all) is the one that takes a side.
-    pub fn of<B: Backend, C: ModelClientOps<B>>(client: &C, factor: &FactorInfo) -> Option<Self> {
+    pub fn of<B: Backend, C: ModelReaderOps<B>>(client: &C, factor: &FactorInfo) -> Option<Self> {
         let single = |ids: Vec<Id>| match ids.as_slice() {
             [id] => Some(*id),
             _ => None,
@@ -64,7 +64,7 @@ impl GaussianBlock {
     /// [`information_blocks`](skoro_model::information::information_blocks): a term the
     /// posterior does not score is no part of an objective assembled from these blocks. To see
     /// every Gaussian term, proposals included, walk
-    /// [`factors`](ModelClientOps::factors) yourself and call [`of`](Self::of).
+    /// [`factors`](ModelReaderOps::factors) yourself and call [`of`](Self::of).
     ///
     /// A scored term that is not Gaussian-shaped is also skipped, and the returned list does not
     /// say which. That is the same silence as the other two readers': a caller reading these
@@ -72,7 +72,7 @@ impl GaussianBlock {
     /// see, with [`terms_missing`](skoro_model::coverage::terms_missing) over
     /// [`WHITENING`] or
     /// [`require_role`](skoro_model::coverage::require_role).
-    pub fn all<B: Backend, C: ModelClientOps<B>>(client: &C) -> Vec<Self> {
+    pub fn all<B: Backend, C: ModelReaderOps<B>>(client: &C) -> Vec<Self> {
         client
             .factors()
             .iter()

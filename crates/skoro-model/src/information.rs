@@ -22,7 +22,7 @@ use skoro_graph::tangent_layout::TangentLayout;
 use skoro_operation::ValueMap;
 use skoro_riemann::matrix::EuclideanMatrixD;
 
-use crate::client_ops::ModelClientOps;
+use crate::client_ops::ModelReaderOps;
 use crate::jacobian::{batch_and_device, jacobian_vjp};
 use crate::roles::FISHER_ROOT;
 
@@ -42,12 +42,12 @@ pub struct InformationBlock<B: Backend> {
 /// [`require_role`](crate::coverage::require_role) first; one that wants to report the omissions
 /// reads them from [`terms_missing`](crate::coverage::terms_missing), or diffs its own
 /// [`factor`](InformationBlock::factor) ids against
-/// [`factors`](ModelClientOps::factors). Returns [`SkoroError::ShapeMismatch`] for a term with more
+/// [`factors`](ModelReaderOps::factors). Returns [`SkoroError::ShapeMismatch`] for a term with more
 /// than one root or with no arguments, [`SkoroError::QuantityTypeMismatch`] for a root that is
 /// not an `EuclideanMatrixD`, and [`SkoroError::LayoutDimensionMismatch`] for a root whose
 /// column count is not the arguments' total dimension. The first two are checked for every term
 /// before anything is evaluated.
-pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
+pub fn information_blocks<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     free: &TangentLayout,
@@ -161,7 +161,7 @@ pub fn information_blocks<B: Backend, C: ModelClientOps<B>>(
 /// [`information_blocks`]. Pair this with [`require_role`](crate::coverage::require_role) whenever
 /// the root has to cover the whole log-density — as it must when it is solved against a gradient,
 /// since the gradient sums over every term.
-pub fn information_root<B: Backend, C: ModelClientOps<B>>(
+pub fn information_root<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     free: &TangentLayout,
@@ -184,7 +184,7 @@ pub fn information_root<B: Backend, C: ModelClientOps<B>>(
 ///
 /// The information of the terms that bind a root, which is the model's own only when every scored
 /// term does; see [`information_blocks`] and [`require_role`](crate::coverage::require_role).
-pub fn information<B: Backend, C: ModelClientOps<B>>(
+pub fn information<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     free: &TangentLayout,

@@ -6,8 +6,8 @@
 //! model is make the bound node a reference: the collector keeps it, `remove` refuses to take it
 //! from under its term, and `remove_closure` takes the term with it.
 //!
-//! The negative half — that `remove_closure` stays off `ModelClientOps`, so an estimator
-//! cannot dismantle the terms it was handed — is a `trybuild` case, since a test that
+//! The negative half — that removal stays off `ModelReaderOps`, so an estimator cannot
+//! dismantle the terms it was handed — is a `trybuild` case, since a test that
 //! compiles cannot assert that another does not.
 
 use skoro_backend::{Flex, Point, TensorData};
@@ -17,7 +17,7 @@ use skoro_core::{
     kind::Continuous,
 };
 use skoro_model::{
-    ModelBuilderOps, ModelClientOps,
+    ModelBuilderOps, ModelReaderOps,
     distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,
     least_squares::residual_layout,
@@ -179,7 +179,7 @@ mod through_add_quantity {
         let bound = bound_model();
         let residual = bound.residual.id();
         assert_eq!(
-            ModelClientOps::remove(&bound.model, &[residual]).map(|removed| removed.len()),
+            ModelBuilderOps::remove(&bound.model, &[residual]).map(|removed| removed.len()),
             Err(SkoroError::NodeStillBound {
                 id: residual,
                 by: bound.density
@@ -413,7 +413,7 @@ mod compile_fail {
     /// --test bindings`. They are expected to need updating when the compiler's wording
     /// changes; what must not change is that the cases fail to compile at all.
     #[test]
-    fn remove_closure_cannot_be_reached_from_the_client_tier() {
+    fn model_changes_cannot_be_reached_from_the_read_tier() {
         trybuild::TestCases::new().compile_fail("tests/compile_fail/*.rs");
     }
 }

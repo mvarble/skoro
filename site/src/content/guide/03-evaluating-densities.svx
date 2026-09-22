@@ -29,7 +29,7 @@ A model carries two densities over the same nodes:
 view of that quantity is attached separately with `add_factor`.
 
 ```
-{../../../../crates/skoro-model/src/client_ops.rs:159..170}
+{../../../../crates/skoro-model/src/client_ops.rs:124..135}
 ```
 
 | Call | Returns |

@@ -125,7 +125,7 @@ impl<B: Backend> Handle<B> {
     pub fn typed<K: Kind<B>, T: QuantityType<B, K>>(&self) -> SkoroResult<Q<B, T>>;
 }
 
-pub trait ModelClientOps<B: Backend> {
+pub trait ModelReaderOps<B: Backend> {
     /// Build `id`'s deferred binding under `role`, if it has one, then return what it binds.
     fn resolve(&self, id: Id, role: Role) -> SkoroResult<Vec<Id>>;
     // `bound` is unchanged: realized nodes only.
@@ -139,8 +139,9 @@ dependency handles.
 **Why builders must not capture handles.** A `Handle` holds a `ModelClient`, which holds
 `Arc<RwLock<ModelServer>>`. The server holds the graph, which would hold the builder, so the server
 could never be dropped. Builders receive handles as arguments instead, freshly minted at resolve
-time. If a builder ever needs the client outside `build`, it can store the `server_id` and call
-`ModelClient::from_id`, which goes through the existing weak registry.
+time. There is no way back from a `server_id` to its client: `ModelClient::from_id` and the weak
+registry behind it were removed, so that an `Id` is never a route to the builder surface. A builder
+that needs the client must be handed it as an argument to `build`.
 
 ## 3.5.5 Resolution protocol
 
@@ -197,7 +198,7 @@ Here `w = L⁻¹` is already part of the density's expression, so depending on i
 ## 3.5.7 Decisions for review
 
 1. **Tier.** `resolve` grows the graph, but it cannot change the log-density or the set of terms, and
-   it is idempotent, much like `cleanup()`. Proposed: `ModelClientOps`, so `information` keeps its
+   it is idempotent, much like `cleanup()`. Proposed: `ModelReaderOps`, so `information` keeps its
    estimator-tier bound. The alternative is `ModelBuilderOps`, which moves `information` to the
    builder tier.
 2. **Explicit or transparent.** Proposed: an explicit `resolve`, with `bound` staying a pure read.
@@ -214,7 +215,7 @@ Here `w = L⁻¹` is already part of the density's expression, so depending on i
 | Phase | Scope | Tests |
 | --- | --- | --- |
 | D1 | `Target`, `bind_deferred`, `deferred`, `realize`, `validate` in `skoro-graph` | dependencies refuse `remove` (`NodeStillBound`); `remove_closure(dep)` takes the term and the entry; `validate_indices` holds after every mutation; `realize` returns `Stale` after the source is removed or already realized |
-| D2 | `DeferredBinding`, `Factor::bind_deferred`, `Handle::typed`, `ModelClientOps::resolve`, collector marking of dependencies | nothing is built before `resolve` (node count and a build counter); a second `resolve` does not build; two threads resolving concurrently settle on one id and the loser is collected after `cleanup()`; resolving a term removed mid-build returns empty and leaks nothing; a dependency survives `cleanup()` with no handle |
+| D2 | `DeferredBinding`, `Factor::bind_deferred`, `Handle::typed`, `ModelReaderOps::resolve`, collector marking of dependencies | nothing is built before `resolve` (node count and a build counter); a second `resolve` does not build; two threads resolving concurrently settle on one id and the loser is collected after `cleanup()`; resolving a term removed mid-build returns empty and leaks nothing; a dependency survives `cleanup()` with no handle |
 | D3 | `Normal`/`JointNormal` defer their roots; `information_blocks` resolves | all §5.7 and §5.9 tests pass (tests that inspect the root via `bound` switch to `resolve`); adding N Gaussians adds exactly N fewer nodes than eager; the folded-root test observes folding at resolve time |
 | D4 | Spec and docs: `FISHER_ROOT` contract ("may be deferred; read with `resolve`"), §7 updated, readme | `cargo doc` without new warnings |
 

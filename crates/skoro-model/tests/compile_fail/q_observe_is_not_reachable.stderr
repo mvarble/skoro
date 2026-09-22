@@ -1,0 +1,5 @@
+error[E0599]: no method named `observe` found for reference `&Q<Flex, Real>` in the current scope
+  --> tests/compile_fail/q_observe_is_not_reachable.rs:15:7
+   |
+15 |     x.observe(&1.0f64)
+   |       ^^^^^^^ method not found in `&Q<Flex, Real>`

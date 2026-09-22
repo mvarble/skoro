@@ -19,7 +19,7 @@ use skoro_backend::{Flex, Tensor, TensorData};
 use skoro_dense::{dense::Dense, factor::whitening_from_precision};
 use skoro_linalg::tril::Tril;
 use skoro_model::{
-    ModelClientOps, hash_map_builders::point_map, jacobian::jacobian_vjp, model::ModelClient, q::Q,
+    ModelReaderOps, hash_map_builders::point_map, jacobian::jacobian_vjp, model::ModelClient, q::Q,
     test_utils::into_vec,
 };
 use skoro_normal::joint::{JointNormal, add_joint_factor};
