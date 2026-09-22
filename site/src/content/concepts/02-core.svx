@@ -1,0 +1,42 @@
+---
+title: Core vocabulary
+summary: skoro-core, the shared types. Ids, the error type, binding roles, continuous/discrete kinds, packing user data into tensors, and samplers.
+order: 2
+---
+
+`skoro-core` holds the types every other crate needs to agree on.
+
+```
+{../../../../crates/skoro-core/src/lib.rs:1..21}
+```
+
+## Ids
+
+Every node in a model has an `Id`, created by an `IdGenerator`. An `Id` is a plain, weak name: it
+does not keep a node alive (see [Handles own nodes](../../design/ownership/)).
+
+## Errors
+
+Recoverable errors are `SkoroError` / `SkoroResult`. Mistakes a user can make at runtime (a
+dimension mismatch, a missing point, a node still referenced) are errors, not panics.
+
+## Kinds
+
+A quantity is either **continuous** (it lives on a manifold and can be differentiated) or
+**discrete** (integers, categories). The `Continuous`/`Discrete` kind tags keep the two apart at
+the type level, and `any_tensor` erases the kind when both must travel in one map.
+
+## Packing
+
+`Packable`, `NumComponents` and `Cardinality` describe how a user's value (a vector, a matrix, a
+rotation) packs into a flat row of a tensor. This is how `add_constant(EuclideanD(3),
+&VectorD::new(..))` becomes a `[1, 3]` tensor.
+
+## Roles
+
+A `Role` is the label on a binding edge (`"residual"`, `"fisher_root"`, …). It lives here, rather
+than beside the graph's edges, so that `SkoroError` can name one.
+
+> [!TODO] Sequences
+> `sequence` (the indexed `SequenceMutator` abstraction) deserves a paragraph: what problem it
+> solves and where it is used (the compiler's steps?).

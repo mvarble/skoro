@@ -1,0 +1,34 @@
+---
+title: Client tiers
+summary: Why evaluating a model and adding density terms to it are separate traits, ModelClientOps and ModelBuilderOps, so an estimator can be given one without the other.
+order: 9
+---
+
+## Context
+
+An estimator needs to evaluate and differentiate a model. It should not be able to add factors
+to it or tear it down.
+
+## Decision
+
+The client surface is split into two traits. `ModelClientOps` evaluates, differentiates and reads
+the model. It can also add constants and parameters, `observe`, `demote_to_parameter`, and remove
+leaves. `ModelBuilderOps: ModelClientOps` adds density terms (`add_quantity`, `add_proposal`,
+`add_factor`), `stacked_tangent`, and `remove_closure`.
+
+```
+{../../../../crates/skoro-model/src/client_ops.rs:300..307}
+```
+
+| | Tier | Behaviour |
+| --- | --- | --- |
+| `remove` | `ModelClientOps` | Leaf-only, all-or-nothing. Refuses a node that is still referenced or still bound. |
+| `remove_closure` | `ModelBuilderOps` | Takes the downward closure and its referrers. Cannot fail on a live child. |
+
+## Consequences
+
+- An estimator holding only `ModelClientOps` cannot silently delete a factor it was handed.
+- The boundary is pinned by a compile-fail test
+  (`crates/skoro-model/tests/compile_fail/remove_closure_is_not_a_client_op.rs`).
+- Neither trait says anything about what a model *contains*; see
+  [Arity is the capability test](../no-capability-flags/).

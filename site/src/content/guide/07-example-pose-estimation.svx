@@ -1,0 +1,113 @@
+---
+title: 'Example: pose estimation (MAP)'
+summary: A robot's trajectory on SE(3) and the landmarks it sees, estimated jointly by maximum a posteriori with a damped Gauss–Newton loop over the model's own residuals.
+order: 7
+katex_macros:
+  \SE: \mathrm{SE}(3)
+  \NSE: \mathcal{N}_{\SE}
+  \pose: x
+  \odom: u
+  \lm: \ell
+  \meas: z
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { poseMap } from './pose-map.graph';
+</script>
+
+> [!NOTE] Status
+> This example shows how skoro is meant to be used, and parts of it cannot run yet. The model can be
+> built and every piece of a solver step exists, but the loop around them doesn't
+> ([What exists today](#what-exists-today)). Each `TODO` marks a listing to be quoted from a
+> compiled example once it runs.
+
+A robot drives through a scene. It knows roughly how far it moved between frames (odometry), and
+now and then it sees a landmark. We want the most probable trajectory and landmark positions given
+everything it measured. This is the problem at the heart of SLAM and bundle adjustment, and it
+exercises most of what makes skoro different:
+
+- the poses live on $\SE$, a curved manifold, and every update is a retraction;
+- every term is Gaussian, so the model already knows its own residuals and Jacobian structure;
+- the objective's structure is read back from the model, not written a second time.
+
+## The model
+
+Poses $\pose_k \in \SE$, landmarks $\lm_j \in \R^3$, odometry $\odom_k$ and observations
+$\meas_{kj}$:
+
+$$
+\begin{aligned}
+\pose_0 &\sim \NSE(\bar\pose_0,\ P_0), \\
+\pose_{k+1} \mid \pose_k &\sim \NSE(\pose_k \circ \odom_k,\ Q), \\
+\meas_{kj} \mid \pose_k, \lm_j &\sim \calN(\pose_k^{-1} \cdot \lm_j,\ R),
+\end{aligned}
+$$
+
+where $\NSE(\mu, \Sigma)$ means that $\pose \ominus \mu$ is $\calN(0, \Sigma)$ in the tangent space
+at $\mu$. That is exactly what `Normal<B, SE3>` is.
+
+<ModelGraph spec={poseMap} />
+
+> [!TODO] Code: build the model
+> Quote from `examples/pose_map.rs` once it exists. The listing should:
+> - create a `ModelClient<Flex>` and constant covariance factors for $P_0$, $Q$ and $R$
+>   (`skoro_normal::facade`);
+> - add $\pose_0$ with `add_quantity(Normal::new(prior_mean, p0))`;
+> - loop over odometry: `let mean = x_k.compose(&u_k)` (confirm the SE(3) op name), then
+>   `add_quantity(Normal::new(mean, q))`;
+> - add each landmark as `add_parameter(Euclidean::<3>)`;
+> - for each sighting, build $\pose_k^{-1} \cdot \lm_j$ (SE(3) inverse action; confirm the op), add
+>   the measurement with `add_quantity`, then `observe` it.
+
+## The objective
+
+The MAP estimate maximizes the log-posterior. Every term is Gaussian, so this is a nonlinear least
+squares problem in the terms' whitened residuals:
+
+$$
+\hat\pose, \hat\lm
+= \arg\max_{\pose, \lm} \log p(\pose, \lm \mid \meas)
+= \arg\min_{\pose, \lm} \tfrac12 \sum_t \lVert r_t \rVert^2 .
+$$
+
+Every `Normal` term has already bound its residual $r_t$ under `RESIDUAL`, so the problem's rows can
+be read straight off the model.
+
+## Solving it
+
+One damped Gauss–Newton (Levenberg–Marquardt) step, which is also Fisher scoring for this model
+([why](../../concepts/fisher-scoring/)):
+
+1. `require_role(&model, RESIDUAL)`: every scored term has a residual.
+2. `residual_layout(&model)` for the rows, `tangent_layout(&ids)` for the columns: 6 per pose and 3
+   per landmark.
+3. `jacobian_vjp` for $J$, and the residual vector $r$ in the same row order.
+4. On the host: `lstsq` on $\begin{bmatrix} J \\ \sqrt\lambda I \end{bmatrix}\delta = \begin{bmatrix} -r \\ 0 \end{bmatrix}$.
+5. `retract_flat`: each pose moves by $\pose \leftarrow \pose \circ \exp(\delta)$, and each landmark by addition.
+6. Accept the step and shrink $\lambda$ if $\log p$ rose; otherwise reject it and grow $\lambda$.
+
+> [!TODO] Code: the solver loop
+> Quote the loop from `examples/pose_map.rs`. Until an `Estimator` exists it is hand-written:
+> the steps above, a stopping rule on $\lVert\delta\rVert$ or on the change in $\log p$, and
+> printing the iterates. Note in the listing which lines would disappear once a reusable
+> Levenberg–Marquardt exists.
+
+> [!TODO] Results
+> A figure of the true, dead-reckoned and estimated trajectories (top-down view), and a table of
+> $\log p$ and $\lambda$ per iteration. The figure could be drawn with `<ModelGraph>`-style inline
+> SVG, or rendered once and committed.
+
+## What exists today
+
+| Piece | Status |
+| --- | --- |
+| `Normal<B, SE3>`, `Normal<B, EuclideanD>` with residual, location, whitening and Fisher-root bindings | built |
+| SE(3) compose, inverse, rotate and unrotate operations | built |
+| `residual_layout`, `tangent_layout`, `jacobian_vjp`, `require_role` | built |
+| Host `lstsq`, `retract_flat` | built |
+| Assembling $r$ in the same row order as $J$ | missing: each caller flattens it by hand |
+| An `Estimator` (damping schedule, line search, convergence test) | missing |
+| Block-sparse $J$ and sparse solvers, for large maps | missing |
+
+See [Status and roadmap](../../reference/status/).

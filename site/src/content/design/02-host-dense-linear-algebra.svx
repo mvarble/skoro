@@ -1,0 +1,36 @@
+---
+title: Dense solves on the host
+summary: Why an estimator's factorizations (Cholesky, triangular solves, QR least squares) run on the host in f64 via faer, rather than on the backend or in the graph.
+order: 2
+---
+
+## Context
+
+A damped Gauss–Newton or Fisher-scoring step solves $(J\transpose J + \lambda I)\,\delta = -J\transpose r$.
+Forming $J\transpose J$ squares the condition number. burn 0.21 has no QR.
+
+## Decision
+
+The solve runs on the host, in `f64`, in the leaf crate `skoro-dense` (backed by `faer`). The
+boundary is exactly two tensors: $J$ in, $\delta$ out. The damped system is solved as a
+row-augmented least-squares problem by column-pivoted QR.
+
+## Consequences
+
+- Conditioning is $\kappa$, not $\kappa^2$, at every damping value.
+- A host `f64` solve is not `f64` end to end: under an `f32` policy, $J$ arrives rounded.
+- A `Dense` is exactly one matrix, so a batch of $N$ problems is $N$ host solves per iteration (after
+  a single transfer).
+- The differentiable `TrilInvert` stays in the graph, and a test keeps the two triangular solves in
+  agreement.
+- Only estimators pay for `faer`.
+
+## Alternatives considered
+
+- **Factorize on the backend.** No QR exists there, and a Cholesky of $J\transpose J$ squares the
+  conditioning.
+- **Make the solve a graph operation.** Nothing differentiates *through* the step, so it would add
+  cost without benefit.
+
+> [!TODO]
+> Confirm or amend. Is GPU-side factorization something you'd revisit if burn gained QR?

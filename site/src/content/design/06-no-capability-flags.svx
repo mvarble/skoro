@@ -1,0 +1,32 @@
+---
+title: Arity is the capability test
+summary: Why skoro has no capability traits or supports_* flags; a model's shape is read off its terms' bindings at run time, and coverage is checked explicitly.
+order: 6
+---
+
+## Context
+
+An estimator needs to know whether a model can give it what it needs, for example whether every
+term is Gaussian-shaped or offers a Fisher root. A `GaussianModelClientOps` trait bound once
+expressed "this client can add Gaussians".
+
+## Decision
+
+There are no capability flags, `supports_*` predicates, or capability traits. A model's shape is
+read at run time from its terms and bindings. Every reader matches on the arity of a `bound` call:
+`[] => skip`, `[x] => use`, `_ => Err(ShapeMismatch)`. Two complementary packagings exist:
+
+- `GaussianBlock::of`: *is this term Gaussian-shaped?*
+- `coverage::terms_missing` / `coverage::require_role`: *which scored terms can't this reader see?*
+
+## Consequences
+
+- A bespoke distribution can offer any subset of roles, including none, and still take part.
+- Readers skip silently, so a skipped term produces a well-conditioned solve of the **wrong**
+  system. `require_role` is the precondition an algorithm must assert before it assembles
+  anything.
+- `ModelClientOps` is not dyn-compatible; every consumer is statically generic over it.
+
+> [!DECISION] The quote that settled it
+> What the old `GaussianModelClientOps` bound expressed ("this client can add Gaussians") was
+> never a claim about what a model *contained*, and every client that can grow a model can add one.

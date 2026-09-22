@@ -1,0 +1,39 @@
+---
+title: Operations on quantities
+summary: The operation crates. skoro-linalg (matmul, transpose, norms, cross products, Tril, fixed and sparse linear maps), skoro-pointwise, skoro-so3 and skoro-se3.
+order: 8
+---
+
+Each crate on this page adds `DiffOperation`s and exposes them on typed handles through `*Ops`
+extension traits (and operator overloads where natural).
+
+## `skoro-linalg`
+
+- `Matmul`, `Transpose`, `CrossProduct`, vector norms.
+- `Tril`, the manifold of lower-triangular matrices, used for covariance factors.
+- `FixedLinearMap` / `linear_map` applies a host-supplied matrix as a differentiable operation. This
+  is how a builder without access to constants (a distribution) puts a known matrix into the graph.
+- `SparseLinearMap` / `sparse_linear_map` does the same for a large sparse matrix, storing only its
+  nonzeros. The Gaussian Fisher root is built this way.
+
+These are *differentiable graph operations*. The dense factorizations an estimator needs are a
+separate concern ([Host linear algebra](../host-linear-algebra/)).
+
+## `skoro-pointwise`
+
+Elementwise `log` and `abs` on `Real` and Euclidean quantities.
+
+## `skoro-so3`
+
+The rotation group, stored as a flattened $3\times3$ matrix: `exp` (Rodrigues' formula), `log`,
+retraction and inverse retraction, compose, rotate/unrotate, and invert.
+
+## `skoro-se3`
+
+Rigid-body transforms (rotation plus translation), built by composing the SO(3) operations with
+translation.
+
+> [!TODO] Writing your own operation
+> A short recipe (implement `DiffOperation`, register it with `register_mapN`, expose it through
+> an `*Ops` trait, and verify it numerically), quoting `skoro-pointwise`'s `abs` as the smallest
+> complete example.

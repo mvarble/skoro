@@ -1,0 +1,43 @@
+---
+title: Distributions
+summary: skoro-normal. The manifold-aware Gaussian, its whitened residual and Fisher root, GaussianBlock as the read side, and joint factors.
+order: 9
+katex_macros:
+  \mean: \mu
+  \whiten: L
+---
+
+`skoro-normal` provides `Normal<B, M>`: a Gaussian on any manifold `M`, parameterized by a mean
+`Q<B, M>` and a lower-triangular factor `Q<B, Tril>` with $\Sigma = \whiten \whiten\transpose$.
+
+## What its factor binds
+
+`Normal`'s factor builds and binds:
+
+- the whitened residual $r = \whiten^{-1}(x \ominus \mean)$ as `RESIDUAL`,
+- $\mean$ as `LOCATION` and $\whiten$ as `WHITENING`, **separately**, so that a filter can read
+  $H = \partial\mean/\partial x$ and $R = \whiten\whiten\transpose$ as the different objects they are,
+- a Fisher-information root over $[x, \mean, \whiten]$ as `FISHER_ROOT` (built with
+  `SparseLinearMap`), and
+- the normalizer's parents.
+
+## `GaussianBlock`
+
+`GaussianBlock` is the read side: the view of a term that binds exactly one each of `RESIDUAL`,
+`LOCATION` and `WHITENING`. It is derived from the bindings on every call, and never stored as a
+second list that could drift.
+
+## Joint factors
+
+A distribution is a conditional over *one* quantity. A joint over several quantities the model
+already holds (for example, what marginalizing a quantity out leaves behind) is attached with
+`JointNormal` / `add_joint_factor`, a free-standing factor with its own residual and root.
+
+## Is it the only distribution?
+
+`Normal` is the only `Distribution` implemented in library code today. Anything non-Gaussian is
+a bespoke implementation of the trait, and it may bind any subset of the roles.
+
+> [!TODO] Distribution roadmap
+> Which families come next (Student-t, von Mises–Fisher, categorical likelihoods, …)? Does each
+> need a closed-form Fisher root to be useful?

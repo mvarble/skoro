@@ -1,0 +1,437 @@
+---
+title: Fisher scoring
+summary: Why skoro binds a Fisher-information root to every Gaussian term, and how an estimator uses it, from Newton's method to a damped, manifold-aware solver.
+order: 11
+katex_macros:
+  \fisher: \mathcal{I}
+  \loss: \ell
+  \params: \theta
+  \paramsHat: \hat\theta
+  \score: s
+  \grad: g
+  \hess: H
+  \root: C
+  \stackedRoot: A
+  \kl: \mathrm{KL}
+---
+
+This page explains the method that skoro's `information` and `information_root` functions exist to
+support. It begins with Newton's method and the reason it fails far from an optimum, introduces the
+Fisher information and the identities that make it useful, and then shows why replacing the Hessian
+with the information matrix produces a reliable algorithm. Two small models are worked through
+numerically. The final sections connect the mathematics to skoro's `FISHER_ROOT` bindings, derive
+the rule by which the information of a many-term model is assembled, and state the algorithm and its
+limitations.
+
+> [!NOTE] Notation
+> Throughout, $\params \in \R^D$ denotes the free parameters, $y$ denotes data, and
+> $\loss(\params) = -\log p(y, \params)$ denotes the negative log-density that we wish to minimize.
+> For maximum a posteriori estimation, $\loss$ includes the negative log-prior. Gradients and
+> Hessians are taken with respect to $\params$ unless stated otherwise.
+
+## Newton's method
+
+The estimate we seek is the minimizer $\paramsHat = \arg\min_\params \loss(\params)$. Newton's method
+approaches it by replacing $\loss$ near the current iterate with its second-order Taylor expansion,
+
+$$
+\loss(\params + \delta) \approx \loss(\params) + \grad\transpose \delta + \tfrac12\, \delta\transpose \hess\, \delta,
+\qquad \grad = \nabla \loss(\params), \quad \hess = \nabla^2 \loss(\params),
+$$
+
+and moving to the minimizer of that quadratic. Setting the derivative of the right-hand side with
+respect to $\delta$ to zero gives the Newton step
+
+$$
+\hess\, \delta = -\grad, \qquad \params \leftarrow \params + \delta.
+$$
+
+When the iterate is already close to $\paramsHat$ and $\hess$ is positive definite there, the method
+converges quadratically: the number of correct digits roughly doubles with each step. Its difficulty
+lies elsewhere. The quadratic model has a minimizer only when $\hess$ is positive definite, and the
+step decreases $\loss$ to first order only when
+
+$$
+\grad\transpose \delta = -\grad\transpose \hess^{-1} \grad < 0 ,
+$$
+
+which is guaranteed for every $\grad$ exactly when $\hess \succ 0$. Far from the optimum the Hessian of
+a nonlinear model is frequently indefinite, and the Newton step then points toward a maximum or a
+saddle point instead of a minimum. Computing $\hess$ also requires second derivatives of the entire
+model, and an indefinite matrix cannot serve as a metric, which some methods ([Limitations](#limitations)) require.
+Fisher scoring addresses the first and last of these problems by replacing $\hess$ with a matrix that is
+positive semidefinite by construction.
+
+## The Fisher information
+
+Consider a statistical model $p(y \mid \params)$ for data $y$. Its **score** is the gradient of the
+log-likelihood,
+
+$$
+\score(y; \params) = \nabla_\params \log p(y \mid \params),
+$$
+
+and its **Fisher information** is the matrix
+
+$$
+\fisher(\params) = \E_{y \sim p(\cdot \mid \params)}\!\left[ \score(y;\params)\, \score(y;\params)\transpose \right].
+$$
+
+The expectation is taken over data drawn from the model itself at the parameter value $\params$, not
+over the data actually observed. Two identities follow from the single fact that a density integrates
+to one.
+
+**Proposition 1.** Under the usual regularity conditions permitting differentiation under the
+integral sign,
+
+$$
+\E[\score] = 0
+\qquad\text{and}\qquad
+\fisher(\params) = \E\!\left[-\nabla_\params^2 \log p(y \mid \params)\right].
+$$
+
+*Proof.* Differentiating $\int p(y \mid \params)\, dy = 1$ with respect to $\params$ gives
+$\int \nabla_\params p \, dy = 0$. Since $\nabla_\params p = p\, \nabla_\params \log p = p\, \score$, this
+reads $\int \score\, p\, dy = 0$, which is the first identity. Differentiating $\int \score\, p\, dy = 0$ once
+more, and using $\nabla_\params p = p\, \score$ again, gives
+
+$$
+\int \left(\nabla_\params^2 \log p\right) p\, dy + \int \score\, \score\transpose p\, dy = 0 ,
+$$
+
+which rearranges to the second identity. $\blacksquare$
+
+The second identity is the one that matters for optimization, because it offers two readings of the
+same matrix. On the one hand, $\fisher(\params)$ is the Hessian of the negative log-likelihood
+averaged over the data the model would generate at $\params$; it is what $\hess$ would be on average if
+the model were correct. On the other hand, $\fisher(\params)$ is the covariance matrix of the score, and
+a covariance matrix is always positive semidefinite. The information therefore carries the curvature
+information of the Hessian while being immune to the indefiniteness that afflicts the Hessian of a
+particular data set.
+
+## Fisher scoring
+
+**Fisher scoring** is Newton's method with the Hessian replaced by the information:
+
+$$
+\fisher(\params)\, \delta = -\grad, \qquad \params \leftarrow \params + \delta .
+$$
+
+That this substitution is sound can be seen from four complementary arguments.
+
+The first is that every Fisher step is a descent direction. If the data identify every direction of
+$\params$, so that $\fisher(\params) \succ 0$, then $\grad\transpose \delta = -\grad\transpose \fisher^{-1} \grad$ is
+negative whenever $\grad \neq 0$. A sufficiently short step along $\delta$ therefore decreases $\loss$.
+The full step may still be too long, as the first example below shows, but that is a question of step
+length, which damping or a line search resolves; the direction itself is never uphill.
+
+The second argument concerns speed. Write the Hessian as $\hess = \fisher + (\hess - \fisher)$. By
+Proposition 1 the discrepancy $\hess - \fisher$ has mean zero when the data are drawn from the model,
+and with informative data it is small near the optimum. Fisher scoring viewed as the fixed-point
+iteration $\params \leftarrow \params - \fisher^{-1} \grad$ has, at $\paramsHat$, the iteration Jacobian
+$\fisher^{-1}(\fisher - \hess)$. Its convergence is therefore linear, with a rate that becomes fast
+precisely when $\hess$ and $\fisher$ agree. For an exponential family in its canonical parameterization,
+such as Poisson or logistic regression with the canonical link, the Hessian does not depend on the
+data at all, so $\hess = \fisher$ identically and Fisher scoring coincides with Newton's method.
+
+The third argument shows what the substitution discards in the most common case, a model with Gaussian
+errors. Suppose $y_i \sim \calN(f_i(\params), \sigma^2)$ independently, and define the whitened
+residuals $r_i = (y_i - f_i(\params))/\sigma$ with Jacobian $J = \partial r / \partial \params$. Then
+
+$$
+\loss = \tfrac12 \sum_i r_i^2 + \text{const}, \qquad
+\grad = J\transpose r, \qquad
+\hess = J\transpose J + \sum_i r_i\, \nabla^2 r_i .
+$$
+
+**Proposition 2.** For this model, $\fisher(\params) = J\transpose J$, so Fisher scoring is the
+Gauss–Newton method.
+
+*Proof.* The matrix $J$ depends only on $\params$, and $\nabla^2 r_i = -\nabla^2 f_i / \sigma$ does not
+depend on $y$. Under the model, $\E[r_i] = 0$. Taking the expectation of $\hess$ therefore removes
+the second term and leaves $J\transpose J$, which by Proposition 1 is $\fisher$. $\blacksquare$
+
+The discarded term $\sum_i r_i \nabla^2 r_i$ is exactly the part of the Hessian that grows with the
+residuals, and it is the source of the indefiniteness observed far from an optimum. Fisher scoring
+keeps the part of the curvature that the model explains and drops the part that is, on average, zero.
+
+The fourth argument is geometric. For a small step, the Kullback–Leibler divergence between the model
+at $\params$ and at $\params + \delta$ satisfies
+
+$$
+\kl\!\left(p_\params \,\middle\|\, p_{\params+\delta}\right)
+= \tfrac12\, \delta\transpose \fisher(\params)\, \delta + O(\|\delta\|^3).
+$$
+
+The information is thus the metric that measures how far a step moves the *distribution*, as opposed to
+how far it moves the parameter vector. Among all steps that change the distribution by a given small
+amount, the Fisher step is the one that decreases $\loss$ fastest; it is the steepest-descent direction
+in this metric, also called the natural gradient. A consequence is that the method does not depend on
+how the model is parameterized, whereas the ordinary gradient does.
+
+What is given up in exchange is exact agreement with Newton's method when the model is misspecified or
+the residuals remain large at the optimum. In those circumstances $\hess$ and $\fisher$ differ even at
+$\paramsHat$, and convergence, while still reliable, is only linear.
+
+## Example: a nonlinear mean
+
+Consider three observations $y_i \sim \calN(e^{\params t_i}, 1)$ at $t = (0, 1, 2)$ with values
+$y = (1, 2.5, 7)$. Writing $f_i = e^{\params t_i}$ and $r_i = y_i - f_i$, the derivatives of the mean
+are $f_i' = t_i f_i$ and $f_i'' = t_i^2 f_i$, and
+
+$$
+\loss = \tfrac12 \sum_i r_i^2, \qquad
+\grad = -\sum_i r_i f_i', \qquad
+\hess = \sum_i (f_i')^2 - \sum_i r_i f_i'', \qquad
+\fisher = \sum_i (f_i')^2 .
+$$
+
+The last expression follows from Proposition 2, since $\E[r_i] = 0$. The minimizer is
+$\paramsHat = 0.971048$. At the starting value $\params = 0.5$ the residuals are
+$(0,\ 0.851,\ 4.282)$, and the large third residual multiplied by $f_3''$ dominates the Hessian:
+$\hess = -15.68$, whereas $\fisher = 32.27$. The two iterations proceed as follows.
+
+| Iteration | Newton $\params$ | Newton $\loss$ | Fisher $\params$ | Fisher $\loss$ |
+| --- | ---: | ---: | ---: | ---: |
+| 0 | 0.5000 | 9.53 | 0.5000 | 9.53 |
+| 1 | −1.0736 | 26.02 | 1.2647 | 15.93 |
+| 2 | −1.6938 | 26.95 | 1.0423 | 0.598 |
+| 3 | −2.3684 | 27.33 | 0.97593 | 0.0127 |
+| 4 | −3.1224 | 27.50 | 0.971081 | 0.0103 |
+| 5 | −3.9654 | 27.58 | 0.971048 | 0.0103 |
+
+Because $\hess < 0$ at the start, Newton's method moves away from the optimum and never recovers. Fisher
+scoring moves in the correct direction from the first step, but that step is too long: $\loss$ rises
+from 9.53 to 15.93 as the iterate overshoots to 1.2647. The subsequent steps converge rapidly, and near
+the optimum the two curvatures nearly agree, with $\hess = 201.11$ and $\fisher = 201.48$, so the final
+iterations behave like Newton's method. The overshoot of the first step is the kind of step-length
+error that the damping of [the algorithm](#the-algorithm) removes.
+
+## Example: a scale parameter
+
+The second example concerns a scale rather than a location. Let $y_i \sim \calN(\mu, s^2)$ with
+$\mu = 2$ known, and estimate $s$ from the four observations $(1.8,\ 2.4,\ 1.2,\ 2.6)$. With $n = 4$
+and $S = \sum_i (y_i - \mu)^2 = 1.2$, the maximum-likelihood estimate is $\hat s = \sqrt{S/n} = 0.5477$.
+Up to a constant,
+
+$$
+\loss(s) = n \log s + \frac{S}{2 s^2}, \qquad
+\grad = \frac{n}{s} - \frac{S}{s^3}, \qquad
+\hess = -\frac{n}{s^2} + \frac{3S}{s^4} .
+$$
+
+Since $\E[S] = n s^2$ under the model, the information is
+$\fisher = -n/s^2 + 3n s^2 / s^4 = 2n/s^2$, which is positive for every $s$. The Hessian, by
+contrast, is negative whenever $S < n s^2 / 3$, that is, whenever the current guess for $s$ is too
+large. Starting from $s = 3$ gives $\hess = -0.40$ and $\fisher = 0.89$.
+
+| Iteration | Newton $s$ | Fisher $s$ |
+| --- | ---: | ---: |
+| 0 | 3.000 | 3.000 |
+| 1 | 6.222 | 1.550 |
+| 2 | 12.54 | 0.8718 |
+| 3 | 25.13 | 0.6080 |
+| 4 | 50.29 | 0.55071 |
+| 5 | 100.6 | 0.547731 |
+| 6 | 201.2 | 0.547723 |
+
+Newton's method doubles $s$ at every step and diverges, while Fisher scoring decreases $\loss$ at every
+step and converges to $\hat s$. At the estimate the two curvatures coincide exactly,
+$\hess = \fisher = 26.667$, because $S = n \hat s^2$ there.
+
+This example is precisely the covariance block of skoro's Gaussian Fisher root in one dimension. A
+`Normal` with covariance factor $L = s$ has whitening $W = L^{-1} = 1/s$, and its root over the
+arguments $(x, \mu, L)$ is
+
+$$
+\root = \begin{bmatrix} W & -W & 0 \\ 0 & 0 & \sqrt2\, W \end{bmatrix},
+\qquad
+\root\transpose \root = \begin{bmatrix}
+\ \ 1/s^2 & -1/s^2 & 0 \\
+-1/s^2 & \ \ 1/s^2 & 0 \\
+0 & 0 & 2/s^2
+\end{bmatrix}.
+$$
+
+The entry for $L$ is $2/s^2$ for a single observation, and summing over the $n$ observations recovers
+$\fisher = 2n/s^2$. The entry for $\mu$ is the familiar precision $1/s^2$ of a Gaussian mean.
+
+## Models with many terms
+
+A skoro model's log-density is a sum of terms, $\log p = \sum_t \log p_t(q_t \mid \mathrm{pa}_t)$,
+where term $t$ scores a quantity $q_t$ given its parents $\mathrm{pa}_t$. Each term declares, through
+its bindings, the arguments $a_t$ over which its local information is expressed (the `ARGUMENT` role;
+for a `Normal` these are $[x, \mu, L]$) and a Fisher root $\root_t$ (the `FISHER_ROOT` role) satisfying
+
+$$
+\root_t\transpose \root_t = \fisher_t(a_t),
+$$
+
+where the expectation defining $\fisher_t$ is over $q_t$ given its parents. Assembling the
+information of the whole model over the free parameters requires two results: one that moves a term's
+information from its arguments to the free parameters, and one that combines the terms.
+
+**Proposition 3 (change of variables).** If the arguments depend on the free parameters through
+$a_t = \phi_t(\params)$, with Jacobian $J_t = \partial a_t / \partial \params$, then the information of
+term $t$ over $\params$ is $J_t\transpose \fisher_t J_t = (\root_t J_t)\transpose (\root_t J_t)$.
+
+*Proof.* By the chain rule the score with respect to $\params$ is $J_t\transpose \score_{a_t}$, where
+$\score_{a_t}$ is the score with respect to the arguments. Because $J_t$ does not depend on $q_t$, its
+outer product has expectation
+$J_t\transpose\, \E[\score_{a_t} \score_{a_t}\transpose]\, J_t = J_t\transpose \fisher_t J_t$. $\blacksquare$
+
+**Proposition 4 (additivity).** The information of the model over $\params$ is the sum of the terms'
+informations.
+
+*Proof.* The score of the model is $\score = \sum_t \score_t$, so $\E[\score \score\transpose]$ is the sum
+of the terms $\E[\score_t \score_u\transpose]$. Order the terms so that each comes after the terms that
+generate its parents, and take $t$ earlier than $u$. Conditionally on all quantities generated before
+$q_u$, the score $\score_u$ has mean zero by Proposition 1, while $\score_t$ is a function of those
+earlier quantities. By the tower property of conditional expectation,
+$\E[\score_t \score_u\transpose] = 0$. Only the terms with $t = u$ survive. $\blacksquare$
+
+Combining the two propositions, the information of the model is
+
+$$
+\fisher(\params) = \sum_t J_t\transpose \root_t\transpose \root_t\, J_t = \stackedRoot\transpose \stackedRoot,
+\qquad
+\stackedRoot = \begin{bmatrix} \root_1 J_1 \\ \vdots \\ \root_T J_T \end{bmatrix}.
+$$
+
+The matrix $\stackedRoot$ is a square root of the information, obtained by stacking each term's root
+composed with its Jacobian. The correspondence with skoro's functions is direct.
+
+| Quantity | skoro | Shape |
+| --- | --- | --- |
+| $J_t$ | `jacobian_vjp(client, points, free, &arguments)` | `[batch, Σ dim(a_t), D]` |
+| $\root_t J_t$ | one `InformationBlock` of `information_blocks` | `[batch, k_t, D]` |
+| $\stackedRoot$ | `information_root(client, points, free)` | `[batch, Σ k_t, D]` |
+| $\stackedRoot\transpose \stackedRoot$ | `information(client, points, free)` | `[batch, D, D]` |
+
+Two conventions deserve mention. When a stochastic quantity is itself among the free parameters, as in
+maximum a posteriori estimation of a latent state, its term still takes the expectation over that
+quantity; for a Gaussian prior this yields the prior precision, which is exactly that term's
+contribution to the curvature. A free-standing joint factor, on the other hand, generates no quantity
+over which an expectation could be taken, and its contribution is by convention the Gauss–Newton matrix
+$W\transpose W$ of its whitened residual, in the sense of Proposition 2.
+
+> [!WARNING] Every scored term must carry a root
+> The sum in Proposition 4 runs over the terms of $\log p$, but `information_blocks` can only stack
+> the terms that *declare* a root: a term that binds no `FISHER_ROOT` is skipped, because there is
+> nothing to stack for it. The two agree exactly when every scored term carries a root, and
+> `require_role(&model, FISHER_ROOT)` is the check that they do. Where they disagree,
+> $\stackedRoot\transpose \stackedRoot$ is the information of the sub-model formed by the rooted terms:
+> a well-defined matrix, but not $\fisher(\params)$.
+
+## The algorithm
+
+In practice Fisher scoring is combined with damping. Given a current iterate, a damping parameter
+$\lambda \geq 0$, and a positive diagonal scaling $D$, one iteration computes the gradient of the
+log-density, assembles the information root, solves the damped system, and takes a step on the
+parameter manifold:
+
+$$
+\left(\stackedRoot\transpose \stackedRoot + \lambda D\right) \delta = \nabla_\params \log p(\params),
+\qquad
+\params \leftarrow \retr(\params, \delta).
+$$
+
+The right-hand side is the gradient of $\log p$ and not of $\loss$, because skoro differentiates the
+log-density; the resulting step is the same as $-\fisher^{-1} \nabla \loss$ when $\lambda = 0$. The
+gradient is available from `log_density_ord1`, the root from `information_root`, and the step from the
+retraction of the free quantities (`PointMap::retract_flat`).
+
+The iteration has a precondition, and it is the asymmetry between those first two. $\nabla \log p$ sums
+over *every* term of the log-density, while $\stackedRoot\transpose \stackedRoot$ covers only the terms
+that bound a Fisher root ([models with many terms](#models-with-many-terms)). The displayed system is
+therefore the Fisher step only when every scored term carries a root; otherwise it sets the curvature
+of one problem against the gradient of another. An implementation asserts the condition with
+`require_role(&model, FISHER_ROOT)` before it assembles anything, or enumerates the offending terms
+with `terms_missing`; neither is optional, because no shape check downstream will catch the mismatch.
+After each step, $\lambda$ is decreased if $\log p$ improved and increased otherwise. A large $\lambda$
+turns the step into a short gradient step, and a small one recovers Fisher scoring, so this adaptive
+scheme is the Levenberg–Marquardt method with the information in place of the Gauss–Newton matrix. It
+is what removes the overshoot seen in the first example.
+
+The linear system is solved on the host with `skoro-dense`, since the backend has no dense
+factorizations. In general the system is symmetric positive definite and is solved by a Cholesky
+factorization (`spd_solve`). For models whose terms are Gaussian with fixed covariances there is a
+better-conditioned route: $\stackedRoot$ is then the whitened residual Jacobian $J_r$ and
+$\nabla \log p = -J_r\transpose r$, so the damped system is the normal equations of the least-squares
+problem
+
+$$
+\min_\delta \left\| \begin{bmatrix} J_r \\ \sqrt{\lambda}\, D^{1/2} \end{bmatrix} \delta
++ \begin{bmatrix} r \\ 0 \end{bmatrix} \right\|^2 ,
+$$
+
+which can be solved by a QR factorization (`lstsq`). Working with the root $\stackedRoot$ rather than
+the product $\stackedRoot\transpose \stackedRoot$ matters here, because the condition number of
+$\stackedRoot\transpose \stackedRoot$ is the square of that of $\stackedRoot$.
+
+> [!NOTE]
+> No Fisher-scoring or Levenberg–Marquardt solver loop ships yet. The primitives above compose into
+> one; see [Status and roadmap](../../reference/status/).
+
+## Limitations
+
+The information is an expected curvature, and its usefulness rests on the model being a reasonable
+description of the data. When the model is misspecified, or when residuals remain large at the optimum,
+$\hess$ and $\fisher$ differ at $\paramsHat$ and the final convergence is linear, as discussed above.
+
+If the data do not constrain some direction of $\params$, the information is singular along that
+direction and the undamped system has no unique solution. Damping restores a well-posed system, but a
+persistently singular information matrix indicates that the parameters are not identifiable from the
+data, which is a modeling issue that no solver can remove.
+
+A distinct failure, and a quieter one, is a model not all of whose terms offer a root. Every
+distribution skoro ships binds one, but a bespoke distribution need not, and one that has no
+closed-form expected information should not. Such a term is skipped rather than refused, so the
+symptom is not a singular matrix or a raised error: it is a well-conditioned solve of the wrong
+system, since the gradient retains the term the curvature dropped. A partially rooted model does not
+yield a worse step toward the same optimum; it yields a step toward a different one. This is the
+failure `require_role` exists to make impossible, and the reason it belongs before the first
+assembly rather than in a diagnostic after a poor iteration.
+
+### Curved manifolds
+
+For quantities on curved manifolds, skoro's Gaussian root uses the block $[W, -W]$ for $(x, \mu)$. This
+block assumes that the derivatives of $v = x \ominus \mu$ with respect to $x$ and $\mu$ are $I$ and
+$-I$, which holds exactly on flat spaces. On groups such as SO(3) and SE(3) the derivatives equal the
+identity only at $v = 0$. For SO(3) they are $J_r^{-1}(v) = I + \tfrac12 [v]_\times + O(\|v\|^2)$ and
+$-\left(I - \tfrac12 [v]_\times\right) + O(\|v\|^2)$, and SE(3) adds further terms linear in $v$ from
+its translation block.
+
+The resulting error is smaller than this first-order discrepancy suggests. Under the model, $v$ is a
+Gaussian with mean zero, so its odd moments vanish, and every correction that is linear in $v$ averages
+out of the expectation that defines the information. The root is therefore exact on flat spaces and
+correct to second order in the dispersion on groups: its relative error grows in proportion to
+$\|\Sigma\|$. This is the same order as the approximation already present in a Gaussian on a group,
+whose density omits the volume factor $\det J_r(v) = 1 - \|v\|^2/12 + \cdots$ of the retraction. When
+$\Sigma$ is isotropic the corrections vanish identically, because each of them applies $[v]_\times$ to a
+multiple of $v$.
+
+A Monte Carlo experiment confirms this scaling. Take $\Sigma = \sigma^2 L_0 L_0\transpose$ for a fixed and
+deliberately skewed triangle $L_0$, and compare $\root\transpose \root$ with the covariance of the model's
+own score over 100,000 draws. Sharing the random draws with a flat control cancels the sampling noise,
+and gives the following relative errors.
+
+| $\sigma$ | SO(3) | SE(3) |
+| --- | ---: | ---: |
+| 0.1 | 0.012 | 0.016 |
+| 0.2 | 0.048 | 0.064 |
+| 0.4 | 0.189 | 0.255 |
+
+Each doubling of $\sigma$ multiplies the error by very nearly four, as second-order accuracy predicts.
+The error is a percent or two for rotational noise of a tenth of a radian, and it becomes material only
+for widely dispersed distributions, where a Gaussian on the group is itself a poor model. An optimizer
+that starts far from its solution, and therefore sees large residuals, can still use the exact
+Gauss–Newton curvature at its current point, which the Jacobians of the terms' `RESIDUAL` bindings
+provide. That matrix is not an expected information, which is why the Fisher root does not carry it.
+
+### Beyond optimization
+
+The information matrix has uses beyond optimization. Riemannian manifold Hamiltonian Monte Carlo uses
+$\fisher(\params)$, augmented by the curvature of the prior, as a position-dependent mass matrix. Its
+dynamics involve the derivatives $\partial \fisher / \partial \params$, which is why skoro keeps the
+Fisher root as a differentiable node in the model graph rather than assembling it outside the graph.

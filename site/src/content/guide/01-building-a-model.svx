@@ -1,0 +1,69 @@
+---
+title: Building a model
+summary: ModelClient, typed quantity handles Q<B, M>, constants, parameters and stochastic quantities, and building new quantities with operators.
+order: 1
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { aPlusB } from './model.graph';
+</script>
+
+A skoro model is a directed acyclic graph that you never touch directly. You hold a
+**client**, ask it to add nodes, and get back typed **handles** that behave like values.
+
+## The client
+
+`ModelClient<B>` is a cheap, cloneable handle to a `ModelServer<B>`, which owns the graph. Most
+code is written against two traits rather than the concrete client:
+
+| Trait | Can | Typical holder |
+| --- | --- | --- |
+| `ModelClientOps` | evaluate and differentiate; read terms and bindings; add constants and parameters; `observe`, `demote_to_parameter`; `remove` a leaf | an estimator or sampler |
+| `ModelBuilderOps` | everything above, plus add density terms (`add_quantity`, `add_proposal`, `add_factor`), `stacked_tangent`, and `remove_closure` | code that builds models |
+
+> [!DECISION] Two tiers
+> An estimator can be handed a model whose density terms it cannot add to or tear down. See
+> [Client tiers](../../design/client-tiers/).
+
+## Quantities
+
+Every node you add comes back as a `Q<B, M>`, where `M` is the quantity's type: a manifold such as
+`Real`, `Euclidean<D>`/`EuclideanD`, `Tril`, `SO3` or `SE3`, or a discrete type such as
+`Categorical`. There are three ways to add one:
+
+- `add_constant(M, &value)`: a fixed value, known at build time.
+- `add_parameter(M)`: a free value, supplied at evaluation time and differentiated with respect to.
+- `add_quantity(distribution)`: a stochastic quantity with a conditional distribution. This also
+  adds a term to the log-density. See [Distributions and factors](../distributions-and-factors/).
+
+A stochastic quantity can later be pinned to data with `observe(&q, &value)`.
+
+## Operations
+
+A handle combines with other handles through `std::ops` operators and `*Ops` extension traits, and
+each operation adds a *mapped* node:
+
+```rust
+{../../../../crates/skoro/src/lib.rs:34..37}
+```
+
+<ModelGraph spec={aPlusB} />
+
+The operations that exist depend on the quantity's type: matrix products for matrices,
+`compose`/`rotate`/`log` for rotations, `log`/`abs` for reals and vectors, and so on. See
+[Operations on quantities](../../concepts/quantity-operations/) for the list.
+
+## Ownership and cleanup
+
+A `Q` is an **ownership token**. When every handle that reaches a node has been dropped, and no
+likelihood term reaches it, the node is garbage and a later `cleanup()` reclaims it. A bare `Id`
+(from `q.id()`) is a *weak* reference, and it may name nothing after a cleanup.
+
+> [!DECISION]
+> Garbage collection is mark-and-sweep from live handles and terms. See
+> [Handles own nodes](../../design/ownership/).
+
+> [!TODO] A worked example
+> Quote (or add) an example that builds a small hierarchical model, such as a latent state with two
+> noisy observations, so the ideas on this page appear together in one listing.

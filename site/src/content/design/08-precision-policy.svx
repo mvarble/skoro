@@ -1,0 +1,29 @@
+---
+title: Precision is a lock-once policy
+summary: Why f64 is selected process-wide before any tensor exists, why a test binary holds exactly one precision, and why cross-precision references are frozen as constants.
+order: 8
+---
+
+## Context
+
+burn fixes a device's float policy the first time a tensor is created on it. Tests need to run
+the same operations at `f32` and `f64`.
+
+## Decision
+
+`skoro_backend::policy::use_f64::<B>()` selects `f64` before anything else runs, and panics if the
+policy is already locked at another precision. A test binary opts in once with
+`f64_test_binary!(B)`, which runs `use_f64` before `main`. **One binary holds one precision.** A
+reference value computed at another precision is frozen into the test as a constant table, never
+recomputed in-process.
+
+## Consequences
+
+- There is no mixed-precision state inside one process.
+- Test suites are split into one executable per precision.
+- `Tensor::from_floats` rounds through `f32` even on an `f64` backend, so precise inputs are built
+  from `TensorData`.
+
+> [!TODO]
+> Would per-tensor dtype (as burn evolves) change this? Is there a user-facing (not test) story for
+> choosing `f64`?

@@ -1,0 +1,50 @@
+---
+title: How to read these docs
+summary: The two reading orders (top-down and bottom-up), the design-decision records, and the plain-text versions of every page for language models.
+order: 3
+---
+
+These docs are organized so you can come at skoro from either end.
+
+## Two reading orders
+
+**The [Guide](../../guide/) is top-down.** It starts from what a user writes: a model, a
+distribution, a call to evaluate a density or build a solver step. It explains the machinery only
+as far as that use needs. Read it if you want to *use* skoro, or to judge quickly whether it fits
+your problem.
+
+**[Concepts](../../concepts/) is bottom-up.** It builds skoro one crate at a time in dependency
+order: tensors, then differentiable operations, then manifolds, the graph, the compiler, the model
+facade, and the distributions and estimators on top. Each page relies only on the pages before it.
+Read it if you want to *extend* skoro (a new operation, manifold, or distribution) or to review
+its internals.
+
+The two tracks link to each other where they meet. Neither repeats the
+[Design decisions](../../design/), which record *why* things are the way they are, each as
+context, decision, consequences, and alternatives considered.
+
+## Conventions
+
+> [!NOTE]
+> A note adds context you can skip.
+
+> [!WARNING]
+> A warning marks a mistake that fails silently: the result looks right and isn't.
+
+> [!DECISION]
+> A design decision summarizes one of the records in [Design decisions](../../design/).
+
+Code blocks with a file name above them are quoted verbatim from the repository at build time, so
+they always match the source. Click the file name to open it on GitHub.
+
+Math uses the notation on the [Notation](../../reference/notation/) page. A page's own
+macros are listed in its frontmatter, and the Markdown version of the page shows them.
+
+## For language models
+
+Every page has a plain Markdown version: add `.md` to its URL, or follow "View as Markdown" at the
+foot of the page. Two indexes follow the [llms.txt](https://llmstxt.org) convention:
+
+- [`/llms.txt`](../../llms.txt): an index of every page with a one-line summary.
+- [`/llms-full.txt`](../../llms-full.txt): every page concatenated in reading order, with quoted code
+  inlined.

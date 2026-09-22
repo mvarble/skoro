@@ -1,0 +1,49 @@
+---
+title: Host linear algebra
+summary: skoro-dense. f64 Cholesky, triangular and SPD solves, and column-pivoted QR least squares on the host via faer, and why the estimator's solve lives outside the graph.
+order: 10
+---
+
+`skoro-dense` is host-resident dense linear algebra in `f64`, one matrix at a time, backed by
+[faer](https://faer.veganb.tw/). It depends only on `skoro-backend` and `skoro-core`, so nothing that
+merely uses `Normal` pays for `faer`.
+
+```
+{../../../../crates/skoro-dense/src/lib.rs:1..6}
+```
+
+A `Dense` is always exactly one matrix. A batch of independent problems crosses the host boundary in
+one transfer (`Dense::split_tensor` / `split_vector` / `stack_vector`) and is then solved row by row,
+so the batch axis is handled *around* the factorizations rather than inside them.
+
+```
+{../../../../crates/skoro-dense/src/lib.rs:15..29}
+```
+
+## The boundary is two tensors wide
+
+In an estimator iteration, only the Jacobian $J$ (in) and the step $\delta$ (out) cross the
+boundary. Everything between is host `f64` and has no representation in the graph.
+`Dense::split_tensor` moves a whole batch across in one transfer and slices it on the host.
+
+## Why QR on the host
+
+The damped step solves
+
+$$
+(J\transpose J + \lambda I)\,\delta = -J\transpose r
+\iff
+\min_\delta \left\lVert \begin{bmatrix} J \\ \sqrt\lambda\, I \end{bmatrix}\delta - \begin{bmatrix} -r \\ 0 \end{bmatrix} \right\rVert .
+$$
+
+Solving the right-hand form by QR keeps the conditioning at $\kappa$ instead of $\kappa^2$ at *every*
+damping value, and burn has no QR. That settles where the solve runs.
+
+> [!DECISION]
+> See [Dense solves on the host](../../design/host-dense-linear-algebra/).
+
+## Keeping two triangular solves apart
+
+`TrilInvert` (in `skoro-linalg`) is a differentiable graph operation on every backend, and it stays
+there. `skoro-dense`'s triangular solve is for estimators. A shared test checks that the two compute
+the same inverse.

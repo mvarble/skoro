@@ -1,0 +1,28 @@
+---
+title: A sealed backend
+summary: Why skoro's Backend trait is sealed to the burn backends it has been verified against.
+order: 7
+---
+
+## Context
+
+Every operation is implemented, and tested, against specific backends. A backend is more than
+an interface: it has precision policies, device semantics and kernel coverage.
+
+## Decision
+
+`skoro_backend::Backend` is a subtrait of burn's backend with a private `Sealed` supertrait,
+implemented only for `Flex` and `CubeBackend<R, F, I>`.
+
+```rust
+{../../../../crates/skoro-backend/src/lib.rs:17..32}
+```
+
+## Consequences
+
+- Operation implementations can rely on the backends they were verified against.
+- burn's autodiff decorators can't be passed in by accident.
+- Adding a backend is a change to `skoro-backend`, not something a downstream crate can do.
+
+> [!TODO]
+> Is sealing about correctness (kernels per backend), about excluding `Autodiff<B>`, or both?

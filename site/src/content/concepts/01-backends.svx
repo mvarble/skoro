@@ -1,0 +1,51 @@
+---
+title: Tensors and backends
+summary: skoro-backend, the foundation. The sealed Backend trait over burn, the batched shape conventions for points, tangent vectors and frames, and the precision policy.
+order: 1
+---
+
+Everything in skoro eventually becomes a burn `Tensor`. `skoro-backend` fixes *which* backends
+are allowed and *what shape* each kind of tensor has.
+
+## Supported backends
+
+`Backend` is a subtrait of burn's backend trait, sealed so that only the backends skoro has been
+verified against implement it: `Flex` (CPU) and `CubeBackend` (GPU via cubecl). None of burn's
+autodiff backends are among them. Skoro differentiates on its own (see
+[Differentiable operations](../operations/)).
+
+```
+{../../../../crates/skoro-backend/src/lib.rs:17..32}
+```
+
+## Shape conventions
+
+Types are aliases over `Tensor` whose names carry meaning. Every one of them is **batched**:
+axis 0 indexes independent problems.
+
+```
+{../../../../crates/skoro-backend/src/lib.rs:60..93}
+```
+
+Two sizes appear throughout the library, and they are different whenever a quantity is curved:
+
+| Quantity | storage | dimension |
+| --- | ---: | ---: |
+| `Real` | 1 | 1 |
+| `Euclidean<3>` | 3 | 3 |
+| `SO3` | 9 | 3 |
+| `SE3` | 12 | 6 |
+
+Points use storage size; tangent vectors, cotangents, gradients and Jacobian columns use
+dimension. A *frame* is a stack of vectors, `[batch, dimension, frame]`, which is how many
+derivative directions travel through a pass at once.
+
+## Precision
+
+The float policy is process-wide and locked on first use. See
+[Backends and precision](../../guide/backends-and-precision/) and
+[Precision is a lock-once policy](../../design/precision-policy/).
+
+> [!TODO] Why burn
+> A sentence or two on why burn was chosen as the tensor layer (portability across CPU and GPU from
+> one Rust codebase? cubecl kernels? ecosystem?), and what was considered instead.

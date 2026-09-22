@@ -1,0 +1,51 @@
+---
+title: Glossary
+summary: Definitions of the terms skoro uses in a specific sense, such as binding, role, factor, term, retraction, cut, epoch and Fisher root.
+order: 2
+---
+
+**Argument.** The nodes a term's local views (residual, information) are expressed over, in
+order: `[x, parents…]` for a conditional. Bound under the `ARGUMENT` role by the model itself.
+
+**Batch.** Axis 0 of every tensor. One evaluation scores `batch` independent settings of the model.
+
+**Binding.** A labelled reference edge `(term, role, node)`: `node` plays `role` for the log-density
+`term`. Read by estimators, ignored by the compiler, respected by removal and collection.
+
+**Cut.** An interior frontier at which `compile_between` stops traversal. Cut nodes lower to
+`Given` steps, whose values are supplied and whose cotangents are collected.
+
+**Dimension vs. storage.** A quantity's tangent-space dimension (SO(3): 3) versus the number of floats
+it is stored as (SO(3): 9).
+
+**Epoch.** A counter the graph bumps on every mutation that could change a compiled program. Part of
+the compiled-sequence cache key.
+
+**Factor.** What a distribution returns: a log-density node plus the bindings it declares. Also a
+free-standing likelihood term added with `add_factor`.
+
+**Fisher root.** A matrix node $C$ with $C\transpose C$ equal to a term's expected information over its
+arguments. Bound under `FISHER_ROOT`.
+
+**Frame.** A stack of tangent or cotangent vectors, `[batch, dimension, frame]`.
+
+**Handle (`Q`).** A typed ownership token for a node. Dropping every handle (and every term) that
+reaches a node makes it garbage.
+
+**Mapped node.** The output of a differentiable operation on other nodes.
+
+**Proposal ($q$).** The generative density a model samples from. Contrast with the target $p$.
+
+**Retraction.** A map $\retr(x, v)$ from a point and a tangent vector to a point, used for every
+step on a manifold. Its inverse gives the tangent vector between two points.
+
+**Role.** The label on a binding (`ARGUMENT`, `RESIDUAL`, `LOCATION`, `WHITENING`,
+`NORMALIZER_PARENT`, `FISHER_ROOT`).
+
+**Target ($p$).** The density the model scores: the sum of the terms with `in_density` set.
+
+**Term.** One summand of a log-density, scoring a quantity given its parents or scoring a joint
+over several quantities.
+
+> [!TODO]
+> Add any term you find yourself explaining twice.

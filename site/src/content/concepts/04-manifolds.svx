@@ -1,0 +1,39 @@
+---
+title: Manifolds and retractions
+summary: skoro-riemann. The Manifold trait as a pair of differentiable operations (retraction and inverse retraction), the flat manifolds, and dyn-compatible erasure.
+order: 4
+katex_macros:
+  \man: \mathcal{M}
+---
+
+A manifold, to skoro, is exactly two differentiable operations plus a dimension:
+
+```
+{../../../../crates/skoro-riemann/src/base.rs:5..30}
+```
+
+- The **retraction** $\retr : \man \times \T_x\man \to \man$ moves a point along a tangent vector.
+  Every optimizer step and every perturbation goes through it.
+- The **inverse retraction** $\invretr : \man \times \man \to \T_x\man$ gives the tangent vector
+  between two points. A residual $x \ominus \mu = \invretr(\mu, x)$ is built from it.
+
+Both are `DiffOperation`s, so they are differentiated like anything else in the graph. This is why
+`skoro-riemann` depends on `skoro-operation`, and not the other way round.
+
+## Manifolds as type tags
+
+A type implementing `Manifold` is also a *tag*: `Q<B, SO3>` and `Q<B, Real>` are different types,
+so operations are type-gated even though the tensors underneath are untyped. `DynManifold` is the
+dyn-compatible twin, used where the graph must handle a quantity whose type is known only at run
+time.
+
+## The flat manifolds
+
+`skoro-riemann` itself provides the flat cases, where both operations are addition and subtraction:
+`Real`, `Euclidean<D>` / `EuclideanD`, and `EuclideanMatrix`. The curved groups live in their own
+crates (`skoro-so3`, `skoro-se3`), and the lower-triangular factors `Tril` live in `skoro-linalg`.
+
+> [!TODO] Retraction choices
+> For SO(3)/SE(3), state which retraction is used (exponential map? a first-order one?) and why.
+> Also explain the chart convention for Jacobians of manifold-valued operations (the skill's
+> `references/manifold-conventions.md` would be the source).

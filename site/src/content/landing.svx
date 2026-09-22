@@ -1,0 +1,32 @@
+---
+title: skoro
+---
+
+Skoro is a probabilistic modeling library written in Rust. Its model-building API produces
+descriptive intermediate representations, so a wide range of inference algorithms can run over the
+same model.
+
+You write a model the way you would write ordinary code over structs: add parameters and random
+quantities, then combine them with operations. Behind the scenes each value is a node in a
+Bayesian network. That network can be sampled, scored, differentiated to second order, and
+compiled into a straight-line program that runs on a CPU or GPU through
+[burn](https://burn.dev).
+
+```rust
+{../../../crates/skoro/src/lib.rs:30..37}
+```
+
+What sets it apart:
+
+- **Second-order and manifold-aware.** Skoro ships its own autodiff engine, with forward
+  values, vector–Jacobian products and Hessian–vector products for every operation. Rotations
+  and poses (SO(3), SE(3)) are first-class quantities, updated through retractions.
+- **Models that describe themselves.** A density term records *bindings*: which nodes are its
+  residual, its location, its whitening and its Fisher-information root. Estimators read the
+  structure they need back off the model instead of asking the user to supply it twice.
+- **Two densities over one graph.** A model scores with $p$ and generates with $q$, so an
+  importance weight $\log p - \log q$ is a first-class quantity.
+
+> [!TODO] Status
+> Say where the project stands (research prototype, used in production, looking for
+> collaborators, …) and what you want a visitor to do next.

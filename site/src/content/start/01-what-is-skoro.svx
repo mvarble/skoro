@@ -1,0 +1,69 @@
+---
+title: What is skoro?
+summary: The problem skoro solves, who it is for, and what makes it different from other probabilistic programming libraries.
+order: 1
+---
+
+Skoro is a probabilistic modeling library for Rust. You describe a model as a cascade of
+conditional distributions over typed quantities (reals, vectors, matrices, rotations, rigid-body
+poses and discrete values). Skoro keeps that description as a graph, and inference algorithms
+can sample it, score it, differentiate it, and read its structure.
+
+## The problem
+
+> [!TODO] Motivation, in your words
+> What were you trying to build when you started skoro, and what went wrong with the tools that
+> existed? (For example: state estimation on SO(3)/SE(3), wanting second-order derivatives, wanting
+> GPU execution from Rust, or wanting estimators that read model structure instead of asking for
+> it twice.) One or two concrete scenarios will do more here than a feature list.
+
+## What skoro gives you
+
+- **A model API that reads like ordinary code.** `let y = f(x);` over typed handles
+  `Q<B, M>`, where `M` names the manifold or discrete set a quantity lives on. The type system
+  stops you from adding a rotation to a vector.
+- **Its own differentiation engine.** Every operation supplies a forward value, a vector–Jacobian
+  product, and a Hessian–vector product, so first- and second-order methods work over the same
+  model. Curved quantities are differentiated in their tangent spaces and updated by
+  retraction.
+- **Self-describing likelihood terms.** Each density term records *bindings*: labelled edges to
+  the nodes that serve as its residual, location, whitening, and Fisher-information root. A
+  least-squares solver, a Kalman-style filter, and a Fisher-scoring loop each read the view they
+  need from the same model.
+- **Two densities over one graph.** The model scores with $p$ and generates with $q$. A term can
+  belong to one, the other, or both, which makes importance weights a built-in quantity.
+- **burn backends.** Execution runs on [burn](https://burn.dev) tensors: CPU through `flex`,
+  GPU through `cubecl`. burn's own autodiff is deliberately not used
+  ([why](../../design/bespoke-autodiff/)).
+
+## Who it is for
+
+Four worked examples, each written as it will read when finished, show the kinds of problems skoro
+is built for:
+
+- **[Pose estimation](../../guide/example-pose-estimation/)**: MAP over a robot trajectory on
+  SE(3) and a landmark map, as nonlinear least squares.
+- **[Calibrating a climate model](../../guide/example-climate-mcmc/)**: MCMC over positive physical
+  parameters and a covariance factor, with the likelihood running through an ODE.
+- **[A sliding-window smoother](../../guide/example-sliding-window/)**: the pose problem as a
+  stream, where old poses are marginalized into factors and pruned from the graph.
+- **[The yield curve as an affine model](../../guide/example-term-structure/)**: a no-arbitrage
+  term-structure model with a differentiable Riccati ODE, fitted to Treasury curves and run daily as
+  a Kalman filter built from graph marginalization.
+
+> [!TODO] Audience
+> Who should reach for skoro, and who should not? For example: robotics and state estimation,
+> Bayesian workflows that need manifold-valued parameters, or people building inference
+> algorithms rather than just using them. If there are close alternatives (Stan, NumPyro, GTSAM,
+> Ceres, factor-graph libraries, …), a short "compared with" paragraph helps a lot here.
+
+## Where it stands
+
+Model building, evaluation, differentiation to second order, and the structural readers
+(least-squares layout, Fisher information) are built and tested. Complete estimators and
+samplers built on top of them (a damped Fisher-scoring loop, MCMC) are not built yet. See
+[Status and roadmap](../../reference/status/) for the gap list.
+
+> [!TODO] Project status line
+> Is it pre-release, and when (if ever) will the crates go to crates.io? What kind of
+> contributions or conversations do you want?

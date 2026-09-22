@@ -1,0 +1,57 @@
+---
+title: Distributions and factors
+summary: How a distribution enters a model, what a factor is, and the binding roles that let inference algorithms read a term's structure.
+order: 2
+---
+
+## Adding a distribution
+
+A stochastic quantity enters a model through `add_quantity`, which takes a value implementing
+`Distribution`. The Gaussian is `Normal::new(mean, std_dev)`, where `mean` is a `Q` on any
+manifold and `std_dev` is a lower-triangular factor `Q<B, Tril>`:
+
+```
+{../../../../crates/skoro-normal/tests/facade.rs:27..34}
+```
+
+Note that the adapter is generic over *any* `ModelBuilderOps`: there is no Gaussian-specific entry
+point.
+
+## What a distribution provides
+
+A `Distribution` supplies its quantity type, a sampler, its parent ids, and a `factor`:
+
+```
+{../../../../crates/skoro-model/src/distribution.rs:47..66}
+```
+
+A **factor** is a log-density node plus the **bindings** the distribution declares for it. A
+binding `(term, role, node)` says that `node` plays `role` for the term.
+
+## Roles
+
+| Role | Meaning | Per term |
+| --- | --- | --- |
+| `ARGUMENT` | the nodes the term's local views are expressed over: `[x, parents…]` | ≥ 1, bound by the model |
+| `RESIDUAL` | an `EuclideanD` node $r$ with $-\log p = \tfrac12\lVert r\rVert^2 + n$ | ≤ 1 |
+| `NORMALIZER_PARENT` | a node the normalizer $n$ depends on | any |
+| `LOCATION` | the location $\mu$ in $r = L^{-1}(x \ominus \mu)$ | ≤ 1 |
+| `WHITENING` | the factor $L$ in $r = L^{-1}(x \ominus \mu)$, with $\Sigma = LL\transpose$ | ≤ 1 |
+| `FISHER_ROOT` | a matrix $C$ with $C\transpose C$ the term's expected information | ≤ 1 |
+
+`Normal` binds all of them. A bespoke distribution may bind any subset, including none.
+
+> [!WARNING] Readers skip silently
+> A reader that needs a role skips any term that didn't bind it, and says nothing. Use
+> `coverage::require_role(&model, ROLE)` before pairing such a reader with a gradient. See
+> [Arity is the capability test](../../design/no-capability-flags/).
+
+## Free-standing factors
+
+`add_factor(factor, &arguments)` attaches a likelihood term over quantities the model already holds.
+This is what a joint over several quantities uses, for example what marginalizing a quantity out
+leaves behind (`skoro_normal::joint::add_joint_factor`).
+
+> [!DECISION]
+> Bindings are reference edges in the graph, not a side table. See
+> [Bindings are graph edges](../../design/bindings/).

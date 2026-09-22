@@ -1,0 +1,111 @@
+---
+title: 'Example: calibrating a climate model (MCMC)'
+summary: The posterior over the parameters of a two-layer energy-balance model, an ODE observed through noisy annual temperatures and heat fluxes, sampled with Hamiltonian Monte Carlo on a manifold.
+order: 8
+katex_macros:
+  \Rpos: \R_{>0}
+  \state: s
+  \obs: y
+  \flow: \Phi_\theta
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { climate } from './climate.graph';
+</script>
+
+> [!NOTE] Status
+> This example needs pieces that don't exist yet: seeded sampling, an HMC sampler, and a
+> positive-reals manifold ([What exists today](#what-exists-today)). It is here to show the kind of
+> problem skoro is aimed at, and to keep the missing pieces in view.
+
+How strongly does the climate respond to a push? A two-layer energy-balance model summarizes
+global warming with a handful of physical parameters: a feedback $\lambda$, an exchange coefficient
+$\gamma$, and two heat capacities. Calibrating them against the observational record means a
+posterior over parameters that are **positive**, an observation-noise covariance that is a
+**triangular factor**, and a likelihood that runs through an **ODE solve**. The last makes gradients
+the interesting part.
+
+## The model
+
+Surface temperature anomaly $T$ and deep-ocean anomaly $T_D$ respond to radiative forcing $F(t)$:
+
+$$
+\begin{aligned}
+C\,\dot T &= F(t) - \lambda T - \gamma\,(T - T_D), \\
+C_D\,\dot T_D &= \gamma\,(T - T_D).
+\end{aligned}
+$$
+
+With $\theta = (\lambda, \gamma, C, C_D) \in \Rpos^4$ and the state $\state = (T, T_D)$, one
+integration step over a year is a map $\state_k = \flow(\state_{k-1}, F_k)$. The system is linear in
+$\state$, so a fixed-step Runge–Kutta step is a short composition of matrix products, and it is
+differentiable with the operations skoro already has.
+
+Each year observes the surface temperature and the top-of-atmosphere imbalance
+$N = F - \lambda T$:
+
+$$
+\obs_k \mid \state_k, \theta, L \sim \calN\!\left( \begin{bmatrix} T_k \\ F_k - \lambda T_k \end{bmatrix},\ LL^\top \right),
+\qquad
+\log\theta \sim \calN(\mu_\theta, \Sigma_\theta),
+\qquad
+L \sim \pi(L).
+$$
+
+<ModelGraph spec={climate} />
+
+> [!TODO] Priors and data
+> Choose the priors (log-normal on $\theta$ from the literature? an LKJ-style prior on the
+> correlation in $LL^\top$?) and the datasets: which temperature record, which top-of-atmosphere
+> imbalance record, and which forcing series. Cite them.
+
+> [!TODO] Code: build the model
+> Quote from `examples/climate_ebm.rs` once it exists. The listing should:
+> - add $\theta$ with its prior (on a positive-reals manifold, or on $\log\theta$ as `Euclidean<4>`
+>   until one exists);
+> - add $L$ as a `Tril` quantity with its prior;
+> - unroll the integration: one mapped node per year, each built from constants (the forcing
+>   $F_k$, the step size) and matrix operations;
+> - add and `observe` each $\obs_k$.
+> A reusable `ode_step` operation, with a hand-written VJP and HVP like any other, is the natural
+> extension.
+
+## Sampling the posterior
+
+The posterior $p(\theta, L \mid \obs)$ has no closed form. Hamiltonian Monte Carlo samples it by
+simulating a particle moving on the parameter manifold, with potential energy $-\log p$:
+
+- the gradient comes from `log_density_ord1`, back through every integration step;
+- each leapfrog position update is a retraction, `retract_flat`, so $\theta$ stays positive and $L$
+  stays triangular without clipping;
+- the Metropolis correction uses `log_density`.
+
+The Riemannian variant uses the Fisher information $\calI(\theta)$ as a position-dependent mass
+matrix, which adapts to the very different scales of $\lambda$ and $C_D$. Skoro keeps the Fisher
+root as a differentiable node for exactly this reason
+([Fisher scoring](../../concepts/fisher-scoring/#beyond-optimization)).
+
+> [!TODO] Code: the sampler
+> Quote the HMC loop (momentum refresh, leapfrog with retractions, accept/reject) from
+> `examples/climate_ebm.rs` or from a future sampler crate. Show how the chain's RNG is seeded.
+
+> [!TODO] Results
+> Posterior histograms or pair plots for $\lambda$ and $\gamma$, the implied equilibrium climate
+> sensitivity $F_{2\times}/\lambda$ with its credible interval, and trace plots. Also report the
+> effective sample size per gradient evaluation.
+
+## What exists today
+
+| Piece | Status |
+| --- | --- |
+| `Tril` quantities, matrix products, `Normal` with a `Tril` factor | built |
+| Gradients through long chains of mapped nodes (`log_density_ord1`) | built |
+| Retractions for every manifold (`retract_flat`) | built |
+| A positive-reals manifold | missing: use $\log\theta$ in the meantime |
+| Seeded RNG and per-quantity sampling | missing |
+| An HMC / NUTS sampler | missing |
+| A differentiable Fisher assembly (for Riemannian HMC) | missing: the root is a graph node, but `information_blocks` isn't on the tape |
+| An ODE-step operation | missing: compose matrix products meanwhile |
+
+See [Status and roadmap](../../reference/status/).

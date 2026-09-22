@@ -1,0 +1,112 @@
+---
+title: 'Example: a sliding-window smoother'
+summary: The pose problem revisited as a stream. Keep a fixed window of recent poses, and when one leaves, marginalize it into a joint factor over what remains, using demotion, joint factors and graph pruning.
+order: 9
+katex_macros:
+  \pose: x
+  \retiring: a
+  \blanket: b
+  \Lam: \Lambda
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { windowBefore, windowAfter } from './window.graph';
+</script>
+
+> [!NOTE] Status
+> The graph surgery on this page is built and tested, and the listing below is real. What's missing
+> is the statistics: nothing yet computes the marginal precision, so the example cannot produce a
+> correct estimate ([What exists today](#what-exists-today)).
+
+[The pose example](../example-pose-estimation/) solved for a whole trajectory at once. A robot
+running for hours can't do that: the problem grows with every frame. A **sliding-window smoother**
+keeps only the most recent poses, and when a pose leaves the window it is not simply deleted,
+which would throw its information away. It is **marginalized**: what it said about the poses that
+remain is kept as a single Gaussian factor over them.
+
+This is where a model that can be edited in place pays off. The graph shrinks as fast as it grows,
+and no node, term or binding leaks.
+
+## One slide of the window
+
+<ModelGraph spec={windowBefore} />
+
+When $\pose_0$ leaves, its Markov blanket is $\pose_1$: the only remaining pose it touches. At the
+current estimate, write the window's information over the retiring pose $\retiring$ and the blanket
+$\blanket$ in blocks. The information that $\blanket$ keeps is the Schur complement:
+
+$$
+\Lam =
+\begin{bmatrix} \Lam_{\retiring\retiring} & \Lam_{\retiring\blanket} \\ \Lam_{\blanket\retiring} & \Lam_{\blanket\blanket} \end{bmatrix}
+\quad\Longrightarrow\quad
+\tilde\Lam_{\blanket} = \Lam_{\blanket\blanket} - \Lam_{\blanket\retiring} \Lam_{\retiring\retiring}^{-1} \Lam_{\retiring\blanket} .
+$$
+
+It enters the model as a joint factor over $\blanket$, linearized at the frozen estimate
+$\hat\pose_1$:
+
+$$
+-\log \tilde p(\pose_1) = \tfrac12 \left\lVert W (\pose_1 \ominus \hat\pose_1) \right\rVert^2 + \text{const},
+\qquad W^\top W = \tilde\Lam_{\blanket} .
+$$
+
+This is exact for a linear-Gaussian model and a Laplace approximation otherwise.
+
+<ModelGraph spec={windowAfter} />
+
+## The graph surgery, as it runs today
+
+This is the loop body from the sliding-window test. Each tick adds a state and its measurement, then
+slides the window in three moves:
+
+```rust
+{../../../../crates/skoro-normal/tests/window.rs:117..142}
+```
+
+The test holds the factor count, the row count of $J$, and the graph's node count exactly steady
+over twelve ticks. A leak or a dangling binding would be invisible in one tick and unmissable over
+twelve.
+
+> [!WARNING] What the test does not do
+> It passes a fixed constant `whitening` where $W$ should be. The bookkeeping is right, but the
+> statistics aren't there yet.
+
+## The missing half
+
+> [!TODO] Code: compute the marginal
+> Quote from `examples/pose_window.rs` once it exists. Per tick:
+> - solve the window (the loop from [the pose example](../example-pose-estimation/#solving-it));
+> - assemble $\Lam$ over $[\retiring, \blanket]$ at the estimate, e.g. from `information` with a
+>   tangent layout of those two poses;
+> - take the Schur complement on the host (**missing**, though `spd_solve`, `matmul` and
+>   `transpose` over `Dense` are all there);
+> - turn $\tilde\Lam_\blanket$ into $W$ with `whitening_from_precision`;
+> - then the three moves above, with the computed `W` and the estimate $\hat\pose_1$ as the anchor.
+
+> [!TODO] Design notes
+> Decide how to handle linearization-point drift: the joint factor is frozen at $\hat\pose_1$
+> while later solves move $\pose_1$. Say whether first-estimate Jacobians or relinearization is the
+> intended policy, and why.
+
+> [!TODO] Results
+> Compare the windowed estimate with the full-batch estimate from the pose example: the trajectory
+> error over time, and the per-tick solve time staying flat while full-batch time grows.
+
+## What exists today
+
+| Piece | Status |
+| --- | --- |
+| `demote_to_parameter`: sever a quantity's conditional, keep its identity | built |
+| `stacked_tangent`, `JointNormal`, `add_joint_factor`: a joint over existing quantities | built |
+| `remove_closure` and mark-and-sweep `cleanup` | built |
+| `whitening_from_precision` on the host | built |
+| The Schur complement, a `marginal_precision` | missing |
+| An estimator to produce $\Lam$ at an estimate | missing (see [the pose example](../example-pose-estimation/#what-exists-today)) |
+
+Two things nothing can check for you:
+
+- a `JointNormal`'s whitening must be expressed in the same block order as its ids;
+- a joint factor binds no `LOCATION` or `WHITENING`, so `GaussianBlock` does not see it.
+
+See [Status and roadmap](../../reference/status/).

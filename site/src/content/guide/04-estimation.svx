@@ -1,0 +1,40 @@
+---
+title: Estimation
+summary: Reading a model's least-squares and Fisher-information structure, solving on the host, and stepping on manifolds, the pieces of a damped Gauss–Newton or Fisher-scoring loop.
+order: 4
+---
+
+Skoro doesn't ship an estimator yet. It ships the pieces one is made from, and those pieces
+already compose. This page walks through one iteration of a damped Gauss–Newton / Fisher-scoring
+step, top-down.
+
+## The shape of one step
+
+1. **Check coverage.** `require_role(&model, FISHER_ROOT)` guarantees that every scored term offers
+   the curvature you are about to use.
+2. **Lay out the problem.** `residual_layout(&model)` gathers each term's `RESIDUAL` as the rows,
+   and `model.tangent_layout(&ids)` fixes the columns (the free quantities' tangent coordinates).
+3. **Linearize.** `jacobian_vjp` assembles $J$ over those layouts. Alternatively,
+   `information_root` assembles the stacked Fisher root $A$ with $A\transpose A = \calI$.
+4. **Solve on the host.** Move $J$ to `skoro-dense` and solve the row-augmented least-squares
+   problem with `lstsq` (QR). This keeps the conditioning at $\kappa$ rather than $\kappa^2$.
+5. **Retract.** `PointMap::retract_flat` applies the step through each quantity's own manifold
+   retraction.
+
+The mathematics, and why the Fisher information is the right curvature, is in
+[Fisher scoring](../../concepts/fisher-scoring/).
+
+> [!WARNING] Jacobian columns must be leaves
+> `jacobian_vjp`/`jacobian_jvp` collect derivatives only at `Parameter` and `Stochastic` leaves. A
+> mapped node used as a column yields a **zero column**, which looks the same as a leaf that
+> genuinely doesn't affect the rows. The compiler can now differentiate with respect to interior
+> nodes (see [Compilation](../../concepts/compilation/)), but these two functions still compile
+> uncut.
+
+> [!NOTE] The residual vector
+> Nothing yet assembles the residual vector $r$ in the same row order as $J$. A caller evaluates the
+> residual nodes and flattens them with the same layout. See [Status](../../reference/status/).
+
+> [!TODO] End-to-end estimator example
+> This page would be much stronger with one compiled example that runs a few damped steps on a real
+> model (e.g. the nonlinear-mean example from the Fisher scoring page) and prints the iterates.

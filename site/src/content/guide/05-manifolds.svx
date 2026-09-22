@@ -1,0 +1,32 @@
+---
+title: Working on manifolds
+summary: Rotations and poses as first-class quantities; how values, tangent vectors and retractions look from the user's side.
+order: 5
+---
+
+Not every quantity lives in $\R^n$. A rotation lives on SO(3) and a rigid-body pose on SE(3).
+Skoro treats both as first-class quantity types: `Q<B, SO3>` and `Q<B, SE3>`.
+
+## What changes for the user
+
+- **Values are stored, derivatives are tangent.** An `SO3` value is a flattened $3\times 3$ matrix
+  (9 floats), but its gradient, Jacobian columns, and optimizer steps have 3 coordinates. `SE3` is
+  12 stored, 6 tangent.
+- **Steps are retractions.** An update is $x \leftarrow \retr(x, \delta)$ rather than
+  $x + \delta$. `PointMap::retract_flat` applies each quantity's own retraction.
+- **Residuals use the inverse retraction.** A Gaussian on a group measures $x \ominus \mu =
+  \invretr(\mu, x)$ and whitens it.
+
+## Operations
+
+`skoro-so3` provides differentiable `exp` (Rodrigues' formula), `log`, compose, rotate/unrotate,
+and invert. `skoro-se3` composes these with a translation. See
+[Operations on quantities](../../concepts/quantity-operations/).
+
+> [!NOTE] Accuracy of the Gaussian on a group
+> The Gaussian's Fisher root is exact on flat spaces and correct to second order in the dispersion
+> on groups. See [Fisher scoring, curved manifolds](../../concepts/fisher-scoring/#curved-manifolds).
+
+> [!TODO] A pose-estimation example
+> A small SE(3) example (e.g. estimate a pose from noisy landmark observations) would show off
+> the manifold support better than any prose.

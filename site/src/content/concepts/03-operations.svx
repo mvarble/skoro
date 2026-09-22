@@ -1,0 +1,70 @@
+---
+title: Differentiable operations
+summary: skoro-operation, the autodiff engine. The DiffOperation contract (forward, VJP and HVP), the four differentiation modes, and the two independent gates in an HVP pass.
+order: 3
+katex_macros:
+  \op: F
+  \cot: \omega
+  \tangent: v
+---
+
+Skoro's differentiation engine is small on purpose. Each operation is a stateless mathematical
+description that knows nothing about the graph. The graph hands it inputs and a *mode*, and it
+returns a value plus whatever it must remember for the backward passes.
+
+## The contract
+
+```
+{../../../../crates/skoro-operation/src/diff/base.rs:118..156}
+```
+
+For an operation $y = \op(x_1, \dots, x_m)$:
+
+- `forward` computes $y$. Depending on the mode it also pushes a tangent forward
+  ($\dot y = \sum_j \partial_j \op \, \dot x_j$) and memoizes the state the backward passes need.
+- `vjp` maps an output cotangent $\cot$ to the input cotangents $\cot \, \partial_j \op$.
+- `hvp` supplies the second-order part of the backward pass along a tangent $\tangent$ that was
+  seeded in the forward pass. The first-order (Leibniz) combination is handled by the tape, not by
+  the operation.
+
+All backward maps act on **cotangent frames** `[batch, dim, frame]`, so many output directions
+are pulled back in one call.
+
+## Four modes
+
+| Mode | Given | Returns |
+| --- | --- | --- |
+| `ForwardOnly` | nothing | output |
+| `Jvp` | tangent **frames** per input | output, pushed-forward frame |
+| `Vjp` | which inputs are differentiable | output, `VjpState` |
+| `Hvp` | differentiable flags **and** seeded tangent **vectors** | output, tangent, `VjpState`, `HvpState` |
+
+## The two gates
+
+The HVP mode carries two per-input facts that are easy to confuse:
+
+- **`diffs[j]`**: does input $j$ depend on a free variable? This gates the `VjpState`.
+- **`tangents[j]`**: was input $j$ seeded with a tangent *in this pass*? This gates the `HvpState`.
+
+A seeded tangent implies differentiable, but **not the reverse**: a differentiable input with no
+seed is normal, since an HVP is usually seeded one variable at a time. Treating the two as one gate
+drops cotangents in one direction or panics in the other.
+
+> [!WARNING]
+> Almost every autodiff bug in this workspace has come from conflating these two gates. The
+> repository's `skoro-diff-operation` skill (`.claude/skills/`) is the checklist for writing a new
+> operation.
+
+## Where manifolds come in
+
+An operation between manifold-valued quantities works in tangent coordinates: its inputs are
+points (storage size), but its derivatives are tangent frames (dimension). The chart and Jacobian
+conventions for curved inputs are covered in [Manifolds and retractions](../manifolds/).
+
+> [!DECISION]
+> Why not burn's autodiff? See [A bespoke autodiff engine](../../design/bespoke-autodiff/).
+
+> [!TODO] How the tape composes steps
+> One paragraph plus a small diagram showing how `step.rs` chains `vjp` and `hvp` across a
+> sequence (the Leibniz rule $\omega \mapsto \mathrm{hvp}(\alpha) + \mathrm{jvp}(\beta)$) would
+> complete this page.

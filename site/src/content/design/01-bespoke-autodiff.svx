@@ -1,0 +1,34 @@
+---
+title: A bespoke autodiff engine
+summary: Why skoro differentiates with its own forward/VJP/HVP engine instead of burn's autodiff backends.
+order: 1
+---
+
+## Context
+
+Inference algorithms for probabilistic models need more than a gradient. Hamiltonian Monte Carlo,
+extended Kalman filters, and MAP estimation with Fisher information need Jacobians,
+vector–Jacobian products, and **second-order** information (Hessian–vector products), and they
+need them **with respect to quantities on non-linear manifolds**, differentiated in tangent
+coordinates. burn provides reverse-mode autodiff as a backend decorator (`Autodiff<B>`).
+
+## Decision
+
+Skoro uses burn strictly for tensor execution and never wraps a backend in `Autodiff`. Every
+operation implements `DiffOperation` (`forward`, `vjp`, `hvp`) by hand, and skoro's own tape runs
+the passes over a compiled sequence.
+
+## Consequences
+
+- First- and second-order derivatives come from one mechanism, over one compiled program.
+- Manifold-valued inputs are differentiated in their tangent spaces by construction.
+- Every new operation costs a hand-written VJP and HVP, and those are where bugs live. The
+  `skoro-diff-operation` skill and numerical checks exist to contain that cost.
+
+## Alternatives considered
+
+> [!TODO] Alternatives
+> Did you try burn's `Autodiff<B>` first, or rule it out up front? Did it fail on second
+> order (double-backward), on tangent-space derivatives, on performance, or on control over what is
+> memoized? Were other engines (e.g. forward-over-reverse via dual numbers, an external AD crate)
+> considered? One concrete failure makes this record much more convincing.

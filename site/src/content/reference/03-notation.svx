@@ -1,0 +1,42 @@
+---
+title: Notation
+summary: The mathematical notation and KaTeX macros used across these docs, including the site-wide macros and how pages define their own.
+order: 3
+---
+
+## Site-wide macros
+
+Defined in `site/katex.config.ts` and available on every page.
+
+| Macro | Renders | Meaning |
+| --- | --- | --- |
+| `\R` | $\R$ | real numbers |
+| `\E` | $\E$ | expectation |
+| `\T` | $\T_x\calM$ | tangent space (with `\calM`) |
+| `\retr` | $\retr(x, v)$ | retraction |
+| `\invretr` | $\invretr(x, y)$ | inverse retraction |
+| `\transpose` | $A\transpose$ | transpose |
+| `\defeq` | $a \defeq b$ | definition |
+| `\bbX`, `\calX`, `\scrX`, `\bfX`, `\rmX` | $\bbR,\ \calI,\ \scrF,\ \bfA,\ \rmT$ | font shorthands for any letter |
+| `\bfx`, `\rmx`, `\bfalpha` | $\bfx,\ \rmd,\ \bfalpha$ | lower-case and Greek variants |
+
+## Conventions
+
+- $x \ominus \mu = \invretr(\mu, x)$: the tangent vector from $\mu$ to $x$.
+- $r = L^{-1}(x \ominus \mu)$: a whitened residual, with $\Sigma = LL\transpose$.
+- $\calI(\theta)$: the (expected) Fisher information.
+- $J$: a Jacobian with rows indexed by residual or argument coordinates and columns by free tangent
+  coordinates.
+
+## Page-local macros
+
+A page defines its own notation in frontmatter, and those definitions override the site-wide ones on
+that page only:
+
+```yaml
+katex_macros:
+  \fisher: \mathcal{I}
+  \params: \theta
+```
+
+The Markdown version of a page (`.md`) keeps this frontmatter, so its macros are always visible.

@@ -1,0 +1,64 @@
+---
+title: Your first model
+summary: Add skoro to a project, import the prelude, and build and score a small Gaussian model.
+order: 2
+---
+
+## Installation
+
+Skoro is not yet published on crates.io. Depend on the workspace by path or git:
+
+```toml
+[dependencies]
+skoro = { git = "https://github.com/mvarble/skoro" }
+```
+
+> [!TODO] Installation details
+> Confirm the recommended dependency line and the minimum Rust version (the workspace uses
+> edition 2024). List any feature flags a user must enable for GPU backends.
+
+## The prelude
+
+`skoro::prelude` re-exports what most model-building code needs: the backends, `ModelClient`, the
+typed handles `Q`, the manifolds, `Normal`, the binding roles, and the readers. This is the
+smallest complete program, quoted from the umbrella crate's doctest:
+
+```rust
+{../../../../crates/skoro/src/lib.rs:30..37}
+```
+
+A few things to notice:
+
+- `B` is the backend. `Flex` is the CPU backend; everything is generic over it.
+- `add_parameter(Real)` returns a `Q<B, Real>`, which is a *handle* to a node rather than a number.
+  The quantity has no value until one is supplied at evaluation time.
+- `a + b` doesn't add numbers. It adds a *mapped* node to the graph and returns its handle.
+
+## A Gaussian, scored
+
+The next example, from `skoro-normal`'s tests, adds a three-dimensional Gaussian quantity with a
+constant mean and a diagonal covariance factor. It then evaluates the model's log-density at the
+mean:
+
+```
+{../../../../crates/skoro-normal/tests/facade.rs:36..60}
+```
+
+This one test shows the whole loop:
+
+1. Quantities are added through `add_quantity(distribution)`, which returns a typed handle.
+2. Values are supplied at evaluation time as a map from node id to tensor. Tensors are always
+   batched: this one has shape `[1, 3]`.
+3. `log_density` returns one log-density per batch row.
+
+## Next steps
+
+- Read the [Guide](../../guide/) to go further top-down, starting from
+  [Building a model](../../guide/building-a-model/).
+- Read [Concepts](../../concepts/) to build the library up from its foundations.
+
+> [!TODO] A compiled examples crate
+> Snippets on this site are quoted from real source so they can't rot. A small `examples/`
+> directory (or `crates/skoro/examples/`) with a runnable end-to-end model would give these pages
+> something better than tests to quote. A good first example would be a nonlinear
+> regression solved with a few hand-written Fisher-scoring steps.

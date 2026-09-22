@@ -1,0 +1,34 @@
+---
+title: Crate map
+summary: Every crate in the workspace, what it is for, and what it depends on.
+order: 1
+---
+
+<script>
+  import CrateMap from '$lib/components/CrateMap.svelte';
+</script>
+
+Rows are dependency layers: each crate depends only on crates in rows above it. Click a crate to
+open the Concepts page that introduces it.
+
+<CrateMap />
+
+## Direct workspace dependencies
+
+| Crate | Depends on (workspace) |
+| --- | --- |
+| `skoro-backend` | none |
+| `skoro-core` | backend |
+| `skoro-operation` | backend, core |
+| `skoro-dense` | backend, core |
+| `skoro-riemann` | backend, core, operation |
+| `skoro-graph` | backend, core, operation, riemann |
+| `skoro-model` | backend, core, graph, operation, riemann |
+| `skoro-linalg` | backend, core, graph, model, operation, riemann |
+| `skoro-pointwise` | backend, core, graph, model, operation, riemann |
+| `skoro-so3` | backend, core, graph, linalg, model, operation, riemann |
+| `skoro-normal` | backend, core, graph, linalg, model, operation, pointwise, riemann |
+| `skoro-se3` | backend, core, graph, linalg, model, operation, riemann, so3 |
+| `skoro` | all of the above |
+
+Generated from `cargo metadata --no-deps --format-version 1`. Keep `src/lib/crates.ts` in step.

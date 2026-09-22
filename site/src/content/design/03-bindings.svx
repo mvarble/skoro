@@ -1,0 +1,39 @@
+---
+title: Bindings are graph edges
+summary: Why a term's structure (its residual, location, whitening, Fisher root) is recorded as labelled reference edges in the graph rather than as a side table or a type-level description.
+order: 3
+---
+
+## Context
+
+Different estimators need different views of the same likelihood term. Least squares needs its
+residual, a filter needs $\mu$ and $L$ separately, and Fisher scoring needs an information root.
+These are nodes built when the distribution is added, and they must stay alive, and be removed,
+together with the term.
+
+## Decision
+
+A distribution's `Factor` declares `(Role, Handle)` pairs once. The graph stores them as
+**bindings**: reference edges `(term, role, node)`. The compiler ignores them. Removal and garbage
+collection treat them as references. Readers query them at run time with `bound(id, role)`.
+
+## Consequences
+
+- No second list can drift out of sync with the graph. `GaussianBlock`, for example, is derived per
+  call.
+- `remove` refuses to break a binding (`NodeStillBound`); `remove_closure` takes the term with it.
+- Roles are strings (`Role(&'static str)`), so they are open to extension but not checked at
+  compile time.
+
+## Alternatives considered
+
+- **A type-level description of the model** (e.g. a `GaussianModel` trait). Rejected: see
+  [Arity is the capability test](../no-capability-flags/).
+- **Lazily built bindings** stored as a distribution object and resolved on demand. Designed and
+  postponed (`docs/deferred-bindings.md`).
+- **Family kernels**, which recognize a term by its binding shape and compute $C J$ directly. Kept as
+  a possible later optimization, not as the primary design.
+
+> [!TODO]
+> Add the story of how bindings replaced whatever came before (if anything did), e.g. the
+> `NlsStructure`/`ResidualCertificate` era mentioned in `docs/skoro.md`.

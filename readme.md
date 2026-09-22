@@ -3,6 +3,8 @@
 Skoro is a probabilistic modeling library designed for speed, modularity, and extensibility.
 Skoro offers a model-building API with descriptive intermediate representations which allow for a wide variety of inference algorithms.
 
+Documentation, written as a top-down guide and a bottom-up tour of the crates, lives in [`site/`](site/README.md) (`cd site && pnpm install && pnpm dev`).
+
 ## Design and Structure
 
 Skoro is designed to bridge the gap between hierarchical probabilistic modeling, automatic differentiation (autodiff), and execution on high-performance `burn` backends.

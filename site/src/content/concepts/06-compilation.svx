@@ -1,0 +1,50 @@
+---
+title: Compilation
+summary: How a subgraph is lowered to a straight-line CompiledSequence that serves all four differentiation passes, with an epoch-keyed cache, cut compilation at interior frontiers, and slot liveness.
+order: 6
+---
+
+Evaluating a model by walking its graph node by node would be slow. Skoro instead **compiles** the
+part of the graph a query needs into a `CompiledSequence`: a flat, index-based list of steps.
+
+## One sequence, four passes
+
+`compile_backward_from(&targets)` finds everything the targets depend on, sorts it
+topologically, and lowers each node to one `CompiledStep`. The same sequence runs all four passes
+(`forward`, `jvp_forward`, `vjp_forward`, `hvp_forward`), and the caller picks one by which method
+it invokes.
+
+## Caching, keyed by epoch
+
+Compiled sequences are cached. A target list alone is **not** a sound key: `observe`,
+`demote_to_parameter` and `remove` change a node's kind or value at a fixed `Id`, which changes which
+inputs are differentiable, and so the compiled program. The key is `(epoch, targets)`, and the graph
+bumps its epoch on every such mutation.
+
+Repeated evaluation without mutation (a Fisher-scoring loop, for example) benefits. A workload that
+mutates every tick (a sliding window) clears the cache every tick and gains nothing. That is
+expected.
+
+## Cut compilation
+
+`compile_between(&cuts, &targets)` stops the traversal at a frontier of interior nodes whose values
+the caller supplies, and still differentiates with respect to that frontier.
+
+> [!WARNING] The trap
+> A cut boundary must **not** lower to a constant step. If it did, everything downstream would be
+> marked non-differentiable, and the values would come back right while the derivatives came back
+> silently wrong. Cut nodes lower to a dedicated `Given` step: a leaf whose value is supplied and
+> whose cotangent is collected, like a parameter.
+
+`Graph::support(id)` is the forward counterpart: the nodes that depend on `id`, sorted for
+determinism.
+
+## Slot liveness
+
+Each operation slot is released at the last step that reads it, a fact computed at compile time
+(`CompiledSequence::last_use`). Only operation slots are dropped. Leaf slots stay alive, because
+the VJP pass reads them after the tape has run.
+
+> [!NOTE]
+> The full design, including the tests that pin each failure mode, is in
+> [`docs/graph-compiler.md`](https://github.com/mvarble/skoro/blob/main/docs/graph-compiler.md).

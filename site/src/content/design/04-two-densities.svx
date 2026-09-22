@@ -1,0 +1,28 @@
+---
+title: Two densities
+summary: Why every model carries both a target density p that it scores and a proposal q that it generates from, and how a term's membership in each is decided.
+order: 4
+---
+
+## Context
+
+Many Monte Carlo methods need a density that can be evaluated but not sampled from. The usual
+remedy is to sample from something else and correct with the weight $\log p - \log q$.
+
+## Decision
+
+A graph carries two densities over the same nodes. Membership in $p$ is stored on each term.
+Membership in $q$ is **derived**: a term is in $q$ exactly when the quantity it scores is still
+being generated. `add_proposal` adds a quantity that is generated but not scored, and `add_factor`
+supplies the target's account of it.
+
+## Consequences
+
+- `log_weight` is a real difference, not a sub-sum: a proposal-only term enters it negatively.
+- A proposal-only term scores exactly one quantity. Joint proposals would need `in_proposal`
+  stored rather than derived.
+- Derivatives are defined for $p$ only (`log_density_ord1`/`ord2`), not for $q$ or the weight.
+
+> [!TODO]
+> What use case drove this: importance sampling, SMC, or variational inference? And should
+> derivatives of $q$ come next?

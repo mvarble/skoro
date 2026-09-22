@@ -1,0 +1,33 @@
+---
+title: Handles own nodes
+summary: Why typed Q handles are the ownership roots of a model and ids are weak, and why collection is mark-and-sweep that runs only when reachability can shrink.
+order: 5
+---
+
+## Context
+
+Models grow and shrink at run time. A sliding-window filter adds and removes quantities every tick,
+and marginalization replaces quantities with factors. Nodes that nothing uses must be reclaimed
+without every mutation having to report what it orphaned.
+
+## Decision
+
+A `Q<B, T>` is the ownership token. `cleanup` is a mark-and-sweep whose roots are the ids that live
+handles name plus the likelihood terms, and it follows parent edges, bindings, and scored-quantity
+edges. A bare `Id` is a weak reference. Collection runs at the mutations that reduce reachability
+(`remove`, `remove_closure`, `demote_to_parameter`), never on `add_*`.
+
+## Consequences
+
+- Reachability is recomputed, not reported, so no mutation can forget to report an orphan.
+- Every node kind is collectable, and the sweep cannot fail.
+- Building an $n$-node model stays $O(n)$; a grow-only workload keeps its garbage until it asks,
+  and watches `graph_node_count`.
+- An `Id` kept across `cleanup()` may name nothing (`NodeNotFound`).
+
+## Alternatives considered
+
+A candidate-queue collector preceded this one, driven by mutations reporting what they orphaned.
+
+> [!TODO]
+> Say what went wrong with the candidate-queue collector that made mark-and-sweep worth the switch.

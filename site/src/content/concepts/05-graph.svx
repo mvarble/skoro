@@ -1,0 +1,57 @@
+---
+title: The model graph
+summary: skoro-graph. An arena of constant, parameter, stochastic and mapped nodes; bindings as labelled reference edges; and two densities, p and q, over the same nodes.
+order: 5
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { normal } from './normal.graph';
+</script>
+
+`skoro-graph` holds the model as a Bayesian network: a directed acyclic graph whose nodes are
+quantities and whose edges point from each node to its parents.
+
+## Nodes
+
+`Graph` is an arena of `Node` variants, each of which may be continuous or discrete:
+
+- **Constant**: a fixed value.
+- **Parameter**: a free value supplied at evaluation time.
+- **Stochastic**: a value drawn from a conditional distribution given its parents; it may be
+  *observed*.
+- **Mapped**: the output of a `DiffOperation` applied to other nodes.
+- **Log-likelihood terms**: the summands of the log-density.
+
+A node's quantity type is erased to `Arc<dyn DynQuantityType<B>>` in the arena. That trait is the
+graph's runtime reflection: `kind()`, `as_manifold()`, `inverse_retraction_op()`,
+`cardinality()`.
+
+## Bindings
+
+Besides parent edges, the graph stores **bindings**: labelled reference edges `(from, role, to)`
+from a log-density term to the nodes that play a role for it. The compiler never reads a binding.
+Removal and garbage collection do, and they treat a binding as a reference:
+
+- `remove` refuses to take a bound node out from under its term (`NodeStillBound`);
+- `remove_closure` takes the term with it.
+
+> [!DECISION]
+> See [Bindings are graph edges](../../design/bindings/).
+
+## Two densities
+
+A graph carries two densities over the same nodes: the target $p(x \mid z)$ it scores, and the
+proposal $q(x \mid z)$ it samples from. Membership in $p$ is stored on each term. Membership in $q$
+is derived: a term is in $q$ exactly when the quantity it scores is still being generated.
+So a *proposal-only* term can generate a quantity the target does not score.
+
+> [!DECISION]
+> See [Two densities](../../design/two-densities/).
+
+## A Gaussian, drawn out
+
+This is what one `add_quantity(Normal::new(μ, L))` adds to the graph. Every node kind and edge kind
+from this page appears in it.
+
+<ModelGraph spec={normal} />

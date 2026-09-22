@@ -1,0 +1,39 @@
+---
+title: Status and roadmap
+summary: What is built and tested, what is deliberately out of scope so far, and the open gaps, ordered by the algorithms they block.
+order: 5
+---
+
+## Built and tested
+
+- Model building over typed quantities on flat and curved manifolds (SO(3), SE(3)), including
+  discrete quantities.
+- Evaluation of $\log p$, $\log q$ and the log-weight; first-order derivatives and Hessian–vector
+  products.
+- Bindings, and the readers built on them: `residual_layout`, `information*`, `GaussianBlock`,
+  `coverage`.
+- The Gaussian, with a Fisher root, and joint Gaussian factors.
+- A compiler with an epoch-keyed cache, cut compilation, and slot liveness.
+- Host `f64` dense factorizations.
+
+## Open gaps
+
+| Gap | Blocks |
+| --- | --- |
+| No RNG seeding; no per-quantity sampling | Reproducible MCMC/SMC; per-chain streams |
+| No derivatives of $q$ or of the weight | Gradient-based variational inference |
+| Fisher assembly is not tape-differentiable | Riemannian-manifold HMC |
+| No block-sparse $J$, no sparse solvers | Large models |
+| `jacobian_*` cannot take an interior column | Block-to-block differentiation of an all-mapped chain |
+| No Schur complement / marginal precision | The computational half of marginalization |
+| No estimator, line search, or convergence test | Every deterministic estimator |
+| No `hessian_*` assembly | Newton methods; observed information |
+| No residual-vector assembly matching `jacobian_*` | Least-squares steps must hand-roll $r$ |
+| Joint proposals over several quantities | Block proposals |
+| Deferred bindings | Expensive-root families; very large models |
+
+Details are in `docs/skoro.md` §5 and `docs/roadmap.md` in the repository.
+
+> [!TODO] Priorities
+> Which of these come next, and in what order? A short "next three things" list gives a reader
+> (or a potential collaborator) a much clearer picture than a gap table alone.

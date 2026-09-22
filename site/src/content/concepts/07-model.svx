@@ -1,0 +1,59 @@
+---
+title: The model facade
+summary: skoro-model. ModelServer and ModelClient, typed Q handles as ownership tokens, mark-and-sweep collection, and the two client tiers.
+order: 7
+---
+
+`skoro-model` turns the untyped graph into the API a user holds.
+
+## Server and client
+
+`ModelServer<B>` owns the `Graph`. `ModelClient<B>` is a cheap, cloneable handle to it, and the
+only routes from a client to the graph itself are `server_call` and `server_call_mut`. Everything
+else goes through two traits:
+
+- `ModelClientOps`: evaluate, differentiate, read terms and bindings, add constants and
+  parameters, `observe`, `demote_to_parameter`, and `remove` a leaf.
+- `ModelBuilderOps: ModelClientOps`: also add density terms (quantities, proposals, factors),
+  `stacked_tangent`, and `remove_closure`.
+
+> [!DECISION]
+> See [Client tiers](../../design/client-tiers/).
+
+## Typed handles
+
+`Q<B, T>` wraps an `Id` with a `PhantomData` tag `T`, the quantity type. The builder API is typed
+(you can't pass a rotation where a vector is expected). The arena underneath is erased.
+
+## Ownership and collection
+
+A `Q` is an **ownership token**; a bare `Id` is a weak reference. `cleanup` is mark-and-sweep, and
+its roots are the ids named by live handles plus the model's likelihood terms. It follows parent
+edges, bindings, and the edge from each term to the quantity it scores. Three properties follow:
+
+- Nothing has to *report* orphaning; reachability is recomputed.
+- Every node kind is collectable, including constants and parameters nothing reaches.
+- The sweep cannot fail.
+
+It runs at the mutations that *reduce* reachability (`remove`, `remove_closure`,
+`demote_to_parameter`) and not on the way in, because sweeping on every `add_*` would make building
+an $n$-node model cost $O(n^2)$.
+
+> [!DECISION]
+> See [Handles own nodes](../../design/ownership/).
+
+## Distributions, factors, and readers
+
+`Distribution` and `Factor` (see [Distributions and factors](../../guide/distributions-and-factors/))
+are defined here, as are the readers that consume bindings: `least_squares::residual_layout`,
+`information`/`information_root`/`information_blocks`, `jacobian_vjp`/`jacobian_jvp`, and
+`coverage::{terms_missing, require_role}`.
+
+## Batch pinning
+
+Two calls pin a model to one batch size: `add_batched_constant` (one value per row) and
+`stacked_tangent` (batch-pinned linearization anchors). Everything else broadcasts.
+
+> [!TODO] Adding a quantity is atomic
+> `add_quantity` removes a partially added quantity if its factor fails. Worth a sentence on why
+> atomicity matters for a long-lived model (e.g. a filter adding terms every tick).

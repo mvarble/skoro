@@ -1,0 +1,53 @@
+---
+title: Evaluating densities
+summary: Supplying values, the batch convention, and the three densities a model reports, log p, log q and the log-weight, plus their derivatives.
+order: 3
+katex_macros:
+  \target: p
+  \proposal: q
+---
+
+## Values in, tensors out
+
+Evaluation takes a `ValueMap`: a map from node id to an `Input` tensor for every free quantity
+(parameters and unobserved stochastic quantities). Every tensor is **batched**: a point is
+`[batch, storage]`, and results come back as `[batch, 1]`. One call evaluates `batch` independent
+settings of the model at once.
+
+> [!NOTE] Storage vs. dimension
+> A rotation is *stored* as 9 floats but has *dimension* 3. Points use storage size; tangent vectors
+> and derivatives use dimension. See [Tensors and backends](../../concepts/backends/).
+
+## Two densities
+
+A model carries two densities over the same nodes:
+
+- the **target** $\target(x \mid z)$, which the model *scores*, and
+- the **proposal** $\proposal(x \mid z)$, the mechanism it *generates* samples from.
+
+`add_quantity` puts a term in both. `add_proposal` puts a term in $\proposal$ only, and the target's
+view of that quantity is attached separately with `add_factor`.
+
+```
+{../../../../crates/skoro-model/src/client_ops.rs:159..170}
+```
+
+| Call | Returns |
+| --- | --- |
+| `log_density(&points)` | $\log \target$ |
+| `log_proposal(&points)` | $\log \proposal$ |
+| `log_weight(&points)` | $\log \target - \log \proposal$, compiled and evaluated in one pass |
+| `generate(batch)` | a batch of samples drawn through $\proposal$ |
+
+> [!DECISION]
+> One graph, two densities. See [Two densities](../../design/two-densities/).
+
+## Derivatives
+
+`log_density_ord1` returns the log-density together with its gradient with respect to the free
+quantities, laid out in their tangent coordinates. Second-order information comes as
+Hessian–vector products (`log_density_ord2`, `evaluate_hvp`), one direction per call.
+
+> [!TODO] Derivative API walkthrough
+> Show `log_density_ord1` on a small model and explain the returned structure, and how to turn it
+> into a flat gradient with a `TangentLayout`. Quote a test rather than writing a new snippet.

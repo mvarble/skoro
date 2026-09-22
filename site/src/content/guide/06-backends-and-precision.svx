@@ -1,0 +1,47 @@
+---
+title: Backends and precision
+summary: Choosing a CPU or GPU backend, and selecting f64 precision with a process-wide, lock-once float policy.
+order: 6
+---
+
+## Backends
+
+Every skoro type is generic over a backend `B: skoro::backend::Backend`. The trait is sealed, and two
+families implement it:
+
+- `Flex`: burn's CPU backend.
+- `CubeBackend<R, F, I>`: burn's cubecl backend on a GPU runtime (e.g. wgpu).
+
+> [!DECISION]
+> The `Backend` trait is sealed. See [A sealed backend](../../design/sealed-backend/).
+
+## Precision is a process-wide policy
+
+Float tensors take their precision from the device's *float policy*, and burn locks that policy the
+first time any tensor is created on the device. So `f64` has to be chosen **before anything else
+runs**:
+
+```
+{../../../../crates/skoro-backend/src/policy.rs:11..30}
+```
+
+A test binary opts in once, at the top level, with `skoro::backend::f64_test_binary!(Flex)`.
+**One binary holds one precision.** A test that needs results at another precision
+should compare against constants computed elsewhere, not create tensors at a second precision.
+
+> [!WARNING] `Tensor::from_floats` rounds through f32
+> Even on an f64 backend, `Tensor::from_floats` goes through `f32`. Build tensors from `TensorData`
+> when precision matters.
+
+> [!DECISION]
+> See [Precision is a lock-once policy](../../design/precision-policy/).
+
+## The host boundary
+
+Dense factorizations (Cholesky, triangular solves, QR least squares) run on the host in `f64` via
+`skoro-dense`, whatever the backend. Under an `f32` policy that buys `f64` *inside* the solve, but
+not end to end. See [Host linear algebra](../../concepts/host-linear-algebra/).
+
+> [!TODO] GPU setup
+> Document how to run on a GPU: which cubecl runtime, which feature flags, and any known tolerance
+> differences (e.g. the SO(3) `wgpu_f32` tolerance misses in `docs/TODO.md`).

@@ -1,0 +1,48 @@
+@import 'katex/dist/katex.css';
+
+/* Container rules copied from the blog: `rehypeKatexBox` wraps display math in a scroll container
+ * whose edges fade, and lifts a `\tag` beside it. */
+
+.math-tag-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.math-scroll-container {
+    overflow-x: auto;
+    flex-grow: 1;
+    --fading-size: 2em;
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black var(--fading-size),
+        black calc(100% - var(--fading-size)),
+        transparent
+    );
+}
+
+.math-tag {
+    margin-left: 2em;
+}
+
+.katex-html {
+    display: inline-block;
+}
+
+.katex {
+    font-size: 1.08em;
+    line-height: 1.2;
+}
+
+.katex-display {
+    margin: var(--space-2) 0 !important;
+
+    & .katex-base:first-child {
+        margin-left: var(--fading-size) !important;
+    }
+
+    & .katex-base:last-child {
+        margin-right: var(--fading-size) !important;
+    }
+}

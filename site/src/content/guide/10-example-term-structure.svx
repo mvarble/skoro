@@ -1,0 +1,204 @@
+---
+title: 'Example: the yield curve as an affine model'
+summary: A multi-factor Gaussian affine term-structure model. Bond loadings come from a differentiable Riccati ODE, the model is fitted to Treasury curves with Fisher scoring, and it runs daily as a Kalman filter built from graph marginalization.
+order: 10
+katex_macros:
+  \QQ: \mathbb{Q}
+  \PP: \mathbb{P}
+  \Kq: K^{\QQ}
+  \thq: \theta^{\QQ}
+  \parQ: \vartheta^{\QQ}
+  \parP: \vartheta^{\PP}
+  \Lam: \Lambda
+---
+
+<script>
+  import ModelGraph from '$lib/components/ModelGraph.svelte';
+  import { termStructure } from './term-structure.graph';
+</script>
+
+> [!NOTE] Status
+> Like the other examples, this page shows how skoro is meant to be used, and parts of it cannot
+> run yet ([What exists today](#what-exists-today)). Unlike them, it ends with
+> [exercises](#work-through-it): the model is worth understanding in its own right.
+
+The yield curve is where rates desks, macro funds and central banks all start: the interest rate
+at every maturity, from a month to thirty years, on every trading day. A handful of latent factors
+explains nearly all of its movement, and **affine term-structure models** tie those factors to
+bond prices through no-arbitrage. Fitting one takes a no-arbitrage pricing ODE, a latent-factor
+filter, a covariance factor on a manifold, and a careful likelihood. Each of those is something
+skoro was built for:
+
+- the **bond loadings** solve a Riccati ODE, unrolled in the graph, so every sensitivity of every
+  yield to every parameter is a derivative skoro already computes;
+- the **factor covariance** is a `Tril` factor, updated by retraction, so it never stops being a
+  valid covariance;
+- the **fit** is Fisher scoring on the model's own bindings, and its information matrix gives the
+  standard errors;
+- the **daily filter** is the [sliding-window smoother](../example-sliding-window/) with a window of
+  one. For a linear-Gaussian model, marginalizing yesterday's factors is exactly the Kalman filter.
+
+## The model
+
+Factors $x_t \in \R^n$ (typically $n = 3$: level, slope and curvature) drive the short rate
+$r_t = \delta_0 + \delta_1^\top x_t$. Under the risk-neutral measure $\QQ$ they follow a
+multivariate Ornstein–Uhlenbeck process,
+
+$$
+dx_t = \Kq(\thq - x_t)\,dt + \Sigma\, dW^{\QQ}_t ,
+$$
+
+and a zero-coupon bond maturing after $\tau$ years is priced by
+$P_t(\tau) = \E^{\QQ}_t\!\left[e^{-\int_t^{t+\tau} r_s\,ds}\right] = \exp\!\big(A(\tau) + B(\tau)^\top x_t\big)$.
+The loadings solve the Riccati equations
+
+$$
+\begin{aligned}
+B'(\tau) &= -\delta_1 - (\Kq)^\top B(\tau), & B(0) &= 0, \\
+A'(\tau) &= -\delta_0 + (\Kq\thq)^\top B(\tau) + \tfrac12 \big\lVert \Sigma^\top B(\tau) \big\rVert^2, & A(0) &= 0,
+\end{aligned}
+$$
+
+so each yield is affine in the factors, $y_t(\tau) = -\big(A(\tau) + B(\tau)^\top x_t\big)/\tau$. Every
+right-hand side is a matrix product, a transpose or a squared norm, and each is a differentiable
+operation in skoro, so a fixed-step Runge–Kutta integration over maturity is a chain of mapped
+nodes.
+
+Day to day, the factors move under the physical measure $\PP$, discretized over a day $\Delta$:
+
+$$
+x_t \mid x_{t-1} \sim \calN\!\left(\mu + \Phi\, x_{t-1},\ \Omega\right),
+\qquad
+\Omega \approx \Sigma\Sigma^\top \Delta ,
+$$
+
+and the curve on day $t$, at maturities $\tau_1, \dots, \tau_m$, is observed with pricing error
+$y_t \sim \calN\!\left(a + \mathbf B\, x_t,\ R\right)$, where the rows of $a$ and $\mathbf B$ are
+$-A(\tau_i)/\tau_i$ and $-B(\tau_i)^\top/\tau_i$.
+
+<ModelGraph spec={termStructure} />
+
+> [!TODO] Identification and data
+> Pick a normalization: a rotation $x \mapsto U x + c$ leaves every yield's law unchanged, so the
+> parameters are not identified as written (see [exercise 3](#work-through-it)). The canonical form of
+> Joslin, Singleton and Zhu (2011) is the usual choice; cite it and say what it fixes. Also choose
+> the data. The Gürkaynak–Sack–Wright zero-coupon curve, which the Federal Reserve publishes, is
+> the standard daily U.S. dataset; state the maturities and the date range used.
+
+> [!TODO] Code: build the model
+> Quote from `examples/term_structure.rs` once it exists. The listing should:
+> - add $\parQ$ as parameters (with $\Kq$ in the chosen canonical form) and $\Sigma$ as a `Tril`
+>   parameter;
+> - integrate the Riccati ODE over a maturity grid as mapped nodes (matrix products, `transpose`, a
+>   squared norm), reading $a$ and $\mathbf B$ off at the observed maturities;
+> - add the factor chain with `add_quantity(Normal::new(mean, omega_factor))`, where
+>   `mean = mu + matmul(phi, x_prev)`;
+> - add each day's curve with `add_quantity(Normal::new(a + matmul(b, x_t), r_factor))` and
+>   `observe` it.
+
+## Fitting it
+
+Given parameters $\vartheta = (\parQ, \parP, \Sigma, R)$, the factor path is Gaussian, so there are
+two natural estimators:
+
+- **Joint MAP** over $\vartheta$ and the whole path $x_{1:T}$: one large least-squares problem,
+  solved exactly as in [the pose example](../example-pose-estimation/#solving-it) and read off the
+  `RESIDUAL` bindings. $\Sigma$ moves by retraction on `Tril`.
+- **Marginal likelihood** $p(y_{1:T} \mid \vartheta)$, with the path integrated out. The Kalman filter
+  below computes it through the prediction-error decomposition. Because the path is exactly
+  Gaussian given $\vartheta$, the Laplace approximation of the marginal is exact
+  ([exercise 5](#work-through-it)).
+
+In both cases the curvature is the Fisher information, assembled from the terms' `FISHER_ROOT`
+bindings ([Fisher scoring](../../concepts/fisher-scoring/)). At the optimum its inverse is the
+asymptotic covariance of $\hat\vartheta$, which gives the standard errors a desk will ask for.
+
+> [!TODO] Code: the fit
+> Quote the fitting loop (the same damped step as the pose example, over $\vartheta$ and the path)
+> and the standard errors from `information`. Say which estimator the listing implements, and why.
+
+## Running it daily: a Kalman filter from marginalization
+
+Each new day adds $x_t$ and $y_t$. Keep a window of **one** factor state. When day $t$ arrives,
+marginalize $x_{t-1}$ exactly as the [sliding-window smoother](../example-sliding-window/) does:
+demote $x_t$, attach a joint Gaussian factor over it, then retire $x_{t-1}$ and its curve. With the
+model linear-Gaussian, the Schur complement of the window's information is exactly the Kalman
+**predict** step,
+
+$$
+\hat x_{t \mid t-1} = \mu + \Phi\, \hat x_{t-1}, \qquad
+P_{t \mid t-1} = \Phi P_{t-1} \Phi^\top + \Omega ,
+$$
+
+and adding the factor for $y_t$ is the **update**. The filter needs $H = \mathbf B$ and $R$
+separately, which is exactly what `GaussianBlock` reads off a term's `LOCATION` and `WHITENING`
+bindings.
+
+> [!TODO] Code: the daily filter
+> Quote the per-day loop from `examples/term_structure.rs`, and check it against a textbook Kalman
+> filter on the same data (they must agree to rounding, since the marginalization is exact here).
+
+## What a desk does with it
+
+- **Relative value.** The pricing error $y_t - a - \mathbf B \hat x_t$ says which maturities are rich or
+  cheap relative to the fitted curve.
+- **Hedging.** The factor exposure of a yield is $\partial y_t(\tau)/\partial x_t = -B(\tau)/\tau$.
+  In skoro this is a Jacobian with respect to $x_t$, and the sensitivity of the curve to *the
+  parameters* (model risk) is a Jacobian with respect to $\vartheta$ through the ODE, at no extra
+  implementation cost.
+- **Term premia.** The model yield minus the average expected short rate under $\PP$ over the
+  bond's life, computed from $\mu$ and $\Phi$ ([exercise 6](#work-through-it)).
+- **Forecasting** with the $\PP$ dynamics, with uncertainty bands from $P_{t \mid t}$ and the
+  parameter covariance.
+
+> [!TODO] Results
+> The fitted loadings $-B(\tau)/\tau$ against maturity (level, slope, curvature shapes), filtered
+> factors over time, pricing errors in basis points by maturity, and a term-premium series for the
+> ten-year yield.
+
+## Work through it
+
+Exercises for building intuition, roughly in order of difficulty.
+
+1. **Derive the Riccati equations.** Apply Feynman–Kac to $P = \exp(A(\tau) + B(\tau)^\top x)$, match
+   the terms constant in $x$ and linear in $x$, and check the one-factor case against Vasicek's
+   closed form $B(\tau) = -(1 - e^{-\kappa\tau})/\kappa$.
+2. **Both ends of the curve.** Show that $y(\tau) \to \delta_0 + \delta_1^\top x$ as $\tau \to 0$.
+   For stable $\Kq$, show that $B(\tau) \to B_\infty = -(\Kq)^{-\top}\delta_1$ and that the
+   long yield tends to
+   $y_\infty = \delta_0 - (\Kq\thq)^\top B_\infty - \tfrac12\lVert \Sigma^\top B_\infty \rVert^2$,
+   which does not depend on $x$. The last term is the *convexity* effect: why does volatility pull
+   long yields down?
+3. **Identification.** Show that $x \mapsto U x + c$, with a matching change of every parameter,
+   leaves the law of the yields unchanged. Count the free parameters before and after a
+   normalization.
+4. **Kalman as marginalization.** Write the two-state window's information in blocks and check that
+   its Schur complement is the predict step above.
+5. **Joint MAP or marginal likelihood?** Show that
+   $\log p(y \mid \vartheta) = \log p(y, \hat x \mid \vartheta) - \tfrac12 \log\det\!\big(\Lam_{xx}/2\pi\big)$,
+   where $\hat x$ maximizes over the path and $\Lam_{xx}$ is the path's information, and that this is
+   exact here. Which parameters does dropping the log-determinant term bias, and in which direction?
+6. **Term premium.** Derive $\E^{\PP}_t\!\left[\tfrac1\tau \int_t^{t+\tau} r_s\,ds\right]$ in discrete time
+   from $\mu$ and $\Phi$, and define the term premium as the model yield minus it.
+7. **Beyond Gaussian.** In a CIR-type (square-root) affine model the Riccati equation for $B$ becomes
+   quadratic. What does that do to the positivity of rates, and to the Gaussian state-space structure
+   used above?
+
+> [!TODO] Your angle
+> Connect this to your own work on affine processes: for example, what large deviations of the
+> factors say about long-horizon yields, or where the Riccati structure of your dissertation
+> reappears here. This is also the paragraph to point a reader to from a résumé.
+
+## What exists today
+
+| Piece | Status |
+| --- | --- |
+| `Tril` factors, `Normal` with a `Tril` factor, matrix products, transpose, norms | built |
+| Gradients through long chains of mapped nodes (the unrolled ODE) | built |
+| `residual_layout`, `information`, `jacobian_vjp`, `GaussianBlock` | built |
+| The graph surgery for marginalization (demote, joint factor, `remove_closure`, `cleanup`) | built |
+| An `Estimator` loop; the Schur complement / marginal precision | missing (see the [pose](../example-pose-estimation/#what-exists-today) and [window](../example-sliding-window/#what-exists-today) examples) |
+| A matrix exponential, for the exact discretization $\Phi = e^{-K^{\PP}\Delta}$ | missing: use the Euler form above |
+| A reusable ODE-step operation | missing: unroll it from matrix products |
+
+See [Status and roadmap](../../reference/status/).
