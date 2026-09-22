@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
     import CrateMap from '$lib/components/CrateMap.svelte';
+    import Logo from '$lib/components/Logo.svelte';
     import TrackCard from '$lib/components/TrackCard.svelte';
     import { SITE, TRACKS } from '$lib/site';
     import Landing from '../content/landing.svx';
@@ -15,7 +16,7 @@
 
 <section class="hero">
     <p class="eyebrow">Rust · burn · second-order autodiff · manifolds</p>
-    <h1>{SITE.name}</h1>
+    <h1><Logo variant="lockup" /><span class="visually-hidden">{SITE.name}</span></h1>
     <p class="hero-tagline">{SITE.tagline}</p>
     <div class="hero-actions">
         <a

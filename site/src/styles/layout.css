@@ -1,6 +1,30 @@
 /* The page frame: top bar, sidebar, content column, table of contents, footer. */
 
 /* ---- top bar ---------------------------------------------------------- */
+/* The logo's SVGs are drawn in the fixed `INK` and `PAPER` of `logo/generate.py`; inlined, they take
+ * the theme's instead. */
+.logo {
+    display: block;
+    line-height: 0;
+
+    svg {
+        width: 100%;
+        height: auto;
+    }
+
+    [stroke='#1c1c1c'] {
+        stroke: var(--fg-1);
+    }
+
+    [fill='#ffffff'] {
+        fill: var(--bg-1);
+    }
+}
+
+.logo-icon {
+    width: 1.625rem;
+}
+
 .topbar {
     position: sticky;
     top: 0;
@@ -402,10 +426,12 @@ main {
     text-align: center;
 
     h1 {
-        font: 800 clamp(2.75rem, 8vw, 4.5rem) / 1 var(--font-family-heading);
-        letter-spacing: -0.04em;
-        color: var(--fg-1);
         margin: var(--space-2) 0 var(--space-4);
+    }
+
+    .logo-lockup {
+        width: min(30rem, 100%);
+        margin: 0 auto;
     }
 
     .hero-tagline {

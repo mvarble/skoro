@@ -1,8 +1,9 @@
 <script lang="ts">
-    import { asset, resolve } from '$app/paths';
+    import { resolve } from '$app/paths';
     import { page } from '$app/state';
     import { SITE, TRACKS } from '$lib/site';
     import Icon from './Icon.svelte';
+    import Logo from './Logo.svelte';
     import ThemeToggle from './ThemeToggle.svelte';
 
     let {
@@ -28,7 +29,7 @@
     {/if}
 
     <a class="wordmark" href={resolve('/')}>
-        <img src={asset('/favicon.svg')} alt="" width="24" height="24" />
+        <Logo variant="icon" />
         <span>{SITE.name}</span>
         <span class="version">v{SITE.version}</span>
     </a>

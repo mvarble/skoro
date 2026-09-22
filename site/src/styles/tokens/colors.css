@@ -1,17 +1,17 @@
-/* A neutral slate scale with one copper accent (a nod to Rust). Every other stylesheet refers to
- * these names, so a palette change is made here and nowhere else. */
+/* A neutral slate scale with one indigo accent, the logo's `COLOR` in `logo/generate.py`. Every
+ * other stylesheet refers to these names, so a palette change is made here and nowhere else. */
 
 :root {
     color-scheme: light;
 
-    --accent-hue: 20;
+    --accent-hue: 255;
 
     /* Foreground: 1 is headings, 2 body text, 3 secondary, 4 faint. */
     --fg-1: hsl(222, 30%, 11%);
     --fg-2: hsl(220, 16%, 22%);
     --fg-3: hsl(220, 9%, 42%);
     --fg-4: hsl(220, 8%, 58%);
-    --fg-accent: hsl(var(--accent-hue), 62%, 38%);
+    --fg-accent: hsl(var(--accent-hue), 55%, 52%);
     --fg-on-accent: hsl(0, 0%, 100%);
 
     /* Background: 1 is the page, 2 raised surfaces (sidebar, cards), 3 code, 4 hover. */
@@ -19,7 +19,7 @@
     --bg-2: hsl(220, 20%, 98%);
     --bg-3: hsl(220, 18%, 96.5%);
     --bg-4: hsl(220, 16%, 93%);
-    --bg-accent: hsl(var(--accent-hue), 62%, 42%);
+    --bg-accent: hsl(var(--accent-hue), 60%, 60%);
     --bg-accent-soft: hsl(var(--accent-hue), 80%, 96%);
     --bg-selection: hsla(var(--accent-hue), 90%, 60%, 0.22);
     --bg-topbar: hsla(0, 0%, 100%, 0.85);
@@ -65,14 +65,14 @@
     --fg-2: hsl(220, 12%, 80%);
     --fg-3: hsl(220, 8%, 62%);
     --fg-4: hsl(220, 7%, 46%);
-    --fg-accent: hsl(var(--accent-hue), 85%, 68%);
+    --fg-accent: hsl(var(--accent-hue), 85%, 76%);
     --fg-on-accent: hsl(0, 0%, 100%);
 
     --bg-1: hsl(222, 16%, 9%);
     --bg-2: hsl(222, 14%, 11.5%);
     --bg-3: hsl(222, 14%, 13.5%);
     --bg-4: hsl(222, 12%, 18%);
-    --bg-accent: hsl(var(--accent-hue), 60%, 44%);
+    --bg-accent: hsl(var(--accent-hue), 60%, 56%);
     --bg-accent-soft: hsla(var(--accent-hue), 70%, 50%, 0.12);
     --bg-selection: hsla(var(--accent-hue), 90%, 60%, 0.3);
     --bg-topbar: hsla(222, 16%, 9%, 0.85);
