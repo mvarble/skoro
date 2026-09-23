@@ -158,6 +158,18 @@ a `Factor<B>`: a log-density node plus whatever `(Role, Handle)` pairs its build
 The model binds `ARGUMENT` to the scored quantity and each of `parent_ids()` itself, so a
 distribution declares only the other roles, or none.
 
+**`Factor.bindings` is a request, not a store.** The graph is the only record of bindings
+(`Graph::bindings_of`, §1.2). A factor's `bindings` field lists bindings it wants recorded, and
+`bind_factor` (`model.rs`) copies each one into the graph once, just after marking the density. The
+`Factor` is then dropped, and nothing reads the field again: `factors()` returns `FactorInfo`, built
+from the graph's bindings. The list is also incomplete, because it leaves out the `ARGUMENT`
+bindings the model adds itself. There are two reasons it holds `Handle`s rather than recording
+bindings directly. First, a bound node such as a residual or Fisher root is usually not an ancestor
+of the log-density. Until the binding exists, the handle's drop guard is the only thing keeping the
+collector from removing it. Second, `factor` only has `Q`s to work with, and a `Q` cannot `bind`,
+since binding lives on `ModelBuilderOps`. So the distribution lists the bindings it wants, and the
+model records them while it holds the write lock.
+
 **`Normal<B, M>` is the only implementation in library code.** Every other impl in the tree is a
 test double, and `JointNormal` is not one at all — it is a free-standing factor, because a
 distribution is a conditional over *one* quantity type. Two consequences that shape everything
