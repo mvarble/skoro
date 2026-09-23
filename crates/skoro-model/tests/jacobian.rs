@@ -8,9 +8,13 @@
 //! a block index.
 
 use skoro_backend::{Flex, Point, Tensor};
-use skoro_core::{error::SkoroResult, id::Id, kind::Continuous};
+use skoro_core::{
+    error::{SkoroError, SkoroResult},
+    id::Id,
+    kind::Continuous,
+};
 use skoro_model::{
-    ModelBuilderOps, TangentLayout,
+    ModelBuilderOps, ModelReaderOps, TangentLayout,
     distribution::{Distribution, Factor, Sampler},
     hash_map_builders::points,
     jacobian::{jacobian_jvp, jacobian_vjp},
@@ -363,4 +367,55 @@ fn a_constant_or_observed_node_that_is_a_row_and_a_column_is_zero() {
     for batch in 0..BATCH {
         assert_eq!(&j[batch * 9..(batch + 1) * 9], expected.as_slice());
     }
+}
+
+/// Both paths reject `columns`, naming `id`, before either pass runs.
+fn assert_rejected(model: &Model, columns: &[Id], rows: &[Id], id: Id) {
+    let points = model.points();
+    let (inputs, outputs) = (layout(&model.client, columns), layout(&model.client, rows));
+    let expected = SkoroError::MappedColumn { id };
+    assert_eq!(
+        jacobian_jvp(&model.client, &points, &inputs, &outputs).unwrap_err(),
+        expected
+    );
+    assert_eq!(
+        jacobian_vjp(&model.client, &points, &inputs, &outputs).unwrap_err(),
+        expected
+    );
+}
+
+/// A mapped column is an error, in both paths.
+///
+/// The passes collect derivatives only at leaves, so without the check `xq` would come back as a
+/// zero column where `∂r/∂(xq) = −1` — well-shaped, and wrong.
+#[test]
+fn a_mapped_column_is_an_error() {
+    let model = Model::new();
+    let xq = (model.x.clone() * model.q.clone()).unwrap();
+    let r = (model.p.clone() - xq.clone()).unwrap();
+    assert_rejected(&model, &[model.x.id(), xq.id()], &[r.id()], xq.id());
+}
+
+/// A mapped column that reaches no row is an error too, not a zero column.
+///
+/// This is the case a check on the pass's output would miss: `v` is not in the subgraph that
+/// feeds `u`, so the pass never sees it.
+#[test]
+fn a_mapped_column_that_reaches_no_row_is_an_error() {
+    let model = Model::new();
+    assert_rejected(
+        &model,
+        &[model.x.id(), model.v.id()],
+        &[model.u.id()],
+        model.v.id(),
+    );
+}
+
+/// A log-density is a mapped node like any other, and is rejected as a column the same way.
+#[test]
+fn a_log_density_column_is_an_error() {
+    let model = Model::new();
+    let o = model.client.add_quantity(Linear).unwrap();
+    let density = model.client.log_density_of(&o).unwrap();
+    assert_rejected(&model, &[model.x.id(), density], &[model.u.id()], density);
 }

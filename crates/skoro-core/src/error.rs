@@ -89,6 +89,12 @@ pub enum SkoroError {
     DuplicateLayoutId { id: Id },
     /// A tangent layout was asked about an id it does not contain.
     IdNotInLayout { id: Id },
+    /// A Jacobian was asked for a column that is a mapped or log-density node.
+    ///
+    /// Columns are what an estimator moves: `Parameter` and `Stochastic` leaves. The passes
+    /// collect derivatives only at leaves, so a mapped column would otherwise come back silently
+    /// zero.
+    MappedColumn { id: Id },
     /// A flattened tangent's dimension disagrees with the layout interpreting it.
     LayoutDimensionMismatch { expected: usize, found: usize },
     /// A Cholesky factorization was attempted on a matrix that is not positive definite.
@@ -235,6 +241,13 @@ impl fmt::Display for SkoroError {
             }
             SkoroError::IdNotInLayout { id } => {
                 write!(f, "id {id:?} is not present in the tangent layout")
+            }
+            SkoroError::MappedColumn { id } => {
+                write!(
+                    f,
+                    "node {id:?} is a mapped node and cannot be a Jacobian column; \
+                     columns must be Parameter or Stochastic leaves"
+                )
             }
             SkoroError::LayoutDimensionMismatch { expected, found } => {
                 write!(

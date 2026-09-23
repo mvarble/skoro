@@ -96,6 +96,13 @@ pub trait ModelReaderOps<B: Backend> {
     /// reason about when reading a covariance or a Jacobian.
     fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout>;
 
+    /// Check that every block of `layout` may be a Jacobian column.
+    ///
+    /// A mapped or log-density node is [`SkoroError::MappedColumn`](skoro_core::error::SkoroError::MappedColumn);
+    /// every leaf is accepted. See
+    /// [`Graph::ensure_leaf_columns`](skoro_graph::graph::Graph::ensure_leaf_columns).
+    fn ensure_leaf_columns(&self, layout: &TangentLayout) -> SkoroResult<()>;
+
     /// The number of nodes in the underlying graph — the bound a retention policy watches.
     ///
     /// A sliding window retires by policy rather than by bookkeeping, and "how big has this
@@ -417,6 +424,11 @@ impl<B: Backend> ModelReaderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn tangent_layout(&self, ids: &[Id]) -> SkoroResult<TangentLayout> {
         self.server_call(|server| TangentLayout::from_ids(server.graph(), ids))
+    }
+
+    #[inline(always)]
+    fn ensure_leaf_columns(&self, layout: &TangentLayout) -> SkoroResult<()> {
+        self.server_call(|server| server.graph().ensure_leaf_columns(layout.ids()))
     }
 
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>

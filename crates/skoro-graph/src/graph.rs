@@ -1661,6 +1661,30 @@ impl<B: Backend> Graph<B> {
             .ok_or(SkoroError::NotContinuous { id })
     }
 
+    /// Check that every id may be a Jacobian column.
+    ///
+    /// A column is something an estimator moves, so a mapped or log-density node is
+    /// [`SkoroError::MappedColumn`]: the passes collect derivatives only at leaves, and such a
+    /// column would come back silently zero. Every leaf is accepted. A `Constant` or `Observed`
+    /// column is a legitimate zero, and `observe` turns a stochastic column into an observed one
+    /// at the same id, so a layout must not start failing because its state was observed.
+    ///
+    /// An id that is not a node is [`SkoroError::NodeNotFound`].
+    pub fn ensure_leaf_columns(&self, ids: impl IntoIterator<Item = Id>) -> SkoroResult<()> {
+        for id in ids {
+            match self.node(id).ok_or(SkoroError::NodeNotFound { id })? {
+                Node::Mapped(_) | Node::LogLikelihood(_) => {
+                    return Err(SkoroError::MappedColumn { id });
+                }
+                Node::Parameter(_)
+                | Node::Stochastic(_)
+                | Node::Constant(_)
+                | Node::Observed(_) => {}
+            }
+        }
+        Ok(())
+    }
+
     /// One [`Term`] per id in [`log_likelihoods`](Self::log_likelihoods), in that order.
     ///
     /// A term is [`in_density`](Term::in_density) as its node records, and

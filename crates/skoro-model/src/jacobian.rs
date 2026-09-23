@@ -11,24 +11,29 @@
 //! These take a client rather than a graph, which is why they live here and not next to
 //! [`TangentLayout`] in `skoro-graph`.
 //!
-//! # Structural constraint: columns are leaves
-//!
-//! This is a constraint on *how a model is written*, not just on how these functions are
-//! called, and it is not enforced by the type system:
+//! # Columns are leaves, and the rule is enforced
 //!
 //! > **Jacobian columns must be `Parameter` / `Stochastic` leaves.**
 //!
-//! It follows from the compiler, and both passes agree on it. `vjp_forward` collects
-//! cotangents only at `CompiledStep::Parameter` / `Sampler`, so nothing else can be a column.
-//! A column that breaks the rule cannot be distinguished by these functions from the
-//! legitimate case below: a mapped-node column yields a **silently zero column**. That is
-//! the one failure mode here that no return value announces.
+//! A column is something an estimator moves, and an estimator moves the free leaves. Both
+//! functions check their `inputs` before any pass runs, and a `Mapped` or `LogLikelihood` column
+//! is [`SkoroError::MappedColumn`](skoro_core::error::SkoroError::MappedColumn). Without the check
+//! it would come back as a silently zero column, because `vjp_forward` collects cotangents only
+//! at leaf steps, and that zero cannot be told apart from the legitimate one below. The check
+//! runs up front rather than on the pass's output, so it also catches a mapped column that
+//! reaches no row, and one whose constant fold lowered it to a constant step.
 //!
-//! For a filter chain this is natural — `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped
-//! — but a state chain built entirely out of mapped nodes cannot be differentiated
-//! block-to-block. A correlated joint over several quantities is no exception: it is
-//! modelled as a likelihood factor over `Parameter` leaves, and those are ordinary
-//! columns.
+//! `Constant` and `Observed` columns are accepted and come back zero (see the rows section).
+//! `observe` turns a stochastic column into an observed one at the same id, and a filter's
+//! layout must not start failing because it observed its state.
+//!
+//! Interior columns are left out on purpose, not deferred. Optimization never needs one: the
+//! passes already apply the chain rule *through* mapped nodes to reach the free leaves. A
+//! linearization at an interior node, such as `∂h/∂x₁` for `x₁ = f(x₀)` in an all-mapped chain,
+//! is a different question, and
+//! [`Graph::compile_between`](skoro_graph::graph::Graph::compile_between) answers it by cutting
+//! at that node. A correlated joint needs no interior columns either: it is a likelihood factor
+//! over `Parameter` leaves, and those are ordinary columns.
 //!
 //! # Rows may be any continuous node
 //!
@@ -121,14 +126,17 @@ fn fill_leaf_rows<B: Backend>(
 ///
 /// Costs `D_in` frames; prefer [`jacobian_vjp`] when the Jacobian is tall.
 ///
-/// See the [module documentation](self) for the constraint that columns must be leaves,
-/// for how leaf rows are filled, and for what a column that reaches no row does.
+/// A `Mapped` or `LogLikelihood` column is
+/// [`SkoroError::MappedColumn`](skoro_core::error::SkoroError::MappedColumn), checked before the
+/// pass runs. See the [module documentation](self) for why columns must be leaves, for how leaf
+/// rows are filled, and for what a column that reaches no row does.
 pub fn jacobian_jvp<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     inputs: &TangentLayout,
     outputs: &TangentLayout,
 ) -> SkoroResult<Tensor<B, 3>> {
+    client.ensure_leaf_columns(inputs)?;
     let (batch, device) = batch_and_device(points);
     let seeds = inputs.identity_frames(batch, &device);
     let ids: Vec<Id> = outputs.ids().collect();
@@ -161,14 +169,17 @@ pub fn jacobian_jvp<B: Backend, C: ModelReaderOps<B>>(
 /// Costs `D_out` frames; prefer this to [`jacobian_jvp`] when the Jacobian is tall, which
 /// is the usual shape of a least-squares problem.
 ///
-/// See the [module documentation](self) for the constraint that columns must be leaves,
-/// for how leaf rows are filled, and for what a column that reaches no row does.
+/// A `Mapped` or `LogLikelihood` column is
+/// [`SkoroError::MappedColumn`](skoro_core::error::SkoroError::MappedColumn), checked before the
+/// pass runs. See the [module documentation](self) for why columns must be leaves, for how leaf
+/// rows are filled, and for what a column that reaches no row does.
 pub fn jacobian_vjp<B: Backend, C: ModelReaderOps<B>>(
     client: &C,
     points: &ValueMap<B>,
     inputs: &TangentLayout,
     outputs: &TangentLayout,
 ) -> SkoroResult<Tensor<B, 3>> {
+    client.ensure_leaf_columns(inputs)?;
     let (batch, device) = batch_and_device(points);
     let seeds = outputs.identity_frames(batch, &device);
     let ids: Vec<Id> = outputs.ids().collect();

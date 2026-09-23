@@ -33,8 +33,6 @@ needs. What that change stopped short of:
 - **Block-sparse Jacobian storage, and sparse solvers.** What is left of this entry: cut
   compilation, `support(id)` and the compiled-program cache shipped — see
   [graph-compiler.md](graph-compiler.md) — and that document deliberately leaves these two out.
-  Also still open is letting `jacobian_*` take an interior column now that
-  `compile_between` makes one expressible.
 - **Lazily built bindings from a stored distribution object.** Designed since, and postponed;
   see [deferred-bindings.md](deferred-bindings.md).
 - **Any change to sampling, `observe`, `stacked_tangent`, or the discrete kind.**

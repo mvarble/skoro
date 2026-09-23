@@ -220,6 +220,14 @@ exercised. The test that covers it today asserts at the compiler level, that a c
 reported among the variables and not among the constants. Widening `jacobian.rs` is what would
 put the rest of that argument under test.
 
+**Since then the conservative branch has become permanent.** Widening `jacobian_*` was declined
+rather than deferred. Columns are what an estimator moves, and the chain rule already runs through
+mapped nodes to reach them, so `jacobian_jvp` and `jacobian_vjp` now reject a mapped column with
+`SkoroError::MappedColumn` instead of returning a silent zero column. A linearization at an interior
+node goes through `compile_between` directly. The gap-ledger row in [skoro.md](skoro.md) §5 and the
+roadmap entry are retired, and the `Given` identity-block argument above stays reasoned rather than
+exercised.
+
 ---
 
 ## 3. Slot liveness and fusing `log_weight`

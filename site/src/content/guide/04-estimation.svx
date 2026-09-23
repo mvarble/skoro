@@ -25,11 +25,12 @@ The mathematics, and why the Fisher information is the right curvature, is in
 [Fisher scoring](../../concepts/fisher-scoring/).
 
 > [!WARNING] Jacobian columns must be leaves
-> `jacobian_vjp`/`jacobian_jvp` collect derivatives only at `Parameter` and `Stochastic` leaves. A
-> mapped node used as a column yields a **zero column**, which looks the same as a leaf that
-> genuinely doesn't affect the rows. The compiler can now differentiate with respect to interior
-> nodes (see [Compilation](../../concepts/compilation/)), but these two functions still compile
-> uncut.
+> The columns of `jacobian_vjp`/`jacobian_jvp` are what the estimator moves: `Parameter` and
+> `Stochastic` leaves. A mapped node used as a column is rejected with `SkoroError::MappedColumn`.
+> Without that check it would come back as a zero column, indistinguishable from a leaf that
+> doesn't affect the rows. Derivatives already flow *through* mapped nodes to the leaves. To
+> linearize at an interior node, compile with a cut instead (see
+> [Compilation](../../concepts/compilation/)).
 
 > [!NOTE] The residual vector
 > Nothing yet assembles the residual vector $r$ in the same row order as $J$. A caller evaluates the

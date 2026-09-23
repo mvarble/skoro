@@ -24,7 +24,6 @@ order: 5
 | No derivatives of $q$ or of the weight | Gradient-based variational inference |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC |
 | No block-sparse $J$, no sparse solvers | Large models |
-| `jacobian_*` cannot take an interior column | Block-to-block differentiation of an all-mapped chain |
 | No Schur complement / marginal precision | The computational half of marginalization |
 | No estimator, line search, or convergence test | Every deterministic estimator |
 | No `hessian_*` assembly | Newton methods; observed information |

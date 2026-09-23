@@ -424,32 +424,34 @@ Two limits on the boundary:
 `lstsq` commits an algorithm to the host path deliberately: burn 0.21 has no QR, so unlike the other
 factorizations it could not be reimplemented on `Tensor<B, 3>` behind the same name.
 
-### 4.3 The structural trap
-
-This one deserves the prominence its own module gives it, because it fails silently
-(`crates/skoro-model/src/jacobian.rs`):
+### 4.3 The column rule
 
 > **Jacobian columns must be `Parameter` / `Stochastic` leaves.**
 
-`vjp_forward` collects cotangents only at the leaf steps, so nothing else can be a column of a
-Jacobian these functions assemble. A mapped-node column yields a **zero column** — and that is
-indistinguishable from the legitimate case of a leaf that simply has no path to any row, which is an
-ordinary occurrence. It is the one failure mode there that no return value announces.
+A column is something an estimator moves, and an estimator moves the free leaves. `jacobian_jvp` and
+`jacobian_vjp` check their columns before either pass runs, and a `Mapped` or `LogLikelihood` column
+is `SkoroError::MappedColumn` (`crates/skoro-model/src/jacobian.rs`). Before the check, such a column
+came back as a **zero column**, because `vjp_forward` collects cotangents only at leaf steps. That
+zero cannot be told apart from the legitimate zero of a leaf with no path to any row, which is an
+ordinary occurrence. The check runs up front, not on the pass's output, so it also catches a mapped
+column that reaches no row. `information*` inherits it through `jacobian_vjp`.
 
-The restriction is now the API's, not the compiler's. `CompiledStep::Given` is a leaf that collects
-cotangents and may stand for a mapped node, so `compile_between` can differentiate with respect to
-an interior quantity — see [graph-compiler.md](graph-compiler.md) §2. What `jacobian_vjp` and
-`jacobian_jvp` do is compile uncut, which is why the rule above still holds of *them*. Widening them
-to take a cut frontier is separate work, and until it lands the sentence in bold is the one to
-follow.
+`Constant` and `Observed` columns are accepted and come back zero. `observe` turns a stochastic
+column into an observed one at the same id, and a filter's layout must not start failing because it
+observed its state.
 
-For a filter chain this is natural: `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped. But **a state
-chain built entirely out of mapped nodes cannot be differentiated block-to-block.** A correlated
-joint is no exception, and needs no exception: it is modelled as a likelihood factor over `Parameter`
-leaves, and those are ordinary columns.
+Interior columns are **left out by design, not deferred**. Optimization never needs one: the passes
+already apply the chain rule *through* mapped nodes to reach the leaves. For a filter chain this is
+natural, since `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped. A linearization at an interior
+node is a different question, for example `∂h/∂x₁` where `x₁ = f(x₀)` in an all-mapped chain.
+`compile_between` answers it: `CompiledStep::Given` is a leaf that collects cotangents and may stand
+for a mapped node (see [graph-compiler.md](graph-compiler.md) §2). A correlated joint needs no
+interior column either. It is modelled as a likelihood factor over `Parameter` leaves, and those are
+ordinary columns.
 
-Rows are unrestricted — any continuous node works, and leaf rows are filled in by `jacobian.rs`
-rather than by either pass, since `∂x/∂x` is the identity and neither pass would seed it.
+Rows are unrestricted. Any continuous node works, and `jacobian.rs` fills in leaf rows itself
+rather than leaving them to either pass, since `∂x/∂x` is the identity and neither pass would seed
+it.
 
 ### 4.4 What is missing around the loop
 
@@ -482,7 +484,6 @@ unless noted.
 | No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
 | No block-sparse `J`, no sparse solvers | Large models, rather than any one algorithm | `roadmap.md` |
-| `jacobian_*` cannot take an interior column | Block-to-block differentiation of an all-mapped chain (§4.3) | `graph-compiler.md` §2.6 — `compile_between` makes it expressible; the API is unchanged |
 | No Schur complement / marginal precision | Marginalization's computation half (§3.3) | Was the old doc's GAP 2 |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
 | No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
