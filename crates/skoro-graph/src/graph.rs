@@ -353,9 +353,9 @@ impl<B: Backend> Graph<B> {
     }
 
     /// Whether `id` is a node this graph built for itself and never handed out — an anchor or
-    /// per-block tangent of a [`stacked_tangent`](Self::stacked_tangent). Such nodes carry no
-    /// handle, so a garbage collector may treat a childless one as reclaimable where an ordinary
-    /// constant may still be named by an [`Id`] the caller kept.
+    /// per-block tangent of a [`stacked_tangent`](Self::stacked_tangent). No caller can name one,
+    /// so [`remove_closure`](Self::remove_closure) takes a childless one along with the closure
+    /// that orphaned it.
     pub fn is_private(&self, id: Id) -> bool {
         self.private_nodes.contains(&id)
     }
@@ -841,12 +841,12 @@ impl<B: Backend> Graph<B> {
     /// quantities, as one `EuclideanD(Σ di)` node.
     ///
     /// This is what lets a single factor score a runtime collection of *several* quantities at
-    /// once, joint likelihood over a Markov blanket needs and which no distribution can express
-    /// -- a distribution is designed to have a [`Sampler`](skoro_core::sampler::Sampler) which is
-    /// over one quantity type. This is deliberately **not** a product manifold: the members keep
-    /// their own ids, their own storage, and their own children, and only their *tangents* are
-    /// stacked. A product would have to re-home them into one merged quantity, which is exactly
-    /// what [`demote_to_parameter`](Self::demote_to_parameter) exists to avoid.
+    /// once. A joint likelihood over a Markov blanket needs exactly that, and no distribution can
+    /// express it -- a distribution is designed to have a [`Sampler`], which is over one quantity
+    /// type. This is deliberately **not** a product manifold: the members keep their own ids,
+    /// their own storage, and their own children, and only their *tangents* are stacked. A
+    /// product would have to re-home them into one merged quantity, which is exactly what
+    /// [`demote_to_parameter`](Self::demote_to_parameter) exists to avoid.
     ///
     /// Each `pi` is frozen as a batch-pinned [`Constant`](crate::node::ConstantNode) of
     /// `xi`'s own quantity type. That is the point of the call rather than an implementation
@@ -855,11 +855,11 @@ impl<B: Backend> Graph<B> {
     /// a batch of `N` independent problems carries `N` independent linearization points --
     /// and the graph is thereafter pinned to that batch.
     ///
-    /// The anchor points `pi` and residual tangents `xi ⊖ pi` are not reachable by a downstream
-    /// walk of any quantity returned by the graph's quantity-builder methods. The only relevant
-    /// quantities accessible to the caller are the `xi` quantities and the output `δ`, so the
-    /// anchor points and residual tangents are held within an arena of private nodes in the graph
-    /// which may only be removed via [`remove_closure`](Self::remove_closure).
+    /// The anchor points `pi` and residual tangents `xi ⊖ pi` are never handed to the caller, who
+    /// holds only the `xi` and the output `δ`. They are recorded as private nodes
+    /// ([`is_private`](Self::is_private)): [`remove_closure`](Self::remove_closure) reclaims one
+    /// as soon as nothing points at it, and a model's mark-and-sweep collects them with `δ`,
+    /// since they are its ancestors and not roots.
     pub fn stacked_tangent(&mut self, at: &PointMap<B>, ids: &[Id]) -> SkoroResult<Id> {
         if ids.is_empty() {
             return Err(SkoroError::ShapeMismatch {

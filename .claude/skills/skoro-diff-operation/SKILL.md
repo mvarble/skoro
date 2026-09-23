@@ -64,7 +64,7 @@ This is where essentially every bug in this workspace has lived. `DiffModeState:
 - **`diffs[j]`** — does input `j` trace back to a free variable? Comes from
   `is_differentiable_parent` in `crates/skoro-graph/src/graph.rs`: constants and observed nodes
   are `false`. A cut boundary overrides it — see `is_differentiable_input` beside it, and
-  `docs/graph-compiler.md` §2.3 — because a supplied free variable is differentiable whatever
+  `docs/skoro.md` §4.5 — because a supplied free variable is differentiable whatever
   the node it stands for was. **This gates `VjpState`.**
 - **`tangents[j]`** — was input `j` seeded with a tangent for _this_ HVP pass? **This gates
   `HvpState`.**

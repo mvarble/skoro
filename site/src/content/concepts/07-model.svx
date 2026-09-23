@@ -29,9 +29,19 @@ else goes through two traits:
 
 ## Ownership and collection
 
-A `Q` is an **ownership token**; a bare `Id` is a weak reference. `cleanup` is mark-and-sweep, and
-its roots are the ids named by live handles plus the model's likelihood terms. It follows parent
-edges, bindings, and the edge from each term to the quantity it scores. Three properties follow:
+A `Q` is an **ownership token**; a bare `Id` is a weak reference. `cleanup` is a mark-and-sweep
+garbage collector:
+
+- **Mark** walks out from the *roots*, the ids named by live handles plus every term in the
+  model's likelihood arena, and marks what it reaches. Marked means keep.
+- **Sweep** removes every unmarked node, children before parents, through the same leaf-only
+  `remove` a caller would use.
+
+Marking follows *references*, from a node to what it depends on: its parents, the quantity a
+density scores (even one it does not read), and every node it binds. It never walks downward, so
+holding `x` does not keep a child `y = f(x)` alive; only a handle on `y`, or a term that reads it,
+does. Because every term is a root, a sweep can never change $\log p$ or $\log q$. Three
+properties follow:
 
 - Nothing has to *report* orphaning; reachability is recomputed.
 - Every node kind is collectable, including constants and parameters nothing reaches.
@@ -39,7 +49,14 @@ edges, bindings, and the edge from each term to the quantity it scores. Three pr
 
 It runs at the mutations that *reduce* reachability (`remove`, `remove_closure`,
 `demote_to_parameter`) and not on the way in, because sweeping on every `add_*` would make building
-an $n$-node model cost $O(n^2)$.
+an $n$-node model cost $O(n^2)$. Dropping a `Q` never collects by itself: it only marks the
+registry dirty, and the next `cleanup` does the work.
+
+> [!WARNING] A collected parameter leaves the free set
+> A `Parameter` that no handle names and no term reads is garbage like anything else. That
+> changes neither density, but it takes the parameter out of the model's free set, and a bare
+> `Id` or a `TangentLayout` built over it earlier then fails with `NodeNotFound`. Keep a `Q` for
+> anything you mean to optimize.
 
 > [!DECISION]
 > See [Handles own nodes](../../design/ownership/).

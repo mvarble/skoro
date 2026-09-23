@@ -2,8 +2,8 @@
 
 Work that two shipped specs deliberately put out of scope. None of what remains here is planned
 or designed; this is a list of what was consciously left undone, not a backlog anyone has
-committed to. The compiler entries have since been built and are recorded in
-[graph-compiler.md](graph-compiler.md); what is left of them is noted where they stood.
+committed to. The compiler entries have since been built and are described in
+[skoro.md](skoro.md) §4.5; what is left of them is noted where they stood.
 
 ## From the proposal-only terms work
 
@@ -31,8 +31,8 @@ needs. What that change stopped short of:
   a root, which is what keeps `information_root` and the gradient it is solved against covering the
   same terms. `docs/fisher-scoring.md` §7 states the condition and §8 the failure it prevents.
 - **Block-sparse Jacobian storage, and sparse solvers.** What is left of this entry: cut
-  compilation, `support(id)` and the compiled-program cache shipped — see
-  [graph-compiler.md](graph-compiler.md) — and that document deliberately leaves these two out.
+  compilation, `support(id)` and the compiled-program cache shipped (see
+  [skoro.md](skoro.md) §4.5), and that work deliberately left these two out.
 - **Lazily built bindings from a stored distribution object.** Designed since, and postponed;
   see [deferred-bindings.md](deferred-bindings.md).
 - **Any change to sampling, `observe`, `stacked_tangent`, or the discrete kind.**

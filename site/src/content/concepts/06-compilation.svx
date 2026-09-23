@@ -17,9 +17,16 @@ it invokes.
 ## Caching, keyed by epoch
 
 Compiled sequences are cached. A target list alone is **not** a sound key: `observe`,
-`demote_to_parameter` and `remove` change a node's kind or value at a fixed `Id`, which changes which
-inputs are differentiable, and so the compiled program. The key is `(epoch, targets)`, and the graph
-bumps its epoch on every such mutation.
+`demote_to_parameter`, `remove` and constant folding change a node's kind or value at a fixed `Id`,
+which changes which inputs are differentiable, and so the compiled program. The key is
+`(epoch, cuts, targets)`, and every graph mutator bumps the epoch, the `add_*` family included, so
+the rule has no exceptions to remember.
+
+- **Targets are keyed verbatim.** Their order fixes the step order and so every slot index, so
+  `[a, b]` and `[b, a]` are different programs. Cuts are sorted and deduplicated, because only
+  their membership matters.
+- **The cache is bounded.** Past `MAX_CACHED_SEQUENCES` distinct keys in one epoch it clears
+  itself rather than growing, and a cloned `Graph` starts with an empty cache.
 
 Repeated evaluation without mutation (a Fisher-scoring loop, for example) benefits. A workload that
 mutates every tick (a sliding window) clears the cache every tick and gains nothing. That is
@@ -36,6 +43,15 @@ the caller supplies, and still differentiates with respect to that frontier.
 > silently wrong. Cut nodes lower to a dedicated `Given` step: a leaf whose value is supplied and
 > whose cotangent is collected, like a parameter.
 
+A `Given` value comes from `points` (`MissingPoint` if it is absent) and is reported among the
+output's `variables`, beside the parameters. A cut at a node that is already a leaf is a no-op, and
+a cut that no target reaches is ignored.
+
+The Jacobian assemblers (`jacobian_jvp`, `jacobian_vjp`) deliberately do not take cuts: their
+columns are the leaves an estimator moves, and a mapped column is rejected with
+`SkoroError::MappedColumn`. A linearization at an interior node goes through `compile_between`
+directly. See [Estimation](../../guide/estimation/).
+
 `Graph::support(id)` is the forward counterpart: the nodes that depend on `id`, sorted for
 determinism.
 
@@ -45,6 +61,10 @@ Each operation slot is released at the last step that reads it, a fact computed 
 (`CompiledSequence::last_use`). Only operation slots are dropped. Leaf slots stay alive, because
 the VJP pass reads them after the tape has run.
 
+`log_weight` evaluates $\log p$ and $\log q$ in one program rather than two, through
+`Graph::log_density_terms_signed`.
+
 > [!NOTE]
-> The full design, including the tests that pin each failure mode, is in
-> [`docs/graph-compiler.md`](https://github.com/mvarble/skoro/blob/main/docs/graph-compiler.md).
+> `docs/skoro.md` §4.5 summarizes the same design. The tests that pin each failure mode are in
+> `crates/skoro-graph/tests/`: `compiler_cache.rs`, `cut_compilation.rs`, `slot_liveness.rs` and
+> `signed_terms.rs`.

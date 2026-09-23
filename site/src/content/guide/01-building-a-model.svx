@@ -59,7 +59,9 @@ The operations that exist depend on the quantity's type: matrix products for mat
 
 A `Q` is an **ownership token**. When every handle that reaches a node has been dropped, and no
 likelihood term reaches it, the node is garbage and a later `cleanup()` reclaims it. A bare `Id`
-(from `q.id()`) is a *weak* reference, and it may name nothing after a cleanup.
+(from `q.id()`) is a *weak* reference, and it may name nothing after a cleanup. That includes a
+parameter: one that no handle names and no term reads is collected too, so keep a `Q` for anything
+you mean to optimize.
 
 > [!DECISION]
 > Garbage collection is mark-and-sweep from live handles and terms. See

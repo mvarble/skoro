@@ -1,6 +1,6 @@
 ---
 title: Host linear algebra
-summary: skoro-dense. f64 Cholesky, triangular and SPD solves, and column-pivoted QR least squares on the host via faer, and why the estimator's solve lives outside the graph.
+summary: skoro-dense. f64 Cholesky, triangular and SPD solves, column-pivoted QR least squares, and the whitening of a precision on the host via faer, and why the estimator's solve lives outside the graph.
 order: 10
 ---
 
@@ -19,6 +19,14 @@ so the batch axis is handled *around* the factorizations rather than inside them
 ```
 {../../../../crates/skoro-dense/src/lib.rs:15..29}
 ```
+
+## The six entry points
+
+`skoro_dense::factor` has six functions, all in the `skoro` prelude and all returning
+`SkoroResult`: `cholesky`, `solve_lower`, `solve_upper`, `spd_solve`, `lstsq`, and
+`whitening_from_precision`. The last turns a precision $\Lambda$ into a lower-triangular $W$ with
+$W\transpose W = \Lambda$, packed for a `Tril` quantity, which is the host step a marginalization
+needs to attach its joint factor.
 
 ## The boundary is two tensors wide
 

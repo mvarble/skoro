@@ -1,12 +1,13 @@
 //! Factorizations and solves over [`Dense`], backed by `faer`.
 //!
-//! All five entry points return [`SkoroResult`]. That is the design argument made
+//! All six entry points return [`SkoroResult`]. That is the design argument made
 //! structural: a matrix that has stopped being positive definite is a condition the caller
 //! must be able to observe, not a `NaN` that surfaces several thousand iterations later.
 //!
-//! Four of the five could be reimplemented on `Tensor<B, 3>` behind the same names if a
-//! batched consumer ever appears. [`lstsq`] could not — `burn` 0.21 has no QR. An
-//! algorithm written against it is committed to the host path, deliberately.
+//! Five of the six could be reimplemented on `Tensor<B, 3>` behind the same names if a
+//! batched consumer ever appears — [`whitening_from_precision`] is a composition of three of the
+//! others. [`lstsq`] could not — `burn` 0.21 has no QR. An algorithm written against it is
+//! committed to the host path, deliberately.
 
 use faer::linalg::solvers::{ColPivQr, Llt, Solve, SolveLstsq};
 use faer::linalg::triangular_solve::{

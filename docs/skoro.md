@@ -445,7 +445,7 @@ already apply the chain rule *through* mapped nodes to reach the leaves. For a f
 natural, since `x_k` is a leaf and `f(x_k)`, `h(x_k)` are mapped. A linearization at an interior
 node is a different question, for example `∂h/∂x₁` where `x₁ = f(x₀)` in an all-mapped chain.
 `compile_between` answers it: `CompiledStep::Given` is a leaf that collects cotangents and may stand
-for a mapped node (see [graph-compiler.md](graph-compiler.md) §2). A correlated joint needs no
+for a mapped node (see `Graph::compile_between` and §4.5). A correlated joint needs no
 interior column either. It is modelled as a likelihood factor over `Parameter` leaves, and those are
 ordinary columns.
 
@@ -457,19 +457,49 @@ it.
 
 - **No `Estimator` abstraction**, and no line search, trust region, damping schedule, or convergence
   test. `lstsq` gives the undamped step and documents damping as the caller's job.
-- **No compiled-program cache.** `information_blocks` compiles twice per call — one reverse pass over
-  the union of the terms' arguments, one evaluation of every root — and a solver loop pays that every
-  iteration. Nothing caches a compiled program.
 - **No dense second-order assembly.** `log_density_ord2`, `evaluate_hvp` and friends are reachable
   from `ModelReaderOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
   basis, and there is **no `hessian_*` mirroring `jacobian_jvp` / `jacobian_vjp`**. Materializing a
   Hessian is a `D_in`-call loop the caller writes, with none of `jacobian.rs`'s layout flattening or
   leaf-row fill-in. Note that `information*` is the *Fisher* information, not the Hessian.
-- **No sparsity anywhere.** `Dense::matmul` is a triple loop with a zero-skip; there is no LU, SVD,
-  eigendecomposition, iterative solver, or sparse storage.
+- **No sparsity on the host.** `Dense::matmul` is a triple loop with a zero-skip; there is no LU,
+  SVD, eigendecomposition, iterative solver, or sparse storage in `skoro-dense`. The one sparse
+  object in the tree is `SparseLinearMap`, a fixed sparse matrix applied *inside* the graph.
 
-One thing that is *not* missing: the directional `_jvp` / `_vjp` / `_hvp` primitives are on
-`ModelReaderOps`, so an estimator bounded on the read tier does get raw access to them.
+Two things that are *not* missing. The directional `_jvp` / `_vjp` / `_hvp` primitives are on
+`ModelReaderOps`, so an estimator bounded on the read tier does get raw access to them. And compiled
+programs are cached (§4.5): `information_blocks` compiles twice per call, but a solver loop that does
+not mutate the model between iterations pays for those two compiles once.
+
+### 4.5 The compiler underneath
+
+Every evaluation above compiles the part of the graph it needs into a `CompiledSequence`, a flat,
+index-based list of steps, and one sequence serves all four passes (`forward`, `jvp_forward`,
+`vjp_forward`, `hvp_forward`). Three properties an estimator leans on:
+
+- **Programs are cached, keyed on `(epoch, cuts, targets)`.** A target list alone is not a sound key:
+  `observe`, `demote_to_parameter`, `remove` and constant folding change a node's kind or value at a
+  fixed `Id`, which changes which inputs are differentiable. So every graph mutator bumps an epoch,
+  including the `add_*` family, and a changed epoch drops the whole cache. Targets are keyed verbatim,
+  because their order fixes every slot index; cuts are sorted and deduplicated, because only their
+  membership matters. The cache clears itself past `MAX_CACHED_SEQUENCES` rather than growing, and a
+  cloned `Graph` starts with an empty one. A workload that mutates every tick, such as the sliding
+  window, clears the cache every tick and gains nothing from it. That is expected.
+- **A compile can be cut.** `Graph::compile_between(cuts, targets)` stops at a frontier of interior
+  nodes whose values the caller supplies. The trap it avoids: a cut must not lower to a constant step,
+  or every consumer below it is marked non-differentiable and the values come back right while the
+  derivatives come back silently wrong. A cut node lowers to `CompiledStep::Given` instead, a leaf
+  whose value comes from `points` (`MissingPoint` if absent) and whose cotangent is collected, like a
+  parameter's; it is reported among `ForwardOutput::variables`. `Graph::support(id)` is the forward
+  counterpart, the nodes that depend on `id`, sorted. The Jacobian functions deliberately do not take
+  cuts (§4.3).
+- **Dead slots are released.** `CompiledSequence::last_use` records each slot's last reader, and a pass
+  drops an operation slot there. Leaf slots are never dropped, because the VJP pass reads them after
+  the tape has run. `log_weight` evaluates both of its sums in one program, through
+  `Graph::log_density_terms_signed`.
+
+The tests that pin each failure mode are `crates/skoro-graph/tests/compiler_cache.rs`,
+`cut_compilation.rs`, `slot_liveness.rs` and `signed_terms.rs`.
 
 ---
 
@@ -523,19 +553,7 @@ rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 
 ## 6. Where the in-tree documentation is stale
 
-Observations, with paths. Repairing them is separate work this document does not do.
-
-- **`skoro-dense`** — both `lib.rs` and `factor.rs` say "five" entry points. There are six:
-  `whitening_from_precision` came later. It is also **not in the prelude**
-  (`crates/skoro/src/lib.rs` exports `cholesky`, `lstsq`, `solve_lower`, `solve_upper`, `spd_solve`
-  only), although it is exactly the host crossing a marginalization needs — reaching it means naming
-  `skoro_dense::factor::whitening_from_precision`.
-- **`ModelServer::demote_to_parameter`** — its closing paragraph says the graph reports each thing
-  the demotion orphaned, "because none of them is an event a later pass could reconstruct." The
-  mark-and-sweep `cleanup` it calls documents the opposite, and is right: reachability is recomputed,
-  not reported.
-- **`ModelServer::cleanup`** — refers to "the previous candidate-queue collector" as context. That
-  collector is gone; the reference will read as a live comparison to someone who never saw it.
-- **`graph.rs`, on `stacked_tangent`** — a dropped clause: "This is what lets a single factor score a
-  runtime collection of *several* quantities at once, joint likelihood over a Markov blanket needs
-  and which no distribution can express".
+None known. The four spots this section listed were repaired on 2026-09-23: the `skoro-dense` entry
+point count (six, with `whitening_from_precision` now in the prelude), `demote_to_parameter`'s claim
+that the graph reports what it orphans, `cleanup`'s references to the collector it replaced, and a
+dropped clause on `stacked_tangent`. Record a new one here with its path.

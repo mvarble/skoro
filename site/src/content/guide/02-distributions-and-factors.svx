@@ -28,6 +28,12 @@ A `Distribution` supplies its quantity type, a sampler, its parent ids, and a `f
 A **factor** is a log-density node plus the **bindings** the distribution declares for it. A
 binding `(term, role, node)` says that `node` plays `role` for the term.
 
+`Factor.bindings` is a *request*, not a store. The model copies each binding into the graph once,
+just after it marks the density, and then drops the `Factor`; `factors()` reads the graph, never
+the field. The field holds handles rather than recording bindings directly for two reasons: a bound
+node such as a residual is usually not an ancestor of the log-density, so until it is bound the
+handle is all that keeps the collector off it; and `factor` only has `Q`s, which cannot `bind`.
+
 ## Roles
 
 | Role | Meaning | Per term |
@@ -49,6 +55,8 @@ binding `(term, role, node)` says that `node` plays `role` for the term.
 ## Free-standing factors
 
 `add_factor(factor, &arguments)` attaches a likelihood term over quantities the model already holds.
+A factor built against another model is refused with `SkoroError::ModelMismatch` before anything is
+marked, whether it arrives through the client or the server.
 This is what a joint over several quantities uses, for example what marginalizing a quantity out
 leaves behind (`skoro_normal::joint::add_joint_factor`).
 

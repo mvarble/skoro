@@ -274,8 +274,8 @@ impl<B: Backend> ModelServer<B> {
     ///
     /// Everything the demotion made unreachable is collected before returning — the orphaned
     /// density, the subgraph it was holding up, the residual and Fisher root it bound, and the
-    /// parent edges the old distribution owned. The graph reports each of those, because none of them
-    /// is an event a later pass could reconstruct.
+    /// parents the old distribution alone was reading. Nothing has to report those: the
+    /// [`cleanup`](Self::cleanup) this ends with recomputes reachability from the roots.
     ///
     /// Returns an error if the quantity does not exist or is neither stochastic nor
     /// already a parameter.
@@ -327,15 +327,14 @@ impl<B: Backend> ModelServer<B> {
     ///
     /// A mark-and-sweep from an explicit root set, run against the graph's shape as it stands
     /// rather than against anything recorded when a handle died. Three consequences worth
-    /// stating, because the previous collector had none of them:
+    /// stating:
     ///
-    /// - **Nothing has to report an orphaning.** Losing an edge is not an event a later pass
-    ///   could reconstruct, which is why the old candidate-queue collector needed every
-    ///   mutation to hand back what it severed. Reachability is not an event either: it is
-    ///   just a property of the graph, recomputed here.
+    /// - **Nothing has to report an orphaning.** No mutation hands back what it severed.
+    ///   Reachability is a property of the graph, recomputed here, not an event a mutation has
+    ///   to announce and a later pass has to remember.
     /// - **Every node kind is collectable.** A `Constant` or `Parameter` nothing reaches is
-    ///   garbage exactly as a `Mapped` node is. The old rule spared them on the grounds that
-    ///   a caller might hold a bare [`Id`], and leaked every temporary constant to do it.
+    ///   garbage exactly as a `Mapped` node is. Sparing leaves because a caller might hold a
+    ///   bare [`Id`] would leak every temporary constant; a bare `Id` is a weak reference.
     /// - **The sweep cannot fail.** See below.
     ///
     /// **The roots** are the ids a live [`Q`](crate::q::Q) names and the graph's likelihood
@@ -368,8 +367,8 @@ impl<B: Backend> ModelServer<B> {
     /// **When this runs, and when it does not.** Here, and at the end of the mutations that
     /// reduce reachability — [`remove`](Self::remove), [`remove_closure`](Self::remove_closure),
     /// [`demote_to_parameter`](Self::demote_to_parameter). Deliberately **not** on the way in:
-    /// adding a node cannot create garbage, and sweeping before every `add_*` — which is what
-    /// the previous collector did — makes building an `n`-node model cost `O(n²)`. So a
+    /// adding a node cannot create garbage, and sweeping before every `add_*` would make
+    /// building an `n`-node model cost `O(n²)`. So a
     /// workload that only grows, building temporaries and dropping their handles without ever
     /// removing or demoting anything, holds that garbage until it asks. `graph_node_count` is
     /// the bound such a caller watches, and this is what it calls. A sliding window, which

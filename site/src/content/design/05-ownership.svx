@@ -27,7 +27,13 @@ edges. A bare `Id` is a weak reference. Collection runs at the mutations that re
 
 ## Alternatives considered
 
-A candidate-queue collector preceded this one, driven by mutations reporting what they orphaned.
+A candidate-queue collector preceded this one. It kept a queue of ids that *might* be garbage and
+popped each one once, so a "not yet" verdict was final. Take `y = f(x)` and `z = g(y)` with both
+handles dropped: examining `z` took it and made `y` a leaf, but `y` had already been popped and
+stayed in the graph for good unless some later mutation offered it again. So every mutation that
+reduced reachability had to hand back what it orphaned. That obligation was spread across five
+call sites and enforced by nothing. The old rule also spared every `Constant` and `Parameter`, in
+case a caller still held a bare `Id`, and so leaked every temporary constant.
 
-> [!TODO]
-> Say what went wrong with the candidate-queue collector that made mark-and-sweep worth the switch.
+Mark-and-sweep takes `z` and `y` in one pass, because neither is marked, and nothing has to report
+anything: reachability is a property of the graph, not an event.

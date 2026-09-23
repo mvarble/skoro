@@ -117,7 +117,9 @@ pub mod prelude {
 
     // ----- host dense linear algebra (estimators only; batch 1, f64) -----
     pub use skoro_dense::dense::Dense;
-    pub use skoro_dense::factor::{cholesky, lstsq, solve_lower, solve_upper, spd_solve};
+    pub use skoro_dense::factor::{
+        cholesky, lstsq, solve_lower, solve_upper, spd_solve, whitening_from_precision,
+    };
 
     // ----- linear algebra & pointwise op traits (operator/method sugar on Q) -----
     pub use skoro_linalg::matrix::{
