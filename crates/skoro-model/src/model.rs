@@ -39,8 +39,10 @@ lazy_static! {
 }
 
 /// The stateful engine wrapping the probabilistic DAG.
-#[derive(Default)]
 pub struct ModelServer<B: Backend> {
+    /// Issued once at construction. Every [`ModelClient`] of this server carries the same id, and
+    /// a handle names its model by it.
+    server_id: Id,
     graph: Graph<B>,
     pub device: B::Device,
     handles: Arc<HandleRegistry>,
@@ -49,20 +51,35 @@ pub struct ModelServer<B: Backend> {
 impl<B: Backend> std::fmt::Debug for ModelServer<B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ModelServer")
+            .field("server_id", &self.server_id)
             .field("graph", &self.graph)
             .field("device", &self.device)
             .finish_non_exhaustive()
     }
 }
 
+impl<B: Backend> Default for ModelServer<B> {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
 impl<B: Backend> ModelServer<B> {
-    /// Create a new model server.
+    /// Create a new model server, with a fresh id.
     pub fn new(device: B::Device) -> Self {
         Self {
+            server_id: SERVER_GENERATOR.issue_id(),
             graph: Graph::new(),
             device,
             handles: Arc::new(HandleRegistry::default()),
         }
+    }
+
+    /// The id every handle into this model carries, and that its clients report as
+    /// [`ModelClient::server_id`].
+    #[inline(always)]
+    pub fn server_id(&self) -> Id {
+        self.server_id
     }
 
     /// Read-only access to the graph.
@@ -186,12 +203,11 @@ impl<B: Backend> ModelServer<B> {
     /// Mark `factor`'s log-density as a free-standing likelihood term, bind
     /// [`ARGUMENT`] to each of `arguments` in order, then bind every role `factor` declares.
     ///
-    /// Returns [`SkoroError::ShapeMismatch`] before changing anything if `arguments` is empty: a
-    /// term has at least one argument.
-    ///
-    /// The server cannot tell whether `factor` was built against it; a handle from another model
-    /// names an id in that model's graph. [`ModelClient::add_factor`] checks that, so prefer it.
+    /// Returns [`SkoroError::ModelMismatch`] before changing anything if the factor's
+    /// log-density or any node it binds belongs to another model, and
+    /// [`SkoroError::ShapeMismatch`] if `arguments` is empty: a term has at least one argument.
     pub fn add_factor(&mut self, factor: &Factor<B>, arguments: &[Id]) -> SkoroResult<()> {
+        self.check_factor_model(factor)?;
         if arguments.is_empty() {
             return Err(SkoroError::ShapeMismatch {
                 expected: 1,
@@ -200,6 +216,21 @@ impl<B: Backend> ModelServer<B> {
         }
         self.mark_likelihood(&factor.log_density)?;
         self.bind_factor(factor, arguments)
+    }
+
+    /// Refuse a factor built against another model. Its handles name ids in that model's graph,
+    /// which here would name unrelated nodes — or none — and be bound without complaint.
+    pub(crate) fn check_factor_model(&self, factor: &Factor<B>) -> SkoroResult<()> {
+        let foreign = std::iter::once(&factor.log_density.client)
+            .chain(factor.bindings.iter().map(|(_, handle)| &handle.client))
+            .find(|client| client.server_id != self.server_id);
+        match foreign {
+            Some(client) => Err(SkoroError::ModelMismatch {
+                lhs: self.server_id,
+                rhs: client.server_id,
+            }),
+            None => Ok(()),
+        }
     }
 
     /// Bind [`ARGUMENT`] to each of `arguments`, then every role `factor` declares.
@@ -631,6 +662,8 @@ impl Drop for NodeDropGuard {
 /// A lightweight, clonable client handle to a specific `ModelServer`.
 #[derive(Debug)]
 pub struct ModelClient<B: Backend> {
+    /// The id of the server this client talks to, copied from [`ModelServer::server_id`] so that
+    /// comparing two handles' models takes no lock.
     pub server_id: Id,
     server: Arc<RwLock<ModelServer<B>>>,
     _phantom: PhantomData<B>,
@@ -646,8 +679,9 @@ impl<B: Backend> ModelClient<B> {
     /// Creates a new server and returns a client handle to it. The server lives as long as at
     /// least one `ModelClient` holds a strong reference.
     pub fn new(device: B::Device) -> Self {
-        let server_id = SERVER_GENERATOR.issue_id();
-        let server = Arc::new(RwLock::new(ModelServer::<B>::new(device)));
+        let server = ModelServer::<B>::new(device);
+        let server_id = server.server_id();
+        let server = Arc::new(RwLock::new(server));
         Self {
             server_id,
             server,
@@ -800,11 +834,11 @@ impl<B: Backend> ModelClient<B> {
         D: Distribution<B, K>,
     {
         let factor = distr.factor(x)?;
-        self.check_factor_model(&factor)?;
 
         // again, slow... but now we mark the mapped quantity as a density and record its
         // bindings. `factor` is still alive here, so nothing it binds can have been collected.
         let mut server = self.server.write().unwrap();
+        server.check_factor_model(&factor)?;
         if in_log_density {
             server.mark_density(&factor.log_density, x)?;
         } else {
@@ -864,29 +898,13 @@ impl<B: Backend> ModelClient<B> {
     /// declares. See [`ModelServer::add_factor`].
     ///
     /// Returns [`SkoroError::ModelMismatch`] before changing anything if the factor's
-    /// log-density or any node it binds belongs to another model.
+    /// log-density or any node it binds belongs to another model; the server checks it.
     pub fn add_factor(&self, factor: Factor<B>, arguments: &[Id]) -> SkoroResult<Q<B, Real>> {
-        self.check_factor_model(&factor)?;
         self.server
             .write()
             .unwrap()
             .add_factor(&factor, arguments)?;
         Ok(factor.log_density)
-    }
-
-    /// Refuse a factor built against another model. Its handles name ids in that model's graph,
-    /// which here would name unrelated nodes — or none — and be bound without complaint.
-    fn check_factor_model(&self, factor: &Factor<B>) -> SkoroResult<()> {
-        let foreign = std::iter::once(&factor.log_density.client)
-            .chain(factor.bindings.iter().map(|(_, handle)| &handle.client))
-            .find(|client| client.server_id != self.server_id);
-        match foreign {
-            Some(client) => Err(SkoroError::ModelMismatch {
-                lhs: self.server_id,
-                rhs: client.server_id,
-            }),
-            None => Ok(()),
-        }
     }
 
     /// Impose a posterior by observing a stochastic quantity at a specified value.

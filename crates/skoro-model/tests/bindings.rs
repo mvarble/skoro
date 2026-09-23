@@ -22,7 +22,7 @@ use skoro_model::{
     hash_map_builders::points,
     least_squares::residual_layout,
     map::register_map1,
-    model::ModelClient,
+    model::{ModelClient, ModelServer},
     q::Q,
     roles::{ARGUMENT, RESIDUAL},
 };
@@ -347,6 +347,34 @@ mod through_add_factor {
         // Refused before marking or binding anything.
         assert!(model.factors().is_empty());
         assert!(model.bindings_of(term.id()).is_empty());
+    }
+
+    /// The server makes the same refusal on its own, so a caller that reaches it without a client
+    /// is not handed a foreign factor's ids to bind.
+    #[test]
+    fn a_server_refuses_a_factor_from_another_model() {
+        let model = ModelClient::<B>::default();
+        let (theta, term) = a_term(&model);
+        let mut server = ModelServer::<B>::default();
+        assert_ne!(server.server_id(), model.server_id);
+
+        assert!(matches!(
+            server.add_factor(&Factor::new(term), &[theta.id()]),
+            Err(SkoroError::ModelMismatch { lhs, rhs })
+                if lhs == server.server_id() && rhs == model.server_id
+        ));
+        assert!(server.graph().log_likelihoods().is_empty());
+    }
+
+    /// A client reports its server's id, which is what the server checks handles against.
+    #[test]
+    fn a_client_carries_its_servers_id() {
+        let model = ModelClient::<B>::default();
+        assert_eq!(
+            model.server_call(|server| server.server_id()),
+            model.server_id
+        );
+        assert_ne!(ModelClient::<B>::default().server_id, model.server_id);
     }
 
     #[test]

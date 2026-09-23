@@ -8,16 +8,7 @@ once their work landed. Recover any of it from `git show 2948f6d:docs/superpower
 
 What is actually left:
 
-## 1. `ModelServer::add_factor` cannot check model identity
-
-`ModelClient::add_factor` (`crates/skoro-model/src/model.rs:886`) refuses a `Factor` built
-against another model, via `check_factor_model`. The server method
-(`crates/skoro-model/src/model.rs:200`) cannot: `ModelServer` has no `server_id` field, so it
-binds a foreign factor's ids without complaint. Its docs point at the client method instead.
-
-Storing the id on `ModelServer` would let the server check too. Small, unscheduled.
-
-## 2. `retire_density_of` is not atomic on its error paths
+## 1. `retire_density_of` is not atomic on its error paths
 
 `Graph::retire_density_of` (`crates/skoro-graph/src/graph.rs`) removes the
 `stochastic_to_log_density` entry first and only then looks the density node up, so its two
@@ -35,13 +26,13 @@ that is the reasoning a fix would have to preserve. Found while auditing mutator
 gaps in `remove` and `register_children` were reachable and were fixed there. Left alone here
 because a fix without a failing test to drive it would be speculative.
 
-## 3. Four `skoro-so3` `wgpu_f32` tests fail
+## 2. Four `skoro-so3` `wgpu_f32` tests fail
 
 Pre-existing as of `91d4270`, before the bindings work, and unrelated to it. They are f32 GPU
 tolerance misses — for example a scaled error of 2.3e-6 against a 1e-6 bound. Needs a GPU to
 reproduce; not verified recently. Separate `skoro-so3` work.
 
-## 4. Deferred bindings — postponed, design kept
+## 3. Deferred bindings — postponed, design kept
 
 Not planned for some time. The finished design, the triggers that would reopen it, and the
 decisions it would then need are in [deferred-bindings.md](deferred-bindings.md).
