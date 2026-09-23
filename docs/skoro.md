@@ -517,8 +517,7 @@ rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 
 ### 5.3 Open items tracked elsewhere
 
-`docs/TODO.md` holds two, not duplicated here: four `skoro-so3` `wgpu_f32` tolerance misses,
-pre-existing and GPU-only; and deferred bindings.
+`docs/TODO.md` holds one, not duplicated here: deferred bindings.
 
 ---
 

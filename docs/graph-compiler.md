@@ -272,9 +272,10 @@ cargo clippy --workspace --all-targets
 cargo fmt --check
 ```
 
-**Known non-green baseline:** four `skoro-so3` `wgpu_f32` tolerance misses
-([TODO.md](TODO.md) §2). Record the pre-change failure list and compare against it, rather
-than asserting "all green."
+**Baseline:** this once listed four `skoro-so3` `wgpu_f32` tolerance misses as known failures.
+They do not reproduce. On 2026-09-23 all twelve tests passed on an RTX 4070 Ti (driver 615.71.09),
+both at `91d4270`, where they were recorded, and at the tip. The baseline is now all green; a
+GPU-specific miss that returns belongs in [TODO.md](TODO.md) with its adapter and driver.
 
 ### §1 — new tests in `crates/skoro-graph/tests/`
 

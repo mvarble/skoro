@@ -44,4 +44,4 @@ not end to end. See [Host linear algebra](../../concepts/host-linear-algebra/).
 
 > [!TODO] GPU setup
 > Document how to run on a GPU: which cubecl runtime, which feature flags, and any known tolerance
-> differences (e.g. the SO(3) `wgpu_f32` tolerance misses in `docs/TODO.md`).
+> differences between GPU adapters.
