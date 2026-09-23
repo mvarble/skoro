@@ -57,9 +57,82 @@ quantity with nothing compensating for it.
 ### 1.2 Ownership
 
 A `Q<B, T>` is the ownership token; a bare `Id` is a weak reference. `cleanup` is a mark-and-sweep
-whose roots are the ids live handles name plus the graph's likelihood terms, following parent edges,
-bindings, and the scored-quantity edge. Three properties follow, all documented on
-`ModelServer::cleanup`:
+garbage collector, which runs in two phases:
+
+- **Mark** walks out from a set of *roots*, the nodes that must survive, and marks every node it can
+  reach. Marked means *keep*.
+- **Sweep** goes over every node in the graph and removes each one the mark phase did not reach.
+
+So the traversal is over the ids to keep, and the removal set is everything else. Nothing ever
+looks for garbage directly.
+
+The mark phase walks the skoro `Graph` itself, meaning the same nodes, not a copy or a separate
+structure. What differs is the set of edges it follows. The `Graph`'s data edges point from parent
+to child, which is the direction values flow during evaluation. The mark phase instead follows
+*references*, from a node to whatever it depends on:
+
+- a node to its parents (the data edges walked backwards);
+- a density to the quantity it scores;
+- a node to whatever it binds.
+
+"Reachable" in what follows means reachable along those references. It never means downstream in
+the data flow.
+
+The roots are the ids live handles name plus the graph's likelihood terms. The pieces, in the order
+the collector uses them:
+
+**Roots.** Two sources, unioned at the start of every sweep (`ModelServer::cleanup`, `model.rs`):
+
+- The ids a live `Q` names. Each `Q` carries a `NodeDropGuard` that registers its id in the server's
+  `HandleRegistry` (`crates/skoro-model/src/cleanup.rs`) and deregisters it on drop; clones share
+  the one guard, so the id leaves the set when the last clone goes.
+- Every id in `Graph::log_likelihoods` (`crates/skoro-graph/src/graph.rs`). The name undersells it:
+  this is the whole term arena, not only the free-standing factors `mark_likelihood` adds. Each
+  quantity's own density (`mark_log_density`), each proposal-only term (`mark_log_proposal`) and
+  each free-standing factor lands there, and the field's comment says so.
+
+**Edges followed.** Marking walks *upward* from a root through three kinds of reference:
+
+1. Parent edges — whatever the node reads.
+2. The scored quantity (`Graph::stochastic_of`) — a density marks the quantity it scores even if
+   it never reads it, since the `Distribution` contract does not require it to.
+3. Bindings (`Graph::bindings_of`) — a term marks its residual, Fisher root and every other node
+   it binds, so those live exactly as long as the term does, with no handle of their own.
+
+It never walks downward. Holding `x` does not keep a child `y = f(x)` alive; only a handle on `y`,
+or a term that reads `y`, does.
+
+**Sweep.** Everything unmarked is removed, children before parents, through the same leaf-only
+`Graph::remove` a caller would use.
+
+**Why this cannot change `p` or `q`.** Both are sums over terms in `log_likelihoods`, and every one
+of those terms is a root. Each term therefore keeps everything it reads, the quantity it scores,
+and everything it binds, so no summand of either density can lose an input. The guarantee comes from
+what is rooted, not from which node kinds may be collected.
+
+**How it relates to leaf-only removal.** The sweep is exactly this rule applied until nothing
+changes: *remove a node that has no surviving children, that no surviving node binds, and that no
+handle names.* Take `y = f(x)` and `z = g(y)`, with both handles dropped and no term reading either.
+A single application of the rule takes `z`, which makes `y` a leaf, which needs a second
+application. The collector `cleanup.rs` replaced worked roughly like that. It kept a queue of
+candidates and popped each one once, so `y` stayed in the graph for good unless the mutation that
+orphaned it put it back on the queue. Mark-and-sweep takes `z` and `y` in one pass, because neither
+is marked. The same fact is why the sweep never trips `Graph::remove`'s refusals: the unmarked set is
+closed downward (a marked child would have marked its parent), so it never contains a node that a
+survivor still points into or binds.
+
+The rule applies to every node kind, not only `Mapped`. A `Constant` or `Parameter` that no handle
+names and no term reaches is collected as well. For a `Parameter` that changes neither `p` nor `q`,
+since no term depends on it. It does take the parameter out of the model's free set, though, and
+any bare `Id` or `TangentLayout` built earlier over it then gets `NodeNotFound`. A stochastic
+quantity built through `add_quantity` is always kept, because its density is a term and the
+scored-quantity edge marks it.
+
+A stacked tangent's private anchors and per-block tangents are deliberately *not* roots. They are
+ancestors of the `δ` node the caller holds, so they are marked while `δ` has a handle and swept
+once it does not. Rooting them would leave `2k + 1` nodes behind on every tick of a sliding window.
+
+Three properties follow, all documented on `ModelServer::cleanup`:
 
 - Nothing has to *report* an orphaning. Reachability is a property of the graph, recomputed, not an
   event a mutation must hand back.
@@ -70,7 +143,9 @@ bindings, and the scored-quantity edge. Three properties follow, all documented 
 It runs at the mutations that *reduce* reachability (`remove`, `remove_closure`,
 `demote_to_parameter`) and deliberately not on the way in, because sweeping before every `add_*`
 makes building an `n`-node model cost `O(n²)`. A workload that only grows holds its garbage until it
-asks; `graph_node_count` is the bound such a caller watches.
+asks; `graph_node_count` is the bound such a caller watches. Dropping a `Q` never collects by
+itself: it only sets the registry's dirty flag, and a `cleanup` that finds the flag clear returns
+without marking anything.
 
 An `Id` kept across a `cleanup()` may name nothing afterwards, which every id-taking method reports
 as `NodeNotFound`.
