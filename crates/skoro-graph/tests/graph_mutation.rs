@@ -1751,3 +1751,66 @@ mod bindings {
         graph.validate_indices().unwrap();
     }
 }
+
+/// A density index that names no retirable density is an error that changes nothing.
+///
+/// `validate_indices` rules the index out, so these corrupt it through a test-only hook. What they
+/// pin down is where the check sits: before the first mutation, not partway through. The batch
+/// puts a removable leaf *ahead* of the offending node, which is what used to be taken before the
+/// error surfaced -- behind an error, and without bumping the epoch.
+mod incoherent_density_index {
+    use super::*;
+
+    /// `(parent, stochastic, leaf)`, with the stochastic node's density index pointing at `density`
+    /// as `make_density` builds it from `parent`.
+    fn fixture(make_density: impl FnOnce(&mut Graph<B>, Id) -> Id) -> (Graph<B>, Id, Id, Id) {
+        let mut graph = Graph::<B>::new();
+        let parent = graph.add_parameter(Real);
+        let stoch = stochastic(&mut graph, vec![parent]);
+        let leaf = graph.add_parameter(Real);
+        let density = make_density(&mut graph, parent);
+        graph.corrupt_density_index(stoch, density);
+        (graph, parent, stoch, leaf)
+    }
+
+    fn untouched(graph: &Graph<B>, parent: Id, stoch: Id, leaf: Id) {
+        assert!(matches!(graph.node(stoch), Some(Node::Stochastic(_))));
+        assert!(graph.children_of(parent).unwrap().contains(&stoch));
+        assert!(graph.node(leaf).is_some(), "the batch was half-applied");
+    }
+
+    #[test]
+    fn remove_refuses_a_density_that_is_not_a_log_likelihood_before_taking_anything() {
+        let mut not_a_density = None;
+        let (mut graph, parent, stoch, leaf) =
+            fixture(|graph, parent| *not_a_density.insert(inert(graph, vec![parent])));
+        let not_a_density = not_a_density.unwrap();
+        assert!(matches!(
+            graph.remove(&[leaf, stoch]),
+            Err(SkoroError::NotLogLikelihood { id }) if id == not_a_density
+        ));
+        untouched(&graph, parent, stoch, leaf);
+    }
+
+    #[test]
+    fn remove_refuses_a_density_that_is_absent_before_taking_anything() {
+        let gone = bogus_id();
+        let (mut graph, parent, stoch, leaf) = fixture(|_, _| gone);
+        assert!(matches!(
+            graph.remove(&[leaf, stoch]),
+            Err(SkoroError::NodeNotFound { id }) if id == gone
+        ));
+        untouched(&graph, parent, stoch, leaf);
+    }
+
+    #[test]
+    fn demote_refuses_before_rewiring_the_node() {
+        let gone = bogus_id();
+        let (mut graph, parent, stoch, leaf) = fixture(|_, _| gone);
+        assert_eq!(
+            graph.demote_to_parameter(stoch).unwrap_err(),
+            SkoroError::NodeNotFound { id: gone }
+        );
+        untouched(&graph, parent, stoch, leaf);
+    }
+}

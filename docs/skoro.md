@@ -517,9 +517,8 @@ rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 
 ### 5.3 Open items tracked elsewhere
 
-`docs/TODO.md` holds three, not duplicated here: `retire_density_of` is not atomic on its error
-paths; four `skoro-so3` `wgpu_f32` tolerance misses, pre-existing and GPU-only; and deferred
-bindings.
+`docs/TODO.md` holds two, not duplicated here: four `skoro-so3` `wgpu_f32` tolerance misses,
+pre-existing and GPU-only; and deferred bindings.
 
 ---
 

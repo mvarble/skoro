@@ -1508,6 +1508,8 @@ impl<B: Backend> Graph<B> {
             Some(_) => return Err(SkoroError::NotStochastic { id }),
             None => return Err(SkoroError::NodeNotFound { id }),
         };
+        // Checked before anything changes, so an error leaves the node stochastic and wired.
+        let density = self.density_to_retire(id)?;
         let Some(Node::Stochastic(StochasticNode {
             id,
             parent_ids,
@@ -1525,7 +1527,8 @@ impl<B: Backend> Graph<B> {
         self.nodes
             .insert(id, Node::Parameter(ParameterNode { id, quantity_type }));
         let mut orphaned = parent_ids;
-        if let Some(dens_id) = self.retire_density_of(id)? {
+        if let Some(dens_id) = density {
+            self.retire_density(id, dens_id);
             orphaned.push(dens_id);
         }
         self.clear_cached_descendants(id);
@@ -1567,6 +1570,18 @@ impl<B: Backend> Graph<B> {
                 return Err(SkoroError::NodeStillBound { id: *id, by });
             }
         }
+        // A stochastic node whose density survives the batch has that density retired below.
+        // Check every such density now, while nothing has changed. What was checked holds through
+        // the loop: the density lies outside the batch so no removal takes it, and the index is
+        // one-to-one so no other removal retires it first.
+        for id in ids {
+            if let Some(Node::Stochastic(_)) = self.nodes.get(id)
+                && let Some(dens_id) = self.stochastic_to_log_density.get(id)
+                && !ids.contains(dens_id)
+            {
+                self.density_to_retire(*id)?;
+            }
+        }
         // Perform removal.
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
@@ -1593,13 +1608,11 @@ impl<B: Backend> Graph<B> {
                     // reverse index, or it is left claiming a node that no longer exists.
                     // A density inside this same batch is about to go anyway, and rewriting it
                     // first would change the node kind reported back to the caller.
-                    match self.stochastic_to_log_density.get(&id) {
-                        Some(dens_id) if ids.contains(dens_id) => {
+                    match self.stochastic_to_log_density.get(&id).copied() {
+                        Some(dens_id) if ids.contains(&dens_id) => {
                             self.stochastic_to_log_density.remove(&id);
                         }
-                        Some(_) => {
-                            self.retire_density_of(id)?;
-                        }
+                        Some(dens_id) => self.retire_density(id, dens_id),
                         None => {}
                     }
                 }
@@ -1802,6 +1815,16 @@ impl<B: Backend> Graph<B> {
             .expect("compiled-sequence cache poisoned")
             .sequences
             .len()
+    }
+
+    /// Point the density index of `stochastic_id` at `density_id`, bypassing every check.
+    ///
+    /// For reaching the error paths that `validate_indices` makes unreachable, to show that a
+    /// mutator hitting one leaves the graph unchanged. Neither validates nor bumps the epoch.
+    #[cfg(feature = "test-utils")]
+    pub fn corrupt_density_index(&mut self, stochastic_id: Id, density_id: Id) {
+        self.stochastic_to_log_density
+            .insert(stochastic_id, density_id);
     }
 
     /// Evaluate and sum `terms`, which the caller has checked are likelihood terms.
@@ -2317,7 +2340,26 @@ impl<B: Backend> Graph<B> {
         }
     }
 
-    /// Strip the scoring role from the density of `stochastic_id`, returning its [`Id`].
+    /// The density scoring `stochastic_id`, if it has one, checked to be retirable by
+    /// [`retire_density`](Self::retire_density). Changes nothing.
+    ///
+    /// The index naming a node that is absent, or one that is not a
+    /// [`LogLikelihood`](Node::LogLikelihood), is [`SkoroError::NodeNotFound`] or
+    /// [`SkoroError::NotLogLikelihood`]. `validate_indices` rules both out, so no constructible call
+    /// reaches either. A mutator still checks before it changes anything, not partway through,
+    /// so that if one ever is reached it leaves the graph as it found it.
+    fn density_to_retire(&self, stochastic_id: Id) -> SkoroResult<Option<Id>> {
+        let Some(&dens_id) = self.stochastic_to_log_density.get(&stochastic_id) else {
+            return Ok(None);
+        };
+        match self.nodes.get(&dens_id) {
+            Some(Node::LogLikelihood(_)) => Ok(Some(dens_id)),
+            Some(_) => Err(SkoroError::NotLogLikelihood { id: dens_id }),
+            None => Err(SkoroError::NodeNotFound { id: dens_id }),
+        }
+    }
+
+    /// Strip the scoring role from `dens_id`, the density of `stochastic_id`.
     ///
     /// A density is a likelihood factor *plus* a claim to score one particular quantity. When the
     /// quantity stops being stochastic -- demoted to a free variable, or removed outright -- that
@@ -2329,40 +2371,35 @@ impl<B: Backend> Graph<B> {
     /// The node survives as an ordinary [`Mapped`](Node::Mapped) one: it is still a perfectly
     /// good real-valued transformation, and the caller may want to keep it. Retiring the factor
     /// is not the same as deleting it.
-    fn retire_density_of(&mut self, stochastic_id: Id) -> SkoroResult<Option<Id>> {
-        let Some(dens_id) = self.stochastic_to_log_density.remove(&stochastic_id) else {
-            return Ok(None);
+    ///
+    /// Infallible: `dens_id` must be what [`density_to_retire`](Self::density_to_retire) returned
+    /// for `stochastic_id`, with nothing in between that could change either index.
+    fn retire_density(&mut self, stochastic_id: Id, dens_id: Id) {
+        self.stochastic_to_log_density.remove(&stochastic_id);
+        let Some(Node::LogLikelihood(LogLikelihoodNode {
+            id,
+            op,
+            parent_ids,
+            quantity_type,
+            value,
+            ..
+        })) = self.nodes.remove(&dens_id)
+        else {
+            unreachable!("checked by density_to_retire");
         };
-        match self.nodes.remove(&dens_id) {
-            Some(Node::LogLikelihood(LogLikelihoodNode {
+        self.nodes.insert(
+            id,
+            Node::Mapped(MappedNode {
                 id,
                 op,
                 parent_ids,
                 quantity_type,
                 value,
-                ..
-            })) => {
-                self.nodes.insert(
-                    id,
-                    Node::Mapped(MappedNode {
-                        id,
-                        op,
-                        parent_ids,
-                        quantity_type,
-                        value,
-                    }),
-                );
-            }
-            Some(node) => {
-                self.nodes.insert(dens_id, node);
-                return Err(SkoroError::NotLogLikelihood { id: dens_id });
-            }
-            None => return Err(SkoroError::NodeNotFound { id: dens_id }),
-        };
+            }),
+        );
         if let Some(index) = self.log_likelihoods.iter().position(|lid| *lid == dens_id) {
             self.log_likelihoods.remove(index);
         }
-        Ok(Some(dens_id))
     }
 
     /// The constant-folded value of an operation over `parent_ids`, if every parent is
