@@ -8,8 +8,8 @@ order: 5
 
 - Model building over typed quantities on flat and curved manifolds (SO(3), SE(3)), including
   discrete quantities.
-- Evaluation of $\log p$, $\log q$ and the log-weight; first-order derivatives and Hessian–vector
-  products.
+- Evaluation of $\log p$, $\log q$ and the log-weight; first-order derivatives, Hessian–vector
+  products, and the dense Hessian of $\log p$ (`hessian_hvp`).
 - Bindings, and the readers built on them: `residual_layout`, `residual_blocks`, `information*`,
   `GaussianBlock`, `coverage`.
 - Block-sparse linearization: per-term Jacobians over only the quantities each term reaches, from
@@ -32,7 +32,6 @@ order: 5
 | No derivatives of $q$ or of the weight | Gradient-based variational inference |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC |
 | No estimator, line search, or convergence test | Every deterministic estimator |
-| No `hessian_*` assembly | Newton methods; observed information |
 | Joint proposals over several quantities | Block proposals |
 | Deferred bindings | Expensive-root families; very large models |
 

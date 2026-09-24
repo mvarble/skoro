@@ -450,7 +450,8 @@ least-squares reading are `residual_blocks`, `Curvature::Residual`, `back_substi
 elimination's accumulated `error` (`min ½‖Aδ − b‖²`, the predicted objective an LM gain ratio
 needs), and a marginal's right-hand side `d`. A term with no closed-form root has no row form; a
 Hessian form `[G g; gᵀ f]` eliminated by Cholesky is where it would join (`GaussianFactor` is
-`#[non_exhaustive]` for it), once `hessian_*` exists.
+`#[non_exhaustive]` for it), once per-term Hessians are assembled; `hessian_hvp` today assembles
+the whole model's.
 
 This is also the fence that keeps the two triangular-solve implementations apart, and deliberately:
 `TrilInvert` is a *differentiable graph operation* on every backend and stays there, while
@@ -507,11 +508,13 @@ it.
 - **No `Estimator` abstraction**, and no line search, trust region, damping schedule, or convergence
   test. `GaussianFactorGraph::damped` / `damped_diagonal` give the damped rows and `Elimination::error`
   the predicted objective, but choosing `λ` is the caller's job.
-- **No dense second-order assembly.** `log_density_ord2`, `evaluate_hvp` and friends are reachable
-  from `ModelReaderOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
-  basis, and there is **no `hessian_*` mirroring `jacobian_jvp` / `jacobian_vjp`**. Materializing a
-  Hessian is a `D_in`-call loop the caller writes, with none of `jacobian.rs`'s layout flattening or
-  leaf-row fill-in. Note that `information*` is the *Fisher* information, not the Hessian.
+- **Second-order assembly is dense and whole-model.** `hessian_hvp(client, points, free)`
+  (`crates/skoro-model/src/hessian.rs`) assembles the `D × D` Hessian of `log p` from `D`
+  Hessian–vector passes, one per layout coordinate. Column `i` is `d/dt g(x ⊕ t eᵢ)`, `g` the
+  gradient in the chart at each point: the ordinary Hessian on flat manifolds, and on curved ones
+  equal to the pullback's Hessian only at a stationary point (it is not symmetrized). There is no
+  per-term or block-sparse Hessian yet, which is what a Cholesky-eliminated Hessian factor would
+  need. `information*` remains the *Fisher* information, the expected curvature.
 - **No incremental elimination.** Every solve re-eliminates the whole tree; there is no iSAM2-style
   update that relinearizes and re-eliminates only the affected cliques, and no Bayes-tree shortcut
   for a marginal — each marginal query eliminates afresh (the symbolic part can be reused through
@@ -566,13 +569,13 @@ unless noted.
 | No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
-| No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
 | Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
 | Deferred bindings | Expensive-root families, very large models | `docs/deferred-bindings.md` — designed, postponed |
 
 Closed on 2026-09-23, and so no longer rows: block-sparse `J` and a sparse solver (§4.2), the
 Schur complement / marginal precision (§3.3), and residual assembly matching the Jacobian rows
-(`residual_blocks`, `residual_vector`).
+(`residual_blocks`, `residual_vector`). Closed on 2026-09-24: dense Hessian assembly
+(`hessian_hvp`, §4.4).
 
 ### 5.1 The sampling gap, in detail
 
@@ -592,7 +595,6 @@ reusable sampler: no weight accumulator, no resampling, no ESS.
 
 ```
 rg -i 'seed_rng|set_seed|B::seed'                      # 0
-rg 'fn hessian'                                        # 0
 rg -i 'hmc|nuts|leapfrog|metropolis|resampl|particle'  # 2, both prose
 rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 ```

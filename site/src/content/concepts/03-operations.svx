@@ -120,8 +120,9 @@ $\cot = \nabla f(x)$ and $\cotb = \frac{d}{dt}\nabla f(x + t\dot x) = \nabla^2 f
 
 **Cost.** A JVP pass with a $k$-column frame and a VJP pass with a $k$-column cotangent frame each
 cost about one evaluation's worth of work per column. An HVP pass carries one vector, so a dense
-$D \times D$ Hessian takes $D$ passes. There is no `hessian_*` assembler. The curvature an
-estimator uses is the Fisher information instead (see [Fisher scoring](../fisher-scoring/)).
+$D \times D$ Hessian takes $D$ passes, which is what `hessian_hvp` does
+([Jacobians](../jacobians/#the-hessian)). The curvature an estimator usually uses is the Fisher
+information instead, which costs no second-order pass (see [Fisher scoring](../fisher-scoring/)).
 
 ## The two gates
 

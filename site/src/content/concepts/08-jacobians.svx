@@ -1,6 +1,6 @@
 ---
 title: Jacobians
-summary: The readers in skoro-model that turn derivative passes into matrices. Dense Jacobians over flattened tangents by either pass, the column rule, leaf rows, structural sparsity from leaf supports, one-pass compressed block Jacobians by row colouring, and the residual rows of a least-squares step.
+summary: The readers in skoro-model that turn derivative passes into matrices. Dense Jacobians over flattened tangents by either pass, the column rule, leaf rows, structural sparsity from leaf supports, one-pass compressed block Jacobians by row colouring, the residual rows of a least-squares step, and the dense Hessian of the log-density.
 order: 8
 katex_macros:
   \supp: S
@@ -111,6 +111,30 @@ these rows, one `ResidualBlock` $(K_t, J_t, r_t)$ per scored term, from one comp
 evaluation. `residual_layout` and `residual_vector` are the dense versions, in the same row order.
 A residual is a flat vector of its own tangent dimension (a Euclidean node), and anything else is
 refused.
+
+## The Hessian
+
+`hessian_hvp(client, points, free)` is the second-order counterpart: the $D \times D$ Hessian of
+$\log p$ over a column layout, `[batch, D, D]`. Each Hessian–vector pass carries one vector
+([Differentiable operations](../operations/#forward-over-reverse-hessianvector-products)), so it
+seeds the $D$ unit vectors of the layout in turn, and column $i$ is
+$$
+H_{:i} = \frac{d}{dt}\Big|_{t=0}\, g(x \oplus t\,e_i), \qquad g(x) = \nabla(\log p \circ R_x)(0),
+$$
+flattened over the layout as the Jacobians are. The column rule is the same: a mapped column is
+refused, and a constant or observed one is zero.
+
+On a flat manifold this is the ordinary, symmetric Hessian. On a curved one it is the derivative
+of the chart gradient, which need not be symmetric, and which agrees with the Hessian of the
+pullback $\log p \circ R_x$ only at a stationary point
+([Manifolds and retractions](../manifolds/#the-hessianvector-product)). Nothing symmetrizes it:
+away from a stationary point, which symmetric matrix to use is the caller's decision.
+
+This is the **observed** curvature, and it is dense and whole-model: $D$ passes, $O(D^2)$ memory.
+The **expected** curvature, the Fisher information, is assembled block-sparsely from each term's
+root and is positive semi-definite by construction ([Fisher scoring](../fisher-scoring/)), which is
+why the estimators on the later pages use it. A per-term, block-sparse Hessian, the input a
+Cholesky-eliminated Hessian factor would need, does not exist yet.
 
 ## Coverage
 

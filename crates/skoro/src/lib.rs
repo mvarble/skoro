@@ -84,6 +84,7 @@ pub mod prelude {
     pub use skoro_normal::structure::GaussianBlock;
 
     // ----- reading factors back: least squares and Fisher information -----
+    pub use skoro_model::hessian::hessian_hvp;
     pub use skoro_model::information::{
         InformationBlock, information, information_blocks, information_root,
     };
