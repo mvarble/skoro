@@ -498,7 +498,17 @@ macro_rules! tests {
 
             #[test]
             fn transform() {
-                super::common::group::transform_impl::<$B>($delta, $epsilon);
+                super::common::group::transform_impl::<$B>(false, $delta, $epsilon);
+            }
+
+            #[test]
+            fn untransform() {
+                super::common::group::transform_impl::<$B>(true, $delta, $epsilon);
+            }
+
+            #[test]
+            fn group_laws() {
+                super::common::group::group_laws_impl::<$B>();
             }
         }
 

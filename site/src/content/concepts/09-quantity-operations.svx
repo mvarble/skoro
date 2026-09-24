@@ -103,8 +103,7 @@ for `invert`. A rotation has no `transpose`: a plain matrix transpose would diff
 ## `skoro-se3`
 
 A pose $(r, p)$ is a rotation and a translation (storage 12, dimension 6), with tangent
-$\delta = (\omega, v)$. The crate provides the pose's retraction and inverse retraction, and no
-other operations on poses. Its retraction is the **product** form, both blocks in the body frame:
+$\delta = (\omega, v)$. Its retraction is the **product** form, both blocks in the body frame:
 $$
 (r, p) \oplus (\omega, v) = \big(r\,\Exp(\omega),\ p + r\,v\big),
 \qquad
@@ -125,6 +124,32 @@ $$
 agreeing with $-\delta$ only to first order. A joint factor built from a marginal
 therefore keeps its linearization point rather than moving it to the marginal's mean
 ([Linearization and marginalization](../linearization/#joint-factors-from-marginals)).
+
+**The pose operations** each have their own operation in this chart, built on the same arithmetic
+as the rotations'. Write a pose perturbation as $(a, b)$ (rotation block first), a point or
+$3 \times n$ matrix operand $U$ perturbed by $B$, the output cotangent $\alpha = (\alpha_c, \alpha_d)$
+for a pose output, and $w = r\transpose\alpha$. A pose's cotangent from a matrix operand is summed
+over its columns $c$.
+
+| Operation | Value | JVP |
+| --- | --- | --- |
+| `compose(x_0, x_1)` | $(r_0 r_1,\ p_0 + r_0 p_1)$ | $c = r_1\transpose a_0 + a_1$, $d = r_1\transpose(b_0 + a_0 \times p_1) + b_1$ |
+| `invert(x)` | $(r\transpose,\ -q)$, $q = r\transpose p$ | $c = -r\,a$, $d = r(a \times q - b)$ |
+| `transform(x, U)` | $r U + p$ | $r(a \times U + b + B)$ |
+| `untransform(x, U)` | $Y = r\transpose(U - p)$ | $-a \times Y - b + r\transpose B$ |
+
+The VJPs are the adjoints:
+
+- `compose`: $\partial x_0 = (r_1\alpha_c + p_1 \times r_1\alpha_d,\ r_1\alpha_d)$ and $\partial x_1 = \alpha$.
+- `invert`: $\partial x = (-w_c + q \times w_d,\ -w_d)$.
+- `transform`: $\partial x = (\sum_c u_c \times w_c,\ \sum_c w_c)$ and $\partial U = w$.
+- `untransform`: $\partial x = (\sum_c \alpha_c \times y_c,\ -\sum_c \alpha_c)$ and $\partial U = r\alpha$.
+
+Each HVP is the derivative of its VJP along the seeded tangents with $\alpha$ fixed. For example,
+`compose`'s VJP reads only $x_1$, so only a tangent seeded at $x_1$ reaches its HVP, and
+`transform`'s never reads $p$, so the translation tangent $b$ reaches none. The terms like
+$a_0 \times p_1$ and $a \times U$ are **lever arms**: rotating a frame swings everything expressed in
+it. They grow with the translations, so the tests use poses far from the origin.
 
 ## Writing your own operation
 

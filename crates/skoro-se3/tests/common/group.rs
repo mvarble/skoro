@@ -118,8 +118,8 @@ where
     check_unary(&x, &out, point, delta, epsilon);
 }
 
-/// `transform` of a point and of a matrix of points.
-pub fn transform_impl<B: Backend>(delta: f64, epsilon: f64)
+/// `transform` (or, with `inverse`, `untransform`) of a point and of a matrix of points.
+pub fn transform_impl<B: Backend>(inverse: bool, delta: f64, epsilon: f64)
 where
     SE3: ContinuousQuantity<B>,
 {
@@ -132,7 +132,53 @@ where
         .with_quantity(&u, tensor::<B, 2>([U], &Default::default()))
         .with_quantity(&m, tensor::<B, 2>([M], &Default::default()))
         .build();
-    let (out_u, out_m) = (x.transform(&u).unwrap(), x.transform(&m).unwrap());
+    let (out_u, out_m) = if inverse {
+        (x.untransform(&u).unwrap(), x.untransform(&m).unwrap())
+    } else {
+        (x.transform(&u).unwrap(), x.transform(&m).unwrap())
+    };
     check_binary(&x, &u, &out_u, point.clone(), delta, epsilon);
     check_binary(&x, &m, &out_m, point, delta, epsilon);
+}
+
+/// Forward values against the group laws: `x ∘ x⁻¹` is the identity, and `untransform` undoes
+/// `transform`.
+pub fn group_laws_impl<B: Backend>()
+where
+    SE3: ContinuousQuantity<B>,
+{
+    let model = ModelClient::<B>::default();
+    let x = model.add_parameter(SE3);
+    let u = model.add_parameter(EuclideanD(3));
+    let point = points()
+        .with_quantity(&x, tensor::<B, 2>([X0], &Default::default()))
+        .with_quantity(&u, tensor::<B, 2>([U], &Default::default()))
+        .build();
+    let identity = x.compose(&x.invert().unwrap()).unwrap();
+    let round_trip = x.untransform(&x.transform(&u).unwrap()).unwrap();
+    let values = |q: skoro_core::id::Id| -> Vec<f64> {
+        model
+            .evaluate_ids(&point, &[q])
+            .unwrap()
+            .evaluations
+            .get(&q)
+            .unwrap()
+            .0
+            .clone()
+            .unwrap_float()
+            .into_data()
+            .convert::<f64>()
+            .to_vec::<f64>()
+            .unwrap()
+    };
+    let want = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+    for (got, want) in values(identity.id()).iter().zip(want) {
+        assert!((got - want).abs() < 1e-4, "x ∘ x⁻¹: {got} vs {want}");
+    }
+    for (got, want) in values(round_trip.id()).iter().zip(U) {
+        assert!(
+            (got - want).abs() < 1e-4,
+            "untransform ∘ transform: {got} vs {want}"
+        );
+    }
 }

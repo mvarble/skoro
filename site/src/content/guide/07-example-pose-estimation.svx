@@ -109,7 +109,7 @@ One damped Gauss–Newton (Levenberg–Marquardt) step, which is also Fisher sco
 | `Normal<B, SE3>`, `Normal<B, EuclideanD>` with residual, location, whitening and Fisher-root bindings | built |
 | The SE(3) retraction and inverse retraction, with chart derivatives | built |
 | SO(3) compose, invert, rotate and unrotate, with chart derivatives | built |
-| Pose operations (SE(3) compose, inverse, transform) | missing: compose them from the SO(3) operations and translations, or add dedicated ones |
+| SE(3) compose, invert, transform and untransform, with chart derivatives | built |
 | `residual_layout`, `tangent_layout`, `jacobian_vjp`, `require_role` | built |
 | `linearize`, block-sparse elimination (COLAMD, junction tree, multifrontal QR), `retract_flat` | built |
 | Residuals in the same row order as $J$ (`residual_blocks`, `residual_vector`) | built |

@@ -17,6 +17,9 @@ pub trait SE3TransformOps<B: Backend> {
     /// `r u + p`: a point (or each column of a `3 × n` matrix) expressed in this pose's frame,
     /// carried out to the frame the pose is expressed in.
     fn transform<T: RotationVector<B>>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, T>>;
+
+    /// `rᵀ (u − p)`: the inverse of [`transform`](Self::transform).
+    fn untransform<T: RotationVector<B>>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, T>>;
 }
 
 impl<B: Backend> SE3TransformOps<B> for Q<B, SE3>
@@ -28,13 +31,19 @@ where
         let columns = otype.columns()?;
         register_map2(otype, SE3Transform(columns), (self, other))
     }
+
+    fn untransform<T: RotationVector<B>>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, T>> {
+        let otype = other.get_quantity_type();
+        let columns = otype.columns()?;
+        register_map2(otype, SE3Untransform(columns), (self, other))
+    }
 }
 
 /// What the backward passes of a pose acting on `U ∈ ℝ^{3×n}` read.
 #[derive(Debug, Clone)]
 pub struct TransformVjp<B: Backend> {
     r: Point<B>,
-    /// `U`.
+    /// `U` for [`SE3Transform`], `Y = rᵀ(U − p)` for [`SE3Untransform`].
     columns: Point<B>,
     d_pose: bool,
     d_operand: bool,
@@ -172,6 +181,126 @@ impl<B: Backend> DiffOperation<B> for SE3Transform {
         let d_u = state
             .d_operand
             .then(|| a.as_ref().map(|a| stack(-cross(a.clone(), w.clone()), n)));
+        vec![d_x.flatten(), d_u.flatten()]
+    }
+}
+
+/// `Y = rᵀ (U − p)` column by column, differentiated in the body-frame chart of the pose.
+///
+/// Perturbing the pose by `(a, b)` and `U` by `B`:
+///
+/// ```text
+/// JVP  Ẏ = −a × Y − b + rᵀ B
+/// VJP  ∂x = (Σ_c α_c × y_c,  −Σ_c α_c)                       ∂U = r α
+/// HVP  ∂x → (Σ_c α_c × Ẏ_c,  0)                              ∂U → r (a × α)
+/// ```
+///
+/// where `Ẏ` in the HVP is the JVP along the seeded tangents.
+#[derive(Debug, Clone, Copy)]
+pub struct SE3Untransform(pub usize);
+
+impl<B: Backend> DiffOperation<B> for SE3Untransform {
+    type VjpState = Option<TransformVjp<B>>;
+    type HvpState = TransformHvp<B>;
+
+    fn forward(
+        &self,
+        inputs_: Vec<Input<B>>,
+        diff_state: DiffModeState<B>,
+    ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
+        let n = self.0;
+        let (r, p, u) = inputs(inputs_);
+        let [batch, _] = r.dims();
+        let y = apply_transpose(&r, spread(&u, n, 1) - repeat(&p, n)).reshape([batch, 3 * n]);
+        let push = |t: Option<TangentFrame<B>>, bu: Option<TangentFrame<B>>| {
+            let from_pose = t.map(|t| {
+                let f = t.dims()[2];
+                let (a, b) = split_frame(t);
+                -cross(tile(a, n), spread(&y, n, f)) - tile(b, n)
+            });
+            let from_operand = bu.map(|bu| apply_transpose(&r, unstack(bu, n)));
+            sum(from_pose, from_operand).map(|t| stack(t, n))
+        };
+        let state = |d_pose: bool, d_operand: bool| {
+            (d_pose || d_operand).then(|| TransformVjp {
+                r: r.clone(),
+                columns: y.clone(),
+                d_pose,
+                d_operand,
+            })
+        };
+        match diff_state {
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(y),
+            DiffModeState::Jvp(frames) => {
+                let [t, bu] = frames.try_into().unwrap();
+                let tangent = push(t, bu);
+                DiffOperationForward::jvp(y, tangent)
+            }
+            DiffModeState::Vjp(diffs) => {
+                let vjp_state = state(diffs[0], diffs[1]);
+                DiffOperationForward::vjp(y, vjp_state)
+            }
+            DiffModeState::Hvp { diffs, tangents } => {
+                let [t, bu] = tangents.try_into().unwrap();
+                let tangent = push(t.clone().map(one_column), bu.clone().map(one_column))
+                    .map(|t| t.squeeze_dim(2));
+                let vjp_state = state(diffs[0], diffs[1]);
+                DiffOperationForward::hvp(y, tangent, vjp_state, (t, bu))
+            }
+        }
+    }
+
+    fn vjp(
+        &self,
+        state: &Self::VjpState,
+        alpha: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        let n = self.0;
+        let Some(state) = state else {
+            return vec![None, None];
+        };
+        let f = alpha.dims()[2];
+        let alpha = unstack(alpha, n);
+        let d_x = state.d_pose.then(|| {
+            let d_a = fold(cross(alpha.clone(), spread(&state.columns, n, f)), n);
+            join_frame(Some(d_a), Some(-fold(alpha.clone(), n))).unwrap()
+        });
+        let d_u = state.d_operand.then(|| stack(apply(&state.r, alpha), n));
+        vec![d_x, d_u]
+    }
+
+    fn hvp(
+        &self,
+        vjp_state: &Self::VjpState,
+        hvp_state: &Self::HvpState,
+        alpha: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        let n = self.0;
+        let Some(state) = vjp_state else {
+            return vec![None, None];
+        };
+        let (t, bu) = hvp_state;
+        let f = alpha.dims()[2];
+        let alpha = unstack(alpha, n);
+        let pose = t.as_ref().map(|t| {
+            let (a, b) = split_vector(t.clone());
+            (repeat(&a, n * f), repeat(&b, n * f))
+        });
+        let d_x = state.d_pose.then(|| {
+            let from_pose = pose
+                .as_ref()
+                .map(|(a, b)| -cross(a.clone(), spread(&state.columns, n, f)) - b.clone());
+            let from_operand = bu
+                .as_ref()
+                .map(|bu| apply_transpose(&state.r, spread(bu, n, f)));
+            sum(from_pose, from_operand)
+                .map(|y_dot| fold(cross(alpha.clone(), y_dot), n))
+                .and_then(|d_a| join_frame(Some(d_a), None))
+        });
+        let d_u = state.d_operand.then(|| {
+            pose.as_ref()
+                .map(|(a, _)| stack(apply(&state.r, cross(a.clone(), alpha.clone())), n))
+        });
         vec![d_x.flatten(), d_u.flatten()]
     }
 }
