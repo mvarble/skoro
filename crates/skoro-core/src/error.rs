@@ -112,6 +112,23 @@ pub enum SkoroError {
     /// than failing — see `skoro_model::coverage` — so this is raised only by a consumer that
     /// has declared it cannot proceed on a partial model.
     MissingBinding { id: Id, role: Role },
+    /// Eliminating a Gaussian factor graph met a singular frontal block: the key at `position` in
+    /// the elimination order is not determined by the rows that reach it (gauge freedom, or a
+    /// direction no factor constrains). The positional counterpart of
+    /// [`NotPositiveDefinite`](Self::NotPositiveDefinite); the graph that raised it maps the
+    /// position back to its key.
+    RankDeficient { position: usize },
+    /// A Gaussian factor graph declares a key, at `index` in key order, that no factor touches.
+    KeyUnconstrained { index: usize },
+    /// A factor of a Gaussian factor graph, at `factor` in insertion order, names a key the graph
+    /// does not declare, names one twice, or has a block whose width disagrees with the key's
+    /// dimension.
+    InvalidFactorKeys { factor: usize },
+    /// An ordering, a symbolic elimination, or a set of values does not match the factor graph it
+    /// is used with: an order that is not a permutation of the graph's keys, a junction tree reused
+    /// on a graph whose structure (the keys each factor touches, or a key's dimension) differs from
+    /// the one it was computed for, or values missing a key a solve needs.
+    StructureMismatch,
 }
 
 impl fmt::Display for SkoroError {
@@ -280,6 +297,21 @@ impl fmt::Display for SkoroError {
             SkoroError::MissingBinding { id, role } => {
                 write!(f, "term {id:?} binds nothing under the role {role}")
             }
+            SkoroError::RankDeficient { position } => write!(
+                f,
+                "the key at elimination position {position} is not determined by its factors"
+            ),
+            SkoroError::KeyUnconstrained { index } => {
+                write!(f, "the key at index {index} is touched by no factor")
+            }
+            SkoroError::InvalidFactorKeys { factor } => write!(
+                f,
+                "factor {factor} names an undeclared or repeated key, or a block of the wrong width"
+            ),
+            SkoroError::StructureMismatch => write!(
+                f,
+                "an ordering, elimination or set of values does not match its factor graph"
+            ),
         }
     }
 }

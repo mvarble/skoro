@@ -43,7 +43,7 @@ fn assert_close(actual: &Dense, expected: &Dense, epsilon: f64) {
         (actual.rows(), actual.cols()),
         (expected.rows(), expected.cols())
     );
-    for (a, e) in actual.data().iter().zip(expected.data()) {
+    for (a, e) in actual.to_row_major().iter().zip(&expected.to_row_major()) {
         assert_abs_diff_eq!(a, e, epsilon = epsilon);
     }
 }
@@ -146,9 +146,9 @@ mod least_squares {
         let normal = spd_solve(&jt.matmul(&j).unwrap(), &jt.matmul(&r).unwrap()).unwrap();
 
         let err = |sol: &Dense| {
-            sol.data()
+            sol.to_row_major()
                 .iter()
-                .zip(x.data())
+                .zip(&x.to_row_major())
                 .map(|(a, b)| (a - b).abs())
                 .fold(0.0f64, f64::max)
         };
@@ -190,7 +190,7 @@ mod least_squares {
 
         let jt = j.transpose();
         let damped = {
-            let mut data = jt.matmul(&j).unwrap().data().to_vec();
+            let mut data = jt.matmul(&j).unwrap().to_row_major();
             for i in 0..3 {
                 data[i * (3 + 1)] += lambda;
             }
@@ -244,7 +244,7 @@ mod whitening {
             let quadratic = d.transpose().matmul(&lambda.matmul(&d).unwrap()).unwrap();
             // `‖W δ‖²`
             let r = w.matmul(&d).unwrap();
-            let whitened: f64 = r.data().iter().map(|x| x * x).sum();
+            let whitened: f64 = r.to_row_major().iter().map(|x| x * x).sum();
             assert!(
                 (quadratic.get(0, 0) - whitened).abs() < 1e-10,
                 "δ = {delta:?}: δᵀΛδ = {}, ‖Wδ‖² = {whitened}",
@@ -256,7 +256,7 @@ mod whitening {
         let expected = 0.5
             * cholesky(&lambda)
                 .unwrap()
-                .data()
+                .to_row_major()
                 .iter()
                 .enumerate()
                 .filter(|(k, _)| *k % 4 == 0)

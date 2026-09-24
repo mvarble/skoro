@@ -1,19 +1,18 @@
 //! Factorizations and solves over [`Dense`], backed by `faer`.
 //!
-//! All six entry points return [`SkoroResult`]. That is the design argument made
+//! Every entry point returns [`SkoroResult`]. That is the design argument made
 //! structural: a matrix that has stopped being positive definite is a condition the caller
 //! must be able to observe, not a `NaN` that surfaces several thousand iterations later.
 //!
-//! Five of the six could be reimplemented on `Tensor<B, 3>` behind the same names if a
-//! batched consumer ever appears — [`whitening_from_precision`] is a composition of three of the
-//! others. [`lstsq`] could not — `burn` 0.21 has no QR. An algorithm written against it is
-//! committed to the host path, deliberately.
+//! All but [`lstsq`] could be reimplemented on `Tensor<B, 3>` behind the same names if a batched
+//! consumer ever appears. [`lstsq`] could not — `burn` 0.21 has no QR. An algorithm written against
+//! it is committed to the host path, deliberately.
 
 use faer::linalg::solvers::{ColPivQr, Llt, Solve, SolveLstsq};
 use faer::linalg::triangular_solve::{
     solve_lower_triangular_in_place, solve_upper_triangular_in_place,
 };
-use faer::{Mat, MatRef, Par, Side};
+use faer::{Par, Side};
 use skoro_core::error::{SkoroError, SkoroResult};
 
 use crate::dense::Dense;
@@ -22,26 +21,23 @@ use crate::dense::Dense;
 ///
 /// Only the lower triangle of `spd` is read.
 pub fn cholesky(spd: &Dense) -> SkoroResult<Dense> {
-    let a = to_faer(square(spd)?);
-    let llt = Llt::new(a.as_ref(), Side::Lower)
+    let llt = Llt::new(square(spd)?.as_faer(), Side::Lower)
         .map_err(|_| SkoroError::NotPositiveDefinite { rows: spd.rows() })?;
-    Ok(from_faer(llt.L()))
+    Ok(Dense::from_faer_ref(llt.L()))
 }
 
 /// Solves `L x = b` for a lower-triangular `L`.
 pub fn solve_lower(l: &Dense, b: &Dense) -> SkoroResult<Dense> {
-    let l = to_faer(square(l)?);
-    let mut rhs = to_faer(compatible(&l.nrows(), b)?);
-    solve_lower_triangular_in_place(l.as_ref(), rhs.as_mut(), Par::Seq);
-    Ok(from_faer(rhs.as_ref()))
+    let mut rhs = compatible(square(l)?.rows(), b)?.clone().into_faer();
+    solve_lower_triangular_in_place(l.as_faer(), rhs.as_mut(), Par::Seq);
+    Ok(Dense::from_faer(rhs))
 }
 
 /// Solves `U x = b` for an upper-triangular `U`.
 pub fn solve_upper(u: &Dense, b: &Dense) -> SkoroResult<Dense> {
-    let u = to_faer(square(u)?);
-    let mut rhs = to_faer(compatible(&u.nrows(), b)?);
-    solve_upper_triangular_in_place(u.as_ref(), rhs.as_mut(), Par::Seq);
-    Ok(from_faer(rhs.as_ref()))
+    let mut rhs = compatible(square(u)?.rows(), b)?.clone().into_faer();
+    solve_upper_triangular_in_place(u.as_faer(), rhs.as_mut(), Par::Seq);
+    Ok(Dense::from_faer(rhs))
 }
 
 /// Solves `A x = b` for a symmetric positive-definite `A`, by Cholesky.
@@ -49,11 +45,10 @@ pub fn solve_upper(u: &Dense, b: &Dense) -> SkoroResult<Dense> {
 /// Errors [`SkoroError::NotPositiveDefinite`] rather than returning `NaN`s. Only the lower
 /// triangle of `a` is read.
 pub fn spd_solve(a: &Dense, b: &Dense) -> SkoroResult<Dense> {
-    let mat = to_faer(square(a)?);
-    let rhs = to_faer(compatible(&mat.nrows(), b)?);
-    let llt = Llt::new(mat.as_ref(), Side::Lower)
+    let rhs = compatible(square(a)?.rows(), b)?;
+    let llt = Llt::new(a.as_faer(), Side::Lower)
         .map_err(|_| SkoroError::NotPositiveDefinite { rows: a.rows() })?;
-    Ok(from_faer(llt.solve(rhs.as_ref()).as_ref()))
+    Ok(Dense::from_faer(llt.solve(rhs.as_faer())))
 }
 
 /// Least squares by column-pivoted QR: `min ‖J δ − r‖`, without forming `JᵀJ`.
@@ -80,10 +75,8 @@ pub fn lstsq(j: &Dense, r: &Dense) -> SkoroResult<Dense> {
             found: j.rows(),
         });
     }
-    let a = to_faer(j);
-    let rhs = to_faer(r);
-    let qr = ColPivQr::new(a.as_ref());
-    Ok(from_faer(qr.solve_lstsq(rhs.as_ref()).as_ref()))
+    let qr = ColPivQr::new(j.as_faer());
+    Ok(Dense::from_faer(qr.solve_lstsq(r.as_faer())))
 }
 
 /// Reject a non-square matrix where a factorization needs one.
@@ -98,64 +91,48 @@ fn square(m: &Dense) -> SkoroResult<&Dense> {
 }
 
 /// Reject a right-hand side whose row count does not match the system.
-fn compatible<'a>(n: &usize, b: &'a Dense) -> SkoroResult<&'a Dense> {
-    if b.rows() != *n {
+fn compatible(n: usize, b: &Dense) -> SkoroResult<&Dense> {
+    if b.rows() != n {
         return Err(SkoroError::ShapeMismatch {
-            expected: *n,
+            expected: n,
             found: b.rows(),
         });
     }
     Ok(b)
 }
 
-fn to_faer(m: &Dense) -> Mat<f64> {
-    Mat::from_fn(m.rows(), m.cols(), |r, c| m.get(r, c))
-}
-
-fn from_faer(m: MatRef<'_, f64>) -> Dense {
-    let (rows, cols) = (m.nrows(), m.ncols());
-    let mut data = Vec::with_capacity(rows * cols);
-    for r in 0..rows {
-        for c in 0..cols {
-            data.push(m[(r, c)]);
-        }
-    }
-    Dense::from_row_major(rows, cols, data)
-        .expect("internal: the row-major length is rows * cols by construction")
-}
-
 /// The whitening of a precision matrix, packed for a `Tril` quantity, with its log-determinant.
 ///
-/// Given a precision `Λ`, returns `(w, ln|det W|)` where `W` is lower-triangular with
-/// `Wᵀ W = Λ`, and `w` is `W`'s lower triangle in `Tril` packing order — row-major, `(i, j)` at
-/// `i(i+1)/2 + j`. A residual `r = W δ` then has `‖r‖² = δᵀ Λ δ`, which is the convention
-/// `skoro-normal` already uses for `Normal`, so the result drops straight into a `Tril` constant.
+/// Given a precision `Λ`, returns `(w, ln|det W|)` where `W` is lower-triangular with a positive
+/// diagonal and `Wᵀ W = Λ`, and `w` is `W`'s lower triangle in `Tril` packing order — row-major,
+/// `(i, j)` at `i(i+1)/2 + j`. A residual `r = W δ` then has `‖r‖² = δᵀ Λ δ`, which is the
+/// convention `skoro-normal` already uses for `Normal`, so the result drops straight into a `Tril`
+/// constant — for a `JointNormal` built by hand from a precision the caller already has. A
+/// marginal computed by elimination arrives as a whitening already
+/// ([`Marginal`](crate::marginal::Marginal)), and never needs this.
 ///
-/// **This is the composition, not a new factorization**: `Σ = Λ⁻¹` by SPD solve, `L = chol(Σ)`,
-/// then `W = L⁻¹` by a triangular solve against the identity. `W` comes out lower-triangular
-/// because the inverse of a lower-triangular matrix is lower-triangular, which is what lets it
-/// live in a `Tril` at all — `chol(Λ)ᵀ` would satisfy the same equation but is upper.
+/// **One Cholesky factorization, no inversion.** With `P` the reversal permutation,
+/// `PΛP = L Lᵀ` for a lower `L`, and `W = P Lᵀ P` is lower-triangular with
+/// `WᵀW = P L Lᵀ P = Λ`. `chol(Λ)ᵀ` would satisfy the same equation but is upper, which a `Tril`
+/// cannot hold; the reversal is what makes the factor lower. (This used to go
+/// `Λ → Σ = Λ⁻¹ → chol(Σ) → inverse`, through an inversion that cancels analytically but not
+/// numerically.)
 ///
-/// The route costs an inversion that cancels analytically but not numerically, and `Λ` is
-/// ill-conditioned exactly when the blanket is under-constrained — which is the case a marginal
-/// over a poorly observed window produces. [`SkoroError::NotPositiveDefinite`] is the honest
-/// failure there, and it is reported rather than returned as `NaN`s.
+/// [`SkoroError::NotPositiveDefinite`] is the honest failure for a `Λ` that is not positive definite
+/// — an under-constrained blanket — and it is reported rather than returned as `NaN`s.
 pub fn whitening_from_precision(precision: &Dense) -> SkoroResult<(Vec<f64>, f64)> {
     let n = square(precision)?.rows();
-    let identity = Dense::identity(n);
-    let covariance = spd_solve(precision, &identity)?;
-    let l = cholesky(&covariance)?;
-    let w = solve_lower(&l, &identity)?;
+    let reversed = Dense::from_fn(n, n, |i, j| precision.get(n - 1 - i, n - 1 - j));
+    let l = cholesky(&reversed)?;
 
     let mut packed = Vec::with_capacity(n * (n + 1) / 2);
     let mut log_det = 0.0;
     for i in 0..n {
+        // `W[i][j] = Lᵀ[n−1−i][n−1−j] = L[n−1−j][n−1−i]`.
         for j in 0..=i {
-            packed.push(w.get(i, j));
+            packed.push(l.get(n - 1 - j, n - 1 - i));
         }
-        // `W` is triangular, so its determinant is the product of the diagonal — and the diagonal
-        // of an inverse-Cholesky factor is strictly positive, so the log is real.
-        log_det += w.get(i, i).abs().ln();
+        log_det += l.get(n - 1 - i, n - 1 - i).ln();
     }
     Ok((packed, log_det))
 }
