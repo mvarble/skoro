@@ -12,12 +12,17 @@ step, top-down.
 
 1. **Check coverage.** `require_role(&model, FISHER_ROOT)` guarantees that every scored term offers
    the curvature you are about to use.
-2. **Lay out the problem.** `residual_layout(&model)` gathers each term's `RESIDUAL` as the rows,
-   and `model.tangent_layout(&ids)` fixes the columns (the free quantities' tangent coordinates).
-3. **Linearize.** `jacobian_vjp` assembles $J$ over those layouts. Alternatively,
-   `information_root` assembles the stacked Fisher root $A$ with $A\transpose A = \calI$.
-4. **Solve on the host.** Move $J$ to `skoro-dense` and solve the row-augmented least-squares
-   problem with `lstsq` (QR). This keeps the conditioning at $\kappa$ rather than $\kappa^2$.
+2. **Lay out the problem.** `model.tangent_layout(&ids)` fixes the columns (the free quantities'
+   tangent coordinates).
+3. **Linearize.** `linearize(&model, points, &free, curvature)` builds a block-sparse Gaussian
+   factor graph: one factor per term, over only the quantities it reaches. `Curvature::Residual`
+   takes each term's `RESIDUAL` rows, $J_t\delta \approx -r_t$; `Curvature::Fisher` takes its
+   Fisher root $C_t J_t$ and the gradient of $\log p$. (The dense `jacobian_vjp`,
+   `information_root` and `residual_vector` remain for small problems.)
+4. **Solve on the host.** Damp with `graph.damped(λ)`, order with a `JunctionTree` (COLAMD, once
+   per structure), and `eliminate` by QR into a Bayes tree. `back_substitute` gives the residual
+   step at conditioning $\kappa$ rather than $\kappa^2$; `solve_normal(&gradient)` gives the Fisher
+   step.
 5. **Retract.** `PointMap::retract_flat` applies the step through each quantity's own manifold
    retraction.
 

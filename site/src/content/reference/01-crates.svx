@@ -29,6 +29,7 @@ open the Concepts page that introduces it.
 | `skoro-so3` | backend, core, graph, linalg, model, operation, riemann |
 | `skoro-normal` | backend, core, graph, linalg, model, operation, pointwise, riemann |
 | `skoro-se3` | backend, core, graph, linalg, model, operation, riemann, so3 |
+| `skoro-linearize` | backend, core, dense, graph, linalg, model, normal, operation, riemann |
 | `skoro` | all of the above |
 
 Generated from `cargo metadata --no-deps --format-version 1`. Keep `src/lib/crates.ts` in step.

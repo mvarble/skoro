@@ -1,6 +1,6 @@
 ---
-title: Dense solves on the host
-summary: Why an estimator's factorizations (Cholesky, triangular solves, QR least squares) run on the host in f64 via faer, rather than on the backend or in the graph.
+title: Solves on the host
+summary: Why an estimator's factorizations (Cholesky, triangular solves, QR least squares, and block-sparse elimination) run on the host in f64 via faer, rather than on the backend or in the graph.
 order: 2
 ---
 
@@ -11,16 +11,22 @@ Forming $J\transpose J$ squares the condition number. burn 0.21 has no QR.
 
 ## Decision
 
-The solve runs on the host, in `f64`, in the leaf crate `skoro-dense` (backed by `faer`). The
-boundary is exactly two tensors: $J$ in, $\delta$ out. The damped system is solved as a
-row-augmented least-squares problem by column-pivoted QR.
+The solve runs on the host, in `f64`, in the leaf crate `skoro-dense` (backed by `faer`). What
+crosses is the Jacobian, in per-term blocks, and the step $\delta$ back. The damped system is solved
+as a row-augmented least-squares problem by QR, block-sparsely: a Gaussian factor graph over keys,
+ordered by COLAMD, eliminated by dense unpivoted QR on each front of a junction tree. This is
+GTSAM's design, at the level of keys rather than scalars.
 
 ## Consequences
 
 - Conditioning is $\kappa$, not $\kappa^2$, at every damping value.
 - A host `f64` solve is not `f64` end to end: under an `f32` policy, $J$ arrives rounded.
 - A `Dense` is exactly one matrix, so a batch of $N$ problems is $N$ host solves per iteration (after
-  a single transfer).
+  a single transfer), sharing one symbolic elimination.
+- The symbolic elimination (ordering, separators, cliques) is computed once per structure and reused;
+  only the numbers are refactored per iteration.
+- Partial elimination gives marginals, the Schur complement in square-root form, without forming or
+  inverting the information.
 - The differentiable `TrilInvert` stays in the graph, and a test keeps the two triangular solves in
   agreement.
 - Only estimators pay for `faer`.
@@ -31,6 +37,11 @@ row-augmented least-squares problem by column-pivoted QR.
   conditioning.
 - **Make the solve a graph operation.** Nothing differentiates *through* the step, so it would add
   cost without benefit.
+- **Scalar sparse QR** (faer's own, with a scalar COLAMD). Correct, and used as a test reference,
+  but it orders and eliminates scalar columns that share their key's sparsity, and it offers no
+  per-key conditionals or separator factors to marginalize with.
+- **METIS (nested dissection).** Better orderings for large 2D/3D graphs, but a C dependency; it can
+  arrive later as another `Ordering`.
 
 > [!TODO]
 > Confirm or amend. Is GPU-side factorization something you'd revisit if burn gained QR?

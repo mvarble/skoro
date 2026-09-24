@@ -9,8 +9,8 @@ its five gaps and its one defect have since closed. **Its section numbering is d
 preserved**; the comments that cited it have been repointed here.
 
 Organized by what a caller can rely on rather than by the crate stack. §1 and §2 are the surfaces
-that exist and are tested. §3 is marginalization, where the split between what is built and what is
-not is unusually clean. §4 is the estimator's view. §5 is the gap ledger, ordered by which algorithm
+that exist and are tested. §3 is marginalization, expressed in the graph and computed on the host by
+partial elimination. §4 is the estimator's view, including the block-sparse elimination underneath it. §5 is the gap ledger, ordered by which algorithm
 each gap blocks. §6 records where the in-tree documentation has drifted from the code.
 
 Every claim below names a path. Every claim that something *does not exist* was checked, not
@@ -226,6 +226,7 @@ statically generic over it.
 | `log_density_of(&q)` | `Option<Id>` | The term scoring a stochastic quantity |
 | `graph_node_count()` | `usize` | The bound a retention policy watches |
 | `tangent_layout(&ids)` | `TangentLayout` | Flat tangent coordinates, in the caller's order |
+| `leaf_support(&ids)` | `Vec<Id>` | The free leaves `ids` depend on, walking parents but never through a leaf: a Jacobian row's structural sparsity |
 
 The roles a term may carry are constants in `crates/skoro-model/src/roles.rs`: `ARGUMENT`,
 `RESIDUAL`, `NORMALIZER_PARENT`, `LOCATION`, `WHITENING`, `FISHER_ROOT`. A `Role` is a newtype over
@@ -276,9 +277,10 @@ The build API is typed (`Q<B, T>`, where `T` is a `PhantomData` tag); the arena 
 
 ---
 
-## 3. Marginalization: the expression half is done, the computation half does not exist
+## 3. Marginalization
 
-This is the cleanest split in the library, and the one most worth knowing before planning work.
+Expressing a marginal is graph work; computing one is host work. Both halves exist and are tested,
+and the test that joins them (§3.3) is exact on a linear-Gaussian chain.
 
 ### 3.1 What is built and tested
 
@@ -290,7 +292,7 @@ behind as a factor over its Markov blanket, and reclaim what is now unreachable.
 | `demote_to_parameter` | `graph.rs`, `model.rs`, `client_ops.rs` (builder tier) | Strips a quantity's sampler, parents and own density, keeping its `Id`, type, and every child edge. **Returns the parents it severed**, since only a caller tracking handles can decide if they are now garbage. |
 | `stacked_tangent` | `graph.rs` (builder tier) | `δ = [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]` as one `EuclideanD(Σdᵢ)`. Builds `2k+1` nodes; each `pᵢ` is a frozen batch-pinned constant in a private arena. |
 | `JointNormal` / `add_joint_factor` | `crates/skoro-normal/src/joint.rs` | A Gaussian over several existing quantities, linearized at a frozen point, entering the model as a free-standing factor over them. |
-| `whitening_from_precision` | `crates/skoro-dense/src/factor.rs` | Turns a precision `Λ` into the `W` with `WᵀW = Λ`, packed for a `Tril`, plus its log-determinant. The host crossing a marginal needs. |
+| `whitening_from_precision` | `crates/skoro-dense/src/factor.rs` | Turns a precision `Λ` a caller already has into the lower `W` with `WᵀW = Λ`, packed for a `Tril`, plus its log-determinant, by one Cholesky of the reversed `Λ` — no inversion. For hand-built joints; a computed marginal (§3.3) arrives as a `W` already. |
 | `remove_closure` | `client_ops.rs` (builder tier) | Retires the cone, taking referrers with it. |
 | `cleanup` | `model.rs` | Reclaims whatever that made unreachable. |
 
@@ -317,35 +319,43 @@ The load-bearing property there is dimension, not storage. An `SE3` member contr
 never 12, so a blanket of `SE3` + `EuclideanD(3)` stacks to 9 rather than 15. Getting it wrong yields
 a well-shaped residual that no downstream shape check would reject.
 
-### 3.3 What is absent
+### 3.3 The computation half: partial elimination
 
-**There is no Schur complement anywhere in the tree, no `marginal_precision`, and no estimator.**
-`window.rs` supplies a fixed constant whitening in place of a computed precision, which is precisely
-why its header says it asserts "the bookkeeping, not the statistics."
+What retiring `x` leaves on its blanket is the Schur complement of the curvature, restricted to the
+factors adjacent to `x`. It is computed without forming `Λ` or inverting anything:
 
-The remaining work is:
+| Piece | Where | What it does |
+| --- | --- | --- |
+| `linearize` | `crates/skoro-linearize/src/lib.rs` | The model at a point as a block-sparse `GaussianFactorGraph<Id>` (§4.2), from the `RESIDUAL` rows or the `FISHER_ROOT` rows. |
+| `marginalize_out` | `skoro-linearize`, over `skoro_dense::marginal::marginalize_out` | Eliminates `x` from **only the factors touching it**, and squares what they leave on the blanket into one lower-triangular `W` and right-hand side `d`. On the host the factors elsewhere are never read — folding them in would count them twice once the joint is attached. (The device side still differentiates every term: `linearize` is not local.) |
+| `marginalize` | the same | The marginal of the *whole* graph on chosen keys, by eliminating every other key (COLAMD with the kept keys constrained last). For reporting and standard errors, not for a window. |
+| `joint_normal_from` | `skoro-linearize` | The `JointNormal` for a `Marginal`: ids and block order taken from the marginal, `W` as a `Tril` constant, the normalizer `−½D ln 2π + ln|det W|`, anchored at the linearization point with the marginal's right-hand side as an offset, `r = W (x ⊖ at) − d`, so its value and Jacobian at `at` are exactly the eliminated rows on any manifold. (Moving the anchor to the mean `at ⊕ W⁻¹d` instead is exact only on a flat manifold: `SE3`'s retraction is not a group exponential, and `crates/skoro/tests/linearize_se3.rs` pins the difference.) |
 
-1. The Schur complement `Λ_survivor = Λ_bb − Λ_ba Λ_aa⁻¹ Λ_ab` over `Dense`. Every primitive it
-   needs — `spd_solve`, `matmul`, `transpose` — exists.
-2. Whatever produces `Λ` at an estimate, which is the same thing as §4's missing estimator: a Laplace
-   marginal is `Λ = JᵀJ` in tangent coordinates at `θ̂`.
+The square root comes out lower-triangular because the last QR runs on the columns reversed and is
+flipped back (`crates/skoro-dense/src/marginal.rs`): `R'ᵀR' = PΛP` for an upper `R'`, so
+`W = P R' P` is lower with `WᵀW = Λ` — the shape a `Tril` can hold.
 
-With the standing precondition that the Laplace marginal is **exact** for a linear-Gaussian model
-and an approximation otherwise.
+`crates/skoro-linearize/tests/window.rs` runs the loop for real: a linear-Gaussian chain,
+linearized at zero on every tick so every marginal carries a right-hand side, a three-member window
+over ten ticks, and at the end the windowed estimate of the live states must equal the full-batch
+estimate to `1e-9`. The Laplace marginal is **exact** for a linear-Gaussian model and an
+approximation otherwise; linearization-point drift in a nonlinear window is the caller's policy.
+`crates/skoro-normal/tests/window.rs` keeps asserting the bookkeeping with a stand-in whitening.
 
 ### 3.4 Two obligations nothing can check
 
 - **`JointNormal`'s block order.** `ids` fixes the order the tangents stack in, and `W` must be
   expressed in those same coordinates. Nothing verifies the correspondence, because nothing can — a
-  `Tril` of the right width is a valid whitening for any ordering.
+  `Tril` of the right width is a valid whitening for any ordering. `joint_normal_from` keeps it by
+  construction, taking the ids from the `Marginal` that `W` came from; a hand-built `JointNormal`
+  still carries the obligation.
 - **A joint factor binds no `LOCATION` or `WHITENING`**, having no single mean node. So
   `GaussianBlock` cannot see it, and a filter reading `H = ∂μ/∂x` and `R = L Lᵀ` off the bindings
   will skip it silently — see §2.3.
 
-Also note that `whitening_from_precision` costs an inversion that cancels analytically but not
-numerically, and `Λ` is ill-conditioned exactly when the blanket is under-constrained, which is the
-case a marginal over a poorly observed window produces. `NotPositiveDefinite` is the honest failure
-there, and it is returned rather than becoming `NaN`s.
+An under-constrained blanket — a direction no retained factor determines — is the honest failure of a
+marginal over a poorly observed window. Elimination reports it as `RankDeficient { position }` and
+`whitening_from_precision` as `NotPositiveDefinite`; neither returns `NaN`s.
 
 ---
 
@@ -354,47 +364,50 @@ there, and it is returned rather than becoming `NaN`s.
 ### 4.1 The step loop already composes
 
 Nothing is missing from the *primitives* of a damped Gauss-Newton or Fisher-scoring step. The loop
-is expressible today:
+is expressible today, block-sparse end to end:
 
 ```rust
-// Objective structure, read off the bindings.
-require_role(&model, FISHER_ROOT)?;              // no term silently omitted (§2.3)
-let rows = residual_layout(&model)?;             // skoro_model::least_squares
-let free = model.tangent_layout(&ids)?;          // the columns: Parameter/Stochastic leaves
-
-// A PointMap is what retracts, and `as_ref()` is its ValueMap view for evaluation.
+// The columns: Parameter/Stochastic leaves. A PointMap is what retracts, and `as_ref()` is its
+// ValueMap view for evaluation.
+let free = model.tangent_layout(&ids)?;
 let mut at = point_map().with_quantity(&x, x0).build();   // skoro_model::hash_map_builders
 
-// Curvature: either the Gauss-Newton Jacobian of the residuals, or the Fisher root.
-let j = jacobian_vjp(&model, at.as_ref(), &free, &rows)?; // [batch, D_out, D_in]
-let a = information_root(&model, at.as_ref(), &free)?;    // [batch, Σk,   D_in]
+// The rows, block by block: `J_t δ ≈ −r_t` per term, each over only the leaves it reaches.
+// `linearize` asserts `require_role` itself (§2.3), and refuses a residual whose normalizer moves.
+let graph = linearize(&model, at.as_ref(), &free, Curvature::Residual)?.remove(0).graph;
 
-// Host solve, damped by row augmentation (§4.2).
-let jd = Dense::from_tensor(j)?;
-let damping = Dense::scaled_identity(free.total(), lambda.sqrt());
-let step = lstsq(&jd.vstack(&damping)?, &rhs)?;
+// Damp by row augmentation (§4.2), order, eliminate. The junction tree depends only on the
+// structure, so a loop builds it once and reuses it while the structure holds.
+let damped = graph.damped(lambda)?;                                // √λ I per key
+let tree = JunctionTree::new(&damped, &Ordering::Colamd)?;         // skoro_dense::elimination
+let step = eliminate(&tree, &damped)?.tree.back_substitute()?;     // skoro_dense::bayes
 
 // Step on the manifolds.
-at = at.retract_flat(&free, step.to_vector(&device))?;
+at = at.retract_flat(&free, to_flat_tensor(&step, &free, &device)?)?;
 ```
 
 `retract_flat` applies each block through its own manifold's retraction, which is the only
 manifold-aware step in the iteration — everything above it is arithmetic in ℝⁿ.
 
-The `rhs` is elided above because it is the one piece with no helper. There is a
-`jacobian_vjp` that assembles `J` over a layout, but **nothing that assembles `r` over the same
-layout**: a caller evaluates the residual nodes with `evaluate_ids` and flattens them itself,
-by `TangentLayout::flatten_vectors` or by hand. The layout that ordered the rows of `J` is the
-layout the residual must agree with, and keeping them in step is unassisted.
+`Curvature::Fisher` gives the Fisher-scoring rows instead — `C_t J_t` with no right-hand side — and
+the gradient of `log p` beside them; the step is then `tree.solve_normal(&gradient)`. It is the
+route for any distribution that binds a root, and the only correct one when a term's covariance is
+itself free (a heteroscedastic Gaussian), which the residual route refuses with
+`NormalizerNotConstant`.
+
+The dense readers remain for small models and for tests: `jacobian_vjp` / `jacobian_jvp` over a
+layout, `information_root` / `information` (the keyed blocks scattered back into `free`'s columns),
+and `residual_vector`, the stacked `r` in `residual_layout`'s order, which is what a dense `lstsq`
+pairs with `J`.
 
 ### 4.2 Crossing to the host
 
-`J` and `δ` are the only tensor-typed values in the iteration; everything between them is host
-`f64` and has no representation in the graph. `Dense::split_tensor` moves a whole batch across in
+The Jacobian blocks and `δ` are the only tensor-typed values in the iteration; everything between
+them is host `f64` and has no representation in the graph. `Dense::split_tensor` moves a whole batch across in
 **one** transfer and then slices host-side — the obvious alternative, `narrow` per row, is `N` device
 reads, and on a cube backend each one fences the queue.
 
-The step is column-pivoted QR on the row-augmented system:
+The step is QR on the row-augmented system:
 
 ```
 (JᵀJ + λI) δ = −Jᵀr    ⟺    min ‖[J; √λI] δ − [−r; 0]‖
@@ -403,6 +416,41 @@ The step is column-pivoted QR on the row-augmented system:
 The right-hand form is solved directly, so the iteration runs at condition `κ` rather than `κ²`, **at
 every damping value** rather than only at `λ = 0`. Forming `JᵀJ` would square the conditioning;
 avoiding it is the entire argument for the host boundary, since `burn` has no QR.
+
+**The QR is block-sparse**, and it is GTSAM's elimination at the level of keys:
+
+1. `jacobian_blocks` (`crates/skoro-model/src/jacobian.rs`) differentiates each row only over the
+   free leaves it reaches (`leaf_support`), in **one** reverse pass: rows with disjoint supports are
+   coloured alike and share frames, so a chain of any length needs a handful of frames rather than
+   one per row, and one compile rather than one per term. `information_blocks` and
+   `residual_blocks` are built on it.
+2. `GaussianFactorGraph` (`crates/skoro-dense/src/factor_graph.rs`) holds the rows as factors
+   `‖Σ_k A_k δ_k − b‖²` over keys. `Ordering::Colamd` runs faer's COLAMD on the **block** pattern —
+   one entry per factor and key; `ConstrainedLast` stands in for the CCOLAMD faer lacks.
+3. `JunctionTree` (`elimination.rs`) is the symbolic elimination: separators, the elimination tree,
+   and chains merged into cliques. It holds no numbers, is checked against the graph's `Structure`
+   on use, and is reused across iterations, batch rows, and ticks of unchanged topology — never
+   keyed on the graph epoch, which a window bumps every tick.
+4. `eliminate` (`bayes.rs`) runs **unpivoted** Householder QR on each dense front
+   `[A_frontal | A_separator | b]`; column pivoting would mix the partition. The result is a
+   `BayesTree` of conditionals `R x_f + S x_s = d`, plus the factors left on any kept keys. A front
+   that does not determine a key is `RankDeficient { position }` — gauge freedom, or a key reached
+   by no informative row — and a key no factor touches is `KeyUnconstrained`. The threshold is
+   `1e-12` relative to the front's column norm, which assumes rows computed in `f64`: under an `f32`
+   float policy an exact gauge freedom leaves diagonals near `1e-7`, and comes back as a huge step
+   rather than an error.
+5. From the tree: `back_substitute` (the least-squares step), `solve_normal(g)` (the Fisher step,
+   `(RᵀR)⁻¹g`, whose solve is sensitive at `κ²` as any normal-equations solve is), `solve_upper(z)`
+   (`R⁻¹z`: a draw from the Laplace approximation for `z ~ N(0, I)`), and `log_det_r`
+   (`½ ln det AᵀA`, for a Laplace evidence).
+
+Everything in 2–5 is indifferent to what the rows mean: a whitened residual Jacobian with `b = −r`,
+a Fisher root with `b = 0`, and a damping prior are the same object. The pieces that assume the
+least-squares reading are `residual_blocks`, `Curvature::Residual`, `back_substitute`, the
+elimination's accumulated `error` (`min ½‖Aδ − b‖²`, the predicted objective an LM gain ratio
+needs), and a marginal's right-hand side `d`. A term with no closed-form root has no row form; a
+Hessian form `[G g; gᵀ f]` eliminated by Cholesky is where it would join (`GaussianFactor` is
+`#[non_exhaustive]` for it), once `hessian_*` exists.
 
 This is also the fence that keeps the two triangular-solve implementations apart, and deliberately:
 `TrilInvert` is a *differentiable graph operation* on every backend and stays there, while
@@ -419,7 +467,8 @@ Two limits on the boundary:
 - **A `Dense` is exactly one matrix.** `from_tensor` rejects a `[b, m, n]` with `b != 1` as
   `BatchNotSingleton` rather than silently taking slice 0. A batched solver reaches the
   factorizations through `split_tensor` / `split_vector` / `stack_vector`, so the batch axis is
-  handled *around* the factorizations — and `N` problems means `N` host round trips per iteration.
+  handled *around* the factorizations: `linearize` returns one graph per batch row, all of one
+  structure, so one junction tree serves every row.
 
 `lstsq` commits an algorithm to the host path deliberately: burn 0.21 has no QR, so unlike the other
 factorizations it could not be reimplemented on `Tensor<B, 3>` behind the same name.
@@ -456,20 +505,23 @@ it.
 ### 4.4 What is missing around the loop
 
 - **No `Estimator` abstraction**, and no line search, trust region, damping schedule, or convergence
-  test. `lstsq` gives the undamped step and documents damping as the caller's job.
+  test. `GaussianFactorGraph::damped` / `damped_diagonal` give the damped rows and `Elimination::error`
+  the predicted objective, but choosing `λ` is the caller's job.
 - **No dense second-order assembly.** `log_density_ord2`, `evaluate_hvp` and friends are reachable
   from `ModelReaderOps`, but each takes a single direction (`HashMap<Id, TangentVector<B>>`), not a
   basis, and there is **no `hessian_*` mirroring `jacobian_jvp` / `jacobian_vjp`**. Materializing a
   Hessian is a `D_in`-call loop the caller writes, with none of `jacobian.rs`'s layout flattening or
   leaf-row fill-in. Note that `information*` is the *Fisher* information, not the Hessian.
-- **No sparsity on the host.** `Dense::matmul` is a triple loop with a zero-skip; there is no LU,
-  SVD, eigendecomposition, iterative solver, or sparse storage in `skoro-dense`. The one sparse
-  object in the tree is `SparseLinearMap`, a fixed sparse matrix applied *inside* the graph.
+- **No incremental elimination.** Every solve re-eliminates the whole tree; there is no iSAM2-style
+  update that relinearizes and re-eliminates only the affected cliques, and no Bayes-tree shortcut
+  for a marginal — each marginal query eliminates afresh (the symbolic part can be reused through
+  `marginal_with`). Nor is there METIS or any iterative solver: COLAMD is the one ordering.
 
 Two things that are *not* missing. The directional `_jvp` / `_vjp` / `_hvp` primitives are on
 `ModelReaderOps`, so an estimator bounded on the read tier does get raw access to them. And compiled
 programs are cached (§4.5): `information_blocks` compiles twice per call, but a solver loop that does
-not mutate the model between iterations pays for those two compiles once.
+not mutate the model between iterations pays for those two compiles once — and its junction tree,
+likewise, once.
 
 ### 4.5 The compiler underneath
 
@@ -513,13 +565,14 @@ unless noted.
 | No RNG seeding; no per-quantity sampling | Any MCMC or SMC — no reproducibility, no per-chain RNG | Not recorded anywhere; found by search |
 | No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
-| No block-sparse `J`, no sparse solvers | Large models, rather than any one algorithm | `roadmap.md` |
-| No Schur complement / marginal precision | Marginalization's computation half (§3.3) | Was the old doc's GAP 2 |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
 | No `hessian_*` assembly | Newton methods; anything wanting the observed information | Not recorded; found by search |
-| No residual-vector assembly to match `jacobian_*` | Every least-squares step must hand-roll its `r` in the layout's order (§4.1) | Not recorded; found while writing this |
 | Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
 | Deferred bindings | Expensive-root families, very large models | `docs/deferred-bindings.md` — designed, postponed |
+
+Closed on 2026-09-23, and so no longer rows: block-sparse `J` and a sparse solver (§4.2), the
+Schur complement / marginal precision (§3.3), and residual assembly matching the Jacobian rows
+(`residual_blocks`, `residual_vector`).
 
 ### 5.1 The sampling gap, in detail
 
@@ -538,7 +591,6 @@ reusable sampler: no weight accumulator, no resampling, no ESS.
 ### 5.2 Searches behind the "does not exist" claims
 
 ```
-rg -i 'schur|marginal_precision'                       # 0
 rg -i 'seed_rng|set_seed|B::seed'                      # 0
 rg 'fn hessian'                                        # 0
 rg -i 'hmc|nuts|leapfrog|metropolis|resampl|particle'  # 2, both prose
@@ -554,6 +606,6 @@ rg -i 'NlsStructure|ResidualCertificate|record_joint'  # 0
 ## 6. Where the in-tree documentation is stale
 
 None known. The four spots this section listed were repaired on 2026-09-23: the `skoro-dense` entry
-point count (six, with `whitening_from_precision` now in the prelude), `demote_to_parameter`'s claim
+point count, `demote_to_parameter`'s claim
 that the graph reports what it orphans, `cleanup`'s references to the collector it replaced, and a
 dropped clause on `stacked_tangent`. Record a new one here with its path.

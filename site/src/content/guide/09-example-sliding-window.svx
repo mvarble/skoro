@@ -15,9 +15,9 @@ katex_macros:
 </script>
 
 > [!NOTE] Status
-> The graph surgery on this page is built and tested, and the listing below is real. What's missing
-> is the statistics: nothing yet computes the marginal precision, so the example cannot produce a
-> correct estimate ([What exists today](#what-exists-today)).
+> The graph surgery and the marginal are built and tested, and both listings below are real. On a
+> linear-Gaussian chain the window reproduces the full-batch estimate to rounding. What's missing is
+> a reusable estimator to solve each window ([What exists today](#what-exists-today)).
 
 [The pose example](../example-pose-estimation/) solved for a whole trajectory at once. A robot
 running for hours can't do that: the problem grows with every frame. A **sliding-window smoother**
@@ -68,21 +68,31 @@ The test holds the factor count, the row count of $J$, and the graph's node coun
 over twelve ticks. A leak or a dangling binding would be invisible in one tick and unmissable over
 twelve.
 
-> [!WARNING] What the test does not do
-> It passes a fixed constant `whitening` where $W$ should be. The bookkeeping is right, but the
-> statistics aren't there yet.
+That test passes a fixed constant `whitening` where $W$ should be: it watches the bookkeeping, not
+the statistics.
 
-## The missing half
+## Computing the marginal
 
-> [!TODO] Code: compute the marginal
-> Quote from `examples/pose_window.rs` once it exists. Per tick:
-> - solve the window (the loop from [the pose example](../example-pose-estimation/#solving-it));
-> - assemble $\Lam$ over $[\retiring, \blanket]$ at the estimate, e.g. from `information` with a
->   tangent layout of those two poses;
-> - take the Schur complement on the host (**missing**, though `spd_solve`, `matmul` and
->   `transpose` over `Dense` are all there);
-> - turn $\tilde\Lam_\blanket$ into $W$ with `whitening_from_precision`;
-> - then the three moves above, with the computed `W` and the estimate $\hat\pose_1$ as the anchor.
+`marginalize_out` linearizes the window and eliminates the retiring state from **its own factors
+alone** — its prior, its measurements, its successor's conditional — leaving one factor on the
+blanket. Nothing else in the window is read: folding the other factors in would count them twice
+once the joint is attached, since the model keeps them. The Schur complement comes out as a
+lower-triangular $W$ with $W\transpose W = \tilde\Lam_\blanket$, never forming $\Lam$ or inverting
+anything, and `joint_normal_from` turns it into the joint factor, with the block order taken from
+the marginal and the right-hand side kept as an offset, $r = W(\pose_1 \ominus \hat\pose_1) - d$:
+
+```rust
+{../../../../crates/skoro-linearize/tests/window.rs:158..183}
+```
+
+The test linearizes at zero on every tick, far from the estimate, so each marginal carries a
+right-hand side and the offset matters; after ten ticks the window's estimates of the live
+states equal the full-batch estimates to $10^{-9}$.
+
+> [!TODO] Code: the pose window
+> Quote from `examples/pose_window.rs` once it exists. Per tick: solve the window (the loop from
+> [the pose example](../example-pose-estimation/#solving-it)), `marginalize_out` the retiring pose at
+> the estimate, and the three moves above with `joint_normal_from`'s factor.
 
 > [!TODO] Design notes
 > Decide how to handle linearization-point drift: the joint factor is frozen at $\hat\pose_1$
@@ -100,13 +110,13 @@ twelve.
 | `demote_to_parameter`: sever a quantity's conditional, keep its identity | built |
 | `stacked_tangent`, `JointNormal`, `add_joint_factor`: a joint over existing quantities | built |
 | `remove_closure` and mark-and-sweep `cleanup` | built |
-| `whitening_from_precision` on the host | built |
-| The Schur complement, a `marginal_precision` | missing |
-| An estimator to produce $\Lam$ at an estimate | missing (see [the pose example](../example-pose-estimation/#what-exists-today)) |
+| `marginalize_out`, `joint_normal_from`: the Schur complement as a whitening, and its factor | built |
+| An estimator to solve each window | missing (see [the pose example](../example-pose-estimation/#what-exists-today)) |
 
 Two things nothing can check for you:
 
-- a `JointNormal`'s whitening must be expressed in the same block order as its ids;
+- a hand-built `JointNormal`'s whitening must be expressed in the same block order as its ids
+  (`joint_normal_from` keeps it by construction);
 - a joint factor binds no `LOCATION` or `WHITENING`, so `GaussianBlock` does not see it.
 
 See [Status and roadmap](../../reference/status/).

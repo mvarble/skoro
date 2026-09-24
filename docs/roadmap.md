@@ -25,14 +25,18 @@ Bindings and Fisher roots landed: a term carries labelled reference edges to oth
 `FISHER_ROOT` gives `information`/`information_root`/`information_blocks` what Fisher scoring
 needs. What that change stopped short of:
 
-- **A Fisher-scoring or Levenberg–Marquardt solver loop.** The information is assembled; no
-  optimizer drives it. Its one non-obvious precondition is now machine-checkable:
+- **A Fisher-scoring or Levenberg–Marquardt solver loop.** The information is assembled, and
+  linearized and eliminated block-sparsely (`skoro-linearize`); no optimizer drives it. Its one
+  non-obvious precondition is now machine-checkable:
   `coverage::require_role(&model, FISHER_ROOT)` refuses a model whose scored terms do not all bind
   a root, which is what keeps `information_root` and the gradient it is solved against covering the
   same terms. `docs/fisher-scoring.md` §7 states the condition and §8 the failure it prevents.
-- **Block-sparse Jacobian storage, and sparse solvers.** What is left of this entry: cut
-  compilation, `support(id)` and the compiled-program cache shipped (see
-  [skoro.md](skoro.md) §4.5), and that work deliberately left these two out.
+- ~~**Block-sparse Jacobian storage, and sparse solvers.**~~ Shipped: compressed block Jacobians
+  (`jacobian_blocks`), a block Gaussian factor graph with COLAMD ordering, a junction tree, and
+  multifrontal QR into a Bayes tree, with partial elimination for marginals (see
+  [skoro.md](skoro.md) §3.3 and §4.2). What that work left out: METIS or any ordering but COLAMD,
+  iSAM2-style incremental re-elimination, Bayes-tree shortcut marginals, and a Hessian (Cholesky)
+  factor form for terms with no closed-form root.
 - **Lazily built bindings from a stored distribution object.** Designed since, and postponed;
   see [deferred-bindings.md](deferred-bindings.md).
 - **Any change to sampling, `observe`, `stacked_tangent`, or the discrete kind.**

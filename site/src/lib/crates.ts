@@ -31,7 +31,8 @@ export const CRATES: Crate[] = [
     },
     {
         name: 'skoro-dense',
-        purpose: 'Host-side f64 factorizations (Cholesky, triangular, QR least squares) via faer.',
+        purpose:
+            'Host-side f64 factorizations, and block-sparse elimination (COLAMD, junction tree, Bayes tree, marginals) via faer.',
         deps: ['skoro-backend', 'skoro-core'],
         page: 'concepts/host-linear-algebra',
     },
@@ -84,9 +85,16 @@ export const CRATES: Crate[] = [
         page: 'concepts/quantity-operations',
     },
     {
+        name: 'skoro-linearize',
+        purpose:
+            'A model linearized into a block-sparse Gaussian factor graph; marginals and joint factors.',
+        deps: ['skoro-dense', 'skoro-normal'],
+        page: 'concepts/host-linear-algebra',
+    },
+    {
         name: 'skoro',
         purpose: 'The umbrella crate: re-exports everything, plus a curated prelude.',
-        deps: ['skoro-dense', 'skoro-normal', 'skoro-se3', 'skoro-pointwise'],
+        deps: ['skoro-linearize', 'skoro-se3', 'skoro-pointwise'],
     },
 ];
 

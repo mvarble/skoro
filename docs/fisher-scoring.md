@@ -337,9 +337,10 @@ method with the information in place of the Gauss–Newton matrix. It is what re
 in Section 4.
 
 The linear system is solved on the host with `skoro-dense`, since the backend has no dense
-factorizations. In general the system is symmetric positive definite and is solved by a Cholesky
-factorization (`spd_solve`). For models whose terms are Gaussian with fixed covariances there is a
-better-conditioned route: $A$ is then the whitened residual Jacobian $J_r$ and
+factorizations, and it is solved block-sparsely: `linearize(..., Curvature::Fisher)` gives one factor
+$C_t J_t$ per term over only the quantities it reaches, elimination factors $A^\top A = R^\top R$
+without forming it, and the Bayes tree's `solve_normal` applies $(R^\top R)^{-1}$ to the gradient. For
+models whose terms are Gaussian with fixed covariances there is a better-conditioned route: $A$ is then the whitened residual Jacobian $J_r$ and
 $\nabla \log p = -J_r^\top r$, so the damped system is the normal equations of the least-squares
 problem
 
@@ -348,7 +349,7 @@ $$
 + \begin{bmatrix} r \\ 0 \end{bmatrix} \right\|^2 ,
 $$
 
-which can be solved by a QR factorization (`lstsq`). Working with the root $A$ rather than the product
+which elimination solves directly (`linearize(..., Curvature::Residual)` and `back_substitute`). Working with the root $A$ rather than the product
 $A^\top A$ matters here, because the condition number of $A^\top A$ is the square of that of $A$.
 
 ## 8. Limitations

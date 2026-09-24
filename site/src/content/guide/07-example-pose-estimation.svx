@@ -79,11 +79,15 @@ be read straight off the model.
 One damped Gauss–Newton (Levenberg–Marquardt) step, which is also Fisher scoring for this model
 ([why](../../concepts/fisher-scoring/)):
 
-1. `require_role(&model, RESIDUAL)`: every scored term has a residual.
-2. `residual_layout(&model)` for the rows, `tangent_layout(&ids)` for the columns: 6 per pose and 3
-   per landmark.
-3. `jacobian_vjp` for $J$, and the residual vector $r$ in the same row order.
-4. On the host: `lstsq` on $\begin{bmatrix} J \\ \sqrt\lambda I \end{bmatrix}\delta = \begin{bmatrix} -r \\ 0 \end{bmatrix}$.
+1. `tangent_layout(&ids)` for the columns: 6 per pose and 3 per landmark.
+2. `linearize(&model, points, &free, Curvature::Residual)`: one factor per term, $J_t \delta \approx -r_t$,
+   each over only the poses and landmarks it touches. It checks `require_role(&model, RESIDUAL)`
+   first.
+3. On the host: `graph.damped(λ)` appends $\sqrt\lambda I$ per key, a `JunctionTree` orders it by
+   COLAMD once, and `eliminate(...).tree.back_substitute()` solves
+   $\begin{bmatrix} J \\ \sqrt\lambda I \end{bmatrix}\delta = \begin{bmatrix} -r \\ 0 \end{bmatrix}$
+   block-sparsely — the cost grows with the map's connectivity, not its size squared.
+4. `to_flat_tensor` turns the per-key step back into a tensor over the layout.
 5. `retract_flat`: each pose moves by $\pose \leftarrow \pose \circ \exp(\delta)$, and each landmark by addition.
 6. Accept the step and shrink $\lambda$ if $\log p$ rose; otherwise reject it and grow $\lambda$.
 
@@ -105,9 +109,8 @@ One damped Gauss–Newton (Levenberg–Marquardt) step, which is also Fisher sco
 | `Normal<B, SE3>`, `Normal<B, EuclideanD>` with residual, location, whitening and Fisher-root bindings | built |
 | SE(3) compose, inverse, rotate and unrotate operations | built |
 | `residual_layout`, `tangent_layout`, `jacobian_vjp`, `require_role` | built |
-| Host `lstsq`, `retract_flat` | built |
-| Assembling $r$ in the same row order as $J$ | missing: each caller flattens it by hand |
+| `linearize`, block-sparse elimination (COLAMD, junction tree, multifrontal QR), `retract_flat` | built |
+| Residuals in the same row order as $J$ (`residual_blocks`, `residual_vector`) | built |
 | An `Estimator` (damping schedule, line search, convergence test) | missing |
-| Block-sparse $J$ and sparse solvers, for large maps | missing |
 
 See [Status and roadmap](../../reference/status/).

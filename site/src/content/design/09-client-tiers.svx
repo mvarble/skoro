@@ -31,7 +31,7 @@ The tiers are drawn by what a call changes. The read tier may add nodes, but may
 Anything that changes one of those is on the builder tier.
 
 ```
-{../../../../crates/skoro-model/src/client_ops.rs:269..290}
+{../../../../crates/skoro-model/src/client_ops.rs:276..297}
 ```
 
 | Call | Tier | Why |

@@ -10,11 +10,19 @@ order: 5
   discrete quantities.
 - Evaluation of $\log p$, $\log q$ and the log-weight; first-order derivatives and Hessian–vector
   products.
-- Bindings, and the readers built on them: `residual_layout`, `information*`, `GaussianBlock`,
-  `coverage`.
+- Bindings, and the readers built on them: `residual_layout`, `residual_blocks`, `information*`,
+  `GaussianBlock`, `coverage`.
+- Block-sparse linearization: per-term Jacobians over only the quantities each term reaches, from
+  one compressed reverse pass (`jacobian_blocks`), and `skoro-linearize` to turn a model into a
+  Gaussian factor graph by its residuals or its Fisher roots.
 - The Gaussian, with a Fisher root, and joint Gaussian factors.
 - A compiler with an epoch-keyed cache, cut compilation, and slot liveness.
-- Host `f64` dense factorizations.
+- Host `f64` dense factorizations, and GTSAM-style block elimination: COLAMD ordering, a reusable
+  junction tree, multifrontal QR into a Bayes tree, and the solves on it (least squares, Fisher
+  step, Laplace draws).
+- Marginals by partial elimination — the Schur complement as a lower-triangular whitening — and
+  the `JointNormal` built from one. A marginalizing window matches the full batch to rounding on a
+  linear-Gaussian chain.
 
 ## Open gaps
 
@@ -23,11 +31,8 @@ order: 5
 | No RNG seeding; no per-quantity sampling | Reproducible MCMC/SMC; per-chain streams |
 | No derivatives of $q$ or of the weight | Gradient-based variational inference |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC |
-| No block-sparse $J$, no sparse solvers | Large models |
-| No Schur complement / marginal precision | The computational half of marginalization |
 | No estimator, line search, or convergence test | Every deterministic estimator |
 | No `hessian_*` assembly | Newton methods; observed information |
-| No residual-vector assembly matching `jacobian_*` | Least-squares steps must hand-roll $r$ |
 | Joint proposals over several quantities | Block proposals |
 | Deferred bindings | Expensive-root families; very large models |
 
