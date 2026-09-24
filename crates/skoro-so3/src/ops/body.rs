@@ -55,3 +55,47 @@ pub(crate) fn sum<B: Backend>(
         (None, b) => b,
     }
 }
+
+// A matrix operand `V ∈ ℝ^{3×n}` (a vector is `n = 1`) is stored row-major as `[batch, 3n]`, and
+// its tangent and cotangent frames as `[batch, 3n, f]`. Derivatives work on `[batch, 3, n·f]`,
+// column `c` of the operand and column `j` of the frame at `c·f + j`, so one cross product or one
+// matmul covers every pair.
+
+/// `V` as `[batch, 3, n·f]`, each operand column repeated across the `f` frame columns.
+pub(crate) fn spread<B: Backend>(v: &Tensor<B, 2>, n: usize, f: usize) -> Tensor<B, 3> {
+    let [batch, _] = v.dims();
+    v.clone()
+        .reshape([batch, 3, n])
+        .unsqueeze_dim::<4>(3)
+        .repeat_dim(3, f)
+        .reshape([batch, 3, n * f])
+}
+
+/// A frame `[batch, 3, f]` as `[batch, 3, n·f]`, repeated across the `n` operand columns.
+pub(crate) fn tile<B: Backend>(a: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+    let [batch, _, f] = a.dims();
+    a.unsqueeze_dim::<4>(2)
+        .repeat_dim(2, n)
+        .reshape([batch, 3, n * f])
+}
+
+/// An operand frame `[batch, 3n, f]` as `[batch, 3, n·f]`.
+pub(crate) fn unstack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+    let [batch, _, f] = x.dims();
+    x.reshape([batch, 3, n * f])
+}
+
+/// `[batch, 3, n·f]` back to an operand frame `[batch, 3n, f]`.
+pub(crate) fn stack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+    let [batch, _, nf] = x.dims();
+    x.reshape([batch, 3 * n, nf / n])
+}
+
+/// The sum over the `n` operand columns: `[batch, 3, n·f]` to a rotation frame `[batch, 3, f]`.
+pub(crate) fn fold<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+    let [batch, _, nf] = x.dims();
+    let f = nf / n;
+    x.reshape([batch, 3, n, f])
+        .sum_dim(2)
+        .reshape([batch, 3, f])
+}
