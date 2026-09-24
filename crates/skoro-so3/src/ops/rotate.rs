@@ -1,7 +1,6 @@
 use skoro_backend::{Backend, CotangentFrame, Point, TangentVector};
 use skoro_core::error::{SkoroError, SkoroResult};
 use skoro_graph::quantity::ContinuousQuantity;
-use skoro_linalg::matrix::Matmul;
 use skoro_model::{map::register_map2, q::Q};
 use skoro_operation::{
     Input,
@@ -63,8 +62,8 @@ where
         T: RotationVector<B>,
     {
         let otype = other.get_quantity_type();
-        let matmul = otype.build_matmul()?;
-        register_map2(otype, matmul, (self, other))
+        let columns = otype.columns()?;
+        register_map2(otype, SO3Rotate(columns), (self, other))
     }
 
     fn unrotate<T>(&self, other: &Q<B, T>) -> SkoroResult<Q<B, T>>
@@ -78,8 +77,6 @@ where
 }
 
 pub trait RotationVector<B: Backend>: ContinuousQuantity<B> {
-    fn build_matmul(&self) -> SkoroResult<Matmul>;
-
     /// The number of 3-vectors this quantity holds: 1 for a vector, `n` for a `3 × n` matrix.
     ///
     /// Returns [`SkoroError::InvalidRotationFrame`] for anything that is not 3 rows.
@@ -87,11 +84,6 @@ pub trait RotationVector<B: Backend>: ContinuousQuantity<B> {
 }
 
 impl<B: Backend> RotationVector<B> for EuclideanD {
-    #[inline(always)]
-    fn build_matmul(&self) -> SkoroResult<Matmul> {
-        Ok(Matmul(3, 3, 1))
-    }
-
     fn columns(&self) -> SkoroResult<usize> {
         if self.0 != 3 {
             return Err(SkoroError::InvalidRotationFrame { rows: self.0 });
@@ -102,24 +94,12 @@ impl<B: Backend> RotationVector<B> for EuclideanD {
 
 impl<B: Backend> RotationVector<B> for Euclidean<3> {
     #[inline(always)]
-    fn build_matmul(&self) -> SkoroResult<Matmul> {
-        Ok(Matmul(3, 3, 1))
-    }
-
-    #[inline(always)]
     fn columns(&self) -> SkoroResult<usize> {
         Ok(1)
     }
 }
 
 impl<B: Backend> RotationVector<B> for EuclideanMatrixD {
-    fn build_matmul(&self) -> SkoroResult<Matmul> {
-        if self.0 != 3 {
-            return Err(SkoroError::InvalidRotationFrame { rows: self.0 });
-        }
-        Ok(Matmul(3, 3, self.1))
-    }
-
     fn columns(&self) -> SkoroResult<usize> {
         if self.0 != 3 {
             return Err(SkoroError::InvalidRotationFrame { rows: self.0 });
@@ -129,11 +109,6 @@ impl<B: Backend> RotationVector<B> for EuclideanMatrixD {
 }
 
 impl<B: Backend, const N: usize> RotationVector<B> for EuclideanMatrix<3, N> {
-    #[inline(always)]
-    fn build_matmul(&self) -> SkoroResult<Matmul> {
-        Ok(Matmul(3, 3, N))
-    }
-
     #[inline(always)]
     fn columns(&self) -> SkoroResult<usize> {
         Ok(N)
@@ -157,6 +132,125 @@ type RotationHvp<B> = (Option<TangentVector<B>>, Option<TangentVector<B>>);
 /// A tangent vector `[batch, d]` as a one-column frame.
 fn one_column<B: Backend>(v: TangentVector<B>) -> skoro_backend::TangentFrame<B> {
     v.unsqueeze_dim(2)
+}
+
+/// `Y = r V` for `V ∈ ℝ^{3×n}` (a vector when `n = 1`), differentiated in the body-frame chart of
+/// `r`.
+///
+/// With `r Exp(a)` and `V + B`, `Y` moves by `r (a × V + B)` column by column, so with
+/// `w_c = rᵀ α_c` and a rotation's cotangent summed over the columns `c`:
+///
+/// ```text
+/// JVP  Ẏ = r (a × V + B)
+/// VJP  ∂r = Σ_c v_c × w_c                  ∂V = rᵀ α
+/// HVP  ∂r → Σ_c (b_c × w_c − v_c × (a × w_c))
+///      ∂V → −a × w
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct SO3Rotate(pub usize);
+
+impl<B: Backend> DiffOperation<B> for SO3Rotate {
+    type VjpState = Option<RotationVjp<B>>;
+    type HvpState = RotationHvp<B>;
+
+    fn forward(
+        &self,
+        inputs: Vec<Input<B>>,
+        diff_state: DiffModeState<B>,
+    ) -> DiffOperationForward<B, Self::VjpState, Self::HvpState> {
+        let n = self.0;
+        let [r, v]: [Point<B>; 2] = inputs
+            .into_iter()
+            .map(Input::unwrap_float)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let [batch, _] = r.dims();
+        let y = apply(&r, spread(&v, n, 1)).reshape([batch, 3 * n]);
+        // `Ẏ` for a rotation frame `a` and an operand frame `b`, each optional.
+        let push = |a: Option<skoro_backend::TangentFrame<B>>,
+                    b: Option<skoro_backend::TangentFrame<B>>| {
+            let f = a.as_ref().or(b.as_ref()).map(|t| t.dims()[2])?;
+            let turned = a.map(|a| cross(tile(a, n), spread(&v, n, f)));
+            let moved = b.map(|b| unstack(b, n));
+            sum(turned, moved).map(|t| stack(apply(&r, t), n))
+        };
+        let state = |d_rotation: bool, d_operand: bool| {
+            (d_rotation || d_operand).then(|| RotationVjp {
+                rotation: r.clone(),
+                columns: v.clone(),
+                d_rotation,
+                d_operand,
+            })
+        };
+        match diff_state {
+            DiffModeState::ForwardOnly => DiffOperationForward::forward_only(y),
+            DiffModeState::Jvp(frames) => {
+                let [a, b] = frames.try_into().unwrap();
+                let tangent = push(a, b);
+                DiffOperationForward::jvp(y, tangent)
+            }
+            DiffModeState::Vjp(diffs) => {
+                let vjp_state = state(diffs[0], diffs[1]);
+                DiffOperationForward::vjp(y, vjp_state)
+            }
+            DiffModeState::Hvp { diffs, tangents } => {
+                let [a, b] = tangents.try_into().unwrap();
+                let tangent = push(a.clone().map(one_column), b.clone().map(one_column))
+                    .map(|t| t.squeeze_dim(2));
+                let vjp_state = state(diffs[0], diffs[1]);
+                DiffOperationForward::hvp(y, tangent, vjp_state, (a, b))
+            }
+        }
+    }
+
+    fn vjp(
+        &self,
+        state: &Self::VjpState,
+        alpha: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        let n = self.0;
+        let Some(state) = state else {
+            return vec![None, None];
+        };
+        let f = alpha.dims()[2];
+        let w = apply_transpose(&state.rotation, unstack(alpha, n));
+        let d_r = state
+            .d_rotation
+            .then(|| fold(cross(spread(&state.columns, n, f), w.clone()), n));
+        let d_v = state.d_operand.then(|| stack(w, n));
+        vec![d_r, d_v]
+    }
+
+    fn hvp(
+        &self,
+        vjp_state: &Self::VjpState,
+        hvp_state: &Self::HvpState,
+        alpha: CotangentFrame<B>,
+    ) -> Vec<Option<CotangentFrame<B>>> {
+        let n = self.0;
+        let Some(state) = vjp_state else {
+            return vec![None, None];
+        };
+        let (a, b) = hvp_state;
+        let f = alpha.dims()[2];
+        let w = apply_transpose(&state.rotation, unstack(alpha, n));
+        let d_r = state.d_rotation.then(|| {
+            let from_b = b
+                .as_ref()
+                .map(|b| fold(cross(spread(b, n, f), w.clone()), n));
+            let from_a = a.as_ref().map(|a| {
+                let turned = cross(repeat(a, n * f), w.clone());
+                -fold(cross(spread(&state.columns, n, f), turned), n)
+            });
+            sum(from_b, from_a)
+        });
+        let d_v = state.d_operand.then(|| {
+            a.as_ref()
+                .map(|a| stack(-cross(repeat(a, n * f), w.clone()), n))
+        });
+        vec![d_r.flatten(), d_v.flatten()]
+    }
 }
 
 /// `U = rᵀ V` for `V ∈ ℝ^{3×n}` (a vector when `n = 1`), differentiated in the body-frame chart of

@@ -84,6 +84,29 @@ pub const V: [f64; 3] = [1.5, -2.0, 0.75];
 pub const M: [f64; 6] = [1.5, -0.5, -2.0, 1.25, 0.75, 2.0];
 
 #[allow(unused)]
+pub fn rotate<B: Backend>(delta: f64, epsilon: f64)
+where
+    SO3: ContinuousQuantity<B>,
+{
+    use skoro_riemann::{euclidean::EuclideanD, matrix::EuclideanMatrixD};
+    use skoro_so3::ops::SO3RotateOps;
+
+    let model = ModelClient::<B>::default();
+    let r = model.add_parameter(SO3);
+    let v = model.add_parameter(EuclideanD(3));
+    let m = model.add_parameter(EuclideanMatrixD(3, 2));
+    let point = points()
+        .with_quantity(&r, tensor::<B, 2>([R1], &Default::default()))
+        .with_quantity(&v, tensor::<B, 2>([V], &Default::default()))
+        .with_quantity(&m, tensor::<B, 2>([M], &Default::default()))
+        .build();
+    let out = r.rotate(&v).unwrap();
+    check_binary(&r, &v, &out, point.clone(), delta, epsilon);
+    let out = r.rotate(&m).unwrap();
+    check_binary(&r, &m, &out, point, delta, epsilon);
+}
+
+#[allow(unused)]
 pub fn unrotate<B: Backend>(delta: f64, epsilon: f64)
 where
     SO3: ContinuousQuantity<B>,
@@ -116,6 +139,12 @@ macro_rules! test_group {
         #[test]
         pub fn compose() {
             group::compose::<B>($delta, $epsilon);
+        }
+
+        /// `r v`, for a vector and for the columns of a matrix.
+        #[test]
+        pub fn rotate() {
+            group::rotate::<B>($delta, $epsilon);
         }
 
         /// `rᵀ v`, for a vector and for the columns of a matrix.
