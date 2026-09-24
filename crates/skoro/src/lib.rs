@@ -154,7 +154,7 @@ pub mod prelude {
     pub use skoro_model::discrete::bridge::{DiscreteEmbed, Discretize};
 
     // ----- SO(3) / SE(3) -----
-    pub use skoro_se3::ops::SE3ComposeOps;
+    pub use skoro_se3::ops::{SE3ComposeOps, SE3InvertOps};
     pub use skoro_se3::quantity::SE3;
     pub use skoro_so3::ops::{SO3ComposeOps, SO3ExpOps, SO3InvertOps, SO3LogOps, SO3RotateOps};
     pub use skoro_so3::quantity::SO3;

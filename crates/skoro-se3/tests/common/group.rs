@@ -18,7 +18,10 @@ use skoro_model::{
     },
 };
 use skoro_operation::ValueMap;
-use skoro_se3::{ops::SE3ComposeOps, quantity::SE3};
+use skoro_se3::{
+    ops::{SE3ComposeOps, SE3InvertOps},
+    quantity::SE3,
+};
 
 /// `(Exp((0.3, -0.2, 0.5)), (5, 6, 7))`.
 const X0: [f64; 12] = [
@@ -95,4 +98,17 @@ where
         .with_quantity(&x1, tensor::<B, 2>([X1], &Default::default()))
         .build();
     check_binary(&x0, &x1, &out, point, delta, epsilon);
+}
+
+pub fn invert_impl<B: Backend>(delta: f64, epsilon: f64)
+where
+    SE3: ContinuousQuantity<B>,
+{
+    let model = ModelClient::<B>::default();
+    let x = model.add_parameter(SE3);
+    let out = x.invert().unwrap();
+    let point = points()
+        .with_quantity(&x, tensor::<B, 2>([X1], &Default::default()))
+        .build();
+    check_unary(&x, &out, point, delta, epsilon);
 }

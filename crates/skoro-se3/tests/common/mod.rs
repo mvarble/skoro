@@ -490,6 +490,11 @@ macro_rules! tests {
             fn compose() {
                 super::common::group::compose_impl::<$B>($delta, $epsilon);
             }
+
+            #[test]
+            fn invert() {
+                super::common::group::invert_impl::<$B>($delta, $epsilon);
+            }
         }
 
         /// `retract` on `SE3`: the rotation through `SO3`'s own retraction and the translation added,
