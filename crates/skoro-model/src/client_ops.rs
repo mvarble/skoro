@@ -103,6 +103,13 @@ pub trait ModelReaderOps<B: Backend> {
     /// [`Graph::ensure_leaf_columns`](skoro_graph::graph::Graph::ensure_leaf_columns).
     fn ensure_leaf_columns(&self, layout: &TangentLayout) -> SkoroResult<()>;
 
+    /// The free leaves -- `Parameter` and unobserved `Stochastic` nodes -- that `ids` depend on,
+    /// in id order.
+    ///
+    /// The structural sparsity of a Jacobian over `ids`: every other column is zero. See
+    /// [`Graph::leaf_support`](skoro_graph::graph::Graph::leaf_support).
+    fn leaf_support(&self, ids: &[Id]) -> Vec<Id>;
+
     /// The number of nodes in the underlying graph — the bound a retention policy watches.
     ///
     /// A sliding window retires by policy rather than by bookkeeping, and "how big has this
@@ -429,6 +436,11 @@ impl<B: Backend> ModelReaderOps<B> for ModelClient<B> {
     #[inline(always)]
     fn ensure_leaf_columns(&self, layout: &TangentLayout) -> SkoroResult<()> {
         self.server_call(|server| server.graph().ensure_leaf_columns(layout.ids()))
+    }
+
+    #[inline(always)]
+    fn leaf_support(&self, ids: &[Id]) -> Vec<Id> {
+        self.server_call(|server| server.graph().leaf_support(ids))
     }
 
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>

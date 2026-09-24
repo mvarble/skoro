@@ -195,3 +195,162 @@ pub fn jacobian_vjp<B: Backend, C: ModelReaderOps<B>>(
         &device,
     ))
 }
+
+/// The ids of `ids` that `layout` holds, in `layout`'s order.
+pub(crate) fn in_layout_order(
+    layout: &TangentLayout,
+    ids: impl IntoIterator<Item = Id>,
+) -> Vec<Id> {
+    let mut blocks: Vec<_> = ids.into_iter().filter_map(|id| layout.block(id)).collect();
+    blocks.sort_unstable_by_key(|block| block.offset);
+    blocks.dedup_by_key(|block| block.id);
+    blocks.into_iter().map(|block| block.id).collect()
+}
+
+/// One row node's Jacobian over the free leaves it can reach.
+pub struct RowJacobian<B: Backend> {
+    /// The row node.
+    pub row: Id,
+    /// The free leaves the row depends on — [`leaf_support`](ModelReaderOps::leaf_support)
+    /// restricted to the columns — in the columns' order. Every other column of the row is zero.
+    pub keys: TangentLayout,
+    /// `∂row/∂keys`: `[batch, dim(row), keys.total()]`.
+    pub jacobian: Tensor<B, 3>,
+}
+
+/// What [`jacobian_blocks`] returns.
+pub struct JacobianBlocks<B: Backend> {
+    /// One entry per distinct row, in first-appearance order.
+    pub rows: Vec<RowJacobian<B>>,
+    /// Frames the reverse pass carried: the sum over colours of the widest row in each. Dense
+    /// [`jacobian_vjp`] would carry the summed dimension of every row.
+    pub frames: usize,
+}
+
+/// The block-sparse Jacobian: each row node's derivative over only the free leaves it reaches, by
+/// one compressed reverse pass.
+///
+/// Dense [`jacobian_vjp`] seeds every row in its own frames and returns every row over every
+/// column, which is `O(D_out · D_in)` in both frames and memory. Here rows whose free-leaf supports
+/// are disjoint are **coloured** alike and seeded into the same frames: a leaf's cotangent in those
+/// frames is then the contribution of the one row of that colour that reaches it, so each block is
+/// read back unmixed. A pose chain needs about three colours however long it is.
+///
+/// Rows are coloured as distinct nodes, not per term, since terms share rows — the argument `x_k`
+/// of one factor is an argument of the next. A repeated id is computed once. One pass means one
+/// compile, so the bounded program cache is not churned by a compile per term.
+///
+/// Columns follow the rule of the [module documentation](self): a `Mapped` or `LogLikelihood`
+/// column is [`SkoroError::MappedColumn`](skoro_core::error::SkoroError::MappedColumn). A leaf row
+/// that is itself a column gets its identity block, as in [`jacobian_vjp`].
+pub fn jacobian_blocks<B: Backend, C: ModelReaderOps<B>>(
+    client: &C,
+    points: &ValueMap<B>,
+    inputs: &TangentLayout,
+    rows: &[Id],
+) -> SkoroResult<JacobianBlocks<B>> {
+    client.ensure_leaf_columns(inputs)?;
+    let (batch, device) = batch_and_device(points);
+
+    let mut seen = std::collections::HashSet::new();
+    let rows: Vec<Id> = rows.iter().copied().filter(|id| seen.insert(*id)).collect();
+    let row_layout = client.tangent_layout(&rows)?;
+
+    // Each row's keys, in the columns' order: its support, looked up in the layout rather than the
+    // layout scanned, so the cost follows the support and not the number of columns.
+    let keys: Vec<Vec<Id>> = rows
+        .iter()
+        .map(|&row| in_layout_order(inputs, client.leaf_support(&[row])))
+        .collect();
+
+    // Greedy colouring: a row joins the first colour whose keys it does not touch.
+    let mut colour_keys: Vec<std::collections::HashSet<Id>> = Vec::new();
+    let mut colour_width: Vec<usize> = Vec::new();
+    let mut colour_of: Vec<Option<usize>> = Vec::with_capacity(rows.len());
+    for (i, row_keys) in keys.iter().enumerate() {
+        if row_keys.is_empty() {
+            colour_of.push(None);
+            continue;
+        }
+        let width = row_layout.blocks()[i].dimension;
+        let colour = colour_keys
+            .iter()
+            .position(|used| row_keys.iter().all(|k| !used.contains(k)))
+            .unwrap_or_else(|| {
+                colour_keys.push(Default::default());
+                colour_width.push(0);
+                colour_keys.len() - 1
+            });
+        colour_keys[colour].extend(row_keys.iter().copied());
+        colour_width[colour] = colour_width[colour].max(width);
+        colour_of.push(Some(colour));
+    }
+    let mut colour_offset = Vec::with_capacity(colour_width.len());
+    let mut frames = 0;
+    for width in &colour_width {
+        colour_offset.push(frames);
+        frames += width;
+    }
+
+    // Seed row `i` with the identity in its colour's frames.
+    let mut seeds = std::collections::HashMap::new();
+    let mut targets = Vec::new();
+    for (i, &row) in rows.iter().enumerate() {
+        let Some(colour) = colour_of[i] else {
+            continue;
+        };
+        let d = row_layout.blocks()[i].dimension;
+        let at = colour_offset[colour];
+        let seed = Tensor::<B, 2>::eye(frames, &device)
+            .slice_dim(0, at..at + d)
+            .unsqueeze_dim::<3>(0)
+            .repeat_dim(0, batch);
+        seeds.insert(row, seed);
+        targets.push(row);
+    }
+    let out = if targets.is_empty() {
+        None
+    } else {
+        Some(client.evaluate_ids_vjp(points, &seeds, &targets)?)
+    };
+
+    let mut result = Vec::with_capacity(rows.len());
+    for (i, &row) in rows.iter().enumerate() {
+        let d = row_layout.blocks()[i].dimension;
+        let layout = client.tangent_layout(&keys[i])?;
+        let jacobian = match (colour_of[i], &out) {
+            (Some(colour), Some(out)) => {
+                let at = colour_offset[colour];
+                let parts: Vec<Tensor<B, 3>> = layout
+                    .blocks()
+                    .iter()
+                    .map(|key| {
+                        if key.id == row && out.primal.variables.get(&row).is_some() {
+                            // `∂x/∂x`, which neither pass seeds; see `fill_leaf_rows`.
+                            return Tensor::<B, 2>::eye(d, &device)
+                                .unsqueeze_dim::<3>(0)
+                                .repeat_dim(0, batch);
+                        }
+                        match out.cotangents.get(&key.id) {
+                            Some(cotangent) => {
+                                cotangent.clone().slice_dim(2, at..at + d).swap_dims(1, 2)
+                            }
+                            None => Tensor::zeros([batch, d, key.dimension], &device),
+                        }
+                    })
+                    .collect();
+                Tensor::cat(parts, 2)
+            }
+            _ => Tensor::zeros([batch, d, 0], &device),
+        };
+        result.push(RowJacobian {
+            row,
+            keys: layout,
+            jacobian,
+        });
+    }
+    Ok(JacobianBlocks {
+        rows: result,
+        frames,
+    })
+}

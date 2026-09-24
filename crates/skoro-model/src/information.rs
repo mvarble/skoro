@@ -5,13 +5,14 @@
 //! term's information as `(C J)ᵀ (C J)`, with `J = ∂arguments/∂x`. Stacking the `C J` blocks of
 //! every term gives a root `A` of the whole model's information `AᵀA`.
 //!
-//! Assembly compiles twice per call, however many terms there are: one reverse pass over the union
-//! of every term's arguments, from which each term's `J` is sliced, and one evaluation of every
-//! root.
+//! Assembly is block-sparse: each term's block is `C J` over only the free leaves its arguments
+//! reach — its [`keys`](InformationBlock::keys) — never over the whole of `free`. It compiles twice
+//! per call, however many terms there are: one compressed reverse pass over the distinct arguments
+//! ([`jacobian_blocks`]), from which each term's `J` is gathered, and one evaluation of every root.
 //!
 //! Batch and device are taken from the first entry of `points`, as in [`jacobian`](crate::jacobian).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use skoro_backend::{Backend, Tensor};
 use skoro_core::{
@@ -23,14 +24,38 @@ use skoro_operation::ValueMap;
 use skoro_riemann::matrix::EuclideanMatrixD;
 
 use crate::client_ops::ModelReaderOps;
-use crate::jacobian::{batch_and_device, jacobian_vjp};
+use crate::jacobian::{batch_and_device, in_layout_order, jacobian_blocks};
 use crate::roles::FISHER_ROOT;
 
-/// One term's contribution to the stacked root: `C J`, shape `[batch, k, free.total()]`.
+/// One term's contribution to the stacked root: `C J` over the free leaves the term reaches.
 pub struct InformationBlock<B: Backend> {
     /// The term's log-likelihood node.
     pub factor: Id,
+    /// The free leaves the term's arguments depend on, in `free`'s order. The term's row of the
+    /// stacked root is zero in every other column.
+    pub keys: TangentLayout,
+    /// `C J`: `[batch, k, keys.total()]`.
     pub root: Tensor<B, 3>,
+}
+
+impl<B: Backend> InformationBlock<B> {
+    /// [`root`](Self::root) scattered into the columns of `free`: `[batch, k, free.total()]`.
+    ///
+    /// Errors [`SkoroError::IdNotInLayout`] if a key is not in `free`.
+    pub fn dense(&self, free: &TangentLayout) -> SkoroResult<Tensor<B, 3>> {
+        let [batch, rows, _] = self.root.dims();
+        let mut out = Tensor::zeros([batch, rows, free.total()], &self.root.device());
+        for key in self.keys.blocks() {
+            let at = free
+                .block(key.id)
+                .ok_or(SkoroError::IdNotInLayout { id: key.id })?;
+            out = out.slice_assign(
+                [0..batch, 0..rows, at.offset..at.offset + at.dimension],
+                self.root.clone().narrow(2, key.offset, key.dimension),
+            );
+        }
+        Ok(out)
+    }
 }
 
 /// One [`InformationBlock`] per term that binds a [`FISHER_ROOT`], in term order.
@@ -84,16 +109,17 @@ pub fn information_blocks<B: Backend, C: ModelReaderOps<B>>(
         return Ok(Vec::new());
     }
 
-    // One reverse pass over the union of the terms' arguments. A row of `J` depends only on its
-    // argument, not on which term lists it, so each term's `J` is its own blocks of this one.
-    let mut seen = HashSet::new();
-    let union_ids: Vec<Id> = terms
+    // One compressed reverse pass over the distinct arguments. A row of `J` depends only on its
+    // argument, not on which term lists it, so each term's `J` is gathered from these rows.
+    let argument_ids: Vec<Id> = terms
         .iter()
         .flat_map(|(_, _, arguments)| arguments.ids())
-        .filter(|id| seen.insert(*id))
         .collect();
-    let union = client.tangent_layout(&union_ids)?;
-    let j_union = jacobian_vjp(client, points, free, &union)?;
+    let argument_rows: HashMap<Id, _> = jacobian_blocks(client, points, free, &argument_ids)?
+        .rows
+        .into_iter()
+        .map(|row| (row.row, row))
+        .collect();
 
     // One evaluation of every root. A mapped root is evaluated, a constant (or constant-folded)
     // one is read from the constants, and a parameter or stochastic one from the points it was
@@ -133,28 +159,50 @@ pub fn information_blocks<B: Backend, C: ModelReaderOps<B>>(
                 root = root.repeat_dim(0, batch);
             }
 
+            // The term's keys: the union of its arguments' keys, in `free`'s order.
+            let key_ids = in_layout_order(
+                free,
+                arguments
+                    .ids()
+                    .flat_map(|id| argument_rows[&id].keys.ids().collect::<Vec<_>>()),
+            );
+            let keys = client.tangent_layout(&key_ids)?;
+            let (_, device) = batch_and_device(points);
             let j = Tensor::cat(
                 arguments
                     .blocks()
                     .iter()
-                    .map(|block| {
-                        let at = union
-                            .block(block.id)
-                            .expect("the union holds every term's arguments");
-                        j_union.clone().narrow(1, at.offset, at.dimension)
+                    .map(|argument| {
+                        let row = &argument_rows[&argument.id];
+                        let mut block =
+                            Tensor::zeros([batch, argument.dimension, keys.total()], &device);
+                        for key in row.keys.blocks() {
+                            let at = keys.block(key.id).expect("a row's keys are the term's");
+                            block = block.slice_assign(
+                                [
+                                    0..batch,
+                                    0..argument.dimension,
+                                    at.offset..at.offset + at.dimension,
+                                ],
+                                row.jacobian.clone().narrow(2, key.offset, key.dimension),
+                            );
+                        }
+                        block
                     })
                     .collect(),
                 1,
             );
             Ok(InformationBlock {
                 factor,
+                keys,
                 root: root.matmul(j),
             })
         })
         .collect()
 }
 
-/// The blocks stacked along the row axis: `[batch, Σk, free.total()]`.
+/// The blocks scattered into `free`'s columns and stacked along the row axis:
+/// `[batch, Σk, free.total()]` — the dense root, for models small enough to want it.
 ///
 /// Returns [`SkoroError::ShapeMismatch`] if no term binds a root. A model where only *some* terms
 /// do is not an error here: it yields a root of those terms alone, per
@@ -174,7 +222,10 @@ pub fn information_root<B: Backend, C: ModelReaderOps<B>>(
         });
     }
     Ok(Tensor::cat(
-        blocks.into_iter().map(|block| block.root).collect(),
+        blocks
+            .iter()
+            .map(|block| block.dense(free))
+            .collect::<SkoroResult<_>>()?,
         1,
     ))
 }

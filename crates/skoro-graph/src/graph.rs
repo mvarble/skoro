@@ -2525,6 +2525,41 @@ impl<B: Backend> Graph<B> {
         ordered
     }
 
+    /// The free leaves `ids` depend on, in id order: every `Parameter` or `Stochastic` node reached
+    /// by walking parent edges from `ids` **without passing through a leaf**, themselves included.
+    ///
+    /// This is the structural sparsity of a Jacobian: a row over `ids` can be non-zero only in the
+    /// columns of these leaves, so it is what a block-sparse linearization keys each term by.
+    ///
+    /// The walk stops at every leaf, and that is the point. A stochastic node's parent edges lead
+    /// to its sampler's inputs -- `x_{k+1}` to `F x_k` -- but at given points its value is an
+    /// input, and the derivative passes collect its cotangent there rather than propagating it
+    /// upward. Walking through it would key `x_{k+1}`'s measurement by every earlier state of the
+    /// chain. Constant and observed nodes end the walk too and are never columns.
+    ///
+    /// It is a superset of the true support, never a subset -- a leaf reached only along a
+    /// zero-derivative path still appears -- which is the safe direction for a sparsity pattern.
+    /// An id that is not a node contributes nothing.
+    pub fn leaf_support(&self, ids: &[Id]) -> Vec<Id> {
+        let mut seen = HashSet::new();
+        let mut stack: Vec<Id> = ids.to_vec();
+        let mut out = Vec::new();
+        while let Some(id) = stack.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            match self.nodes.get(&id) {
+                Some(Node::Parameter(_) | Node::Stochastic(_)) => out.push(id),
+                Some(node @ (Node::Mapped(_) | Node::LogLikelihood(_))) => {
+                    stack.extend(node.parent_ids().iter().copied());
+                }
+                Some(Node::Constant(_) | Node::Observed(_)) | None => {}
+            }
+        }
+        out.sort_unstable();
+        out
+    }
+
     /// Every node `id` can reach by following child edges, itself included, in id order.
     ///
     /// The forward counterpart of [`topological_sort`](Self::topological_sort), and the query a
