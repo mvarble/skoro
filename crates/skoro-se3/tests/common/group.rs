@@ -18,8 +18,9 @@ use skoro_model::{
     },
 };
 use skoro_operation::ValueMap;
+use skoro_riemann::{euclidean::EuclideanD, matrix::EuclideanMatrixD};
 use skoro_se3::{
-    ops::{SE3ComposeOps, SE3InvertOps},
+    ops::{SE3ComposeOps, SE3InvertOps, SE3TransformOps},
     quantity::SE3,
 };
 
@@ -54,6 +55,10 @@ const X1: [f64; 12] = [
     -4.0,
     0.75,
 ];
+
+/// A point, and a `3 × 2` matrix whose columns are two points.
+const U: [f64; 3] = [1.5, -2.0, 0.75];
+const M: [f64; 6] = [1.5, -0.5, -2.0, 1.25, 0.75, 2.0];
 
 fn check_unary<B, A, O>(a: &Q<B, A>, out: &Q<B, O>, point: ValueMap<B>, delta: f64, epsilon: f64)
 where
@@ -111,4 +116,23 @@ where
         .with_quantity(&x, tensor::<B, 2>([X1], &Default::default()))
         .build();
     check_unary(&x, &out, point, delta, epsilon);
+}
+
+/// `transform` of a point and of a matrix of points.
+pub fn transform_impl<B: Backend>(delta: f64, epsilon: f64)
+where
+    SE3: ContinuousQuantity<B>,
+{
+    let model = ModelClient::<B>::default();
+    let x = model.add_parameter(SE3);
+    let u = model.add_parameter(EuclideanD(3));
+    let m = model.add_parameter(EuclideanMatrixD(3, 2));
+    let point = points()
+        .with_quantity(&x, tensor::<B, 2>([X0], &Default::default()))
+        .with_quantity(&u, tensor::<B, 2>([U], &Default::default()))
+        .with_quantity(&m, tensor::<B, 2>([M], &Default::default()))
+        .build();
+    let (out_u, out_m) = (x.transform(&u).unwrap(), x.transform(&m).unwrap());
+    check_binary(&x, &u, &out_u, point.clone(), delta, epsilon);
+    check_binary(&x, &m, &out_m, point, delta, epsilon);
 }
