@@ -24,9 +24,10 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
                 let [dx] = tvecs.try_into().unwrap();
                 DiffOperationForward::jvp(
                     x.clone().abs(),
+                    // `d|x| = sign(x) dx`, column by column of the frame.
                     dx.map(|dx| {
-                        dx.full_like(-1.0)
-                            .mask_fill(x.unsqueeze_dim(2).greater_equal_elem(0.0), 1.0)
+                        let mask = x.unsqueeze_dim(2).greater_equal_elem(0.0);
+                        (-dx.clone()).mask_where(mask, dx)
                     }),
                 )
             }
@@ -44,8 +45,8 @@ impl<B: Backend> DiffOperation<B> for PointwiseAbs {
             } => {
                 let [dx] = tvecs.try_into().unwrap();
                 let tangent = dx.map(|dx| {
-                    dx.full_like(-1.0)
-                        .mask_fill(x.clone().greater_equal_elem(0.0), 1.0)
+                    let mask = x.clone().greater_equal_elem(0.0);
+                    (-dx.clone()).mask_where(mask, dx)
                 });
                 let vjp_state = diffs[0].then(|| x.clone());
                 DiffOperationForward::hvp(x.abs(), tangent, vjp_state, ())
