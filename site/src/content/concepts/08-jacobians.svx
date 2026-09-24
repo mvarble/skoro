@@ -1,0 +1,126 @@
+---
+title: Jacobians
+summary: The readers in skoro-model that turn derivative passes into matrices. Dense Jacobians over flattened tangents by either pass, the column rule, leaf rows, structural sparsity from leaf supports, one-pass compressed block Jacobians by row colouring, and the residual rows of a least-squares step.
+order: 8
+katex_macros:
+  \supp: S
+---
+
+An estimator does not want cotangent frames keyed by `Id`. It wants a matrix. This page builds
+the Jacobian of some **row** nodes with respect to the **columns**, the free quantities an
+estimator moves. It starts from the dense matrix and ends with the block-sparse one that large
+models need.
+
+## The Jacobian over flattened tangents
+
+Fix a column layout over the free leaves $x_1, \dots, x_n$ (total dimension $D_{\mathrm{in}}$), and
+a row layout over nodes $y_1, \dots, y_m$ (total $D_{\mathrm{out}}$), both flattened as on
+[The model graph](../graph/#flattened-tangent-coordinates). The Jacobian at a point is the block
+matrix
+$$
+J \in \R^{D_{\mathrm{out}} \times D_{\mathrm{in}}}, \qquad
+J_{ij} = \frac{\partial y_i}{\partial x_j} \in \R^{d_{y_i} \times d_{x_j}},
+$$
+each block in the charts at $x_j$ and at $y_i$ ([Manifolds and retractions](../manifolds/#derivatives-in-charts)).
+So $y_i(x \oplus \delta) \ominus y_i(x) = \sum_j J_{ij}\,\delta_j + O(\lVert\delta\rVert^2)$.
+
+Two passes produce the same $J$:
+
+- **`jacobian_jvp`** seeds each column block $x_j$ with its rows of $I_{D_{\mathrm{in}}}$, a
+  $d_{x_j} \times D_{\mathrm{in}}$ frame, and one forward pass returns every row block $J_{i,:}$.
+  It costs $D_{\mathrm{in}}$ frames.
+- **`jacobian_vjp`** seeds each row block $y_i$ with its rows of $I_{D_{\mathrm{out}}}$, and one
+  reverse pass returns $J_{:,j}\transpose$ at each column. Concatenating and transposing gives $J$.
+  It costs $D_{\mathrm{out}}$ frames, which is cheaper when $J$ is tall, the usual shape of a
+  least-squares problem.
+
+Both seed through the single helper `TangentLayout::identity_frames`, so the two index conventions
+cannot drift apart. A transpose error there would give a well-shaped, wrong $J$ whenever
+$D_{\mathrm{in}} = D_{\mathrm{out}}$.
+
+## Two rules at the edges
+
+**Columns must be leaves.** A column is something an estimator moves, and the passes collect
+cotangents only at leaves ([Compilation](../compilation/#the-four-passes)). A mapped node as a
+column would come back as a silently zero column, indistinguishable from a leaf that reaches no row.
+So both assemblers refuse one up front (`SkoroError::MappedColumn`). Constant and observed columns
+are accepted and are zero: `observe` must not make a filter's layout start failing. The
+derivative *through* a mapped node is never lost, since the passes apply the chain rule through it to
+reach the leaves.
+
+**Leaf rows are filled in.** A row that is itself a leaf is seeded by neither pass. Its derivative
+is filled in directly: $\partial x / \partial x = I$ on its own column, and zero elsewhere. A
+constant or observed row is zero everywhere. This is what lets a term's *arguments*, which are
+usually leaves, be the rows of a Jacobian.
+
+## Structural sparsity
+
+A term touches a few quantities; a model has many. For a row $y$, its **leaf support**
+$\supp(y)$ is the set of free leaves reached by walking parent edges from $y$ without passing
+through a leaf (`leaf_support`). The walk stops at every leaf because, at given points, no
+derivative flows through a stochastic node's sampler ([The model graph](../graph/#evaluating-at-a-point-what-is-an-independent-variable)).
+Then
+$$
+x_j \notin \supp(y_i) \implies J_{ij} = 0 .
+$$
+$\supp$ is a superset of the true support (a leaf reached only along a zero-derivative path still
+appears), which is the safe direction for a sparsity pattern. In a chain
+$x_{k+1} \sim \mathcal N(F x_k, Q)$, the conditional's residual has support $\{x_k, x_{k+1}\}$
+however long the chain is.
+
+## One pass for all the blocks: row colouring
+
+Dense assembly seeds every row in its own frames, $O(D_{\mathrm{out}})$ frames and
+$O(D_{\mathrm{out}} D_{\mathrm{in}})$ memory. `jacobian_blocks` instead exploits the supports. Two
+rows are **structurally orthogonal** when their supports are disjoint. Partition the rows into
+**colours** $c$, each a set of mutually orthogonal rows, give colour $c$ a range of
+$w_c = \max_{i \in c} d_{y_i}$ frames, and seed every row of the colour with the identity in *that
+same* range. One reverse pass with $\sum_c w_c$ frames then delivers at leaf $x$, in colour $c$'s
+range,
+$$
+\sum_{i \in c} J_{ix}\transpose \big[\,I_{d_{y_i}}\ 0\,\big] = J_{i^\ast x}\transpose \big[\,I_{d_{y_{i^\ast}}}\ 0\,\big],
+$$
+where $i^\ast$ is the only row of colour $c$ whose support contains $x$, if there is one. So each
+block $J_{ix}$, for $x \in \supp(y_i)$, is read back unmixed from the columns of its row's colour.
+
+The colouring is greedy: a row joins the first colour whose accumulated keys it does not touch.
+
+```
+{../../../../crates/skoro-model/src/jacobian.rs:266..287}
+```
+
+A pose chain needs about three colours however long it is, so the frame count stays constant while
+the dense count grows with the chain. The result is one `RowJacobian` per distinct row: its keys
+$\supp(y) \cap \{\text{columns}\}$ in column order, and the block $\partial y / \partial x_{\supp(y)}$.
+Rows are coloured as distinct nodes rather than per term, because terms share rows (the argument
+$x_k$ of one factor is an argument of the next). One pass means one compile, so the bounded program
+cache is not churned by a compile per term.
+
+## Residual rows
+
+Terms declare their local structure through bindings ([The model graph](../graph/#bindings)). A term
+whose negative log-density is a sum of squares $\tfrac12 \lVert r_t \rVert^2$ binds its whitened
+residual $r_t$ under `RESIDUAL`. Linearizing it at $x$,
+$$
+r_t(x \oplus \delta) = r_t(x) + J_t\,\delta_{K_t} + O(\lVert\delta\rVert^2), \qquad
+K_t = \supp(r_t),
+$$
+so minimizing $\tfrac12 \sum_t \lVert r_t(x \oplus \delta)\rVert^2$ to first order is the
+least-squares problem with rows $J_t\,\delta_{K_t} \approx -r_t$. `residual_blocks` returns exactly
+these rows, one `ResidualBlock` $(K_t, J_t, r_t)$ per scored term, from one compressed pass and one
+evaluation. `residual_layout` and `residual_vector` are the dense versions, in the same row order.
+A residual is a flat vector of its own tangent dimension (a Euclidean node), and anything else is
+refused.
+
+## Coverage
+
+The readers are permissive: a term that binds nothing under the role a reader wants is skipped. A
+model may mix terms whose structure a reader understands with terms it does not. But then what a
+reader returns covers a *sub*-model, and nothing in the value says so. `coverage::terms_missing`
+lists the scored terms missing a role, and `coverage::require_role` refuses them. An algorithm that
+pairs a reader's rows with a gradient of the whole $\log p$ must call it first, because otherwise it
+solves a well-conditioned system for the wrong problem.
+
+The curvature readers built on the same compressed pass, `information_blocks` and its dense forms,
+need the Fisher root, which is defined by the distributions. They are on
+[Fisher scoring](../fisher-scoring/#models-with-many-terms).

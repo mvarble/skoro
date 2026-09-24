@@ -1,7 +1,7 @@
 ---
 title: Fisher scoring
 summary: Why skoro binds a Fisher-information root to every Gaussian term, and how an estimator uses it, from Newton's method to a damped, manifold-aware solver.
-order: 11
+order: 12
 katex_macros:
   \fisher: \mathcal{I}
   \loss: \ell
@@ -299,14 +299,30 @@ $$
 $$
 
 The matrix $\stackedRoot$ is a square root of the information, obtained by stacking each term's root
-composed with its Jacobian. The correspondence with skoro's functions is direct.
+composed with its Jacobian.
+
+**$\stackedRoot$ is block-sparse.** A term's arguments depend only on the free quantities in their
+leaf supports ([Jacobians](../jacobians/#structural-sparsity)), so $J_t$, and with it the row block
+$\root_t J_t$, is zero outside the columns of
+$$
+K_t = \textstyle\bigcup_{a \in a_t} \mathrm{supp}(a) \cap \{\text{free}\}.
+$$
+`information_blocks` computes each block over $K_t$ alone. It takes one compressed reverse pass over
+the *distinct* arguments of every term (`jacobian_blocks`), since arguments are shared: the $x_k$ of
+one conditional is the parent of the next. It gathers each term's $J_t$ from those rows, and it
+evaluates every root in one more pass. So assembly compiles twice, however many terms there are, and
+never materializes a column a term cannot reach. The correspondence with skoro's functions:
 
 | Quantity | skoro | Shape |
 | --- | --- | --- |
-| $J_t$ | `jacobian_vjp(client, points, free, &arguments)` | `[batch, Σ dim(a_t), D]` |
-| $\root_t J_t$ | one `InformationBlock` of `information_blocks` | `[batch, k_t, D]` |
-| $\stackedRoot$ | `information_root(client, points, free)` | `[batch, Σ k_t, D]` |
+| $J_t$ over $K_t$ | gathered from `jacobian_blocks` over the arguments | `[batch, Σ dim(a_t), dim(K_t)]` |
+| $\root_t J_t$ over $K_t$ | one `InformationBlock` of `information_blocks`, with its `keys` $K_t$ | `[batch, k_t, dim(K_t)]` |
+| $\stackedRoot$ | `information_root(client, points, free)`, the blocks scattered into $D$ columns | `[batch, Σ k_t, D]` |
 | $\stackedRoot\transpose \stackedRoot$ | `information(client, points, free)` | `[batch, D, D]` |
+
+The dense forms are for small models and tests. The keyed blocks are what
+[Linearization and marginalization](../linearization/) turns into a factor graph, whose elimination
+never forms $\stackedRoot\transpose\stackedRoot$.
 
 Two conventions deserve mention. When a stochastic quantity is itself among the free parameters, as in
 maximum a posteriori estimation of a latent state, its term still takes the expectation over that

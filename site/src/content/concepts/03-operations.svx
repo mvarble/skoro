@@ -1,70 +1,170 @@
 ---
 title: Differentiable operations
-summary: skoro-operation, the autodiff engine. The DiffOperation contract (forward, VJP and HVP), the four differentiation modes, and the two independent gates in an HVP pass.
+summary: skoro-operation, the autodiff engine. The DiffOperation contract, and the mathematics of its four modes, forward, JVP (pushforward of frames), VJP (pullback of cotangents) and HVP (forward-over-reverse), composed over a program by the tape.
 order: 3
 katex_macros:
   \op: F
-  \cot: \omega
+  \cot: \alpha
+  \cotb: \beta
   \tangent: v
 ---
 
 Skoro's differentiation engine is small on purpose. Each operation is a stateless mathematical
 description that knows nothing about the graph. The graph hands it inputs and a *mode*, and it
-returns a value plus whatever it must remember for the backward passes.
+returns a value plus whatever it must remember for the backward passes. This page states what each
+mode computes for one operation, then how the **tape** composes them over a whole program.
 
-## The contract
+Throughout this page, inputs and outputs are treated as vectors in $\R^d$. For a quantity on a
+curved manifold the same statements hold in *tangent coordinates*, which the next page defines;
+nothing here changes.
+
+## One operation
+
+An operation is a map
+$$
+y = \op(x_1, \dots, x_m), \qquad x_j \in \R^{d_j},\ y \in \R^{d},
+$$
+with partial Jacobians $\partial_j \op(x) \in \R^{d \times d_j}$. The contract is one trait with three
+methods:
 
 ```
 {../../../../crates/skoro-operation/src/diff/base.rs:118..156}
 ```
 
-For an operation $y = \op(x_1, \dots, x_m)$:
+`forward` always computes $y$. What else it does depends on the mode:
 
-- `forward` computes $y$. Depending on the mode it also pushes a tangent forward
-  ($\dot y = \sum_j \partial_j \op \, \dot x_j$) and memoizes the state the backward passes need.
-- `vjp` maps an output cotangent $\cot$ to the input cotangents $\cot \, \partial_j \op$.
-- `hvp` supplies the second-order part of the backward pass along a tangent $\tangent$ that was
-  seeded in the forward pass. The first-order (Leibniz) combination is handled by the tape, not by
-  the operation.
+| Mode | Given | Returns | Mathematically |
+| --- | --- | --- | --- |
+| `ForwardOnly` | nothing | $y$ | $\op(x)$ |
+| `Jvp` | a tangent frame $\dot X_j \in \R^{d_j \times k}$ per input (or none) | $y$, $\dot Y$ | $\dot Y = \sum_j \partial_j\op(x)\,\dot X_j$ |
+| `Vjp` | which inputs are differentiable | $y$, `VjpState` | memoize what $\partial_j\op(x)\transpose$ needs |
+| `Hvp` | differentiable flags **and** a tangent vector $\dot x_j$ per input (or none) | $y$, $\dot y$, `VjpState`, `HvpState` | $\dot y = \sum_j \partial_j\op(x)\,\dot x_j$, and memoize for both backward maps |
 
-All backward maps act on **cotangent frames** `[batch, dim, frame]`, so many output directions
-are pulled back in one call.
+The two backward methods act on **cotangent frames**, $\cot \in \R^{d \times k}$, a stack of $k$
+output cotangents pulled back at once:
 
-## Four modes
+- `vjp(state, α)` returns, per input, $\partial_j\op(x)\transpose \cot \in \R^{d_j \times k}$: the
+  **pullback**, or vector–Jacobian product.
+- `hvp(vjp_state, hvp_state, α)` returns, per input, the derivative of that pullback along the
+  tangent seeded in the forward pass, with $\cot$ held fixed:
+  $$
+  \mathrm{hvp}_j(\cot) = \frac{d}{dt}\Big|_{t=0} \partial_j\op\big(x + t\dot x\big)\transpose \cot
+  = \sum_l \big(\partial_l \partial_j \op(x)\,[\dot x_l]\big)\transpose \cot .
+  $$
 
-| Mode | Given | Returns |
-| --- | --- | --- |
-| `ForwardOnly` | nothing | output |
-| `Jvp` | tangent **frames** per input | output, pushed-forward frame |
-| `Vjp` | which inputs are differentiable | output, `VjpState` |
-| `Hvp` | differentiable flags **and** seeded tangent **vectors** | output, tangent, `VjpState`, `HvpState` |
+A useful consequence when deriving an `hvp`: if the `vjp` formula for input $j$ does not mention
+input $l$, then input $l$ contributes nothing to $\mathrm{hvp}_j$. An absent (`None`) result
+means a zero block. Returning `None` rather than a tensor of zeros is what lets a pass skip whole
+subtrees.
+
+## A program
+
+A model evaluation is a program: slots $s_0, \dots, s_{n-1}$ and steps
+$s_{o_k} \leftarrow \op_k(s_{i_{k,1}}, \dots, s_{i_{k,m}})$, run in order
+([Core vocabulary](../core/)). Some slots are **leaves**, supplied from outside: the free variables
+$x$. One or more are **targets**: the values we differentiate, say $f(x)$. The tape records one
+backward step per operation step during the forward pass, and replays them in reverse.
+
+### Forward mode: pushing frames
+
+Seed each leaf with a tangent frame $\dot X$ (for instance the columns of an identity). The forward
+pass applies each step's JVP in order:
+$$
+\dot S_{o_k} = \sum_j \partial_j \op_k \, \dot S_{i_{k,j}} .
+$$
+By the chain rule, the frame reaching a target is $\partial f / \partial x \cdot \dot X$. One pass
+with a $k$-column frame yields $k$ directional derivatives.
+
+### Reverse mode: pulling cotangents
+
+Seed each target with a cotangent frame $\cot$, and every other slot with nothing. Run the steps
+backward. Each one takes the cotangent accumulated at its output and adds its pullback into each
+input:
+$$
+\cot_{i_{k,j}} \mathrel{+}= \partial_j \op_k\transpose\, \cot_{o_k} .
+$$
+The accumulation, summing the contributions of every consumer of a slot, is the multivariable chain
+rule. The tape owns it; operations never see it.
+
+```
+{../../../../crates/skoro-operation/src/tape.rs:49..61}
+```
+
+For a scalar target $f$ seeded with $\cot = 1$, the cotangent that arrives at leaf $x_j$ is the
+gradient $\nabla_{x_j} f$. That is how `log_density_ord1` returns $\nabla \log p$: it seeds every
+term of the log-density with a batch of ones.
+
+### Forward-over-reverse: Hessian–vector products
+
+For second order, run the forward pass in `Hvp` mode with a tangent **vector** $\dot x$ seeded at
+the leaves. Every slot $s$ then carries a primal value $s(x)$ and a velocity $\dot s$ along the path
+$x + t\dot x$. The backward pass carries two cotangents per slot:
+
+- $\cot_s$, the first-order cotangent, exactly as in reverse mode;
+- $\cotb_s = \frac{d}{dt}\cot_s(x + t\dot x)\big|_{t=0}$, its derivative along the seeded path.
+
+Differentiating the reverse recurrence by the product rule gives
+$$
+\cotb_{i_{k,j}} \mathrel{+}= \underbrace{\frac{d}{dt}\partial_j\op_k\transpose\,\cot_{o_k}}_{\mathrm{hvp}_j(\cot_{o_k})}
+\;+\; \underbrace{\partial_j\op_k\transpose\,\cotb_{o_k}}_{\mathrm{vjp}_j(\cotb_{o_k})} .
+$$
+The tape applies this Leibniz rule itself. An operation's `hvp` is only the first term:
+
+```
+{../../../../crates/skoro-operation/src/diff/step.rs:64..66}
+```
+
+Seed $\cot = 1$ and $\cotb = 0$ at a scalar target (the seed does not move with $t$). At a leaf,
+$\cot = \nabla f(x)$ and $\cotb = \frac{d}{dt}\nabla f(x + t\dot x) = \nabla^2 f(x)\,\dot x$.
+`log_density_ord2` returns both.
+
+**Cost.** A JVP pass with a $k$-column frame and a VJP pass with a $k$-column cotangent frame each
+cost about one evaluation's worth of work per column. An HVP pass carries one vector, so a dense
+$D \times D$ Hessian takes $D$ passes. There is no `hessian_*` assembler. The curvature an
+estimator uses is the Fisher information instead (see [Fisher scoring](../fisher-scoring/)).
 
 ## The two gates
 
 The HVP mode carries two per-input facts that are easy to confuse:
 
-- **`diffs[j]`**: does input $j$ depend on a free variable? This gates the `VjpState`.
+- **`diffs[j]`**: does input $j$ depend on a free variable? This gates the `VjpState`, and so
+  whether $\cot$ and $\cotb$ are pulled back into input $j$ at all.
 - **`tangents[j]`**: was input $j$ seeded with a tangent *in this pass*? This gates the `HvpState`.
 
 A seeded tangent implies differentiable, but **not the reverse**: a differentiable input with no
 seed is normal, since an HVP is usually seeded one variable at a time. Treating the two as one gate
-drops cotangents in one direction or panics in the other.
+drops cotangents in one direction or panics in the other. The invariant is: if
+$\partial_j\op$ is absent, $\mathrm{hvp}_j$ must be absent too.
 
 > [!WARNING]
 > Almost every autodiff bug in this workspace has come from conflating these two gates. The
 > repository's `skoro-diff-operation` skill (`.claude/skills/`) is the checklist for writing a new
 > operation.
 
-## Where manifolds come in
+## The second track: discrete operations
 
-An operation between manifold-valued quantities works in tangent coordinates: its inputs are
-points (storage size), but its derivatives are tangent frames (dimension). The chart and Jacobian
-conventions for curved inputs are covered in [Manifolds and retractions](../manifolds/).
+Not every quantity is continuous. Counts, categories and booleans are **discrete**: integer-valued,
+with no tangent space, and so nothing to differentiate. Their operations form a second track
+beside `DiffOperation`:
+
+```
+{../../../../crates/skoro-operation/src/discrete.rs:1..13}
+```
+
+A `DiscreteOperation` is a forward-only map to an integer tensor. Every pass computes its value, and
+none differentiates it: the compiled step is flagged forward-only, so no derivative ever enters or
+leaves it. Crossing between the tracks is always explicit, and never
+implicit coercion:
+
+- An **embedding** (discrete to continuous, e.g. an integer as a real) is a `DiffOperation` with a
+  discrete input. It has an ordinary output, but its pullback into the discrete input is always
+  absent, since a discrete input has no tangent.
+- A **discretization** (continuous to discrete, e.g. the threshold $\mathbb 1[x \ge 0]$) is a
+  `DiscreteOperation` reading a continuous input. Being forward-only, it passes no cotangent back
+  to that input. For a step function that is the true derivative everywhere but at the step.
+
+So derivatives flow only between continuous quantities, and a discrete node is never a variable
+of differentiation.
 
 > [!DECISION]
 > Why not burn's autodiff? See [A bespoke autodiff engine](../../design/bespoke-autodiff/).
-
-> [!TODO] How the tape composes steps
-> One paragraph plus a small diagram showing how `step.rs` chains `vjp` and `hvp` across a
-> sequence (the Leibniz rule $\omega \mapsto \mathrm{hvp}(\alpha) + \mathrm{jvp}(\beta)$) would
-> complete this page.

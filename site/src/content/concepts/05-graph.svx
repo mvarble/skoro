@@ -1,7 +1,10 @@
 ---
 title: The model graph
-summary: skoro-graph. An arena of constant, parameter, stochastic and mapped nodes; bindings as labelled reference edges; and two densities, p and q, over the same nodes.
+summary: skoro-graph. An arena of constant, parameter, stochastic and mapped nodes; the two densities p and q as sums of log-likelihood terms, and the importance weight between them; ancestral sampling; which nodes are independent variables; bindings; and flattened tangent coordinates.
 order: 5
+katex_macros:
+  \pa: \operatorname{pa}
+  \terms: \mathcal{T}
 ---
 
 <script>
@@ -10,44 +13,132 @@ order: 5
 </script>
 
 `skoro-graph` holds the model as a Bayesian network: a directed acyclic graph whose nodes are
-quantities and whose edges point from each node to its parents.
+quantities, and whose edges point from each node to its parents. This page defines what a model
+*means*, meaning which density it scores and which it samples from, and what its derivatives are
+taken with respect to.
 
 ## Nodes
 
 `Graph` is an arena of `Node` variants, each of which may be continuous or discrete:
 
 - **Constant**: a fixed value.
-- **Parameter**: a free value supplied at evaluation time.
-- **Stochastic**: a value drawn from a conditional distribution given its parents; it may be
-  *observed*.
-- **Mapped**: the output of a `DiffOperation` applied to other nodes.
-- **Log-likelihood terms**: the summands of the log-density.
+- **Parameter** $\theta$: a free value, supplied at evaluation time and scored by nothing unless a
+  term says otherwise.
+- **Stochastic** $x$: a value with a conditional distribution given its parents $\pa(x)$. It may
+  be **observed**, which fixes its value.
+- **Mapped** $y = F(\pa(y))$: the output of a `DiffOperation` applied to other nodes.
+- **Log-likelihood terms** $\ell_t$: real-valued nodes, the summands of the densities below.
 
 A node's quantity type is erased to `Arc<dyn DynQuantityType<B>>` in the arena. That trait is the
 graph's runtime reflection: `kind()`, `as_manifold()`, `inverse_retraction_op()`,
 `cardinality()`.
 
+## Two densities
+
+Let $\terms$ be the model's terms. Each term $t$ is a log-likelihood node $\ell_t$, a function of
+its parents. A stochastic quantity contributes the term $\ell_x = \log p(x \mid \pa(x))$ built by
+its distribution. A **free-standing factor** contributes any real-valued node, such as a prior on a
+parameter or a joint over several existing quantities. A graph carries two densities over the same
+nodes, each a sum over a subset of the terms:
+$$
+\log p = \sum_{t \in \terms_p} \ell_t, \qquad
+\log q = \sum_{t \in \terms_q} \ell_t, \qquad
+\log w = \log p - \log q .
+$$
+
+- $p$, the **target**, is the density the model scores: $\log p(x, \theta; y)$ for latent
+  quantities $x$, parameters $\theta$ and observed data $y$. Membership in $\terms_p$ is stored on
+  each term.
+- $q$, the **proposal**, is the density the model samples from. Membership is *derived*: a term is
+  in $\terms_q$ exactly when the quantity it scores is a live (unobserved) stochastic node. So
+  `observe` moves a term out of $q$ (a fixed value is not sampled), and a free-standing factor,
+  which scores no quantity, is never in $q$.
+
+```
+{../../../../crates/skoro-graph/src/term.rs:4..21}
+```
+
+A *proposal-only* term, added with `add_proposal`, is in $q$ and not in $p$: it generates a
+quantity the target does not score. That is what makes $\log w$ a genuine difference rather than a
+sub-sum, and what importance sampling needs: for draws from $q$,
+$\E_q[w\,h] = \E_p[h]$ up to normalization. `log_weight` evaluates both sums in one program, so the
+terms in both cancel exactly rather than to within rounding.
+
+> [!DECISION]
+> See [Two densities](../../design/two-densities/).
+
+## Sampling: the generative reading of q
+
+`generate` draws every quantity by **ancestral sampling**: in topological order, each live
+stochastic node is drawn from its sampler given its parents' values, and each mapped node is
+computed. When each distribution's term is the log-density of its own sampler, as the Gaussian's
+is, the draws have density $q$ (each in its quantity's tangent coordinates, as
+[Distributions](../distributions/) makes precise). Nothing checks that correspondence for a bespoke
+distribution. `generate_from(points)` does the same, except
+that any node given in `points` keeps its given value. For the Gaussian, the sampler is
+$x = \mu \oplus L z$ with $z \sim \mathcal N(0, I)$
+([Distributions](../distributions/)).
+
+## Evaluating at a point: what is an independent variable
+
+`log_density`, and every evaluation after it, runs at **given points**: a value for every parameter
+and every live stochastic node the query reaches. At given points:
+
+- **Parameters and live stochastic nodes are the independent variables**, the leaves the
+  derivative passes differentiate with respect to. A stochastic node's parent edges lead to its
+  sampler's inputs (the mean of $x_{k+1}$ is $F x_k$), but at a given point its value is an
+  *input*. No derivative flows through a sampler: $\partial \log p / \partial x_k$ counts
+  $x_k$'s appearances in terms, never its role in generating $x_{k+1}$.
+- **Constants and observed nodes are not differentiable.** Nor is a mapped node whose parents
+  are all fixed. The graph folds such a node to a cached value when it is added, and again when an
+  `observe` fixes its last free input. `unobserve` and `demote_to_parameter` drop those folds
+  again. Its consumers treat a folded node as a constant.
+
+So the gradient of $\log p$ is taken with respect to the parameters and latent quantities jointly,
+in their tangent coordinates ([Manifolds and retractions](../manifolds/)).
+
+## Discrete quantities
+
+Any node kind may be discrete: `Integer`, `Categorical(n)` (an index in $0..n$), and `Boolean`, each
+packed as one integer. They take part in the densities exactly as continuous ones do. A discrete
+stochastic quantity's term is a log-*mass* $\log P(x \mid \pa(x))$, a summand of $p$, and of $q$
+while it is live. Ancestral sampling draws it like any other. But a discrete node is never
+differentiable and never a column. A `TangentLayout` refuses one (`NotContinuous`), so the gradient
+of $\log p$ is taken with respect to the continuous leaves only, with the discrete values held
+fixed. Discrete arithmetic, comparison and logic (`+`, `-`, `*`; `eq`, `lt`, …; `&`, `|`, `!`) and
+the bridges between the tracks are the [discrete operations](../operations/#the-second-track-discrete-operations).
+
+## Flattened tangent coordinates
+
+Estimators want vectors and matrices; the graph is keyed by `Id`. A `TangentLayout` over ids
+$(x_1, \dots, x_k)$ assigns each a contiguous block of a flat vector, sized by **dimension**:
+$$
+\T_{x_1}\mathcal M_1 \times \cdots \times \T_{x_k}\mathcal M_k \;\cong\; \R^{D},
+\qquad D = \textstyle\sum_i d_i, \qquad \delta = (\delta_1; \dots; \delta_k).
+$$
+The order is the caller's. A flat step retracts block by block, which is the only manifold-aware
+operation in an estimator's iteration (`PointMap::retract_flat`):
+$$
+(x_1, \dots, x_k) \oplus \delta \defeq (x_1 \oplus \delta_1, \dots, x_k \oplus \delta_k).
+$$
+A layout is not revalidated against the graph after it is built. Reusing one across a mutation that
+adds, removes or demotes a quantity is a caller error.
+
 ## Bindings
 
-Besides parent edges, the graph stores **bindings**: labelled reference edges `(from, role, to)`
-from a log-density term to the nodes that play a role for it. The compiler never reads a binding.
-Removal and garbage collection do, and they treat a binding as a reference:
+Besides parent edges, the graph stores **bindings**: labelled reference edges $(t, \rho, n)$ from a
+term $t$ to a node $n$ that plays role $\rho$ for it. A Gaussian term binds its residual under
+`RESIDUAL` and its Fisher root under `FISHER_ROOT`, for instance. The compiler never reads a
+binding. Removal and garbage collection do, and they treat a binding as a reference:
 
 - `remove` refuses to take a bound node out from under its term (`NodeStillBound`);
 - `remove_closure` takes the term with it.
 
+Bindings are how the readers on later pages find a term's local structure (its residual, its
+curvature) without the model saying what kind of model it is.
+
 > [!DECISION]
 > See [Bindings are graph edges](../../design/bindings/).
-
-## Two densities
-
-A graph carries two densities over the same nodes: the target $p(x \mid z)$ it scores, and the
-proposal $q(x \mid z)$ it samples from. Membership in $p$ is stored on each term. Membership in $q$
-is derived: a term is in $q$ exactly when the quantity it scores is still being generated.
-So a *proposal-only* term can generate a quantity the target does not score.
-
-> [!DECISION]
-> See [Two densities](../../design/two-densities/).
 
 ## A Gaussian, drawn out
 

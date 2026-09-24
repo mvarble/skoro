@@ -46,6 +46,10 @@
 
 <section class="landing-crates">
     <h2>The workspace</h2>
-    <p>Each crate depends only on the crates above it. The bottom-up track follows this order.</p>
+    <p>
+        Each crate depends only on the crates above it. The bottom-up track follows this order,
+        except that the host linear algebra, which depends on nothing above the core, is read just
+        before the estimators that use it.
+    </p>
     <CrateMap />
 </section>

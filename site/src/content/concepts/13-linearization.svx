@@ -1,0 +1,133 @@
+---
+title: Linearization and marginalization
+summary: skoro-linearize, where a model meets the host elimination. A model at a point as a block-sparse Gaussian factor graph, by its residual rows (Gauss–Newton) or its Fisher-root rows (Fisher scoring), and when each is correct; marginals and marginalizing out; and the joint factor that replaces what a sliding window retires.
+order: 13
+katex_macros:
+  \fisher: \mathcal{I}
+  \hatx: \hat x
+---
+
+The previous pages built two halves. On the device, a model at a point yields keyed Jacobian blocks
+([Jacobians](../jacobians/)) and keyed Fisher-root blocks ([Fisher scoring](../fisher-scoring/)).
+On the host, a factor graph of such blocks is eliminated into steps and marginals
+([Host linear algebra](../host-linear-algebra/)). `skoro-linearize` joins them. It is the only
+crate that sees both a model and `faer`, so neither `skoro-model` nor `skoro-dense` has to depend
+on the other. Estimators are built on top of it.
+
+## A model at a point, as a factor graph
+
+`linearize(model, points, free, curvature)` declares every free quantity as a key, with its tangent
+dimension, and adds one factor per scored term that reaches a free quantity. A term that reaches
+none contributes only a constant and is left out. The step $\delta$ is in the flattened tangent
+coordinates of the free quantities, and is applied by $x \leftarrow x \oplus \delta$.
+
+### `Curvature::Residual`: Gauss–Newton
+
+Each term's factor is its residual rows ([Jacobians](../jacobians/#residual-rows)):
+$$
+A_t = J_t = \frac{\partial r_t}{\partial x_{K_t}}, \qquad b_t = -r_t,
+\qquad
+\Phi(\delta) = \tfrac12\sum_t \lVert r_t + J_t\,\delta_{K_t}\rVert^2 .
+$$
+$\Phi$ is the first-order model of $\tfrac12\sum_t\lVert r_t(x \oplus \delta)\rVert^2$, which is
+$-\log p(x \oplus \delta)$ up to a constant **when no term's normalizer depends on a free
+quantity**. `back_substitute` on the eliminated graph minimizes $\Phi$: the Gauss–Newton step,
+computed at the conditioning of $J$ and never forming $J\transpose J$. `graph.damped(λ)` first
+turns it into the Levenberg–Marquardt step.
+
+The precondition is checked. `linearize` requires every scored term to bind a `RESIDUAL`
+(`require_role`). It refuses, with `NormalizerNotConstant`, a term whose `NORMALIZER_PARENT` has a
+free quantity in its leaf support. A Gaussian whose covariance is being estimated has
+$-\log p = \tfrac12\lVert r\rVert^2 - \ln\lvert\det W(\theta)\rvert + \text{const}$, and minimizing
+the first term alone would optimize the wrong objective.
+
+### `Curvature::Fisher`: Fisher scoring
+
+Each term's factor is its Fisher-root block, with no right-hand side, and the gradient comes
+alongside:
+$$
+A_t = C_t J_t, \qquad b_t = 0, \qquad g = \nabla \log p \ \text{(per key)} .
+$$
+Elimination gives $R$ with $R\transpose R = \fisher$. `solve_normal(g)` returns
+$\delta = \fisher^{-1}\nabla\log p$, the Fisher-scoring step, and damping works as before. This
+route is correct for any distribution that binds a root, and for the heteroscedastic Gaussian the
+residual route refuses, because the Gaussian root carries the covariance factor's own information
+block ([Distributions](../distributions/#the-fisher-root)). It requires every scored term to bind a
+`FISHER_ROOT`, since the gradient sums every term.
+
+### When the two agree
+
+For a Gaussian term with a constant covariance on a flat manifold, $r = W(x - \mu)$ and the
+covariance factor does not move, so the root's covariance rows contribute nothing. What is left is
+$$
+C_t J_t = \begin{bmatrix} W(\partial x/\partial\theta - \partial\mu/\partial\theta) \\ 0 \end{bmatrix}
+= \begin{bmatrix} \partial r_t / \partial\theta \\ 0 \end{bmatrix},
+$$
+the residual Jacobian above $d^2$ zero rows. The two curvatures $A\transpose A$ are the same. On a curved manifold they differ at second order in the
+residual, because the root takes the inverse retraction's Jacobians to be $\pm I$. They differ
+entirely once a covariance is free, where only the Fisher route is right.
+
+### Batches, and what is local
+
+A batch of $N$ points is $N$ independent problems: `linearize` returns $N$ graphs of one structure,
+so one `JunctionTree` serves them all. The host elimination reads only what it needs. The device
+side does not: `linearize` differentiates every scored term, one block transfer per term, before
+any elimination starts.
+
+## Marginals
+
+With either curvature, the marginals of [Host linear algebra](../host-linear-algebra/#marginals-are-partial-elimination)
+apply to the model directly:
+
+- `marginalize(model, points, free, K, curvature)` is the marginal on the free quantities $K$,
+  with every other free quantity eliminated: the Laplace (Gauss–Newton) marginal, or the
+  expected-information marginal. It is the one to read covariances and standard errors from.
+- `marginalize_out(model, points, free, E, curvature)` is what retiring $E$ leaves on its Markov
+  blanket $B$, from $E$'s own terms alone. It is the factor that *replaces* those terms.
+
+Both return a `Marginal` over quantity ids: $W$ lower-triangular, $d$, and the keys in order.
+
+## Joint factors from marginals
+
+`joint_normal_from(model, marginal, at)` turns a `Marginal` on $B$, linearized at the point
+$\hatx_B$ given in `at`, into a [`JointNormal`](../distributions/#joint-factors) with
+$$
+r(x_B) = W\,(x_B \ominus \hatx_B) - d, \qquad
+\log\varphi = -\tfrac12\lVert r\rVert^2 - \tfrac{D}{2}\ln 2\pi + \ln\det W .
+$$
+Its quantities, and so the block order of $W$, come from the marginal, so the correspondence that a
+hand-built joint must keep holds by construction. $W$ becomes a `Tril` constant, and $d$ a constant
+offset (omitted when zero).
+
+**Why anchor at $\hatx_B$ and keep $d$.** Since $(\hatx_B \oplus \delta) \ominus \hatx_B = \delta$
+exactly, the factor at $x_B = \hatx_B \oplus \delta$ is
+$$
+r(\hatx_B \oplus \delta) = W\delta - d ,
+$$
+which is precisely the eliminated rows $\tfrac12\lVert W\delta - d\rVert^2$, in value *and*
+Jacobian, on any manifold. Linearizing the new model at $\hatx_B$ reproduces the eliminated problem
+exactly. The alternative, anchoring at the marginal's mean $\hatx_B \oplus W^{-1}d$ with no offset,
+would need $\hatx_B \ominus (\hatx_B \oplus o) = -o$. That identity holds on a flat manifold, but not
+on `SE3`, where the gap is of the size of $d$ itself when the linearization point is far from the
+optimum ([Operations on quantities](../quantity-operations/#skoro-se3)). The test
+`crates/skoro/tests/linearize_se3.rs` pins this.
+
+## The sliding-window step
+
+Retiring a quantity $x_E$ from a model takes four moves:
+
+1. `marginalize_out` $x_E$ at the current estimate: a `Marginal` on its blanket $B$;
+2. `demote_to_parameter` the members of $B$ whose conditionals read $x_E$, which removes those
+   terms while keeping the members ([The model facade](../model/#changing-the-model-in-terms-of-its-densities));
+3. attach `joint_normal_from` the marginal;
+4. `remove_closure` $x_E$, which takes its remaining terms with it.
+
+The terms removed in steps 2 and 4 are exactly the terms that touch $x_E$, and step 3 adds exactly
+their replacement $\varphi_B$. By the identity on
+[Host linear algebra](../host-linear-algebra/#marginalizing-a-key-out), the problem on the remaining
+quantities is unchanged, *at the linearization point*. For a linear-Gaussian model the linearization
+is exact everywhere, so the windowed estimates equal the full-batch estimates.
+`crates/skoro-linearize/tests/window.rs` checks this to $10^{-9}$ over ten ticks, linearizing at zero
+so that every marginal carries a nonzero $d$. For a nonlinear model the joint factor stays frozen at
+$\hatx_B$ while later solves move $x_B$. That is the usual first-order approximation of a fixed-lag
+smoother, and choosing when to relinearize is the caller's policy.

@@ -1,0 +1,150 @@
+---
+title: Distributions
+summary: skoro-normal. The manifold-aware Gaussian as a law in tangent coordinates, its density, normalizer and sampler; its whitened residual; the derivation of its Fisher information root over mean, value and covariance factor; GaussianBlock as the read side; and joint factors.
+order: 10
+katex_macros:
+  \mean: \mu
+  \whiten: L
+  \W: W
+---
+
+`skoro-normal` provides `Normal<B, M>`: a Gaussian on any manifold `M`, parameterized by a mean
+`Q<B, M>` and a lower-triangular factor `Q<B, Tril>`. This page defines it precisely, then derives
+the two things its factor offers the estimators: a whitened residual and a root of its Fisher
+information.
+
+## The law
+
+Let $d$ be the dimension of `M`, $\Sigma = \whiten\whiten\transpose$, and $\W = \whiten^{-1}$ (the
+**whitening**). $x \sim \mathcal N(\mean, \Sigma)$ on `M` means that the tangent coordinates of $x$
+in the chart at the mean ([Manifolds and retractions](../manifolds/)) are Gaussian:
+$$
+v = x \ominus \mean \sim \mathcal N(0, \Sigma) \quad\text{in } \R^d .
+$$
+The term it adds to the model is the log-density of $v$:
+$$
+\log p(x \mid \mean, \whiten)
+= -\tfrac{d}{2}\ln 2\pi \;-\; \tfrac12 \big\lVert \W (x \ominus \mean) \big\rVert^2 \;+\; \sum_{i=1}^{d} \ln\lvert \W_{ii} \rvert .
+$$
+The last sum is $\ln\lvert\det \W\rvert = -\tfrac12 \ln\det\Sigma$, since $\W$ is triangular. On a
+flat manifold this is the ordinary Gaussian. On a curved one it is a density in tangent
+coordinates, and it omits the volume factor of the retraction (for `SO3`,
+$\det J(v) = 1 - \lVert v\rVert^2/12 + \cdots$). That is an approximation of the same order as the
+Fisher root's below, and negligible for concentrated distributions.
+
+`Tril` places no sign constraint on the diagonal of $\whiten$, and flipping the sign of a column of
+$\whiten$ leaves $\Sigma$ unchanged. The absolute values make the density indifferent to it.
+
+**The sampler matches the density.** `NormalSampler` draws $x = \mean \oplus \whiten z$ with
+$z \sim \mathcal N(0, I_d)$. Since $(\mean \oplus \whiten z) \ominus \mean = \whiten z$ exactly,
+$v = \whiten z \sim \mathcal N(0, \Sigma)$, which is the law above. So the Gaussian's term is the
+log-density of its own sampler, and $q$ is the density of what `generate` draws
+([The model graph](../graph/#sampling-the-generative-reading-of-q)).
+
+## The residual and the normalizer
+
+Split the log-density into its data-dependent and constant parts:
+$$
+-\log p = \tfrac12 \lVert r \rVert^2 - n(\whiten), \qquad
+r = \W\,(x \ominus \mean), \qquad
+n(\whiten) = -\tfrac{d}{2}\ln 2\pi + \ln\lvert\det \W\rvert .
+$$
+$r \in \R^d$ is the **whitened residual**. A least-squares estimator minimizes
+$\tfrac12\sum\lVert r\rVert^2$ alone, which is the same problem only when no normalizer moves with
+the quantities being estimated, that is, when $\whiten$ is not free. A Gaussian whose covariance is
+estimated (heteroscedastic noise) is *not* a least-squares term, and the residual route refuses it
+([Linearization and marginalization](../linearization/)).
+
+`Normal`'s factor builds these nodes once, sharing $\W$, and binds them:
+
+| Role | Node | For |
+| --- | --- | --- |
+| `RESIDUAL` | $r$ | Gauss–Newton rows ([Jacobians](../jacobians/#residual-rows)) |
+| `LOCATION` | $\mean$ | a filter's $H = \partial\mean/\partial x$ |
+| `WHITENING` | $\whiten$ | a filter's $R = \whiten\whiten\transpose$ |
+| `NORMALIZER_PARENT` | $\whiten$ | the least-squares precondition above |
+| `FISHER_ROOT` | $C$ | the Fisher information (below) |
+| `ARGUMENT` | $x, \mean, \whiten$ | the columns $C$ is expressed over |
+
+## The Fisher root
+
+The Fisher information of a term with respect to its arguments $\eta = (x, \mean, \whiten)$ is the
+expected outer product of its score. [Fisher scoring](../fisher-scoring/) explains why an estimator
+wants it. Here we derive the matrix $C$ the Gaussian binds, with
+$$
+C\transpose C = \E_{x}\big[\nabla_\eta \log p\; \nabla_\eta \log p\transpose\big],
+$$
+over the $d + d + d(d+1)/2$ tangent coordinates of $(x, \mean, \whiten)$.
+
+**Value and mean.** On a flat manifold $\partial r/\partial x = \W$ and
+$\partial r / \partial \mean = -\W$, so the scores are $-\W\transpose r$ and $\W\transpose r$ with
+$\E[rr\transpose] = I$. The block is $[\,\W\ \ -\W\,]\transpose [\,\W\ \ -\W\,]$.
+
+**Covariance factor.** For packed coordinate $q$ of $\whiten$, let $E_q$ be the matrix with a one
+at that entry. Then $\partial_q \Sigma = E_q\whiten\transpose + \whiten E_q\transpose$, and the
+Gaussian's information over covariance parameters is
+$F_{qq'} = \tfrac12 \operatorname{tr}\big(\Sigma^{-1}\partial_q\Sigma\,\Sigma^{-1}\partial_{q'}\Sigma\big)$.
+With $G_q = \W E_q$,
+$$
+\Sigma^{-1}\partial_q\Sigma = \whiten^{-\top}\big(G_q + G_q\transpose\big)\whiten\transpose
+\quad\Longrightarrow\quad
+F_{qq'} = \tfrac12\operatorname{tr}\big(S_q S_{q'}\big), \qquad S_q = G_q + G_q\transpose,
+$$
+by cyclicity of the trace. So the columns $\mathrm{vec}(S_q)/\sqrt2$ form a root $C_L$ with
+$C_L\transpose C_L = F$.
+
+**Cross terms** between the mean block and the covariance block are linear in $r$, and the odd
+moments of a Gaussian vanish, so they are zero in expectation. The root is
+$$
+C = \begin{bmatrix} \W & -\W & 0 \\ 0 & 0 & C_L \end{bmatrix}
+\in \R^{(d + d^2) \times (2d + d(d+1)/2)} .
+$$
+Every entry of $C$ is linear in $\W$, so $C = K\,\mathrm{vec}(\W)$ for one fixed, very sparse
+matrix $K$, and the root is built as a `SparseLinearMap` of the packed whitening
+([Operations on quantities](../quantity-operations/#skoro-linalg)). When $\whiten$ is a constant,
+the whole root constant-folds.
+
+**On a curved manifold** the value and mean blocks take $\partial r / \partial x$ and
+$\partial r/\partial\mean$ to be $\pm\W$. On `SO3` and `SE3` that holds only at $r = 0$: the true
+Jacobians carry $J(v)^{-1} = I + \tfrac12 v^\wedge + O(\lVert v\rVert^2)$ factors. The
+corrections linear in $v$ average out, because $v$ has zero odd moments, so $C\transpose C$ is exact on
+flat spaces and correct to second order in the dispersion on groups. Its relative error grows like
+$\lVert\Sigma\rVert$, and vanishes when $\Sigma$ is isotropic. The measurements are on
+[Fisher scoring](../fisher-scoring/#curved-manifolds).
+
+## `GaussianBlock`
+
+`GaussianBlock` is the read side: the view of a term that binds exactly one each of `RESIDUAL`,
+`LOCATION` and `WHITENING`. It is derived from the bindings on every call, and never stored as a
+second list that could drift.
+
+## Joint factors
+
+A distribution is a conditional over *one* quantity. A Gaussian over several quantities the model
+already holds (for example, what marginalizing a quantity out leaves behind) is a
+**`JointNormal`**, attached with `add_joint_factor` as a free-standing factor. Over quantities
+$x_1, \dots, x_k$, with frozen anchors $a_i$, it scores
+$$
+\delta = (x_1 \ominus a_1; \dots; x_k \ominus a_k), \qquad
+r = \W\,\delta - b, \qquad
+\log \varphi = -\tfrac12\lVert r\rVert^2 + n,
+$$
+with $\W$ a constant `Tril` of the summed dimension, an optional constant offset $b$ (zero unless
+`with_offset` gives one), and a constant normalizer $n$. It binds $r$ as its residual and $\W$
+itself, unpacked, as its Fisher root: $C\transpose C = \W\transpose\W = \Lambda$, the precision of
+$\delta$. The stacked tangent is what makes a joint over quantities on *different* manifolds
+possible without a product manifold. Its dimension is the sum of the members' dimensions.
+
+The block order of $\W$ must match the order of the quantities, and nothing can check that: a
+`Tril` of the right width is a valid whitening for any ordering. A hand-built joint carries that
+obligation. One built from a computed marginal does not
+([Linearization and marginalization](../linearization/#joint-factors-from-marginals)).
+
+## Is it the only distribution?
+
+`Normal` is the only `Distribution` implemented in library code today. Anything non-Gaussian is
+a bespoke implementation of the trait, and it may bind any subset of the roles.
+
+> [!TODO] Distribution roadmap
+> Which families come next (Student-t, von Mises–Fisher, categorical likelihoods, …)? Does each
+> need a closed-form Fisher root to be useful?

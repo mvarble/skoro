@@ -22,7 +22,12 @@ Defined in `site/katex.config.ts` and available on every page.
 
 ## Conventions
 
-- $x \ominus \mu = \invretr(\mu, x)$: the tangent vector from $\mu$ to $x$.
+- $x \oplus \delta = \retr(x, \delta)$: the point reached from $x$ along the tangent coordinates
+  $\delta$. The retraction *defines* tangent coordinates
+  ([Manifolds and retractions](../../concepts/manifolds/)).
+- $x \ominus \mu = \invretr(\mu, x)$: the tangent vector from $\mu$ to $x$, so
+  $(\mu \oplus \delta) \ominus \mu = \delta$. The mirror identity $\mu \ominus (\mu \oplus \delta) = -\delta$
+  holds only on flat manifolds.
 - $r = L^{-1}(x \ominus \mu)$: a whitened residual, with $\Sigma = LL\transpose$.
 - $\calI(\theta)$: the (expected) Fisher information.
 - $J$: a Jacobian with rows indexed by residual or argument coordinates and columns by free tangent

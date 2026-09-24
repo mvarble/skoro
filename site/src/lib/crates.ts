@@ -89,7 +89,7 @@ export const CRATES: Crate[] = [
         purpose:
             'A model linearized into a block-sparse Gaussian factor graph; marginals and joint factors.',
         deps: ['skoro-dense', 'skoro-normal'],
-        page: 'concepts/host-linear-algebra',
+        page: 'concepts/linearization',
     },
     {
         name: 'skoro',

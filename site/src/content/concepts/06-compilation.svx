@@ -1,18 +1,84 @@
 ---
 title: Compilation
-summary: How a subgraph is lowered to a straight-line CompiledSequence that serves all four differentiation passes, with an epoch-keyed cache, cut compilation at interior frontiers, and slot liveness.
+summary: How a subgraph is lowered to a straight-line CompiledSequence that serves all four differentiation passes; which inputs are differentiable; what each pass collects at the leaves; cut compilation as partial derivatives at an interior frontier; the epoch-keyed cache; and slot liveness.
 order: 6
 ---
 
 Evaluating a model by walking its graph node by node would be slow. Skoro instead **compiles** the
-part of the graph a query needs into a `CompiledSequence`: a flat, index-based list of steps.
+part of the graph a query needs into a `CompiledSequence`: a flat, index-based list of steps, the
+program of [Differentiable operations](../operations/#a-program).
 
-## One sequence, four passes
+## Lowering
 
-`compile_backward_from(&targets)` finds everything the targets depend on, sorts it
-topologically, and lowers each node to one `CompiledStep`. The same sequence runs all four passes
-(`forward`, `jvp_forward`, `vjp_forward`, `hvp_forward`), and the caller picks one by which method
-it invokes.
+`compile_backward_from(&targets)` collects the targets' ancestors, sorts them topologically, and
+lowers each node to one `CompiledStep` writing one slot:
+
+| Node | Step | In a pass |
+| --- | --- | --- |
+| Constant, observed | `Constant` | a value; never differentiated |
+| Parameter | `Parameter` | a leaf: value from `points`; cotangents collected |
+| Live stochastic | `Sampler` | a leaf: value from `points`, or drawn when generating; cotangents collected |
+| Mapped, log-likelihood | `Operation` | the node's `DiffOperation`, or its cached value if it is constant-folded |
+| A node named as a cut | `Given` | a leaf standing for an interior node (below) |
+
+The same sequence runs all four passes (`forward`, `jvp_forward`, `vjp_forward`, `hvp_forward`), and
+the caller picks one by which method it invokes.
+
+## Which inputs are differentiable
+
+Each `Operation` step records, per input, whether that input can carry a derivative. An input is
+differentiable when its parent is a continuous parameter or live stochastic node, or a continuous
+mapped or log-likelihood node that has not been constant-folded. Constants and observed nodes are
+not. This is the `diffs` flag of [the two gates](../operations/#the-two-gates). An operation with
+no differentiable input is kept off the tape entirely, so whole subtrees rooted in constants cost
+one forward evaluation and nothing more.
+
+## The four passes
+
+With slots $s_0, \dots, s_{n-1}$, leaves $x$ and targets $f$, the passes compute the recurrences of
+the operations page over the steps:
+
+- **`forward`** runs every step: the values $f(x)$.
+- **`jvp_forward`** takes a tangent frame $\dot X_x \in \R^{d_x \times k}$ per leaf (missing means
+  zero) and returns, per target, $\sum_x \partial f / \partial x \cdot \dot X_x$. The Jacobian's
+  JVP assembler seeds the columns of an identity.
+- **`vjp_forward`** takes a cotangent frame $\alpha_f$ per target and returns, per leaf,
+  $\sum_f (\partial f/\partial x)\transpose \alpha_f$.
+- **`hvp_forward`** takes a tangent vector per leaf, and order-1 and order-2 cotangents per target,
+  and returns per leaf the pair $(\alpha_x, \beta_x)$ of the forward-over-reverse recurrence: for a
+  scalar target seeded $(1, 0)$, the gradient and the Hessian–vector product
+  ([Manifolds and retractions](../manifolds/#the-hessianvector-product)).
+
+Cotangents are collected **only at leaf slots** (`Parameter`, `Sampler`, `Given`). A cotangent
+pulled into a constant is discarded before it can be observed. A leaf that no target reaches comes
+back as absent, and the Jacobian assemblers read absent as zero.
+
+## Cut compilation
+
+`compile_between(&cuts, &targets)` stops the traversal at a frontier $c$ of interior nodes whose
+values the caller supplies. The program then computes $f(x, c)$ with $c$ as an *independent*
+input, and its derivatives are **partial** derivatives with the frontier held fixed:
+$$
+\frac{\partial f}{\partial c}\Big|_{x}, \qquad \frac{\partial f}{\partial x}\Big|_{c}.
+$$
+The total derivative through the cut is the chain rule a caller can assemble from two programs:
+$\frac{df}{dx} = \frac{\partial f}{\partial x}\big|_c + \frac{\partial f}{\partial c}\big|_x \frac{\partial c}{\partial x}$.
+This is how a linearization at an interior node, such as $\partial h / \partial x_1$ for
+$x_1 = F(x_0)$ in an all-mapped chain, is taken.
+
+> [!WARNING] The trap
+> A cut boundary must **not** lower to a constant step. If it did, everything downstream would be
+> marked non-differentiable, and the values would come back right while the derivatives came back
+> silently wrong. Cut nodes lower to a dedicated `Given` step: a leaf whose value is supplied and
+> whose cotangent is collected, like a parameter.
+
+A `Given` value comes from `points` (`MissingPoint` if it is absent) and is reported among the
+output's `variables`, beside the parameters. A cut at a node that is already a leaf is a no-op, and
+a cut that no target reaches is ignored. The Jacobian assemblers deliberately do not take cuts:
+their columns are the leaves an estimator moves ([Jacobians](../jacobians/)).
+
+`Graph::support(id)` is the forward counterpart: the nodes that depend on `id`, sorted for
+determinism.
 
 ## Caching, keyed by epoch
 
@@ -32,37 +98,11 @@ Repeated evaluation without mutation (a Fisher-scoring loop, for example) benefi
 mutates every tick (a sliding window) clears the cache every tick and gains nothing. That is
 expected.
 
-## Cut compilation
-
-`compile_between(&cuts, &targets)` stops the traversal at a frontier of interior nodes whose values
-the caller supplies, and still differentiates with respect to that frontier.
-
-> [!WARNING] The trap
-> A cut boundary must **not** lower to a constant step. If it did, everything downstream would be
-> marked non-differentiable, and the values would come back right while the derivatives came back
-> silently wrong. Cut nodes lower to a dedicated `Given` step: a leaf whose value is supplied and
-> whose cotangent is collected, like a parameter.
-
-A `Given` value comes from `points` (`MissingPoint` if it is absent) and is reported among the
-output's `variables`, beside the parameters. A cut at a node that is already a leaf is a no-op, and
-a cut that no target reaches is ignored.
-
-The Jacobian assemblers (`jacobian_jvp`, `jacobian_vjp`) deliberately do not take cuts: their
-columns are the leaves an estimator moves, and a mapped column is rejected with
-`SkoroError::MappedColumn`. A linearization at an interior node goes through `compile_between`
-directly. See [Estimation](../../guide/estimation/).
-
-`Graph::support(id)` is the forward counterpart: the nodes that depend on `id`, sorted for
-determinism.
-
 ## Slot liveness
 
 Each operation slot is released at the last step that reads it, a fact computed at compile time
 (`CompiledSequence::last_use`). Only operation slots are dropped. Leaf slots stay alive, because
 the VJP pass reads them after the tape has run.
-
-`log_weight` evaluates $\log p$ and $\log q$ in one program rather than two, through
-`Graph::log_density_terms_signed`.
 
 > [!NOTE]
 > `docs/skoro.md` §4.5 summarizes the same design. The tests that pin each failure mode are in

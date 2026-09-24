@@ -1,24 +1,119 @@
 ---
 title: Manifolds and retractions
-summary: skoro-riemann. The Manifold trait as a pair of differentiable operations (retraction and inverse retraction), the flat manifolds, and dyn-compatible erasure.
+summary: skoro-riemann. A manifold as a dimension plus two differentiable operations, the retraction and its inverse; how the retraction defines tangent coordinates; what a gradient and a Hessian–vector product mean at a curved point; and the flat manifolds.
 order: 4
 katex_macros:
   \man: \mathcal{M}
+  \Retr: R
 ---
 
-A manifold, to skoro, is exactly two differentiable operations plus a dimension:
+A manifold, to skoro, is exactly a dimension plus two differentiable operations:
 
 ```
 {../../../../crates/skoro-riemann/src/base.rs:5..30}
 ```
 
-- The **retraction** $\retr : \man \times \T_x\man \to \man$ moves a point along a tangent vector.
-  Every optimizer step and every perturbation goes through it.
-- The **inverse retraction** $\invretr : \man \times \man \to \T_x\man$ gives the tangent vector
-  between two points. A residual $x \ominus \mu = \invretr(\mu, x)$ is built from it.
+There is no metric, no connection, and no notion of a geodesic anywhere in the library. Everything
+that follows (derivatives, gradients, Jacobians, the Fisher information) is built from the
+retraction alone. This page makes that precise, because every later page differentiates at curved
+points.
 
-Both are `DiffOperation`s, so they are differentiated like anything else in the graph. This is why
+## The retraction defines the coordinates
+
+The **retraction** $\Retr : (x, \delta) \mapsto \Retr_x(\delta)$ moves a point $x \in \man$ along a
+vector $\delta \in \R^d$, with $\Retr_x(0) = x$. It is a local parameterization of $\man$ around
+$x$, a chart. In skoro that chart is the *definition* of what tangent coordinates at $x$ mean:
+$\T_x\man$ is $\R^d$, and a tangent $\delta$ at $x$ names the curve $t \mapsto \Retr_x(t\delta)$.
+We write
+$$
+x \oplus \delta \defeq \Retr_x(\delta).
+$$
+Every optimizer step, every perturbation in a test, and every draw from a distribution goes
+through it.
+
+The **inverse retraction** returns the coordinates of one point in the chart at another:
+$$
+y \ominus x \defeq \Retr_x^{-1}(y) = \invretr(x, y), \qquad \text{so that} \qquad (x \oplus \delta) \ominus x = \delta
+$$
+wherever the chart is valid. This is the residual of a distribution: $x \ominus \mu$ is where
+$x$ sits in the chart at the mean $\mu$.
+
+> [!WARNING] $\ominus$ is not a group difference
+> $(x \oplus \delta) \ominus x = \delta$ holds by construction. The mirror identity
+> $x \ominus (x \oplus \delta) = -\delta$ does **not** hold in general. It measures $x$ in the chart
+> at the *moved* point, and it agrees with $-\delta$ only to first order. It holds exactly on a flat
+> manifold. On `SE3` it fails at second order, because skoro's `SE3` retraction is not the group
+> exponential ([Operations on quantities](../quantity-operations/#skoro-se3)). A computation that
+> needs "the point whose residual is $-\delta$" must not assume it.
+
+Both maps are `DiffOperation`s, so they are differentiated like anything else. This is why
 `skoro-riemann` depends on `skoro-operation`, and not the other way round.
+
+## Derivatives in charts
+
+Let $f : \man \to \mathcal N$ be a map between manifolds of dimensions $d$ and $e$. Its derivative
+at $x$ is the $e \times d$ matrix of the map in the charts at $x$ and at $y = f(x)$:
+$$
+Df(x)\,a = \frac{d}{dt}\Big|_{t=0} \big(f(x \oplus ta) \ominus y\big), \qquad a \in \R^d .
+$$
+This is what an operation's JVP computes when its inputs or output are curved, and its VJP is the
+transpose. To derive one:
+
+1. perturb the input, $x_t = x \oplus ta$;
+2. push it through, $y_t = f(x_t)$;
+3. **solve** $y_t = y \oplus c(t)$ for $c(t)$;
+4. the JVP is $c'(0)$, and the VJP is its adjoint.
+
+Step 3 is where every factor like $\mathrm{Exp}(\omega)\transpose$ on the next pages comes from.
+With every operation expressed this way, the passes of
+[Differentiable operations](../operations/) compose unchanged: a program over curved quantities is
+a program over their tangent coordinates.
+
+### The gradient
+
+For a scalar $f : \man \to \R$ (a log-density), the cotangent the reverse pass delivers at a leaf
+$x$ is
+$$
+g(x) \defeq \nabla (f \circ \Retr_x)(0) \in \R^d ,
+$$
+the gradient of $f$ pulled back through the chart at $x$. With no metric in play, this is a
+differential expressed in chart coordinates, not a Riemannian gradient. It is exactly what an
+optimizer needs: moving to $x \oplus \delta$ changes $f$ by $g(x)\transpose\delta + O(\lVert\delta\rVert^2)$.
+
+### The Hessian–vector product
+
+The HVP pass differentiates $g$ along the seeded tangent, re-expressing it at each point in *that*
+point's chart:
+$$
+H(x)\,v \defeq \frac{d}{dt}\Big|_{t=0}\, g(x \oplus tv).
+$$
+This is what `log_density_ord2` returns, and what the numeric reference in the test suite checks
+(`(vjp(x ⊕ δeᵢ) − vjp(x)) / δ`). On a flat manifold it is the ordinary Hessian. At a curved point
+it can differ from $\nabla^2(f \circ \Retr_x)(0)\,v$, the Hessian of the pullback, because the chart
+changes along the path. At a **stationary point** the two agree. Write
+$\Retr_{x_t}(\delta) = \Retr_x(\varphi_t(\delta))$ for a family of local reparameterizations with
+$\varphi_0 = \mathrm{id}$ and $\varphi_t(0) = tv$. Then
+$g(x_t) = D\varphi_t(0)\transpose\, \nabla(f\circ\Retr_x)(tv)$, and
+$$
+\frac{d}{dt}\Big|_{t=0} g(x_t) = \nabla^2(f\circ\Retr_x)(0)\,v + \Big(\frac{d}{dt}\Big|_{t=0} D\varphi_t(0)\Big)\transpose g(x),
+$$
+whose second term vanishes when $g(x) = 0$.
+
+## Flat manifolds
+
+`skoro-riemann` provides the flat cases, where $x \oplus \delta = x + \delta$ and
+$y \ominus x = y - x$: `Real`, `Euclidean<D>` / `EuclideanD`, and `EuclideanMatrix`. There, storage
+equals dimension, both identities above hold exactly, and every derivative is the ordinary one. The
+packed lower triangles `Tril` (covariance factors, in `skoro-linalg`) are flat in the same way,
+with no positivity constraint.
+
+The curved groups live in their own crates, `skoro-so3` and `skoro-se3`, and both use **right**
+(body-frame) charts: $\Retr_r(\omega) = r\,\mathrm{Exp}(\omega)$ on rotations. Their formulas are on
+[Operations on quantities](../quantity-operations/), where those crates enter.
+
+> [!TODO] Retraction choices
+> Say why skoro uses right (body-frame) charts, and why `SE3`'s retraction is the product form
+> $(r\,\mathrm{Exp}(\omega),\ p + r v)$ rather than the group exponential.
 
 ## Manifolds as type tags
 
@@ -26,14 +121,3 @@ A type implementing `Manifold` is also a *tag*: `Q<B, SO3>` and `Q<B, Real>` are
 so operations are type-gated even though the tensors underneath are untyped. `DynManifold` is the
 dyn-compatible twin, used where the graph must handle a quantity whose type is known only at run
 time.
-
-## The flat manifolds
-
-`skoro-riemann` itself provides the flat cases, where both operations are addition and subtraction:
-`Real`, `Euclidean<D>` / `EuclideanD`, and `EuclideanMatrix`. The curved groups live in their own
-crates (`skoro-so3`, `skoro-se3`), and the lower-triangular factors `Tril` live in `skoro-linalg`.
-
-> [!TODO] Retraction choices
-> For SO(3)/SE(3), state which retraction is used (exponential map? a first-order one?) and why.
-> Also explain the chart convention for Jacobians of manifold-valued operations (the skill's
-> `references/manifold-conventions.md` would be the source).

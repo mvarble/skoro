@@ -1,0 +1,233 @@
+---
+title: Host linear algebra
+summary: skoro-dense. Dense f64 factorizations, and the mathematics of block-sparse elimination of a linear-Gaussian factor graph, from eliminating one key by QR (and why that is a Schur complement), through the elimination tree, junction tree and multifrontal QR, to the Bayes-tree solves, damping, and marginals as partial elimination.
+order: 11
+katex_macros:
+  \sep: \mathcal{S}
+  \Lam: \Lambda
+---
+
+`skoro-dense` is host-resident linear algebra in `f64`, backed by [faer](https://faer.veganb.tw/).
+It depends only on `skoro-backend` and `skoro-core`, so nothing that merely uses `Normal` pays for
+`faer`. It is independent of everything on the previous pages. They produce its inputs, and the
+next pages consume its outputs.
+
+```
+{../../../../crates/skoro-dense/src/lib.rs:1..4}
+```
+
+## Dense
+
+```
+{../../../../crates/skoro-dense/src/lib.rs:8..14}
+```
+
+`skoro_dense::factor` has the dense entry points, all returning `SkoroResult`: `cholesky`,
+`solve_lower`, `solve_upper`, `spd_solve`, `lstsq`, and `whitening_from_precision`. The last
+returns, for a precision $\Lam$, the **lower**-triangular $W$ with $W\transpose W = \Lam$ that a
+`Tril` whitening needs. It uses one Cholesky and no inversion. Let $P$ reverse the order of
+coordinates, and factor $P\Lam P = LL\transpose$ with $L$ lower. Then $W = P L\transpose P$ is
+lower-triangular (reversing both axes of an upper-triangular matrix makes it lower), and
+$$
+W\transpose W = P L P\, P L\transpose P = P (P\Lam P) P = \Lam .
+$$
+($\mathrm{chol}(\Lam)\transpose$ also squares to $\Lam$, but it is upper-triangular, which a `Tril`
+cannot hold.)
+
+## Why QR on the host
+
+A damped Gauss–Newton step solves
+$$
+(J\transpose J + \lambda I)\,\delta = -J\transpose r
+\iff
+\min_\delta \left\lVert \begin{bmatrix} J \\ \sqrt\lambda\, I \end{bmatrix}\delta - \begin{bmatrix} -r \\ 0 \end{bmatrix} \right\rVert .
+$$
+Solving the right-hand form by QR keeps the conditioning at $\kappa(J)$ rather than
+$\kappa(J)^2$, at *every* damping value. burn has no QR, and that settles where the solve runs.
+Everything on the rest of this page is a sparse form of that QR.
+
+> [!DECISION]
+> See [Solves on the host](../../design/host-dense-linear-algebra/).
+
+## Factor graphs
+
+A model's linearization is block-sparse: each term touches a few quantities. `skoro-dense`
+represents it with keys, not scalars, as the unit, as GTSAM does:
+
+```
+{../../../../crates/skoro-dense/src/lib.rs:18..33}
+```
+
+A `GaussianFactorGraph` declares keys $k$ with dimensions $d_k$, and factors $f$, each a block of
+rows over a few keys $K_f$:
+$$
+\Phi(\delta) = \sum_f \tfrac12 \big\lVert A_f\,\delta_{K_f} - b_f \big\rVert^2 = \tfrac12\lVert A\delta - b\rVert^2 .
+$$
+Here $A$ stacks the factors' rows, each scattered into the columns of its keys. The curvature of
+$\Phi$ is $\Lam = A\transpose A$. The graph never asks where the rows came from. Whitened residual
+Jacobians with $b = -r$, Fisher roots with $b = 0$, and damping priors are all the same object
+(see [Linearization and marginalization](../linearization/)).
+
+## Eliminating one key
+
+Pick a key $j$. Only the factors touching $j$ involve $\delta_j$. Stack them into one dense matrix
+over $j$ and the other keys they touch, its **separator** $\sep_j$, with $\delta_j$'s columns first:
+$$
+M = \big[\, A_j \;\big|\; A_{\sep} \;\big|\; b \,\big].
+$$
+An orthogonal $Q$ (Householder QR, **unpivoted**) brings it to upper-trapezoidal form:
+$$
+Q\transpose M = \begin{bmatrix} R_j & T & d_j \\ 0 & A'_{\sep} & b' \\ 0 & 0 & e \end{bmatrix},
+$$
+where $R_j$ is square upper-triangular. Since $Q$ preserves norms, those factors' contribution to
+$\Phi$ splits exactly:
+$$
+\tfrac12\lVert A_j\delta_j + A_\sep\delta_\sep - b\rVert^2
+= \underbrace{\tfrac12\lVert R_j\delta_j + T\delta_\sep - d_j\rVert^2}_{\text{conditional on } \delta_\sep}
++ \underbrace{\tfrac12\lVert A'_\sep\delta_\sep - b'\rVert^2}_{\text{new factor on } \sep}
++ \tfrac12 e^2 .
+$$
+
+- The first term is a **conditional**: for any $\delta_\sep$ it is zero at
+  $\delta_j = R_j^{-1}(d_j - T\delta_\sep)$, when $R_j$ is invertible. So minimizing over
+  $\delta_j$ removes it.
+- The second is a new factor on the separator. It replaces every factor that touched $j$.
+- $\tfrac12 e^2$ is residual error that no choice of $\delta$ can remove.
+
+**Why this is the Schur complement.** Write $\Lam$ restricted to $(j, \sep)$ in blocks. Because
+$Q$ is orthogonal, $M\transpose M = (Q\transpose M)\transpose(Q\transpose M)$, which gives
+$\Lam_{jj} = R_j\transpose R_j$, $\Lam_{j\sep} = R_j\transpose T$ and
+$\Lam_{\sep\sep} = T\transpose T + A'^{\top}_{\sep} A'_{\sep}$. Hence
+$$
+\Lam_{\sep\sep} - \Lam_{\sep j}\Lam_{jj}^{-1}\Lam_{j\sep}
+= T\transpose T + A'^{\top}_\sep A'_\sep - T\transpose R_j (R_j\transpose R_j)^{-1} R_j\transpose T
+= A'^{\top}_\sep A'_\sep .
+$$
+The new factor is a square root of the Schur complement, reached without forming $\Lam$ or
+inverting anything.
+
+Column pivoting would be wrong here, not merely different: it would mix $\delta_j$'s columns with
+the separator's, and the partition is the whole point. A diagonal of $R_j$ below
+$10^{-12}$ of its column's norm means $\delta_j$ is not determined by the rows that reach it: gauge
+freedom, or a direction no factor informs. It is reported as `RankDeficient { position }`. A key
+no factor touches is `KeyUnconstrained`. The threshold assumes rows computed in `f64`. Rows that
+passed through `f32` carry $10^{-7}$ relative noise, and an exact dependence then survives the test
+and comes back as a huge step.
+
+## Eliminating all of them: order, trees and fronts
+
+Eliminate keys one at a time in an order $\pi$. Each elimination adds a factor on its separator,
+which later eliminations must absorb. How big those separators grow (the **fill**) is decided
+entirely by the order.
+
+**Ordering.** `Ordering::Colamd` runs faer's COLAMD on the **block** pattern, one row per factor,
+one column per key, and one entry per $(f, k)$ with $k \in K_f$. Every scalar column of a key shares
+its sparsity, so ordering keys is cheaper and loses nothing. `ConstrainedLast(K)` orders every
+other key by COLAMD and puts $K$ last, which is what a marginal on $K$ needs. It stands in for the
+CCOLAMD that faer lacks.
+
+**The elimination tree.** The separators depend only on which keys each factor touches, so they are
+computed before any number is. Home each factor at its earliest key in $\pi$. Then, in order,
+$$
+\sep_j = \Big(\bigcup_{f \text{ homed at } j} K_f \;\cup \bigcup_{c:\ \mathrm{parent}(c) = j} \sep_c\Big) \setminus \{j\},
+\qquad \mathrm{parent}(j) = \min_\pi \sep_j .
+$$
+The parent of $j$ is the first key its new factor lands on.
+
+**The junction tree.** A chain in which a key $j$ has a single child $c$ with
+$\sep_c = \{j\} \cup \sep_j$ can be eliminated as one dense front with no extra fill. Such chains
+are merged into **cliques**, each with frontal keys $F$ and separator $\sep$. The `JunctionTree`
+holds the cliques, children before parents. It holds no numbers, and it is reused for as long as
+the graph's `Structure` (each factor's keys, each key's dimension) is unchanged: across solver
+iterations, the rows of a batch, and filter ticks of the same topology. Reuse is checked against
+the structure, never trusted, and never keyed on the graph epoch, which a window bumps every tick.
+`JunctionTree::sequential` turns merging off, and serves as the baseline the multifrontal form is
+tested against.
+
+**Multifrontal elimination.** Each clique stacks its homed factors and its children's separator
+factors into $[\,A_F \mid A_\sep \mid b\,]$ and eliminates all its frontals with one QR, exactly as
+for one key. The top rows become a **conditional**
+$$
+R_c\,\delta_{F} + S_c\,\delta_{\sep} = d_c ,
+$$
+with $R_c$ upper-triangular, its diagonal made positive by flipping row signs (which changes no
+norm). The next rows are the clique's separator factor, handed to its parent.
+
+## The Bayes tree, and what it solves
+
+The conditionals, arranged as the cliques were, form a `BayesTree`. After a full elimination, the
+block rows $[\,R_c \ S_c\,]$ stacked in elimination order are one upper-triangular $R$ with
+$$
+R\transpose R = A\transpose A = \Lam, \qquad \Phi(\delta) = \tfrac12\lVert R\delta - d\rVert^2 + \text{error}.
+$$
+Everything follows from triangular solves with $R$, one clique at a time:
+
+| Method | Computes | Direction | Use |
+| --- | --- | --- | --- |
+| `back_substitute` | $R^{-1}d$ | top-down, $\delta_F = R_c^{-1}(d_c - S_c\delta_\sep)$ | the minimizer of $\Phi$: the least-squares step |
+| `solve_upper(z)` | $R^{-1}z$ | top-down | $z \sim \mathcal N(0, I)$ gives $\delta \sim \mathcal N(0, \Lam^{-1})$: Laplace draws |
+| `solve_upper_transpose(g)` | $R^{-\top}g$ | bottom-up | the first half of the next row |
+| `solve_normal(g)` | $R^{-1}R^{-\top}g = \Lam^{-1}g$ | both | a step against an external gradient (Fisher scoring) |
+| `log_det_r` | $\sum \ln R_{ii}$ | | $\tfrac12\ln\det\Lam$, for a Laplace evidence |
+
+`Elimination::error` is $\tfrac12\sum e^2 = \min_\delta \Phi(\delta)$, the predicted objective
+a Levenberg–Marquardt gain ratio compares against.
+
+`solve_normal` is sensitive at $\kappa(A)^2$, as any normal-equations solve is, even though $R$ was
+computed at $\kappa(A)$. `back_substitute` avoids that whenever the rows carry their own right-hand
+side.
+
+**Damping** is two more rows per key. `damped(λ)` appends $\sqrt\lambda\,I$ with $b = 0$, and
+`damped_diagonal(λ, D)` appends $\sqrt\lambda\,D^{1/2}$, which turns $\Lam$ into
+$\Lam + \lambda D$ at no cost in conditioning.
+
+## Marginals are partial elimination
+
+Split the keys into eliminated $E$ and kept $K$. Eliminating only $E$ leaves a set of factors on
+$K$: the factors that touched no key of $E$, untouched, plus the separator factors of the last
+eliminated cliques. By the one-key argument, applied repeatedly,
+$$
+\min_{\delta_E} \Phi(\delta_E, \delta_K) = \Phi_K(\delta_K) + \text{error}, \qquad
+\nabla^2 \Phi_K = \Lam_{KK} - \Lam_{KE}\Lam_{EE}^{-1}\Lam_{EK} .
+$$
+That is the Laplace marginal on $K$ in square-root form. For a linear-Gaussian model it is exact.
+Elimination here is lazy: only the factors that touch $E$ are read. The cost is in the eliminated
+keys' neighbourhood, not in the size of the graph.
+
+`marginal(graph, K)` eliminates everything else (ordered by `ConstrainedLast(K)`) and **squares up**
+what is left into one lower-triangular $W$:
+$$
+\Phi_K(\delta_K) = \tfrac12\lVert W\delta_K - d\rVert^2 + \text{const}, \qquad W\transpose W = \Lam_K .
+$$
+QR gives an upper factor, so the last QR runs on the columns reversed. With $P$ the reversal, QR of
+$[\,A_K P \mid b\,]$ gives an upper $R'$ with $R'^{\top}R' = P\Lam_K P$ and right-hand side $d'$.
+Then $W = P R' P$ is lower with $W\transpose W = \Lam_K$, and since
+$A_K\delta = (A_K P)(P\delta)$,
+$$
+\lVert R' (P\delta) - d' \rVert = \lVert P R' P\,\delta - P d'\rVert = \lVert W\delta - Pd'\rVert, \qquad d = P d' .
+$$
+A `Marginal` carries its keys (in the caller's order) *with* $W$, $d$, $\ln\det W = \tfrac12\ln\det\Lam_K$,
+the information $W\transpose W$, the covariance $W^{-1}W^{-\top}$, and the mean offset $W^{-1}d$.
+Fewer rows than $\sum_{k \in K} d_k$ means a singular marginal, `RankDeficient`.
+
+### Marginalizing a key *out*
+
+A sliding window needs something subtly different: not the marginal of the whole graph on some
+keys, but the factor that **replaces** the factors of the keys it retires. Split
+$\Phi = \Phi_{\ni E} + \Phi_{\not\ni E}$ into the factors that touch $E$ and those that do not, and
+let $B$ be the other keys the first group touches, $E$'s **Markov blanket**. Since
+$\Phi_{\not\ni E}$ does not involve $\delta_E$,
+$$
+\min_{\delta_E} \Phi = \underbrace{\min_{\delta_E} \Phi_{\ni E}(\delta_E, \delta_B)}_{\varphi_B(\delta_B)} + \Phi_{\not\ni E} .
+$$
+So replacing $\Phi_{\ni E}$ by $\varphi_B$ leaves the problem on the remaining keys unchanged.
+`marginalize_out(graph, E)` computes exactly $\varphi_B$, from the factors that touch $E$ and
+nothing else. `marginal(graph, B)` would compute
+$\min_{\delta_{\neq B}} \Phi$ instead, folding in $\Phi_{\not\ni E}$ as well. Attached as a factor
+while the model keeps $\Phi_{\not\ni E}$, that would count those factors twice.
+
+## Keeping two triangular solves apart
+
+`TrilInvert` (in `skoro-linalg`) is a differentiable graph operation on every backend, and it stays
+there. `skoro-dense`'s triangular solve is for estimators. A shared test checks that the two compute
+the same inverse.

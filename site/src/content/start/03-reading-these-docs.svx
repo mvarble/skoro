@@ -13,11 +13,15 @@ distribution, a call to evaluate a density or build a solver step. It explains t
 as far as that use needs. Read it if you want to *use* skoro, or to judge quickly whether it fits
 your problem.
 
-**[Concepts](../../concepts/) is bottom-up.** It builds skoro one crate at a time in dependency
-order: tensors, then differentiable operations, then manifolds, the graph, the compiler, the model
-facade, and the distributions and estimators on top. Each page relies only on the pages before it.
-Read it if you want to *extend* skoro (a new operation, manifold, or distribution) or to review
-its internals.
+**[Concepts](../../concepts/) is bottom-up.** It builds skoro one layer at a time, each page
+relying only on the pages before it: tensors, then differentiable operations and the chart calculus
+of manifolds, the graph and its densities, the compiler, the model facade, Jacobians, the concrete
+operations and distributions, and then the host linear algebra, Fisher scoring, and linearization on
+top. It follows crate dependency order, except that the host linear algebra (which depends only on
+the core) is read just before the estimators that use it. It carries the full mathematics of what is
+implemented, so reading it front to back explains every component. Read it if you want to
+*understand* or *extend* skoro (a new operation, manifold, or distribution), or to review its
+internals.
 
 The two tracks link to each other where they meet. Neither repeats the
 [Design decisions](../../design/), which record *why* things are the way they are, each as

@@ -1,7 +1,9 @@
 ---
 title: The model facade
-summary: skoro-model. ModelServer and ModelClient, typed Q handles as ownership tokens, mark-and-sweep collection, and the two client tiers.
+summary: skoro-model. ModelServer and ModelClient, typed Q handles as ownership tokens, mark-and-sweep collection, the two client tiers, and what each builder mutation does to the densities and the free set.
 order: 7
+katex_macros:
+  \pa: \operatorname{pa}
 ---
 
 `skoro-model` turns the untyped graph into the API a user holds.
@@ -61,18 +63,37 @@ registry dirty, and the next `cleanup` does the work.
 > [!DECISION]
 > See [Handles own nodes](../../design/ownership/).
 
+## Changing the model, in terms of its densities
+
+The builder tier's mutations are best read by what they do to $\log p$, $\log q$ and the free set.
+
+- **`add_quantity(D)`** adds a stochastic node $x$ and its term
+  $\ell_x = \log D(x \mid \pa(x))$ to both $p$ and $q$. It is atomic: if building the factor
+  fails, the call removes everything it added, so a long-lived model (a filter adding terms every
+  tick) is never left holding half a quantity. **`add_proposal(D)`** adds the term to $q$ only.
+- **`add_factor(φ, args)`** adds a free-standing term $\ell_\varphi$ to $p$, over quantities
+  already in the model. It scores no quantity, so it is never in $q$.
+- **`add_parameter`** adds a free leaf $\theta$ that nothing scores.
+- **`observe(x, y)`** fixes $x = y$. Its term stays in $p$ (it is now a likelihood of data), leaves
+  $q$, and $x$ leaves the free set.
+- **`demote_to_parameter(x)`** removes $x$'s own term $\ell_x$ from both densities and cuts $x$
+  from its parents, while keeping its `Id`, its value and every child edge. Afterwards $x$ is a
+  free parameter, and the terms of its children still read it. This is the first move of
+  marginalization: whatever $\ell_x$ said about $x$ must then be put back as a factor.
+- **`stacked_tangent(at, [x_1..x_k])`** builds the node
+  $\delta = (x_1 \ominus a_1; \dots; x_k \ominus a_k)$, one `EuclideanD` of summed dimension,
+  where the anchors $a_i$ are frozen copies of the points in `at`. It is the argument of a joint
+  factor over several quantities, and needs no product manifold.
+- **`remove` / `remove_closure`** retire nodes; the second takes everything downstream, including
+  every term that read them.
+
 ## Distributions, factors, and readers
 
 `Distribution` and `Factor` (see [Distributions and factors](../../guide/distributions-and-factors/))
-are defined here, as are the readers that consume bindings: `least_squares::residual_layout`,
-`information`/`information_root`/`information_blocks`, `jacobian_vjp`/`jacobian_jvp`, and
-`coverage::{terms_missing, require_role}`.
+are defined here. So are the readers that consume bindings and derivatives, which are the subject of
+the next page: [Jacobians](../jacobians/).
 
 ## Batch pinning
 
 Two calls pin a model to one batch size: `add_batched_constant` (one value per row) and
 `stacked_tangent` (batch-pinned linearization anchors). Everything else broadcasts.
-
-> [!TODO] Adding a quantity is atomic
-> `add_quantity` removes a partially added quantity if its factor fails. Worth a sentence on why
-> atomicity matters for a long-lived model (e.g. a filter adding terms every tick).

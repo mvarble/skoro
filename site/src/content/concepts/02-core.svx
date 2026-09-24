@@ -37,6 +37,20 @@ rotation) packs into a flat row of a tensor. This is how `add_constant(Euclidean
 A `Role` is the label on a binding edge (`"residual"`, `"fisher_root"`, …). It lives here, rather
 than beside the graph's edges, so that `SkoroError` can name one.
 
-> [!TODO] Sequences
-> `sequence` (the indexed `SequenceMutator` abstraction) deserves a paragraph: what problem it
-> solves and where it is used (the compiler's steps?).
+## Sequences
+
+A compiled program ([Compilation](../compilation/)) is a straight line of steps over an array of
+**slots** $s_0, s_1, \dots, s_{n-1}$, each slot holding one node's value. A `SequenceMutator` is one
+step of such a program, described entirely by which slots it reads and which one it writes:
+
+```
+{../../../../crates/skoro-core/src/sequence.rs:1..4}
+```
+
+Step $k$ computes $s_{o_k} \leftarrow F_k(s_{i_{k,1}}, \dots, s_{i_{k,m}})$, where
+$(i_{k,1}, \dots, i_{k,m})$ are its `input_indices` and $o_k$ its `output_index`. Programs are
+ordered so that every slot is written before it is read. That is all the structure the derivative
+passes need: the forward pass runs the steps in order, and the backward passes run them in reverse,
+each step pulling a cotangent back from $s_{o_k}$ to the slots it read
+([Differentiable operations](../operations/)). Operations and samplers are both sequence steps, which
+is why the trait lives here, below both.

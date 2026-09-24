@@ -1,0 +1,158 @@
+---
+title: Operations on quantities
+summary: The operation crates and their mathematics. skoro-linalg (matmul, transpose, norms, cross products, Tril and its inverse, fixed and sparse linear maps), skoro-pointwise, skoro-so3 (Exp, Log, their right Jacobians, and the body-frame charts) and skoro-se3 (the product retraction), with a recipe for writing a new operation.
+order: 9
+katex_macros:
+  \Exp: \operatorname{Exp}
+  \Log: \operatorname{Log}
+---
+
+Each crate on this page adds `DiffOperation`s and exposes them on typed handles through `*Ops`
+extension traits (and operator overloads where natural). Every derivative below is in the charts of
+[Manifolds and retractions](../manifolds/#derivatives-in-charts). For the flat quantities that is
+the ordinary derivative.
+
+## `skoro-linalg`
+
+- **`Matmul`, `Transpose`**, vector norms and `CrossProduct`, with their ordinary derivatives,
+  e.g. $d(AB) = dA\,B + A\,dB$.
+- **`Tril(n)`**, the packed lower-triangular matrices, flat, of dimension $n(n+1)/2$, packed
+  row-major with $(i, j)$ at $i(i+1)/2 + j$. Covariance factors $\Sigma = LL\transpose$ live here.
+  Three operations serve the Gaussian:
+  - `invert`, $W = L^{-1}$ by forward substitution, with $dW = -W\,dL\,W$;
+  - `vector_product`, $Lv$ for a packed $L$;
+  - `diag`, the diagonal.
+
+  `Tril` imposes no sign on the diagonal. Nothing needs it to, because the Gaussian's normalizer
+  reads $\lvert W_{ii} \rvert$.
+- **`FixedLinearMap` / `linear_map`** applies a host-supplied matrix $K$, $y = K\,\mathrm{vec}(x)$.
+  This is how a builder without access to constants (a distribution) puts a known matrix into the
+  graph. **`SparseLinearMap` / `sparse_linear_map`** does the same for a large sparse $K$, storing
+  only its nonzeros. The Gaussian Fisher root is one such map of the packed whitening
+  ([Distributions](../distributions/#the-fisher-root)).
+
+These are *differentiable graph operations*. The factorizations an estimator needs are a separate,
+host-side concern ([Host linear algebra](../host-linear-algebra/)).
+
+## `skoro-pointwise`
+
+Elementwise `log` and `abs` on `Real` and Euclidean quantities.
+
+## `skoro-so3`
+
+A rotation $r \in SO(3)$ is stored as its flattened $3 \times 3$ matrix (storage 9, dimension 3).
+With $\omega^\wedge$ the skew matrix of $\omega \in \R^3$ ($\omega^\wedge\,u = \omega \times u$) and
+$\theta = \lVert\omega\rVert$:
+
+- **Exponential** (Rodrigues):
+  $\Exp(\omega) = I + \frac{\sin\theta}{\theta}\,\omega^\wedge + \frac{1-\cos\theta}{\theta^2}\,(\omega^\wedge)^2 .$
+- **Logarithm**: $\theta = \arccos\frac{\operatorname{tr} r - 1}{2}$ and
+  $\omega = \frac{\theta}{2\sin\theta}\,(r - r\transpose)^\vee$, with a Taylor branch near
+  $\theta = 0$ and an eigen-axis branch near $\theta = \pi$, where $\sin\theta$ vanishes.
+- **Right Jacobian**, defined by
+  $\Exp(\omega + \delta) = \Exp(\omega)\,\Exp\big(J(\omega)\,\delta + o(\delta)\big)$:
+  $$
+  J(\omega) = I - \frac{1-\cos\theta}{\theta^2}\,\omega^\wedge + \frac{\theta - \sin\theta}{\theta^3}\,(\omega^\wedge)^2,
+  \qquad
+  J(\omega)^{-1} = I + \tfrac12\,\omega^\wedge + \frac{1}{\theta^2}\Big(1 - \frac{\theta}{2}\cot\frac{\theta}{2}\Big)(\omega^\wedge)^2 .
+  $$
+
+Every coefficient switches between its closed form and a truncated series at a cutoff chosen for
+the float width, since one cutoff shared between `f32` and `f64` leaves `f32` evaluating
+expressions that have cancelled away.
+
+**The chart** is the right (body-frame) one:
+$$
+r \oplus \omega = r\,\Exp(\omega), \qquad r_1 \ominus r_0 = \Log(r_0\transpose r_1).
+$$
+With $E = \Exp(\omega)$, a perturbation $a$ of $r$ and $\dot\omega$ of $\omega$, the retraction's
+derivatives, read in the chart at the output $rE$, are
+$$
+\text{JVP: } c = E\transpose a + J(\omega)\,\dot\omega, \qquad
+\text{VJP: } \partial_r = E\,\alpha,\ \ \partial_\omega = J(\omega)\transpose\alpha .
+$$
+For the inverse retraction, with $\Delta r = r_0\transpose r_1$, $\omega = \Log(\Delta r)$ and input
+perturbations $a_0, a_1$, the body-frame perturbation of $\Delta r$ is $h = a_1 - \Delta r\transpose a_0$, and
+$$
+\text{JVP: } \dot\omega = J(\omega)^{-1} h, \qquad
+\text{VJP: } \partial_{r_1} = J(\omega)^{-\top}\alpha,\ \ \partial_{r_0} = -\Delta r\, J(\omega)^{-\top}\alpha .
+$$
+The HVPs of these four maps are transcribed from derivations verified against finite differences on
+`f32`, `f64` and wgpu. They are listed in the repository's `skoro-diff-operation` skill,
+`references/manifold-conventions.md`.
+
+**The group operations** are defined on the stored matrices:
+
+| Operation | Value | Registered as |
+| --- | --- | --- |
+| `compose(r_0, r_1)` | $r_0 r_1$ | `Matmul(3, 3, 3)` |
+| `invert(r)`, `transpose(r)` | $r\transpose = r^{-1}$ | a transpose |
+| `rotate(r, v)` | $r v$ | `Matmul(3, 3, 1)` |
+| `unrotate(r, v)` | $r\transpose v$ | transpose, then rotate |
+
+Their values are exact. Their derivatives with respect to a **vector** operand are exact too ($v$
+in `rotate` and `unrotate`). But they are plain matrix operations, differentiated in the coordinates of the
+9-number storage, not in the rotation's 3-dimensional chart. So a derivative pass that seeds or
+collects at a **rotation** operand of one of them does not have the chart form of
+[Manifolds and retractions](../manifolds/#derivatives-in-charts). Today it fails with a shape
+error. For comparison, the chart derivative of `compose` would be the JVP
+$c = r_1\transpose a_0 + a_1$, since $r_0\Exp(a_0)\,r_1\Exp(a_1) = r_0 r_1\,\Exp(r_1\transpose a_0)\Exp(a_1)$.
+
+> [!WARNING]
+> Differentiate through `compose`, `invert`, `transpose`, `rotate` and `unrotate` only with respect to
+> their Euclidean operands. With respect to a rotation, use the retraction and inverse retraction,
+> which carry their chart derivatives.
+
+## `skoro-se3`
+
+A pose $(r, p)$ is a rotation and a translation (storage 12, dimension 6), with tangent
+$\delta = (\omega, v)$. The crate provides the pose's retraction and inverse retraction, and no
+other operations on poses. Its retraction is the **product** form, both blocks in the body frame:
+$$
+(r, p) \oplus (\omega, v) = \big(r\,\Exp(\omega),\ p + r\,v\big),
+\qquad
+(r_1, p_1) \ominus (r_0, p_0) = \big(\Log(r_0\transpose r_1),\ r_0\transpose(p_1 - p_0)\big).
+$$
+The translation is expressed in the frame of the *base* point $r$, so rotating $r$ swings the
+offset $r v$. That lever arm appears in the JVP, read in the output frame $rE$:
+$\dot v_{\text{out}} = E\transpose\big(b + a \times v + \dot v\big)$ for a perturbation $(a, b)$ of
+the pose.
+
+This is **not** the group exponential of $SE(3)$, whose translation block would be
+$r\,V(\omega)\,v$ with $V$ the left Jacobian. The difference is exactly why the mirror identity of
+[Manifolds and retractions](../manifolds/#the-retraction-defines-the-coordinates) fails here:
+$(x \oplus \delta) \ominus x = \delta$ holds exactly, but
+$$
+x \ominus (x \oplus \delta) = \big(-\omega,\ -\Exp(\omega)\transpose v\big) \neq -\delta,
+$$
+agreeing with $-\delta$ only to first order. A joint factor built from a marginal
+therefore keeps its linearization point rather than moving it to the marginal's mean
+([Linearization and marginalization](../linearization/#joint-factors-from-marginals)).
+
+## Writing your own operation
+
+An operation is a `DiffOperation` implementation, registered on typed handles. `skoro-pointwise`'s
+elementwise logarithm is the smallest complete example: $y = \log x$, with JVP $\dot x / x$, VJP
+$\alpha / x$, and HVP (the derivative of the VJP along $\dot x$, with $\alpha$ fixed)
+$-\alpha\,\dot x / x^2$.
+
+```
+{../../../../crates/skoro-pointwise/src/log.rs:10..73}
+```
+
+Note the gates: the `VjpState` is kept only when `diffs[0]` says the input is differentiable, and
+the `HvpState` is the seeded tangent, which is absent when nothing was seeded. The `hvp` output is
+gated on both. Exposing it on handles is one line per operation:
+
+```
+{../../../../crates/skoro-pointwise/src/lib.rs:30..45}
+```
+
+Then verify it numerically, and on both backends:
+
+- `test_jvp_numerically`, `test_vjp_numerically`, `test_hvp_numerically` and
+  `test_hvp_cross_numerically` in `skoro_model::test_utils` compare against finite differences;
+- use a fixture with non-unit tangents and points far from any identity, since unit seeds and
+  near-identity rotations hide exactly the bugs that matter.
+
+The `skoro-diff-operation` skill has the full checklist.

@@ -1,11 +1,14 @@
 ---
 title: Tensors and backends
-summary: skoro-backend, the foundation. The sealed Backend trait over burn, the batched shape conventions for points, tangent vectors and frames, and the precision policy.
+summary: skoro-backend, the foundation. The sealed Backend trait over burn, the batched shape conventions for points, tangent vectors and frames, the storage/dimension distinction every later page relies on, and the precision policy.
 order: 1
+katex_macros:
+  \man: \mathcal{M}
 ---
 
 Everything in skoro eventually becomes a burn `Tensor`. `skoro-backend` fixes *which* backends
-are allowed and *what shape* each kind of tensor has.
+are allowed and *what shape* each kind of tensor has. The shapes are worth learning precisely,
+because every later page, from the derivative passes to the Jacobians, is phrased in them.
 
 ## Supported backends
 
@@ -18,27 +21,52 @@ autodiff backends are among them. Skoro differentiates on its own (see
 {../../../../crates/skoro-backend/src/lib.rs:17..32}
 ```
 
-## Shape conventions
+## Batches are independent problems
 
-Types are aliases over `Tensor` whose names carry meaning. Every one of them is **batched**:
-axis 0 indexes independent problems.
+Axis 0 of every tensor indexes a **batch**. A batch of size $N$ is $N$ independent copies of the
+same computation: row $b$ of the output depends only on row $b$ of every input. A model evaluated
+at a batch of points returns a batch of log-densities, one per row, never their sum. Every map on
+the following pages is therefore defined on one row, and extends to a batch row by row.
+
+## Points, tangent vectors, and frames
+
+A quantity lives on a manifold $\man$ (introduced on [Manifolds and retractions](../manifolds/)).
+Two sizes describe it, and they differ whenever $\man$ is curved:
+
+- its **storage size** $s$: how many numbers represent a point $x \in \man$;
+- its **dimension** $d$: how many numbers represent a tangent vector $v \in \T_x\man$.
+
+| Quantity | storage $s$ | dimension $d$ |
+| --- | ---: | ---: |
+| `Real` | 1 | 1 |
+| `Euclidean<3>` | 3 | 3 |
+| `SO3` (a $3\times3$ rotation matrix) | 9 | 3 |
+| `SE3` (a rotation and a translation) | 12 | 6 |
+| `Tril(n)` (a packed lower triangle) | $n(n+1)/2$ | $n(n+1)/2$ |
+
+The type aliases carry this distinction in their names:
 
 ```
 {../../../../crates/skoro-backend/src/lib.rs:60..93}
 ```
 
-Two sizes appear throughout the library, and they are different whenever a quantity is curved:
+| Alias | Shape | One row is |
+| --- | --- | --- |
+| `Point<B>` | `[batch, s]` | a point $x \in \man$ |
+| `TangentVector<B>` | `[batch, d]` | a tangent vector $v \in \T_x\man \cong \R^d$ |
+| `CotangentVector<B>` | `[batch, d]` | a cotangent (a row vector acting on $\T_x\man$) |
+| `TangentFrame<B>` | `[batch, d, k]` | a $d \times k$ matrix $V = [v_1 \cdots v_k]$ of tangent vectors |
+| `CotangentFrame<B>` | `[batch, d, k]` | a $d \times k$ matrix of cotangents, one per column |
 
-| Quantity | storage | dimension |
-| --- | ---: | ---: |
-| `Real` | 1 | 1 |
-| `Euclidean<3>` | 3 | 3 |
-| `SO3` | 9 | 3 |
-| `SE3` | 12 | 6 |
+A **frame** is the device that makes derivatives cheap: a linear map applied to a frame acts on all
+$k$ columns at once, so pushing $k$ directions through a derivative costs one pass rather than $k$.
+Axis 1 is the component axis and axis 2 indexes the columns. The Jacobian assemblers
+([Jacobians](../jacobians/)) seed a frame with the columns of an identity matrix and read a whole
+Jacobian out of one pass.
 
-Points use storage size; tangent vectors, cotangents, gradients and Jacobian columns use
-dimension. A *frame* is a stack of vectors, `[batch, dimension, frame]`, which is how many
-derivative directions travel through a pass at once.
+Points use storage size; tangent vectors, cotangents, gradients and Jacobian columns use dimension.
+Confusing the two is the classic silent failure in this library: an `SE3` block sized 12 still
+evaluates and still differentiates, but every column after the sixth means something else.
 
 ## Precision
 
