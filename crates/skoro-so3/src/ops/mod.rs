@@ -11,7 +11,6 @@ pub mod invert;
 pub mod log;
 pub mod retraction;
 pub mod rotate;
-pub mod transpose;
 
 pub use compose::*;
 pub use exp::{SO3Exp, SO3ExpBackend, SO3ExpOps, exp};

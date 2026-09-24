@@ -81,27 +81,24 @@ The HVPs of these four maps are transcribed from derivations verified against fi
 `f32`, `f64` and wgpu. They are listed in the repository's `skoro-diff-operation` skill,
 `references/manifold-conventions.md`.
 
-**The group operations** are defined on the stored matrices:
+**The group operations** each have their own operation, differentiated in the same body-frame
+chart. With $a$ a perturbation of a rotation, $B$ of a vector or $3 \times n$ matrix operand $V$,
+$\alpha$ the output cotangent, and $w = r\transpose\alpha$ (column by column, a rotation's cotangent
+summed over the columns $c$):
 
-| Operation | Value | Registered as |
-| --- | --- | --- |
-| `compose(r_0, r_1)` | $r_0 r_1$ | `Matmul(3, 3, 3)` |
-| `invert(r)`, `transpose(r)` | $r\transpose = r^{-1}$ | a transpose |
-| `rotate(r, v)` | $r v$ | `Matmul(3, 3, 1)` |
-| `unrotate(r, v)` | $r\transpose v$ | transpose, then rotate |
+| Operation | Value | JVP | VJP |
+| --- | --- | --- | --- |
+| `compose(r_0, r_1)` | $r_0 r_1$ | $r_1\transpose a_0 + a_1$ | $\partial r_0 = r_1\alpha$, $\partial r_1 = \alpha$ |
+| `invert(r)` | $r\transpose = r^{-1}$ | $-r\,a$ | $\partial r = -r\transpose\alpha$ |
+| `rotate(r, V)` | $r V$ | $r(a \times V + B)$ | $\partial r = \sum_c v_c \times w_c$, $\partial V = w$ |
+| `unrotate(r, V)` | $U = r\transpose V$ | $-a \times U + r\transpose B$ | $\partial r = \sum_c \alpha_c \times u_c$, $\partial V = r\alpha$ |
 
-Their values are exact. Their derivatives with respect to a **vector** operand are exact too ($v$
-in `rotate` and `unrotate`). But they are plain matrix operations, differentiated in the coordinates of the
-9-number storage, not in the rotation's 3-dimensional chart. So a derivative pass that seeds or
-collects at a **rotation** operand of one of them does not have the chart form of
-[Manifolds and retractions](../manifolds/#derivatives-in-charts). Today it fails with a shape
-error. For comparison, the chart derivative of `compose` would be the JVP
-$c = r_1\transpose a_0 + a_1$, since $r_0\Exp(a_0)\,r_1\Exp(a_1) = r_0 r_1\,\Exp(r_1\transpose a_0)\Exp(a_1)$.
-
-> [!WARNING]
-> Differentiate through `compose`, `invert`, `transpose`, `rotate` and `unrotate` only with respect to
-> their Euclidean operands. With respect to a rotation, use the retraction and inverse retraction,
-> which carry their chart derivatives.
+The first row follows from $r_0\Exp(a_0)\,r_1\Exp(a_1) = r_0 r_1\,\Exp(r_1\transpose a_0)\Exp(a_1)$,
+and the second from $(r\Exp(a))\transpose = r\transpose\Exp(-r a)$. Each HVP is the derivative of
+its VJP along the seeded tangent with $\alpha$ fixed. For example,
+$\partial r_0 \to r_1(a_1 \times \alpha)$ for `compose`, and $\partial r \to a \times (r\transpose\alpha)$
+for `invert`. A rotation has no `transpose`: a plain matrix transpose would differentiate the
+9-number storage rather than the rotation, so `invert` is the only way to write $r\transpose$.
 
 ## `skoro-se3`
 

@@ -79,6 +79,24 @@ where
     check_binary(&r0, &r1, &out, point, delta, epsilon);
 }
 
+#[allow(unused)]
+pub fn invert<B: Backend>(delta: f64, epsilon: f64)
+where
+    SO3: ContinuousQuantity<B>,
+{
+    use skoro_so3::ops::SO3InvertOps;
+
+    let model = ModelClient::<B>::default();
+    let r = model.add_parameter(SO3);
+    let out = r.invert().unwrap();
+    let point = points()
+        .with_quantity(&r, tensor::<B, 2>([R0], &Default::default()))
+        .build();
+    test_jvp_numerically(&r, &out, point.clone(), delta, epsilon);
+    test_vjp_numerically(&r, &out, point.clone(), delta, epsilon);
+    test_hvp_numerically(&r, &out, point, delta, epsilon);
+}
+
 /// A vector operand, and a `3 × 2` matrix operand whose columns are rotated alike.
 pub const V: [f64; 3] = [1.5, -2.0, 0.75];
 pub const M: [f64; 6] = [1.5, -0.5, -2.0, 1.25, 0.75, 2.0];
@@ -139,6 +157,12 @@ macro_rules! test_group {
         #[test]
         pub fn compose() {
             group::compose::<B>($delta, $epsilon);
+        }
+
+        /// `rᵀ = r⁻¹`, whose chart derivative is `−r a`.
+        #[test]
+        pub fn invert() {
+            group::invert::<B>($delta, $epsilon);
         }
 
         /// `r v`, for a vector and for the columns of a matrix.
