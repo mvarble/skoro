@@ -32,6 +32,11 @@ mod retraction {
     super::test_retract!(1.0e-3, 1.0e-2);
 }
 
+/// The group operations on stored rotations, differentiated in the body-frame chart.
+mod group {
+    super::test_group!(1.0e-3, 1.0e-2);
+}
+
 /// `b ⊖ a` on `SO3`, the genuine `Log(aᵀb)` rather than a subtraction. This is the residual a
 /// Gaussian factor over rotations whitens, and the sign convention is fixed by it.
 mod inverse_retraction {
