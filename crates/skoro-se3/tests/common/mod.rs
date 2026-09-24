@@ -1,3 +1,5 @@
+pub mod group;
+
 use skoro_backend::Backend;
 use skoro_backend::Tensor;
 use skoro_graph::quantity::ContinuousQuantity;
@@ -482,6 +484,14 @@ where
 #[macro_export]
 macro_rules! tests {
     ($B:ty, $delta:literal, $epsilon:literal) => {
+        /// The pose operations, differentiated in the body-frame chart.
+        mod group {
+            #[test]
+            fn compose() {
+                super::common::group::compose_impl::<$B>($delta, $epsilon);
+            }
+        }
+
         /// `retract` on `SE3`: the rotation through `SO3`'s own retraction and the translation added,
         /// composed as one rigid-body step.
         mod retraction {

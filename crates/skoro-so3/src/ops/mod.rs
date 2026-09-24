@@ -3,7 +3,7 @@ use skoro_riemann::euclidean::{Euclidean3, EuclideanD};
 
 use crate::quantity::SO3;
 
-mod body;
+pub mod body;
 pub mod compose;
 pub mod exp;
 pub mod inverse_retraction;

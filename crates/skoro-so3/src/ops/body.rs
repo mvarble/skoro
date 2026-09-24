@@ -4,12 +4,12 @@
 //! Tensors are `[batch, 3, m]`: axis 1 is the component axis and axis 2 runs over columns, which
 //! may be the columns of a matrix operand, the columns of a frame, or both, flattened. Everything
 //! here is a plain tensor operation, so the group operations built on it serve every backend
-//! from one implementation.
+//! from one implementation. `skoro-se3` builds the pose operations on the same arithmetic.
 
 use skoro_backend::{Backend, Point, Tensor};
 
 /// `x × y` column by column, along axis 1.
-pub(crate) fn cross<B: Backend>(x: Tensor<B, 3>, y: Tensor<B, 3>) -> Tensor<B, 3> {
+pub fn cross<B: Backend>(x: Tensor<B, 3>, y: Tensor<B, 3>) -> Tensor<B, 3> {
     let part = |t: &Tensor<B, 3>, i: usize| t.clone().narrow(1, i, 1);
     let (x0, x1, x2) = (part(&x, 0), part(&x, 1), part(&x, 2));
     let (y0, y1, y2) = (part(&y, 0), part(&y, 1), part(&y, 2));
@@ -24,31 +24,28 @@ pub(crate) fn cross<B: Backend>(x: Tensor<B, 3>, y: Tensor<B, 3>) -> Tensor<B, 3
 }
 
 /// The stored rotation `[batch, 9]` as `[batch, 3, 3]`.
-pub(crate) fn matrix<B: Backend>(r: &Point<B>) -> Tensor<B, 3> {
+pub fn matrix<B: Backend>(r: &Point<B>) -> Tensor<B, 3> {
     let [batch, _] = r.dims();
     r.clone().reshape([batch, 3, 3])
 }
 
 /// `r x`.
-pub(crate) fn apply<B: Backend>(r: &Point<B>, x: Tensor<B, 3>) -> Tensor<B, 3> {
+pub fn apply<B: Backend>(r: &Point<B>, x: Tensor<B, 3>) -> Tensor<B, 3> {
     matrix(r).matmul(x)
 }
 
 /// `rᵀ x`.
-pub(crate) fn apply_transpose<B: Backend>(r: &Point<B>, x: Tensor<B, 3>) -> Tensor<B, 3> {
+pub fn apply_transpose<B: Backend>(r: &Point<B>, x: Tensor<B, 3>) -> Tensor<B, 3> {
     matrix(r).swap_dims(1, 2).matmul(x)
 }
 
 /// A `[batch, 3]` vector repeated as `m` columns: `[batch, 3, m]`.
-pub(crate) fn repeat<B: Backend>(v: &Tensor<B, 2>, m: usize) -> Tensor<B, 3> {
+pub fn repeat<B: Backend>(v: &Tensor<B, 2>, m: usize) -> Tensor<B, 3> {
     v.clone().unsqueeze_dim::<3>(2).repeat_dim(2, m)
 }
 
 /// `a + b` where either may be absent, `None` only when both are.
-pub(crate) fn sum<B: Backend>(
-    a: Option<Tensor<B, 3>>,
-    b: Option<Tensor<B, 3>>,
-) -> Option<Tensor<B, 3>> {
+pub fn sum<B: Backend>(a: Option<Tensor<B, 3>>, b: Option<Tensor<B, 3>>) -> Option<Tensor<B, 3>> {
     match (a, b) {
         (Some(a), Some(b)) => Some(a + b),
         (a, None) => a,
@@ -62,7 +59,7 @@ pub(crate) fn sum<B: Backend>(
 // matmul covers every pair.
 
 /// `V` as `[batch, 3, n·f]`, each operand column repeated across the `f` frame columns.
-pub(crate) fn spread<B: Backend>(v: &Tensor<B, 2>, n: usize, f: usize) -> Tensor<B, 3> {
+pub fn spread<B: Backend>(v: &Tensor<B, 2>, n: usize, f: usize) -> Tensor<B, 3> {
     let [batch, _] = v.dims();
     v.clone()
         .reshape([batch, 3, n])
@@ -72,7 +69,7 @@ pub(crate) fn spread<B: Backend>(v: &Tensor<B, 2>, n: usize, f: usize) -> Tensor
 }
 
 /// A frame `[batch, 3, f]` as `[batch, 3, n·f]`, repeated across the `n` operand columns.
-pub(crate) fn tile<B: Backend>(a: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+pub fn tile<B: Backend>(a: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
     let [batch, _, f] = a.dims();
     a.unsqueeze_dim::<4>(2)
         .repeat_dim(2, n)
@@ -80,19 +77,19 @@ pub(crate) fn tile<B: Backend>(a: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
 }
 
 /// An operand frame `[batch, 3n, f]` as `[batch, 3, n·f]`.
-pub(crate) fn unstack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+pub fn unstack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
     let [batch, _, f] = x.dims();
     x.reshape([batch, 3, n * f])
 }
 
 /// `[batch, 3, n·f]` back to an operand frame `[batch, 3n, f]`.
-pub(crate) fn stack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+pub fn stack<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
     let [batch, _, nf] = x.dims();
     x.reshape([batch, 3 * n, nf / n])
 }
 
 /// The sum over the `n` operand columns: `[batch, 3, n·f]` to a rotation frame `[batch, 3, f]`.
-pub(crate) fn fold<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
+pub fn fold<B: Backend>(x: Tensor<B, 3>, n: usize) -> Tensor<B, 3> {
     let [batch, _, nf] = x.dims();
     let f = nf / n;
     x.reshape([batch, 3, n, f])
