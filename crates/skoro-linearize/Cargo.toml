@@ -1,0 +1,20 @@
+[package]
+name = "skoro-linearize"
+description = "Linearize a Skoro model into a block-sparse Gaussian factor graph, and marginalize it."
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+skoro-backend.workspace = true
+skoro-core.workspace = true
+skoro-dense.workspace = true
+skoro-graph.workspace = true
+skoro-linalg.workspace = true
+skoro-model.workspace = true
+skoro-normal.workspace = true
+skoro-operation.workspace = true
+skoro-riemann.workspace = true
+
+[dev-dependencies]
+skoro-model = { workspace = true, features = ["testing"] }

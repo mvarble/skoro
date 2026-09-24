@@ -26,6 +26,7 @@ skoro-dense = { path = "./crates/skoro-dense" }
 skoro-operation = { path = "./crates/skoro-operation" }
 skoro-graph = { path = "./crates/skoro-graph" }
 skoro-linalg = { path = "./crates/skoro-linalg" }
+skoro-linearize = { path = "./crates/skoro-linearize" }
 skoro-model = { path = "./crates/skoro-model" }
 skoro-normal = { path = "./crates/skoro-normal" }
 skoro-riemann = { path = "./crates/skoro-riemann" }

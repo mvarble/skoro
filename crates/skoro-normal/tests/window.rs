@@ -1,10 +1,10 @@
 //! A sliding window over a chain model, grown and retired tick by tick through the
 //! builder — the model-side half of the loop in `docs/skoro.md` §3.
 //!
-//! What is asserted is the bookkeeping, not the statistics — nothing marginalizes yet, and
-//! §3.3 is what is missing: each tick demotes the blanket member, replaces its conditional with a
-//! joint factor over it, and retires the oldest state-measurement pair with everything
-//! below it. The records, the row count of `J`, and the graph's size must all hold
+//! What is asserted is the bookkeeping, not the statistics; the computed marginal is tested in
+//! `skoro-linearize/tests/window.rs`. Each tick demotes the blanket member, replaces its conditional
+//! with a joint factor over it (whitened by a stand-in identity), and retires the oldest pair with
+//! everything below it. The records, the row count of `J`, and the graph's size must all hold
 //! exactly steady afterwards — a leak or a dangling record is invisible in one tick and
 //! unmissable over twelve.
 

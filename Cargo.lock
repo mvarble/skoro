@@ -5824,6 +5824,7 @@ dependencies = [
  "skoro-dense",
  "skoro-graph",
  "skoro-linalg",
+ "skoro-linearize",
  "skoro-model",
  "skoro-normal",
  "skoro-operation",
@@ -5889,6 +5890,21 @@ dependencies = [
  "skoro-dense",
  "skoro-graph",
  "skoro-model",
+ "skoro-operation",
+ "skoro-riemann",
+]
+
+[[package]]
+name = "skoro-linearize"
+version = "0.0.0"
+dependencies = [
+ "skoro-backend",
+ "skoro-core",
+ "skoro-dense",
+ "skoro-graph",
+ "skoro-linalg",
+ "skoro-model",
+ "skoro-normal",
  "skoro-operation",
  "skoro-riemann",
 ]

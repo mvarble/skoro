@@ -27,7 +27,7 @@ use skoro_model::{
 };
 use skoro_riemann::{euclidean::EuclideanD, matrix::EuclideanMatrixD, real::Real};
 
-/// A Gaussian factor `−½ δᵀ Λ δ + n` over a set of quantities, where `δ` stacks their tangents
+/// A Gaussian factor `−½ ‖W δ − d‖² + n` over a set of quantities, where `δ` stacks their tangents
 /// against a frozen linearization point.
 ///
 /// The precision `Λ` enters as its **whitening** `W`, a lower-triangular `Tril(Σdᵢ)` constant with
@@ -36,8 +36,17 @@ use skoro_riemann::{euclidean::EuclideanD, matrix::EuclideanMatrixD, real::Real}
 /// this reuses [`TrilOps::vector_product`] unchanged.
 ///
 /// `W` is taken already computed rather than derived from `Λ` here, and deliberately: turning a
-/// precision into a whitening is dense host linear algebra, and `skoro-dense` is the crate that
-/// pays for `faer`. See `skoro_dense::factor::whitening_from_precision`.
+/// precision into a whitening is host linear algebra, and `skoro-dense` is the crate that pays for
+/// `faer`. A marginal computed by elimination builds one of these directly, ids and all, through
+/// `skoro_linearize::joint_normal_from`; for one built by hand from a precision, see
+/// `skoro_dense::factor::whitening_from_precision`.
+///
+/// `d` is zero unless an offset is given ([`with_offset`](Self::with_offset)): then the factor's mean
+/// is `W⁻¹d` away from the linearization point, in its tangent coordinates. That is the form a
+/// marginal computed by elimination takes — its rows `W δ = d` hold at the point it was linearized
+/// at, which need not be the optimum — and keeping `d` explicit, rather than moving the anchor by
+/// `W⁻¹d`, keeps the factor's value and Jacobian at that point exactly those rows on any manifold.
+/// Moving the anchor is exact only on a flat one.
 ///
 /// **The block order is load-bearing.** `ids` fixes the order the tangents are stacked in, and `W`
 /// must be expressed in those same coordinates. Nothing checks that correspondence, because
@@ -46,6 +55,7 @@ pub struct JointNormal<B: Backend> {
     ids: Vec<Id>,
     at: PointMap<B>,
     whitening: Q<B, Tril>,
+    offset: Option<Q<B, EuclideanD>>,
     normalizer_parents: [Id; 1],
     normalizer: f64,
 }
@@ -55,6 +65,7 @@ impl<B: Backend> std::fmt::Debug for JointNormal<B> {
         f.debug_struct("JointNormal")
             .field("ids", &self.ids)
             .field("whitening", &self.whitening)
+            .field("offset", &self.offset)
             .finish_non_exhaustive()
     }
 }
@@ -65,6 +76,7 @@ impl<B: Backend> Clone for JointNormal<B> {
             ids: self.ids.clone(),
             at: self.at.clone(),
             whitening: self.whitening.clone(),
+            offset: self.offset.clone(),
             normalizer_parents: self.normalizer_parents,
             normalizer: self.normalizer,
         }
@@ -91,8 +103,23 @@ impl<B: Backend> JointNormal<B> {
             ids,
             at,
             whitening,
+            offset: None,
             normalizer,
         }
+    }
+
+    /// The same factor with right-hand side `d`: its residual becomes `r = W δ − d`.
+    ///
+    /// `d` is a constant `EuclideanD` of the whitening's width. A `d` of any other width is refused
+    /// when the residual is built.
+    pub fn with_offset(mut self, offset: Q<B, EuclideanD>) -> Self {
+        self.offset = Some(offset);
+        self
+    }
+
+    /// The right-hand side `d`, if one was given.
+    pub fn offset(&self) -> Option<&Q<B, EuclideanD>> {
+        self.offset.as_ref()
     }
 
     /// The quantities this factor scores, in the order `W` is expressed in.
@@ -115,13 +142,26 @@ where
         + std::ops::Neg<Output = B::FloatElem>
         + std::ops::AddAssign<B::FloatElem>,
 {
-    /// `r = W · [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k]`.
+    /// `r = W · [x₁ ⊖ p₁ ; … ; x_k ⊖ p_k] − d`.
     ///
     /// The single expression both public methods are built from, so the residual and the
     /// density cannot come to disagree about what this factor scores.
     fn residual<C: ModelBuilderOps<B>>(&self, client: &C) -> SkoroResult<Q<B, EuclideanD>> {
         let delta = client.stacked_tangent(&self.at, &self.ids)?;
-        self.whitening.vector_product(&delta)
+        let whitened = self.whitening.vector_product(&delta)?;
+        match &self.offset {
+            None => Ok(whitened),
+            Some(d) => {
+                let width = whitened.get_quantity_type().0;
+                if d.get_quantity_type().0 != width {
+                    return Err(skoro_core::error::SkoroError::ShapeMismatch {
+                        expected: width,
+                        found: d.get_quantity_type().0,
+                    });
+                }
+                whitened - d.clone()
+            }
+        }
     }
 
     /// The residual node `r`, built over quantities the model already holds.

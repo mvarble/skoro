@@ -45,6 +45,7 @@ pub use skoro_core as core;
 pub use skoro_dense as dense;
 pub use skoro_graph as graph;
 pub use skoro_linalg as linalg;
+pub use skoro_linearize as linearize;
 pub use skoro_model as model;
 pub use skoro_normal as normal;
 pub use skoro_operation as operation;
@@ -86,7 +87,10 @@ pub mod prelude {
     pub use skoro_model::information::{
         InformationBlock, information, information_blocks, information_root,
     };
-    pub use skoro_model::least_squares::residual_layout;
+    pub use skoro_model::jacobian::{JacobianBlocks, RowJacobian, jacobian_blocks};
+    pub use skoro_model::least_squares::{
+        ResidualBlock, residual_blocks, residual_layout, residual_vector,
+    };
 
     // ----- whether those readers cover the whole model -----
     pub use skoro_model::coverage::{require_role, terms_missing};
@@ -115,10 +119,26 @@ pub mod prelude {
     // discrete quantity types
     pub use skoro_core::discrete::{Boolean, Categorical, Integer};
 
-    // ----- host dense linear algebra (estimators only; batch 1, f64) -----
+    // ----- host linear algebra (estimators only; batch 1, f64) -----
     pub use skoro_dense::dense::Dense;
     pub use skoro_dense::factor::{
         cholesky, lstsq, solve_lower, solve_upper, spd_solve, whitening_from_precision,
+    };
+
+    // ----- block-sparse elimination: factor graphs, orderings, Bayes trees, marginals -----
+    pub use skoro_dense::bayes::{BayesTree, Elimination, GaussianConditional, eliminate};
+    pub use skoro_dense::elimination::JunctionTree;
+    pub use skoro_dense::factor_graph::{
+        GaussianFactor, GaussianFactorGraph, JacobianFactor, Structure,
+    };
+    pub use skoro_dense::marginal::Marginal;
+    pub use skoro_dense::ordering::Ordering;
+    pub use skoro_dense::values::{Key, VectorValues};
+
+    // ----- a model, linearized onto those -----
+    // The key-generic `marginal` / `marginalize_out` are `skoro::dense::marginal::*`.
+    pub use skoro_linearize::{
+        Curvature, Linearized, joint_normal_from, linearize, marginalize, marginalize_out,
     };
 
     // ----- linear algebra & pointwise op traits (operator/method sugar on Q) -----

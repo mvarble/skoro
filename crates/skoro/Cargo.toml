@@ -16,6 +16,7 @@ skoro-normal.workspace = true
 skoro-riemann.workspace = true
 skoro-pointwise.workspace = true
 skoro-linalg.workspace = true
+skoro-linearize.workspace = true
 skoro-so3.workspace = true
 skoro-se3.workspace = true
 
