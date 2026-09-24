@@ -64,6 +64,20 @@ sub-sum, and what importance sampling needs: for draws from $q$,
 $\E_q[w\,h] = \E_p[h]$ up to normalization. `log_weight` evaluates both sums in one program, so the
 terms in both cancel exactly rather than to within rounding.
 
+**Gradients of all three.** `log_density_ord1`, `log_proposal_ord1` and `log_weight_ord1` return
+each sum with its gradient at every leaf, by one reverse pass. The weight's pass seeds each term
+with its net sign, $+1$ in $p$ only, $-1$ in $q$ only, and $0$ in both, so a shared term cancels
+exactly in the gradient as in the value. Like every evaluation here, they are taken at given
+points ([below](#evaluating-at-a-point-what-is-an-independent-variable)): the draw is held fixed,
+so for a proposal with parameters $\phi$, the cotangent at $\phi$ is $\nabla_\phi \log q(x; \phi)$
+at the fixed $x$. That is the score a **score-function** (likelihood-ratio) estimator needs,
+$$
+\nabla_\phi\, \E_{q_\phi}[f(x)] = \E_{q_\phi}\big[f(x)\,\nabla_\phi \log q(x;\phi)\big].
+$$
+A **reparameterization** gradient differentiates the draw $x = \mu \oplus L z$ itself, which would
+need derivatives to flow through samplers. The model deliberately cuts that path, and no such
+gradient exists yet.
+
 > [!DECISION]
 > See [Two densities](../../design/two-densities/).
 

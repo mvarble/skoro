@@ -566,7 +566,7 @@ unless noted.
 | Gap | Blocks | Status |
 | --- | --- | --- |
 | No RNG seeding; no per-quantity sampling | Any MCMC or SMC — no reproducibility, no per-chain RNG | Not recorded anywhere; found by search |
-| No derivatives of `q` or of the weight | Gradient-based variational inference | `roadmap.md` |
+| No reparameterization gradients (derivatives through samplers) | Reparameterized variational inference; `∇ log q` and `∇ log w` at fixed draws exist | `roadmap.md` |
 | Fisher assembly is not tape-differentiable | Riemannian-manifold HMC specifically | `roadmap.md` |
 | No `Estimator`, line search, or convergence test | Every deterministic estimator (§4.4) | `roadmap.md` |
 | Joint proposals over several quantities | Block proposals; `Term` already has the shape | `roadmap.md` |
@@ -575,7 +575,9 @@ unless noted.
 Closed on 2026-09-23, and so no longer rows: block-sparse `J` and a sparse solver (§4.2), the
 Schur complement / marginal precision (§3.3), and residual assembly matching the Jacobian rows
 (`residual_blocks`, `residual_vector`). Closed on 2026-09-24: dense Hessian assembly
-(`hessian_hvp`, §4.4).
+(`hessian_hvp`, §4.4), and first-order gradients of `log q` and `log w` at given points
+(`log_proposal_ord1`, `log_weight_ord1`), the score-function half of the old "derivatives of `q`"
+row.
 
 ### 5.1 The sampling gap, in detail
 

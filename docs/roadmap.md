@@ -11,8 +11,11 @@ Proposal-only terms landed: a term can now be a summand of `q` without being one
 `log_weight = Σ in_density − Σ in_proposal` is a real difference rather than a subset sum.
 What that change stopped short of:
 
-- **Derivatives of `q` or of the weight.** `log_density_ord1`/`ord2` stay `p`-only. Importance
-  sampling needs the weight's value, not its gradient.
+- **Derivatives of `q` or of the weight.** What is left of this entry: the first-order gradients
+  at given points shipped (`log_proposal_ord1`, `log_weight_ord1`), which is what a score-function
+  estimator needs. Still missing are second-order forms, and **reparameterization gradients**,
+  which differentiate the draw itself and so need derivatives to flow through samplers, a path the
+  model deliberately cuts today.
 - **Joint proposals over several quantities at once.** A proposal-only term scores exactly one
   stochastic quantity, which follows from `in_proposal` being derived rather than stored. The
   extension is to store `in_proposal` beside `in_density`; `Term` already has the shape for it.

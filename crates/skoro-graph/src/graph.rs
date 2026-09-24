@@ -1794,6 +1794,81 @@ impl<B: Backend> Graph<B> {
         Ok(total)
     }
 
+    /// [`log_density_terms_signed`](Self::log_density_terms_signed) with its gradient: the value
+    /// `Σ plus − Σ minus` and its cotangent at every leaf, by one reverse pass.
+    ///
+    /// The program is the one the value-only form compiles, over the union of the two sides, so
+    /// the two share a cache entry. Each target is seeded with its net sign, `+1` per appearance
+    /// in `plus` and `−1` per appearance in `minus`, so a term on both sides is seeded with zero
+    /// and cancels exactly in the gradient as in the value.
+    ///
+    /// At given points, as every evaluation here: a stochastic leaf is an independent variable,
+    /// and no derivative flows through a sampler. The cotangent at a leaf is therefore the partial
+    /// derivative of the signed sum with the leaf's value held as given, which is the
+    /// score-function ingredient `∇_θ log q(x; θ)` at a fixed draw `x`, not a reparameterization
+    /// gradient.
+    ///
+    /// Every id on either side must be a likelihood term, else [`SkoroError::NotLogLikelihood`].
+    pub fn log_density_terms_signed_ord1(
+        &self,
+        points: &ValueMap<B>,
+        plus: &[Id],
+        minus: &[Id],
+    ) -> SkoroResult<PointEvalOrder1<B>> {
+        let mut union: Vec<Id> = Vec::with_capacity(plus.len() + minus.len());
+        let mut sign: HashMap<Id, f64> = HashMap::new();
+        for (id, s) in plus
+            .iter()
+            .map(|id| (id, 1.0))
+            .chain(minus.iter().map(|id| (id, -1.0)))
+        {
+            if !self.log_likelihoods.contains(id) {
+                return Err(SkoroError::NotLogLikelihood { id: *id });
+            }
+            if !union.contains(id) {
+                union.push(*id);
+            }
+            *sign.entry(*id).or_insert(0.0) += s;
+        }
+
+        let compiled_sequence = self.compile_backward_from(&union)?;
+        let batch_size = Self::batch_size_of(points);
+        let cotangents: HashMap<Id, CotangentFrame<B>> = union
+            .iter()
+            .map(|id| {
+                let seed = Tensor::ones([batch_size, 1, 1], &Default::default()) * sign[id];
+                (*id, seed)
+            })
+            .collect();
+        let vjp_output = compiled_sequence.vjp_forward(VjpForwardInput {
+            points,
+            cotangents: &cotangents,
+            options: ForwardOptions {
+                batch_size,
+                use_model_samplers: false,
+            },
+        })?;
+
+        let mut value = Point::zeros([batch_size, 1], &Default::default());
+        for id in &union {
+            let term = vjp_output
+                .primal
+                .evaluations
+                .get(id)
+                .expect("Log-likelihood should be evaluated.")
+                .0
+                .clone()
+                .unwrap_float();
+            value = value + term * sign[id];
+        }
+        let cotangents = vjp_output
+            .cotangents
+            .into_iter()
+            .map(|(id, v)| (id, v.squeeze_dim(2)))
+            .collect();
+        Ok(PointEvalOrder1 { value, cotangents })
+    }
+
     /// The batch axis the supplied points imply, defaulting to one when there are none.
     fn batch_size_of(points: &ValueMap<B>) -> usize {
         points

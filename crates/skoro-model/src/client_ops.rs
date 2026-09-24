@@ -148,6 +148,22 @@ pub trait ModelReaderOps<B: Backend> {
     /// enters it negatively.
     fn log_weight(&self, points: &ValueMap<B>) -> SkoroResult<Point<B>>;
 
+    /// [`log_proposal`](Self::log_proposal) with its gradient at every leaf.
+    ///
+    /// At given points: the draw `x` is held fixed and no derivative flows through a sampler, so
+    /// the cotangent at a parameter `θ` is `∇_θ log q(x; θ)`, the score a score-function
+    /// (likelihood-ratio) gradient estimator needs. A reparameterization gradient, which
+    /// differentiates the draw itself, is not available.
+    fn log_proposal_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>>;
+
+    /// [`log_weight`](Self::log_weight) with its gradient at every leaf: `∇(log p − log q)` at
+    /// the given points, in one compiled pass.
+    ///
+    /// A term in both densities is seeded with zero and cancels exactly. The same caveat as
+    /// [`log_proposal_ord1`](Self::log_proposal_ord1) applies: this is a derivative at a fixed
+    /// draw, not through it.
+    fn log_weight_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>>;
+
     /// Fetch the quantity type associated with a quantity.
     fn get_quantity_type<K, T>(&self, tag: &Q<B, T>) -> SkoroResult<T>
     where
@@ -670,6 +686,26 @@ impl<B: Backend> ModelReaderOps<B> for ModelClient<B> {
             // compiled a second program to walk most of the same graph, and the terms in both
             // then cancelled to within rounding rather than exactly.
             graph.log_density_terms_signed(
+                points,
+                &term_ids(&terms, |t| t.in_density),
+                &term_ids(&terms, |t| t.in_proposal),
+            )
+        })
+    }
+
+    fn log_proposal_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>> {
+        self.server_call(|server| {
+            let graph = server.graph();
+            let terms = graph.terms();
+            graph.log_density_terms_signed_ord1(points, &term_ids(&terms, |t| t.in_proposal), &[])
+        })
+    }
+
+    fn log_weight_ord1(&self, points: &ValueMap<B>) -> SkoroResult<PointEvalOrder1<B>> {
+        self.server_call(|server| {
+            let graph = server.graph();
+            let terms = graph.terms();
+            graph.log_density_terms_signed_ord1(
                 points,
                 &term_ids(&terms, |t| t.in_density),
                 &term_ids(&terms, |t| t.in_proposal),
