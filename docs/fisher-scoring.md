@@ -288,8 +288,8 @@ its Jacobian. The correspondence with skoro's functions is direct.
 | Quantity | skoro | Shape |
 | --- | --- | --- |
 | $J_t$ | `jacobian_vjp(client, points, free, &arguments)` | `[batch, Σ dim(a_t), D]` |
-| $C_t J_t$ | one `InformationBlock` of `information_blocks` | `[batch, k_t, D]` |
-| $A$ | `information_root(client, points, free)` | `[batch, Σ k_t, D]` |
+| $C_t J_t$ over the term's keys $K_t$ | one `InformationBlock` of `information_blocks` | `[batch, k_t, dim(K_t)]` |
+| $A$, the blocks scattered into all $D$ columns | `information_root(client, points, free)` | `[batch, Σ k_t, D]` |
 | $A^\top A$ | `information(client, points, free)` | `[batch, D, D]` |
 
 Two conventions deserve mention. When a stochastic quantity is itself among the free parameters, as in
@@ -349,7 +349,9 @@ $$
 + \begin{bmatrix} r \\ 0 \end{bmatrix} \right\|^2 ,
 $$
 
-which elimination solves directly (`linearize(..., Curvature::Residual)` and `back_substitute`). Working with the root $A$ rather than the product
+which elimination solves directly (`linearize(..., Curvature::Residual)` and `back_substitute`).
+[linearization.md](linearization.md) explains both routes, and the elimination behind them, from
+the ground up. Working with the root $A$ rather than the product
 $A^\top A$ matters here, because the condition number of $A^\top A$ is the square of that of $A$.
 
 ## 8. Limitations

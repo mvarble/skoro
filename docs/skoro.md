@@ -417,7 +417,9 @@ The right-hand form is solved directly, so the iteration runs at condition `κ` 
 every damping value** rather than only at `λ = 0`. Forming `JᵀJ` would square the conditioning;
 avoiding it is the entire argument for the host boundary, since `burn` has no QR.
 
-**The QR is block-sparse**, and it is GTSAM's elimination at the level of keys:
+**The QR is block-sparse**, and it is GTSAM's elimination at the level of keys.
+[linearization.md](linearization.md) derives all of it from Gauss–Newton up, and lists every method
+it supports:
 
 1. `jacobian_blocks` (`crates/skoro-model/src/jacobian.rs`) differentiates each row only over the
    free leaves it reaches (`leaf_support`), in **one** reverse pass: rows with disjoint supports are
