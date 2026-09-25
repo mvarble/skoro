@@ -1,12 +1,68 @@
 ---
 title: Compilation
-summary: How a subgraph is lowered to a straight-line CompiledSequence that serves all four differentiation passes; which inputs are differentiable; what each pass collects at the leaves; cut compilation as partial derivatives at an interior frontier; the epoch-keyed cache; and slot liveness.
+summary: How constants, constant folds and batch pins enter a compiled program; how a subgraph is lowered to a straight-line CompiledSequence that serves all four differentiation passes; which inputs are differentiable; what each pass collects at the leaves; cut compilation as partial derivatives at an interior frontier; the epoch-keyed cache; and slot liveness.
 order: 6
 ---
 
 Evaluating a model by walking its graph node by node would be slow. Skoro instead **compiles** the
 part of the graph a query needs into a `CompiledSequence`: a flat, index-based list of steps, the
 program of [Differentiable operations](../operations/#a-program).
+
+## Constants, folds and pins
+
+A compiled sequence runs at given points, but much of a model is fixed before any point arrives.
+Three things hold a fixed value, and the sequence treats them alike: it reads the stored value
+instead of computing one.
+
+| Fixed value | Where it comes from | Step |
+| --- | --- | --- |
+| Constant | `add_constant`, `add_batched_constant` | `Constant` |
+| Observation | `observe`, `observe_batched` | `Constant`, reported among the output's `constants` |
+| Fold | a mapped or log-likelihood node whose parents are all fixed | `Operation`, carrying the value |
+
+**Constant folding is the graph's work, not the compiler's.** `add_mapped` evaluates a node whose
+parents all hold values as soon as it is added, and caches the result on the node. `observe`
+re-runs the fold over the descendants it has just fixed, and `unobserve` and
+`demote_to_parameter` clear the folds below the node they free
+([The graph](../graph/#evaluating-at-a-point-what-is-an-independent-variable)). The compiler copies
+whatever folds exist into the steps. Every one of these mutations bumps the epoch, so a program
+compiled against an old fold is never reused ([below](#caching-keyed-by-epoch)).
+
+A folded node keeps its step and its slot, because its consumers read that slot like any other.
+What changes is how the passes treat it:
+
+- **Its operation is not re-entered.** Every pass copies the cached value into the slot.
+- **It is not a differentiable input.** A consumer treats a folded parent as a constant, so
+  fixedness spreads down the graph. An operation with no differentiable input is marked
+  `constant_inputs` and runs forward-only in every pass: no tangent is pushed through it and
+  nothing is written to the tape. If it has no fold (a discrete operation, or one fed only by
+  discrete draws), its `forward` still runs.
+- **No cotangent reaches it.** The consumer's `diffs` flag for a fixed input is false
+  ([the two gates](../operations/#the-two-gates)), so no cotangent is computed for that input.
+
+A cut is the one way to reopen a fold. A cut node lowers to a differentiable leaf, so the consumers
+below it regain differentiable inputs ([Cut compilation](#cut-compilation)).
+
+### Batch pins
+
+Every stored value is a `QuantityValue`, in one of two forms. A pass turns it into a batch-$n$
+operand (`materialize`) when it reads it:
+
+- **`Unbatched`**: one row, broadcast to whatever `batch_size` the pass runs at. `add_constant` and
+  `observe` store this form.
+- **`Batched`**: one row per batch member, usable only at exactly that batch size. A batch-1 value
+  in a batch-$n$ pass is a `BatchSizeMismatch`, not a broadcast. `add_batched_constant`,
+  `observe_batched` and the anchors of `stacked_tangent` store this form, and it **pins** the graph
+  to that batch ([Batch pinning](../model/#batch-pinning)).
+
+Pins propagate through folds. A fold over a pinned parent runs at the pinned batch and is stored
+`Batched`, so the folded node pins as well. (Folding at batch 1 and broadcasting the result would
+keep row 0 and silently drop the rest.) The graph rejects contradicting pins as early as it can see
+them: a pinned constant or observation whose batch differs from the graph's, or a node whose parents
+directly pin different batches. A pin that is reached only through an unfolded node cannot be seen
+at build time. It is caught when the pass runs, because every `Constant` step and every fold
+materializes at the pass's `ForwardOptions::batch_size`, and every supplied leaf value is checked
+against that same size. `unobserve` of a batched observation releases its pin.
 
 ## Lowering
 
