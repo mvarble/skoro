@@ -1,0 +1,81 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+    workflow:
+        name: Workflow rules
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: Test bin/wf
+              run: node --test 'tools/wf/*.test.ts'
+            - name: Check the rules against the base branch
+              if: github.event_name == 'pull_request'
+              run: |
+                  flags=""
+                  if [ "${{ github.base_ref }}" = "main" ]; then flags="--merge"; fi
+                  bin/wf check --base "origin/${{ github.base_ref }}" $flags
+            - name: Check the rules
+              if: github.event_name == 'push'
+              run: bin/wf check --merge
+
+    site:
+        name: Site
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: site
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  # Documents without dates take them from the git history.
+                  fetch-depth: 0
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: site/pnpm-lock.yaml
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm check
+            - run: pnpm lint
+            - run: pnpm test
+            - name: Build the fixture, which has a document of every kind
+              run: pnpm build
+              env:
+                  SITE_CONTENT: test/content
+            - name: Build the site
+              run: pnpm build
+
+    rust:
+        name: Rust
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            # The workspace returns with the core work; until then there is nothing to check.
+            - name: Is there a workspace?
+              id: workspace
+              run: echo "exists=$([ -f Cargo.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            - uses: dtolnay/rust-toolchain@stable
+              if: steps.workspace.outputs.exists == 'true'
+              with:
+                  components: rustfmt, clippy
+            - uses: Swatinem/rust-cache@v2
+              if: steps.workspace.outputs.exists == 'true'
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo fmt --all --check
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo clippy --workspace --all-targets -- -D warnings
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo test --workspace
