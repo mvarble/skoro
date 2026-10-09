@@ -1,0 +1,3 @@
+#!/bin/sh
+# The development workflow's command line; see .agents/reference/workflow.md.
+exec node "$(dirname "$0")/../tools/wf/main.ts" "$@"
