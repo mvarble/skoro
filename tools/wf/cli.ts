@@ -141,7 +141,7 @@ const flag = (args: Args, name: string) =>
 function requireActive(root: string): { slug: string; workflow: Workflow } {
     const slug = activeSlug(root);
     if (!slug) {
-        throw new WorkflowError('no entry is active on this branch; start one with `/start`.');
+        throw new WorkflowError('no entry is active on this branch; start one with `/wf-start`.');
     }
     return { slug, workflow: readWorkflow(root, slug) };
 }
@@ -153,13 +153,14 @@ function stageOf(workflow: Workflow): Stage {
     return workflow.stage;
 }
 
+// The skill that works on each stage (`.agents/skills/wf-*`).
 const SKILL: Record<Stage, string> = {
-    math: '/math',
-    implementation: '/implementation',
-    plan: '/plan',
-    build: '/build',
-    publish: '/publish',
-    writeup: '/writeup',
+    math: '/wf-math',
+    implementation: '/wf-implementation',
+    plan: '/wf-plan',
+    build: '/wf-build',
+    publish: '/wf-publish',
+    writeup: '/wf-writeup',
 };
 
 // ---------------------------------------------------------------------------
@@ -172,11 +173,11 @@ function status(root: string, args: Args, io: Output): Result {
         if (expect) {
             io.warn(
                 `wf: this step needs an entry at the ${expect} stage, and none is active on this ` +
-                    'branch. Start one with `/start`.',
+                    'branch. Start one with `/wf-start`.',
             );
             return io.result(3);
         }
-        io.say('No entry is active on this branch. Start one with `/start <slug> <kind>`.');
+        io.say('No entry is active on this branch. Start one with `/wf-start <slug> <kind>`.');
         const entries = listEntries(root);
         if (entries.length) {
             io.say('', 'Entries:');
@@ -223,7 +224,7 @@ function status(root: string, args: Args, io: Output): Result {
         io.say(`Plan:     ${boxes.ticked} of ${boxes.total} done`);
     }
     io.say(
-        `Next:     work with ${SKILL[stage]}; when it is right, \`/approve\` moves on` +
+        `Next:     work with ${SKILL[stage]}; when it is right, \`/wf-approve\` moves on` +
             (stage == stages.at(-1) ? ' and finishes the entry.' : ` to ${nextStage(workflow)}.`),
     );
     return io.result(0);
@@ -568,8 +569,8 @@ function check(root: string, args: Args, io: Output): Result {
     if (args.flags.merge && active) {
         const stage = workflows.get(active)?.stage;
         problems.push(
-            `'${active}' is still at ${stage}: finish it with \`/approve\` or set it aside with ` +
-                '`/abandon` before merging.',
+            `'${active}' is still at ${stage}: finish it with \`/wf-approve\` or set it aside with ` +
+                '`/wf-abandon` before merging.',
         );
     }
 

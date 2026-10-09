@@ -76,7 +76,7 @@ test('status --expect refuses the wrong stage', () => {
     assert.equal(r.wf('status', '--expect', 'math').code, 0);
     const wrong = r.wf('status', '--expect', 'plan');
     assert.equal(wrong.code, 3);
-    assert.match(wrong.stderr, /'normal' is at math\. The step for it is \/math/);
+    assert.match(wrong.stderr, /'normal' is at math\. The step for it is \/wf-math/);
     assert.match(r.wf('status').stdout, /\[math\] → implementation/);
 });
 
@@ -213,7 +213,7 @@ test('a decision is written up and published', () => {
     const r = repo();
     const result = r.wf('start', 'design', '--kind', 'decision');
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /Next: \/writeup/);
+    assert.match(result.stdout, /Next: \/wf-writeup/);
     assert.equal(r.wf('path').stdout.trim(), 'site/content/archive/design/writeup.md');
     assert.match(r.wf('path', 'math').stderr, /has no document/);
 });
@@ -233,7 +233,7 @@ test('guard refuses edits the stage does not allow', () => {
     assert.equal(guard(`${entry}/index.md`).code, 0);
     const early = guard(`${entry}/plan.md`);
     assert.equal(early.code, 2);
-    assert.match(early.stderr, /ask for `\/reopen plan`/);
+    assert.match(early.stderr, /ask for `\/wf-reopen plan`/);
     assert.equal(guard(`${entry}/workflow.json`).code, 2);
     assert.equal(guard('.workflow/active').code, 2);
     assert.equal(guard('site/content/guide/first-model/index.md').code, 2, 'pages open at publish');

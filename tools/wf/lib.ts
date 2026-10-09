@@ -242,14 +242,14 @@ export function refusal(
             if (place.stage == 'plan' && workflow.stage == 'build') return undefined;
             return (
                 `${rel} is the ${place.stage} document, and the entry is at ${workflow.stage}. ` +
-                `To change it, ask for \`/reopen ${place.stage}\`.`
+                `To change it, ask for \`/wf-reopen ${place.stage}\`.`
             );
         }
         default: {
             const area = place.area;
             if (!subject) {
                 return area == 'code'
-                    ? `${rel} is code, and no entry is active: start one with \`/start\`.`
+                    ? `${rel} is code, and no entry is active: start one with \`/wf-start\`.`
                     : undefined;
             }
             if (unlocked(subject.workflow).has(area)) return undefined;
