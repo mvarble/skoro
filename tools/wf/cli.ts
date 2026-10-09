@@ -180,7 +180,8 @@ function status(root: string, args: Args, io: Output): Result {
         io.say('No entry is active on this branch. Start one with `/wf-start <slug> <kind>`.');
         const entries = listEntries(root);
         if (entries.length) {
-            io.say('', 'Entries:');
+            io.say();
+            io.say('Entries:');
             for (const entry of entries) {
                 try {
                     const workflow = readWorkflow(root, entry);
@@ -406,14 +407,20 @@ function readiness(
         }
         const ref = base ?? defaultBase(root);
         const changed = ref ? changedSince(root, ref) : undefined;
-        const pages = [...new Set((changed ?? []).map(pageKey).filter((key) => key !== undefined))];
-        for (const key of pages) {
-            if (!listed.includes(key) && pageExists(root, key)) {
-                problems.push(`page '${key}' changed on this branch; list it under \`pages\` in ${index}.`);
+        if (changed) {
+            const pages = new Set(changed.map(pageKey).filter((key) => key !== undefined));
+            for (const key of pages) {
+                if (!listed.includes(key) && pageExists(root, key)) {
+                    problems.push(`page '${key}' changed on this branch; list it under \`pages\` in ${index}.`);
+                }
             }
-        }
-        if (workflow.kind != 'chore' && !listed.length && !pages.length) {
-            problems.push('no documentation page changed: say what this entry made true in the docs.');
+            for (const key of listed) {
+                if (!pages.has(key)) problems.push(`${index} lists page '${key}', which this branch did not change.`);
+            }
+            const landing = changed.some((rel) => /^site\/content\/landing\.(md|svx)$/.test(rel));
+            if (workflow.kind != 'chore' && !pages.size && !landing) {
+                problems.push('no documentation page changed: say what this entry made true in the docs.');
+            }
         }
     }
     return problems;

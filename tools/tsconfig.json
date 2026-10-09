@@ -1,0 +1,20 @@
+{
+    // Type-checks the tooling, which Node runs as TypeScript directly (type stripping), with the
+    // site's TypeScript: `site/node_modules/.bin/tsc -p tools`.
+    "compilerOptions": {
+        "target": "es2023",
+        "lib": ["es2023"],
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "allowImportingTsExtensions": true,
+        "erasableSyntaxOnly": true,
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "skipLibCheck": true,
+        "typeRoots": ["../site/node_modules/@types"],
+        "types": ["node"]
+    },
+    "include": ["**/*.ts"]
+}

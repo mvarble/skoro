@@ -173,10 +173,17 @@ test('publish needs the changed pages listed, and finishes the entry', () => {
     assert.match(unlisted.stderr, /page 'guide\/first-model' changed on this branch/);
     assert.match(r.wf('check', '--base', 'main', '--merge').stderr, /still at publish/);
 
+    write(r.root, 'site/content/guide/other/index.md', '---\ntitle: Other\norder: 2\n---\n\nOld.\n');
+    r.sh('add', '-A');
+    r.sh('commit', '-qm', 'other');
     write(r.root, `${entry}/index.md`, '---\ntitle: The Normal\npages: [guide/first-model, guide/gone]\n---\n\nA Gaussian.\n');
     r.commit();
     assert.match(r.wf('approve', '--base', 'main').stderr, /'guide\/gone', which does not exist/);
-    write(r.root, `${entry}/index.md`, '---\ntitle: The Normal\npages:\n  - guide/first-model\n---\n\nA Gaussian.\n');
+    write(
+        r.root,
+        `${entry}/index.md`,
+        '---\ntitle: The Normal\npages:\n  - guide/first-model\n  - guide/other\n---\n\nA Gaussian.\n',
+    );
     r.commit();
     const done = r.wf('approve', '--base', 'main');
     assert.equal(done.code, 0, done.stderr);
@@ -185,6 +192,28 @@ test('publish needs the changed pages listed, and finishes the entry', () => {
     r.commit();
     const merge = r.wf('check', '--base', 'main', '--merge');
     assert.equal(merge.code, 0, merge.stderr);
+});
+
+test('publish refuses a listed page the branch did not change, and wants some page changed', () => {
+    const r = repo();
+    r.wf('start', 'charter', '--kind', 'decision');
+    write(r.root, 'site/content/archive/charter/index.md', '---\ntitle: Charter\npages: []\n---\n\nWhy.\n');
+    write(r.root, 'site/content/archive/charter/writeup.md', 'Because.\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    r.commit();
+    assert.match(r.wf('approve', '--base', 'main').stderr, /no documentation page changed/);
+    write(r.root, 'site/content/archive/charter/index.md', '---\ntitle: Charter\npages: [guide/first-model]\n---\n\nWhy.\n');
+    r.commit();
+    assert.match(
+        r.wf('approve', '--base', 'main').stderr,
+        /lists page 'guide\/first-model', which this branch did not change/,
+    );
+    write(r.root, 'site/content/archive/charter/index.md', '---\ntitle: Charter\npages: []\n---\n\nWhy.\n');
+    write(r.root, 'site/content/landing.md', 'What skoro is.\n');
+    r.commit();
+    const done = r.wf('approve', '--base', 'main');
+    assert.equal(done.code, 0, done.stderr);
 });
 
 test('a branch works on one entry', () => {

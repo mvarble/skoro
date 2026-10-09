@@ -51,6 +51,8 @@ jobs:
             - run: pnpm check
             - run: pnpm lint
             - run: pnpm test
+            - name: Type-check bin/wf
+              run: node_modules/.bin/tsc -p ../tools
             - name: Build the fixture, which has a document of every kind
               run: pnpm build
               env:

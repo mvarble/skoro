@@ -73,7 +73,7 @@ Before pushing, run what applies:
 
 ```sh
 bin/wf check
-node --test 'tools/wf/*.test.ts'
+node --test 'tools/wf/*.test.ts' && site/node_modules/.bin/tsc -p tools
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind
 ```
