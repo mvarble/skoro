@@ -1,0 +1,42 @@
+/* `mesearch-ui`'s map, given skoro's colours. The component reads mesearch's token names, which
+ * are defined here, inside it, in terms of skoro's; the dark theme follows on its own. */
+
+.math-map {
+    margin: var(--space-6) 0;
+
+    --ink: var(--fg-1);
+    --ink-soft: var(--fg-2);
+    --muted: var(--fg-3);
+    --faint: var(--fg-4);
+    --rule: var(--border);
+    --rule-strong: var(--border-strong);
+    --paper: var(--bg-1);
+    --paper-raised: var(--bg-2);
+    --paper-sunken: var(--bg-3);
+    --accent: var(--fg-accent);
+    --accent-soft: var(--bg-accent-soft);
+    --font-ui: var(--font-family-ui);
+    --font-serif: var(--font-family-body);
+    --font-size-ui: var(--font-size-small);
+    --font-size-eyebrow: var(--font-size-tiny);
+    --radius-large: var(--radius-lg);
+    --shadow: var(--shadow-md);
+    --shadow-strong: var(--shadow-md);
+    --sequence: var(--fg-accent);
+    --graph-background: var(--bg-2);
+    --graph-grid: color-mix(in srgb, var(--fg-3) 8%, transparent);
+    --graph-edge: var(--border-strong);
+    --graph-edge-strong: var(--fg-3);
+    --graph-node: var(--bg-1);
+    --graph-label: var(--fg-1);
+
+    & [class*='kind-'] {
+        --kind: var(--fg-accent);
+        --kind-soft: var(--bg-accent-soft);
+    }
+
+    & .kind-entry-document {
+        --kind: var(--callout-decision);
+        --kind-soft: color-mix(in srgb, var(--callout-decision) 12%, var(--bg-1));
+    }
+}

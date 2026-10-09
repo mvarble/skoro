@@ -1,0 +1,192 @@
+/* `<ModelGraph>` figures. A node or edge sets `--c` from its kind (or role); everything else is
+ * drawn from `--c`, so a new kind needs one rule here and one token in `tokens/colors.css`. */
+
+.model-graph {
+    margin: var(--space-6) 0;
+
+    svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+    }
+
+    figcaption {
+        margin-top: var(--space-3);
+        font: var(--font-small);
+        color: var(--fg-3);
+        text-align: center;
+
+        strong {
+            color: var(--fg-1);
+        }
+    }
+}
+
+/* The drawing and its text layer. The canvas is a size container, so `cqw` (1% of its width) lets
+ * the labels' font size scale with the SVG: a font of `--graph-font` viewport units in a viewport
+ * `--graph-width` units wide. */
+.graph-canvas {
+    position: relative;
+    margin: 0 auto;
+    container-type: inline-size;
+}
+
+.graph-labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    font-size: calc(var(--graph-font) * 100cqw / var(--graph-width));
+    line-height: 1;
+
+    > span {
+        position: absolute;
+        white-space: nowrap;
+    }
+
+    .katex {
+        font-size: 1.05em;
+    }
+}
+
+.node-label {
+    color: var(--fg-1);
+    font-family: var(--font-family-ui);
+    font-style: italic;
+}
+
+.node-annotation {
+    color: var(--fg-3);
+    font-family: var(--font-family-ui);
+    font-size: 0.78em;
+}
+
+.edge-label {
+    color: var(--c);
+    font-family: var(--font-family-mono);
+    font-size: 0.72em;
+    padding: 0.1em 0.3em;
+    background: var(--bg-1);
+    border-radius: var(--radius-sm);
+}
+
+/* ---- nodes ------------------------------------------------------------ */
+.graph-node {
+    --c: var(--graph-constant);
+
+    :is(circle, rect) {
+        fill: color-mix(in srgb, var(--c) var(--graph-fill-mix), var(--bg-1));
+        stroke: var(--c);
+        stroke-width: 2;
+    }
+
+    &.kind-constant {
+        --c: var(--graph-constant);
+    }
+    &.kind-parameter {
+        --c: var(--graph-parameter);
+    }
+    &.kind-stochastic {
+        --c: var(--graph-stochastic);
+    }
+    &.kind-mapped {
+        --c: var(--graph-mapped);
+    }
+    &.kind-log-likelihood {
+        --c: var(--graph-log-likelihood);
+    }
+
+    /* Probabilistic-graphical-model convention: an observed quantity is shaded. */
+    &.kind-observed {
+        --c: var(--graph-observed);
+
+        :is(circle, rect) {
+            fill: color-mix(in srgb, var(--c) var(--graph-observed-mix), var(--bg-1));
+        }
+    }
+
+    /* A cut boundary: its value is supplied from outside the compiled program. */
+    &.kind-given {
+        --c: var(--graph-given);
+
+        :is(circle, rect) {
+            stroke-dasharray: 5 3;
+        }
+    }
+}
+
+/* ---- edges ------------------------------------------------------------ */
+.graph-edge {
+    --c: var(--graph-edge);
+
+    path {
+        fill: none;
+        stroke: var(--c);
+        stroke-width: 1.6;
+    }
+
+    polygon {
+        fill: var(--c);
+    }
+
+    &.kind-scores path {
+        stroke-dasharray: 1.5 4;
+        stroke-linecap: round;
+        stroke-width: 2;
+    }
+
+    &.kind-binding path {
+        stroke-dasharray: 6 4;
+    }
+
+    &.kind-plain {
+        --c: var(--fg-4);
+    }
+}
+
+.role-argument {
+    --c: var(--role-argument);
+}
+.role-residual {
+    --c: var(--role-residual);
+}
+.role-location {
+    --c: var(--role-location);
+}
+.role-whitening {
+    --c: var(--role-whitening);
+}
+.role-normalizer_parent {
+    --c: var(--role-normalizer-parent);
+}
+.role-fisher_root {
+    --c: var(--role-fisher-root);
+}
+
+.graph-muted {
+    opacity: 0.3;
+}
+
+/* ---- legend ----------------------------------------------------------- */
+.graph-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-1) var(--space-4);
+    margin-top: var(--space-3);
+    font: var(--font-tiny);
+    color: var(--fg-3);
+    list-style: none;
+    padding: 0;
+
+    li {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    svg {
+        width: auto;
+        margin: 0;
+    }
+}
