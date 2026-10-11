@@ -170,16 +170,46 @@ This replaces the archive's design, in which a shared graph sat behind one lock,
 carried a client that could change it, and drop guards fed a mark-and-sweep collector. It also
 removes the need for a separate read-only access level: a snapshot is read-only by construction.
 
-> [!TODO] Operator sugar under a single writer
-> In the archive, `a + b` added a node because every quantity handle carried the model. With a
-> single writer there are two shapes, and the choice is open:
->
-> - a handle holds the writer, so `a + b` keeps working, but only on the writing thread;
-> - building goes through the writer explicitly (`w.add(&a, &b)`, or a closure handed a builder),
->   and a handle is a plain typed identifier that can be sent anywhere.
->
-> The first keeps the ergonomics; the second makes the single-writer rule visible in the types.
-> Both need a sketch of a small sequential model before one is chosen.
+**Building reads like ordinary code.** A model is written as functions of quantities, with no
+builder in their signatures. An operator and a function a user writes are the same kind of thing:
+
+```rust
+// The range from a vehicle at `x` to a target at `y`: an ordinary function of quantities.
+fn range<B: Backend>(x: Q<B, Euclidean<3>>, y: Q<B, Euclidean<3>>) -> Q<B, Real> {
+    (y - x).norm()
+}
+```
+
+(The names in these sketches are illustrative; the core's implementation settles them.) `y - x`
+and `range(x, y)` both add nodes to the model, and neither names the writer. They can do
+so because building happens inside a *building scope* that a writer opens, and every operation on
+a quantity adds its node to the writer whose scope is open on the current thread:
+
+```rust
+let x = writer.build(|| {
+    let x = vehicle_prior.sample_as("vehicle/0");
+    let z = Normal::new(range(x, target), sigma).sample_as("range/0");
+    x
+})?;
+```
+
+The writer is the only thing that changes a model, and a scope is how it lends itself to the code
+that builds; outside a scope, an operation on a quantity is refused. A `Q` is then a plain typed
+identifier, cheap to copy: it holds no reference to a writer, so it can be sent to other threads and used in
+queries against any snapshot that contains its quantity. The same `Q` is valid on every branch
+that shares the quantity, which multiple-hypothesis building depends on: each hypothesis's writer
+opens its own scope, and the same function of the same quantities builds into each.
+
+```rust
+for (hypothesis, writer) in branches.iter_mut() {
+    writer.build(|| associate(measurement, hypothesis.target(), hypothesis.clutter()))?;
+}
+```
+
+Errors cannot be returned from `y - x`, and an operator that panicked on a shape mismatch would
+break the rule that errors are values. So an operation that fails inside a scope still returns a
+`Q`, marked failed: anything built on it is failed too, and the scope reports the first failure,
+with where it happened, as the error of `build`. Nothing a failed scope built is published.
 
 ### 4. Static at the edges, dynamic inside, and everything nameable
 
@@ -413,8 +443,11 @@ What becomes hard, or costs something:
   operations, until profiling earns a fusion.
 - **Every reader takes an observation set**, and "is this quantity free?" becomes a question about
   the model and the query together.
-- **Snapshots and branches are a new design**, untested in the archive, and their top-level API is
-  not yet sketched.
+- **Snapshots and branches are a new design**, untested in the archive.
+- **Building scopes are implicit state.** Which writer an operation builds into is decided by the
+  scope open on the current thread, not by anything in its signature; an operation outside a scope
+  is refused when it runs, not when it compiles, and a failure inside one surfaces only when the
+  scope ends.
 - **Registration has a cost.** Every type-erased thing must be named and registered, built-in or
   not.
 - **Products are conditional**, and the core must prove them before they are relied upon.
@@ -452,6 +485,15 @@ query-time conditioning and snapshots, for the reasons in positions 1 and 3.
 
 **Compile-time dimensions only, or both kinds implemented separately** (the archive). Replaced by
 runtime dimensions with typed wrappers, so nothing is implemented twice.
+
+**Handles that carry their writer** (as the archive's carried its client). Operators work
+anywhere a handle is, but a handle becomes bound to one thread and one branch: it cannot be sent to
+an estimator, and building the same function into several hypotheses means rebinding every handle
+to each branch. Building scopes keep the sugar and leave handles free.
+
+**An explicit builder in every signature** (`builder.add_mapped_quantity(...)`, or
+`fn f(b: &mut Builder, x: Q) -> Q`). Rejected: it makes the code that describes a model read like
+code that manipulates a graph, and an operator cannot take a builder at all.
 
 **Target and proposal flags on terms** (the archive). Replaced by samplers that carry their own
 densities.
