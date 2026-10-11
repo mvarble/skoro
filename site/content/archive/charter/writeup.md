@@ -211,6 +211,20 @@ break the rule that errors are values. So an operation that fails inside a scope
 `Q`, marked failed: anything built on it is failed too, and the scope reports the first failure,
 with where it happened, as the error of `build`. Nothing a failed scope built is published.
 
+**How a scope works.** The exclusive access a writer needs is taken once, when the scope opens,
+not by each operation: `build` borrows the writer mutably for the length of the closure, so the
+compiler guarantees nothing else touches it meanwhile. Opening the scope stages a copy-on-write
+draft of the latest snapshot and registers that draft with the current thread. An operation finds
+the draft through the thread and borrows it only for as long as it takes to insert its own node,
+never while user code or a distribution runs, so a distribution's `sample_as` can build its
+log-density with ordinary operations inside the same scope. The draft belongs to one thread and is
+invisible to readers, who hold immutable snapshots; when the scope ends without a failure, the
+draft becomes the latest snapshot in a single atomic step, so a reader sees the model as it was
+before the scope or as it is after it, never half of it. If the closure panics, the draft is
+unregistered and discarded. Because a thread-local cannot be generic over the backend, the draft is
+held type-erased and recovered by each operation; an operation that finds no draft, or a draft for
+another backend, returns a failed `Q`. Scopes nest, and an operation builds into the innermost.
+
 ### 4. Static at the edges, dynamic inside, and everything nameable
 
 The building API is typed. A quantity is a `Q<B, T>`, where `T` names its type (a manifold or a
@@ -231,6 +245,38 @@ target 3 at tick 40", which stays the same across snapshots, branches and serial
 the internal identifier the graph uses. Addresses are what let two branches agree that they hold
 the same quantity, what random keys are derived from (position 10), and what a serialized model is
 read back by.
+
+**Addresses are hierarchical, and sub-models are functions.** An address is a path of segments,
+each a name or an integer (tick `t` and measurement `j` are numbers, and stay numbers), displayed
+as `40/target/3`. A *namespace* is a frame on the same stack as a building scope: inside
+`scope::namespace(t, || ...)`, a quantity added as `x` is addressed `t/x`. A sub-model is then an
+ordinary function of quantities that names its own quantities locally and knows nothing about where
+it is placed; the code that calls it places it:
+
+```rust
+fn step<B: Backend>(prev: Q<B, Pose>, u: &Odometry, zs: &[Range]) -> Q<B, Pose> {
+    let x = Normal::new(prev.compose(u.delta()), q).sample_as("x");
+    for (j, z) in zs.iter().enumerate() {
+        scope::namespace(j, || Normal::new(range(x, landmark(z.id)), sigma).sample_as("z"));
+    }
+    x
+}
+
+let mut x = writer.build(|| prior.sample_as("x"))?;
+for (t, data) in stream.enumerate() {
+    x = writer.build(|| scope::namespace(t, || step(x, &data.u, &data.zs)))?;
+}
+// "x", then "0/x", "0/0/z", "0/1/z", "1/x", "1/0/z", ...
+```
+
+Sub-models connect through their arguments and results, as Gen.jl's generative functions do, never
+by looking each other's quantities up by name; looking a quantity up by address, relative to the
+open namespaces, remains for code that resumes building from a snapshot. Namespaces nest freely.
+They are also the natural unit of retirement: when tick 0 leaves a sliding window,
+`writer.retire("0")` marginalizes everything under `0/` onto its Markov blanket and removes it,
+which makes declarative the bookkeeping the archive did by hand on every tick. A namespace is part
+of an address within one model, and is unrelated to branching: `1/x` names the same quantity in
+every branch that contains it.
 
 Three things are deliberately absent: code generated and compiled ahead of time (SymForce's
 approach does not fit models built at run time), macro languages for models (hard to reason about
@@ -424,6 +470,8 @@ What becomes easy:
 
 - running several algorithms, and several conditionings, on one model, concurrently;
 - holding a model under many structural hypotheses at once, as cheap branches of one another;
+- composing a model from sub-models written as functions, placed under namespaces, and retiring a
+  whole namespace (a tick leaving a window) in one call;
 - simulation-based checks of inference algorithms and consistency checks of estimators;
 - adding a distribution or a manifold operation, which is mostly composition of existing pieces,
   with derivatives of both orders for free;
@@ -490,6 +538,17 @@ runtime dimensions with typed wrappers, so nothing is implemented twice.
 anywhere a handle is, but a handle becomes bound to one thread and one branch: it cannot be sent to
 an estimator, and building the same function into several hypotheses means rebinding every handle
 to each branch. Building scopes keep the sugar and leave handles free.
+
+**Lifetimes on handles instead of a thread-local** (`Q<'s, B, T>`, holding a reference to the
+draft). Using a handle outside its scope would then fail to compile rather than fail when run, and
+no thread-local would be needed. Declined, for now, because the lifetime appears in every function
+a user writes, which is the burden building scopes exist to remove; it is the fallback if the
+run-time checks prove error-prone.
+
+**Importing a built model under a namespace.** Possible, since built models are nameable, but an
+imported model arrives with its own priors fixed, while a sequential model needs each step's prior
+to be the previous step's result. Sub-models as functions with arguments express that; imports do
+not, and are left out until a use for them appears.
 
 **An explicit builder in every signature** (`builder.add_mapped_quantity(...)`, or
 `fn f(b: &mut Builder, x: Q) -> Q`). Rejected: it makes the code that describes a model read like
