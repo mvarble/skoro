@@ -1,0 +1,479 @@
+---
+summary: The mathematics the core rests on, from quantities, their charts and their products, through operations and their derivatives of first and second order composed over programs, to queries, terms, importance weights, random keys and retirement.
+depends_on: [retraction, automatic-differentiation, derivatives-in-charts, product-manifold]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as order from './statements/order.md';
+	import * as productAgreement from './statements/product-agreement.md';
+	import * as importance from './statements/importance.md';
+	import * as retirement from './statements/retirement.md';
+</script>
+
+## The problem
+
+The core is the part of skoro that every later entry builds on: the quantities a model is made of,
+the operations that relate them, the derivatives of those operations, the log-density a model
+defines, and the changes a model goes through as it is built, branched and retired. It ships no
+distribution, but it must be exactly right about what a distribution, an estimator or a sampler
+will ask of it, because each of those will trust it without checking.
+
+This document works out that mathematics, at the level of precision the implementation needs.
+Most of it is standard, and the standard parts are in the math notes it depends on:
+[retractions](../../math/retraction/), [automatic differentiation over frames](../../math/automatic-differentiation/),
+[derivatives in tangent charts](../../math/derivatives-in-charts/) and
+[product manifolds](../../math/product-manifold/). What is particular to skoro, and what this
+document settles, is how those pieces meet [the charter](../charter/writeup.md): which quantities
+are differentiated and when, what order of derivative a computation needs from each step, what
+selection and discrete quantities do to derivatives, what a query does to a model's density, how
+random keys make draws reproducible, and what retiring a quantity means.
+
+## Setting
+
+A *model* is a set of *quantities* and a set of *terms*. Each quantity takes values in its *type*:
+a manifold $\mathcal M$ of dimension $d$ with a retraction, or a countable set. Each term $t$ is a
+real-valued function $\ell_t$ of some of the quantities, its *log-density*, and the model's
+log-density is their sum,
+
+$$
+	\log p(x) = \sum_t \ell_t(x) . @tag(log-density)
+$$
+
+Between the quantities sit *mapped values*, outputs of operations applied to quantities and to
+other mapped values, through which the terms are written. The whole is a directed acyclic graph,
+built forward: a node is added only after the nodes it reads.
+
+For a manifold-valued quantity, $x \oplus \delta$ and $y \ominus x$ are its retraction and inverse
+retraction [](eq:math/retraction/oplus), and derivatives are read in tangent charts
+[](eq:math/derivatives-in-charts/derivative). A quantity's *dimension* is that of its tangent
+space; its *storage size* is the number of reals that represent a point, which may be larger (a
+rotation has dimension $3$ and is stored as $9$ or $4$ numbers). Every flat vector of derivative
+coordinates in this document is indexed by dimension, never by storage.
+
+Computation is batched: a model is evaluated at $N$ points at once, one per row of a batch. Rows
+never interact: an evaluation at $N$ points is $N$ independent evaluations, and every derivative
+below is per row. Batching is therefore absent from the mathematics, and only the implementation
+needs to keep it straight.
+
+## Quantities
+
+**Euclidean quantities.** The core's continuous types are the flat ones: the real line $\R$,
+vectors $\R^n$ and matrices $\R^{m \times n}$, with $x \oplus \delta = x + \delta$ and
+$y \ominus x = y - x$. A matrix is flattened column by column into $\R^{mn}$ for its tangent
+coordinates, so its dimension equals its storage size. The dimensions $n$, $m$ are fixed for each
+quantity when it is created, and every operation checks them then.
+
+**Discrete quantities.** The core's discrete types are the finite sets
+$\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$, with $\mathrm{Boolean} = \mathrm{Categorical}(2)$,
+and the integers $\mathbb Z$. A discrete quantity has no tangent space, no retraction and no
+dimension, and it is never a coordinate of a derivative. A density over a discrete quantity is a
+probability mass, a density with respect to the counting measure.
+
+**Products.** A product of continuous types is a continuous type: a quantity of type
+$\mathcal M_1 \times \cdots \times \mathcal M_k$ is one point $(x_1, \dots, x_k)$, stored as its
+factors' storage concatenated, with the stacked tangent space [](eq:math/product-manifold/stack)
+and the factor-wise retraction of [%full](statement:math/product-manifold/product-retraction). The
+core has products of continuous types only. A quantity with a continuous part and a discrete part
+is two quantities, as the charter has it, and a joint density over several discrete quantities
+needs no product, since a term may involve any number of quantities.
+
+A product's factors may be of any continuous type, including products, and of dimensions known
+only at run time. That is what makes a product the natural type of a marginal over a Markov
+blanket, whose members are only known when a quantity is retired ([Retirement](#retirement)).
+
+## Operations
+
+An *operation* is a smooth map
+
+$$
+	y = F(x_1, \dots, x_m; k_1, \dots, k_r) @tag(operation)
+$$
+
+from continuous inputs $x_j \in \mathcal M_j$ and discrete inputs $k_i$ to an output $y$, smooth in
+the continuous inputs for each value of the discrete ones. Its partial derivatives
+$\partial_j F$ are taken in tangent charts, and it may provide four maps, each over a *frame* of
+directions ([automatic differentiation over frames](../../math/automatic-differentiation/)):
+
+| map | given | returns |
+| --- | --- | --- |
+| forward | the inputs | $y$ |
+| tangent | a frame $\dot X_j$ per continuous input | $\dot Y = \sum_j \partial_j F\, \dot X_j$ |
+| cotangent | a frame $\alpha$ at the output | $\partial_j F\transpose \alpha$ per continuous input |
+| second order | velocities $\dot X_j$, and one cotangent $\alpha$ | $\operatorname{hvp}_j(\alpha) = \frac{\mathrm d}{\mathrm dt}\big\vert_{t=0} \partial_j F(x \oplus t\dot X)\transpose \alpha$ per input |
+
+The second-order map takes a velocity frame of several columns, one Hessian direction each, and a
+single cotangent column. Its definition in charts is the one under which a forward-over-reverse pass
+computes the chart Hessian [](eq:math/derivatives-in-charts/chart-hessian), by
+[%full](statement:math/derivatives-in-charts/passes).
+
+Discrete inputs carry no derivatives, and a discrete output carries none either. A map that turns a
+discrete input into a continuous output (an *embedding*, such as an integer read as a real) has no
+partial derivative in it. A map that turns a continuous input into a discrete output (a
+*discretization*, such as the indicator $\mathbb 1[x \ge 0]$) passes no cotangent back. For a step
+function that is the true derivative everywhere but at its steps, and the core makes no attempt to
+do better: a model that needs a derivative across a discretization needs a relaxation, which is a
+modelling choice, not the core's.
+
+### Two gates
+
+Within a pass, an operation's continuous inputs differ in two ways that the implementation must
+keep apart:
+
+- an input is *differentiable* if it depends on a leaf the pass differentiates with respect to,
+  which decides whether cotangents ($\alpha$, and in a Hessian pass $\beta$) are pulled back into
+  it;
+- an input *carries a velocity* if it depends on a leaf seeded with a velocity in this pass, which
+  decides whether its velocity enters $\operatorname{hvp}$.
+
+The second implies the first, and not conversely: a Hessian pass is often seeded at one quantity
+while all of them are differentiated. An operation's $\operatorname{hvp}_j$ is absent whenever
+$\partial_j F$ is not needed, and a missing velocity counts as zero.
+
+### Order
+
+Every operation states its *order* $o(F)$: $0$ if it provides only the forward map, $1$ if it also
+provides the tangent and cotangent maps, $2$ if it also provides the second-order map. Most
+primitives have order $2$. An operation that runs burn's automatic differentiation inside, such as a
+neural network, has order $1$; one whose derivative does not exist or was not written has order
+$0$. What a pass needs of a step depends on where the step sits in it.
+
+<Statement {...order} />
+
+A pass that is not admissible is refused before it runs, naming a step $k$ with $o(F_k) < r_k$.
+This refines the charter's "least order over the program's steps" in two ways that matter in
+practice. A step that no differentiated leaf reaches, or that reaches no target, needs nothing,
+so a model may contain a first-order neural network and still be differentiated twice with respect
+to quantities that do not feed it. And a step that only pulls back cotangents in a Hessian pass,
+because no seeded velocity reaches it, needs only first order: its $\operatorname{hvp}$ terms are
+zero by [](eq:math/automatic-differentiation/leibniz).
+
+## Selection
+
+*Selection* chooses one of several continuous values by a discrete index:
+
+$$
+	y = \operatorname{select}(k;\, v_0, \dots, v_{n-1}) = v_k,
+	\qquad k \in \mathrm{Categorical}(n),\; v_i \in \mathcal M . @tag(select)
+$$
+
+All the $v_i$ and $y$ are of one type. For each $k$ the map is a projection, so its derivatives in
+charts are as simple as derivatives get: since $y = v_k$, the chart at $y$ is the chart at $v_k$,
+and
+
+$$
+	\partial_{v_i} y = \begin{cases} I & i = k, \\ 0 & i \ne k, \end{cases}
+	\qquad \operatorname{hvp}_{v_i} = 0 .
+$$
+
+The cotangent at $y$ goes to the selected value and nowhere else, and the index receives nothing.
+Mixtures, switching models and data association are built on selection: a mixture whose component
+is a discrete quantity reads that component's parameters through selection, and a measurement
+associated by a discrete quantity selects the target it came from. The derivative with respect to the values, at a fixed
+index, is exactly what a gradient-based algorithm conditioned on the discrete quantities needs.
+
+## The primitives
+
+The core's primitive operations, on Euclidean quantities, with the derivative maps they carry. In
+the table, $\odot$ is the elementwise product, a dot over a symbol its velocity in a Hessian pass,
+and $\alpha$ the cotangent at the output. Each frame is handled column by column, so one column is
+shown.
+
+| operation | tangent | cotangent per input | second order per input |
+| --- | --- | --- | --- |
+| $a + b$ | $\dot a + \dot b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $a - b$ | $\dot a - \dot b$ | $\alpha,\ -\alpha$ | $0,\ 0$ |
+| $-a$ | $-\dot a$ | $-\alpha$ | $0$ |
+| $a \odot b$ | $\dot a \odot b + a \odot \dot b$ | $b \odot \alpha,\ a \odot \alpha$ | $\dot b \odot \alpha,\ \dot a \odot \alpha$ |
+| $s\,a$, $s \in \R$ | $\dot s\, a + s\, \dot a$ | $a\transpose \alpha,\ s\, \alpha$ | $\dot a\transpose \alpha,\ \dot s\, \alpha$ |
+| $A B$ | $\dot A B + A \dot B$ | $\alpha B\transpose,\ A\transpose \alpha$ | $\alpha \dot B\transpose,\ \dot A\transpose \alpha$ |
+| $\sum_i a_i$ | $\sum_i \dot a_i$ | $\alpha \mathbf 1$ | $0$ |
+| $e^{a}$ (elementwise) | $e^{a} \odot \dot a$ | $e^{a} \odot \alpha$ | $e^{a} \odot \dot a \odot \alpha$ |
+| $\log a$ (elementwise) | $\dot a / a$ | $\alpha / a$ | $-\dot a \odot \alpha / a^2$ |
+| slice, concatenate, transpose | the same map | its adjoint | $0$ |
+| select | [](eq:select) | to the selected value | $0$ |
+
+Every row is checked the same way: the tangent map is the derivative of the forward map, the
+cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
+velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) are the
+only ones whose second-order maps mix inputs: the pull-back into one input involves the other, so
+the other's velocity appears. The linear ones have none. The discrete operations the core needs
+(integer arithmetic and comparison) and the embedding of an integer as a real carry no
+derivatives, by the conventions of [Operations](#operations).
+
+## Programs, composites and passes
+
+A model is evaluated by *compiling* a program from the graph: the steps that compute the requested
+targets, in an order respecting the graph, ending in the targets
+([automatic differentiation over frames](../../math/automatic-differentiation/)). Four passes run over
+a compiled program: the forward pass, the tangent pass [](eq:math/automatic-differentiation/jvp),
+the cotangent pass [](eq:math/automatic-differentiation/vjp), and the Hessian pass
+[](eq:math/automatic-differentiation/leibniz). Derivatives are collected at the leaves only, which
+the next section defines.
+
+A *composite* operation is a named subgraph of other operations, such as the retraction of a
+product, or (in later entries) a distribution's log-density. Its derivative maps are *defined* as
+the composition of its parts', so expanding a composite into its parts at compilation changes no
+value that any pass computes, and its order is that of its parts under
+[%full](statement:order). A hand-written fused form of a composite, introduced for speed or for
+numerical care, is a different operation with the same mathematics, and it is correct only if every
+pass over it agrees with every pass over the composite, to within rounding.
+
+The product retraction is the composite the charter's acceptance test is about.
+
+<Statement {...productAgreement} />
+
+<Proof>
+
+Slicing and concatenation are linear, so their tangent maps are themselves, their cotangent maps
+are their adjoints (scattering into a zero block and gathering a block), and their second-order maps
+are zero. In the tangent pass, slicing hands each factor's retraction exactly its blocks of the
+frames, and concatenation stacks what they return. In the cotangent and Hessian passes, the
+concatenation's adjoint hands each factor exactly its blocks of $\alpha$ and $\beta$, the factors
+pull them back, and the slicing's adjoint places each result in its own block, adding only zeros. By
+[](eq:math/automatic-differentiation/leibniz), with the linear steps' $\operatorname{hvp}$ zero, the
+product's $\beta$ is the factors' $\beta$s, stacked. So every pass computes the block-diagonal
+assembly of the factors' passes, which is the derivative structure of
+[](eq:math/product-manifold/blocks).
+
+</Proof>
+
+The proof introduces no arithmetic beyond additions of zero, so a test may hold the agreement to a
+tolerance of a few units in the last place. On Euclidean factors alone it checks little, though:
+every second-order map along the way is zero, so the second derivatives under test are zeros on
+both sides. The test means something only when a factor is curved, and when the retraction is
+composed with a function whose second derivative does not vanish. A private test-only type with a
+curved retraction, the positive reals with $x \oplus \delta = x\, e^{\delta}$
+([retractions](../../math/retraction/)), needs only the exponential and the logarithm, and makes
+every block of the chart Hessian non-trivial.
+
+## Queries
+
+The charter puts conditioning in the query: the model holds the joint density
+[](eq:log-density), and each question asked of it says which quantities are fixed. A *query*
+partitions the quantities its targets reach into
+
+- the *observed* quantities $x_O$, fixed at values the query gives;
+- the *free continuous* quantities $x_F$, the variables of the query;
+- the *free discrete* quantities $k_D$, which a generation draws, and whose values any other query
+  gives and holds fixed.
+
+The query's log-density is then a function of $x_F$ alone,
+
+$$
+	\log p(x_F;\, x_O, k_D) = \sum_t \ell_t(x_F, x_O, k_D), @tag(query)
+$$
+
+which is, up to the constant $\log p(x_O, k_D)$, the log-density of the conditional distribution of
+$x_F$ given the rest. One model answers many queries: with the measurements observed it is a
+posterior; with nothing observed, a prior to simulate from; with the states observed, a likelihood
+of measurements.
+
+**Leaves.** The leaves of a query's program are its free quantities, and the derivatives of every
+pass are taken with respect to $x_F$ in their tangent charts. A quantity's value is an input of the
+query even when the quantity was built by drawing from a distribution whose parameters depend on
+other quantities: at a given point, no derivative flows through a sampler, and
+$\partial \log p / \partial x_i$ counts $x_i$'s appearances in the terms, never its role in
+generating its children. A mapped value that depends only on observed quantities and constants is a
+constant of the query and is computed once; since observing is the
+query's, so is this folding, and it happens at compilation, never in the model.
+
+**Discrete quantities in a query.** The gradient of [](eq:query) at fixed $k_D$ is the gradient of
+the conditional density of $x_F$ given $k_D$. An algorithm that targets the distribution of $x_F$
+alone, with $k_D$ unobserved, needs $k_D$ summed or sampled out, which a gradient cannot do; that is
+why the charter has a gradient-based algorithm refuse a query with a free discrete quantity, rather
+than silently condition on the value it was given.
+
+**Flattened coordinates.** An estimator works with vectors, not with quantities. Ordered as the
+estimator chooses, the free quantities $x_F = (x_1, \dots, x_n)$ are one point of the product
+manifold $\mathcal M_1 \times \cdots \times \mathcal M_n$, a tangent of which is a vector
+$\delta \in \R^D$, $D = \sum_i d_i$, stacked by [](eq:math/product-manifold/stack). An estimator's
+step is that product's retraction,
+
+$$
+	x_F \oplus \delta = (x_1 \oplus \delta_1, \dots, x_n \oplus \delta_n), @tag(step)
+$$
+
+and a Jacobian, gradient or Hessian over $x_F$ is the block matrix of
+[](eq:math/product-manifold/blocks). So the layout an estimator uses and a product quantity type are
+the same mathematical object, and the core should build them from one construction.
+
+## Terms and the importance weight
+
+A term's log-density $\ell_t$ depends on some quantities through the graph. Following the charter,
+a term records the quantity it *scores*, $s_t$, if any, and the quantities it is *conditioned on*,
+$C_t$, so that $\ell_t$ reads as $\log p_t(s_t \mid C_t)$. A term that scores nothing is a *joint
+factor* over $C_t$, such as a prior over several existing quantities or the replacement left by a
+retirement. The quantities a term involves, $V_t = \{s_t\} \cup C_t$, determine every structural
+question the core answers: which terms touch a quantity, what a quantity's Markov blanket is, and
+what retiring it disturbs. They are only right if they contain every quantity $\ell_t$ depends on,
+so the core reads $V_t$ off the graph, as the quantities reached from $\ell_t$ through mapped
+values, rather than trusting a declaration; $C_t$ is then $V_t$ without $s_t$.
+
+**The generative reading.** A distribution may provide a sampler for the quantity it scores, which
+draws $s_t$ given $C_t$, with a log-density $\log q_t(s_t \mid C_t)$ of its own; an exact sampler
+has $q_t = p_t$ (charter, position 9). A query generates its free quantities, continuous and discrete,
+ancestrally: each from the sampler of the term that scores it, in the order of the graph. In this
+section, $x_F$ stands for all of them. Generation is possible exactly
+when every free quantity is scored by a term with a sampler; it is refused otherwise, naming a
+quantity that is not. The importance weight of a generated point is
+
+$$
+	\log w(x_F) = \sum_t \ell_t(x_F, x_O) - \sum_{t \,:\, s_t \in F} \log q_t(s_t \mid C_t), @tag(weight)
+$$
+
+which is the charter's [](eq:archive/charter/writeup/weight), with the observed quantities' terms
+(likelihoods) and joint factors contributing $\ell_t$ alone, and each term whose sampler is exact
+cancelling.
+
+<Statement {...importance} />
+
+<Proof>
+
+Ancestral generation draws $x_F$ with density $q(x_F) = \prod_{t : s_t \in F} q_t(s_t \mid C_t)$
+with respect to the product of the base measures, since each quantity is drawn given quantities
+drawn or fixed before it. Then $w = p(x_F, x_O) / q(x_F)$ wherever $q > 0$, which covers the
+support of $p(\cdot, x_O)$ by the positivity condition, and
+$\E_q[w h] = \int h\, p(x_F, x_O)\, \mathrm d x_F$.
+
+</Proof>
+
+Two conditions in the statement are the core's to check or to state. The base measures must match:
+in the core, a continuous quantity's density is with respect to Lebesgue measure on its Euclidean
+space and a discrete quantity's with respect to counting measure, so this holds; densities on
+curved manifolds will need a stated base measure when the first curved type arrives. Positivity is
+the distribution's responsibility, and the core cannot check it.
+
+## Random keys
+
+Every draw comes from a key (charter, position 10). Mathematically a key is an element of a finite
+set $\mathcal K$, with two deterministic maps: $\operatorname{split} : \mathcal K \to \mathcal K^n$,
+and $\operatorname{fold} : \mathcal K \times \Sigma \to \mathcal K$, which folds in one address
+segment from the set $\Sigma$ of names and integers. The key of the quantity at address
+$a = a_1 / \cdots / a_m$ in a run with key $k$ is
+
+$$
+	k_a = \operatorname{fold}(\cdots \operatorname{fold}(\operatorname{fold}(k, a_1), a_2) \cdots, a_m), @tag(address-key)
+$$
+
+and its sampler turns $k_a$ into the uniform variates it consumes. Because $k_a$ depends on $k$ and
+$a$ alone, a quantity's draw does not depend on the order in which the model was built, on what was
+retired before it, or on which branch holds it, and a namespace's keys share the prefix of folds
+that the namespace's own address determines.
+
+The independence of draws rests on an idealization: that $\operatorname{fold}$ and
+$\operatorname{split}$ behave as a pseudorandom function, so that distinct addresses yield keys
+indistinguishable from independent uniform ones. Two things the core must ensure for that to mean
+anything. Distinct addresses must give distinct inputs: each segment's encoding must be injective
+and tagged by its kind, so that the name `"3"` and the integer $3$ differ, and folding segment by
+segment, rather than hashing a concatenated string, rules out collisions such as `ab/c` against
+`a/bc`. And each batch row of a run must have its own run key, split from the run's, so that rows
+are independent.
+
+Because the uniform variates are drawn on the host from the key and then converted to the
+precision a query computes in, one key gives the same draws at single and double precision, up to
+the rounding of the conversion.
+
+## Retirement
+
+Retiring is the one change that shrinks a model: the quantities under a namespace are removed, and
+what they said about the rest is kept. Let $E$ be the quantities to retire, $\mathcal T_E$ the terms
+that involve any of them ($V_t \cap E \neq \emptyset$), and
+
+$$
+	B = \Bigl(\bigcup_{t \in \mathcal T_E} V_t\Bigr) \setminus E @tag(blanket)
+$$
+
+their *Markov blanket*: the other quantities those terms involve.
+
+Retirement must condition as well as marginalize. The retired namespace of a tick holds that tick's
+measurements as well as its states, and integrating the measurements out of the joint would discard
+exactly the information a sliding window keeps them for. So the quantities of $E$ split into those
+fixed at given values, $E_O$ (usually the measurements, with the values the estimator observed),
+and those integrated out, $E_F$. Since conditioning belongs to the query, the values of $E_O$ are
+given to the retirement itself, and once retired they become part of the model: what remains is the
+joint of the remaining quantities given those values.
+
+<Statement {...retirement} />
+
+<Proof>
+
+Split [](eq:log-density) into the terms of $\mathcal T_E$, which involve only $E$ and $B$, and the
+rest, which involve no quantity of $E$. Fixing $E_O$ and integrating over $E_F$, the second group
+comes out of the integral as a constant factor, by Tonelli's theorem for the non-negative
+integrand, and what remains of the first group is $\exp \ell_B(x_B)$.
+
+</Proof>
+
+The replacement must be computed from the terms $\mathcal T_E$ alone. Computing the marginal of the
+whole model on $B$ instead would fold in the terms outside $\mathcal T_E$, which the model still
+holds, and count them twice. The integral defining $\ell_B$ rarely has a closed form. It has one
+for linear-Gaussian terms, where retiring the oldest state of a chain is the update-and-predict step
+of a Kalman filter; otherwise it is approximated, by a Laplace approximation at the current
+estimate in the archive's sliding windows. Either way, computing it needs the distributions and the
+linear algebra of later entries; what the core needs is the structure: $E$, $\mathcal T_E$, $B$,
+the removal, and a place for the replacement, a joint factor over $B$ whose type, when it is one
+density over the blanket's tangent coordinates jointly, is the product of the blanket's types.
+
+Two consequences for the rest of the model:
+
+- **Mapped values.** A mapped value under the retired namespace that a remaining node reads, and
+  that depends only on remaining quantities, is not a function of $E$ and must not be removed with
+  it. One that depends on $E$ can only be read by terms in $\mathcal T_E$, which are replaced, and
+  by other mapped values that depend on $E$, which go with it.
+- **Generation after retirement.** A blanket quantity whose scoring term was in $\mathcal T_E$
+  (the state after a retired state, say, whose transition was conditioned on it) is scored by no
+  term afterwards, only involved in the replacement. Unless the replacement is written in a
+  generative form, as a term scoring that quantity with a sampler, generation from the new model is
+  refused for it, by structure.
+
+## In skoro's terms
+
+- **Quantities** are Euclidean (real, vector, matrix) and discrete (categorical, boolean, integer),
+  and products of continuous quantities. Dimensions are fixed when a quantity is created, and every
+  derivative coordinate is indexed by tangent dimension.
+- **Operations** are maps [](eq:operation) with up to four derivative maps over frames, each with
+  an order. The core's primitives are those of [The primitives](#the-primitives), and every other
+  operation, the product's retraction included, is a composite of them.
+- **Passes** are the forward, tangent, cotangent and Hessian passes over a compiled program,
+  differentiating with respect to a query's free continuous quantities in their charts, refused
+  before running when not admissible by [%full](statement:order).
+- **The density** is the sum of terms [](eq:log-density). A query fixes the observed quantities and
+  the discrete ones, and its density is [](eq:query). Generation is ancestral from samplers, and its
+  weight is [](eq:weight).
+- **Random keys** are derived from addresses by [](eq:address-key).
+- **Retirement** removes a namespace's quantities $E$, conditioning on the given values of $E_O$ and
+  integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one term over the blanket
+  [](eq:blanket).
+
+## Open questions
+
+> [!TODO] The acceptance test needs a curved factor
+> On Euclidean factors, every second derivative the charter's acceptance test compares is zero. I
+> propose that the test also use a private, test-only factor with a curved retraction (the positive
+> reals with $x \oplus \delta = x\, e^{\delta}$), and compare not only the retraction's passes but
+> those of a nonlinear scalar function composed with it, so that every block of the chart Hessian is
+> non-trivial. This needs the exponential and the logarithm among the primitives.
+
+> [!TODO] Which primitives the core ships
+> The table in [The primitives](#the-primitives) goes beyond addition, subtraction and
+> multiplication: it adds negation, scaling by a real, matrix products, sums, the elementwise
+> exponential and logarithm, and the structural operations (slice, concatenate, transpose,
+> select). Slicing and concatenation are needed by products, the exponential and logarithm by the
+> curved test factor and by any test distribution with a scale. Is this the right set, or should
+> the core stop at what the products and the acceptance test strictly need?
+
+> [!TODO] What retirement does in the core
+> Computing the replacement $\ell_B$ needs distributions and linear algebra the core does not have.
+> I propose that the core's retirement take the replacement from its caller (given $E$, $E_O$'s
+> values, $\mathcal T_E$ and $B$, which the core computes), remove $E$, and attach it, all in one
+> atomic change; and that the core's tests exercise it with a private linear-Gaussian dummy whose
+> replacement is known in closed form. Computing the replacement (Gaussian, Laplace) is then a
+> later entry's. Should retirement instead wait for that entry altogether?
+
+> [!TODO] Re-scoring a blanket quantity
+> For generation to survive a retirement, the replacement must be able to score blanket quantities
+> that lost their scoring term, which makes retirement more than removal plus a joint factor. Is
+> that in scope for the core, or is a model that has retired quantities simply not generated from
+> until a later entry says how?

@@ -1,0 +1,133 @@
+---
+title: Derivatives in tangent charts
+summary: The derivative of a map between manifolds, its gradient and its Hessian product, all read in the tangent charts a retraction provides, and why automatic differentiation computes them unchanged.
+depends_on: [retraction, automatic-differentiation]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as chainRule from './statements/chain-rule.md';
+	import * as chartHessian from './statements/chart-hessian.md';
+	import * as passes from './statements/passes.md';
+</script>
+
+A [retraction](../retraction/) gives every point of a manifold a chart, its tangent space. This note
+reads derivatives in those charts: the derivative of a map between manifolds as a matrix, the
+gradient of a scalar function as a vector, and its second derivative along a direction. Each is
+what an optimizer or a sampler needs at a point, and none needs a metric.
+
+## The derivative
+
+Let $f : \mathcal M \to \mathcal N$ be smooth, between manifolds of dimensions $d$ and $e$, each with
+a retraction, and let $y = f(x)$. The derivative of $f$ at $x$ is the $e \times d$ matrix of $f$
+read in the chart at $x$ and the chart at $y$:
+
+$$
+	\mathrm D f(x)\, a \defeq \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} \bigl(f(x \oplus t a) \ominus y\bigr),
+	\qquad a \in \R^d . @tag(derivative)
+$$
+
+Equivalently, $\mathrm D f(x)$ is the ordinary Jacobian at $0$ of the *local representative*
+$\hat f_x = R_y^{-1} \circ f \circ R_x$, a map from a neighbourhood of $0$ in $\R^d$ to $\R^e$.
+Because each $\mathrm D R_x(0)$ is the identity, it is also the intrinsic differential of $f$,
+written in the bases that identify the tangent spaces with $\R^d$ and $\R^e$.
+
+<Statement {...chainRule} />
+
+<Proof>
+
+Near $0$, $\widehat{h \circ f}_x = R_z^{-1} \circ h \circ f \circ R_x
+= (R_z^{-1} \circ h \circ R_y) \circ (R_y^{-1} \circ f \circ R_x) = \hat h_y \circ \hat f_x$, with
+$z = h(y)$, because $R_y \circ R_y^{-1}$ is the identity near $y$. The ordinary chain rule at $0$,
+with $\hat f_x(0) = 0$, gives the claim.
+
+</Proof>
+
+So derivatives in charts compose exactly as Jacobians do, and the passes of
+[automatic differentiation](../automatic-differentiation/) apply unchanged to a program whose steps
+are maps between manifolds, as long as each step's derivative is taken in charts. To derive one by
+hand:
+
+1. perturb the input, $x_t = x \oplus t a$;
+2. push it through, $y_t = f(x_t)$;
+3. solve $y_t = y \oplus c(t)$ for $c(t)$;
+4. the Jacobian–vector product is $c'(0)$, and the vector–Jacobian product is its transpose.
+
+The transpose is taken in coordinates: a cotangent at $y$ is a row of $e$ numbers acting on tangent
+coordinates, and $\mathrm D f(x)\transpose$ maps it to a cotangent at $x$. No inner product on the
+tangent spaces is involved.
+
+## The gradient
+
+For a scalar function $f : \mathcal M \to \R$, its gradient in the chart at $x$ is
+
+$$
+	g(x) \defeq \nabla (f \circ R_x)(0) = \mathrm D f(x)\transpose 1 \in \R^d, @tag(gradient)
+$$
+
+the cotangent that a reverse pass seeded with $1$ delivers. It says how $f$ changes along a step:
+$f(x \oplus \delta) = f(x) + g(x)\transpose \delta + O(\lVert\delta\rVert^2)$. With no metric in
+play, it is the differential of $f$ written in chart coordinates, not a Riemannian gradient.
+
+## The Hessian product
+
+The second derivative needs a choice that the first does not, because moving along a direction
+moves the chart as well. The *chart Hessian* differentiates the gradient along a direction $v$,
+reading the gradient at each point in that point's own chart:
+
+$$
+	H(x)\, v \defeq \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} g(x \oplus t v) . @tag(chart-hessian)
+$$
+
+The other candidate is the Hessian of the pull-back $f \circ R_x$, which keeps the chart at $x$
+fixed. On a flat manifold the two are the same matrix, the ordinary Hessian. On a curved one they
+differ by a term proportional to the gradient.
+
+<Statement {...chartHessian} />
+
+<Proof>
+
+For small $t$ and $\delta$ near $0$, $R_{x_t}(\delta) = R_x(\varphi_t(\delta))$, with
+$\varphi_0$ the identity and $\varphi_t(0) = R_x^{-1}(x_t) = t v$ by [](eq:math/retraction/roundtrip).
+So $f \circ R_{x_t} = (f \circ R_x) \circ \varphi_t$ near $0$, and
+
+$$
+	g(x_t) = \mathrm D \varphi_t(0)\transpose\, \nabla (f \circ R_x)(t v) .
+$$
+
+Differentiating at $t = 0$, with $\mathrm D \varphi_0(0) = I$ and $\nabla (f \circ R_x)(0) = g(x)$,
+gives the claim.
+
+</Proof>
+
+On the rotations, with the retraction $R_x(\delta) = x \operatorname{Exp}(\delta)$, the
+Baker–Campbell–Hausdorff formula gives
+$\varphi_t(\delta) = t v + \delta + \tfrac{t}{2}\, v \times \delta$, up to terms of order $t^2 \lVert\delta\rVert$ and $t \lVert\delta\rVert^2$,
+so the correction is $\tfrac12 [g(x)]_\times v$: the chart Hessian is the Hessian of the pull-back
+plus the skew-symmetric matrix $\tfrac12 [g(x)]_\times$, and it is not symmetric away from a
+stationary point. Which symmetric matrix to use there, if one is needed, is the algorithm's
+decision. At a stationary point, which is where curvature is most often read (a Laplace
+approximation, a Newton step's convergence), the two agree.
+
+## Programs over manifolds
+
+The chart Hessian is the one a forward-over-reverse pass computes, provided each step's
+second-order map is read in charts the same way.
+
+<Statement {...passes} />
+
+<Proof>
+
+First order is [%full](statement:chain-rule) applied step by step. For the second, the reverse
+recurrence holds identically in $x$, with every $\partial_j F$ evaluated at the slot values computed
+from $x$ and read in the charts at those values. Differentiate it along $x_t = x \oplus t v$. Each
+slot traces a curve $s(x_t)$ through $s(x)$ whose velocity in the chart at $s(x)$ is
+$\dot s = \mathrm D s(x)\, v$, the velocity the forward pass computes. The derivative of the smooth
+function $s \mapsto \partial_j F(s)\transpose \alpha$ along a curve depends only on the curve's
+velocity, so it equals the derivative along $s \oplus t \dot s$, which is
+$\operatorname{hvp}_j(\alpha)$. The product rule then gives the forward-over-reverse recurrence,
+and at a leaf the differentiated quantity is $g(x_t)$, whose derivative is
+[](eq:chart-hessian).
+
+</Proof>

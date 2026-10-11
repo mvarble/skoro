@@ -1,0 +1,87 @@
+---
+title: Retractions and tangent charts
+summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations ⊕ and ⊖.
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as retraction from './statements/retraction.md';
+	import * as mirror from './statements/mirror.md';
+</script>
+
+Estimation moves points. On $\R^d$ a step is an addition, $x + \delta$; on a curved manifold, such
+as the rotations or the unit sphere, there is no addition, and a *retraction* takes its place. This
+note defines it, shows how it turns every tangent space into a chart, and introduces the notation
+$\oplus$ and $\ominus$ used throughout these notes.
+
+## The definition
+
+Let $\mathcal M$ be a smooth manifold of dimension $d$. In computation, a tangent space
+$\T_x\mathcal M$ is never handled abstractly: each is identified with $\R^d$ by a basis chosen
+smoothly in $x$, and a tangent vector is a column of $d$ numbers. We assume such an identification
+throughout.
+
+<Statement {...retraction} />
+
+The definition is the one used in optimization on manifolds, where retractions replace the
+exponential map of a Riemannian manifold. The exponential map is a retraction, but
+so is any map that agrees with it to first order, which is usually cheaper. Nothing here needs a
+metric.
+
+Two examples. On $\R^d$, $R_x(\delta) = x + \delta$. On the positive reals, with
+$\T_x(0, \infty)$ identified with $\R$ by measuring relative change,
+$R_x(\delta) = x\,e^{\delta}$: it is defined for every $\delta$, never leaves the positive reals,
+and satisfies $\frac{\mathrm d}{\mathrm d\delta} x e^\delta \big|_{0} = x$, which is the identity
+in the chosen identification (a tangent at $x$ of coordinate $1$ is the velocity $x$).
+
+## Tangent charts
+
+Because $\mathrm D R_x(0)$ is invertible, the inverse function theorem makes $R_x$ a diffeomorphism
+from a neighbourhood of $0 \in \R^d$ onto a neighbourhood of $x$. So $R_x$ is a *chart* of
+$\mathcal M$ around $x$, the tangent chart at $x$, and every point near $x$ has coordinates in it.
+As is common in robotics, we write
+
+$$
+	x \oplus \delta \defeq R_x(\delta), \qquad y \ominus x \defeq R_x^{-1}(y), @tag(oplus)
+$$
+
+the second for $y$ in the neighbourhood where $R_x$ is invertible. In words, $y \ominus x$ is where
+$y$ sits in the chart at $x$. By construction,
+
+$$
+	(x \oplus \delta) \ominus x = \delta @tag(roundtrip)
+$$
+
+for every $\delta$ in the chart's domain, and $x \oplus (y \ominus x) = y$ for every $y$ in its
+image. On $\R^d$, $\oplus$ and $\ominus$ are addition and subtraction; on the positive reals above,
+$y \ominus x = \log(y / x)$.
+
+## The mirror identity
+
+On $\R^d$, $x \ominus (x \oplus \delta) = -\delta$ as well: the step back from $x \oplus \delta$ to
+$x$ is the reverse of the step forward. On a curved manifold it generally is not, because the left
+side is measured in the chart at the *moved* point $x \oplus \delta$, not at $x$.
+
+<Statement {...mirror} />
+
+<Proof>
+
+Write $y = x \oplus \delta$ and $\varphi(\delta, c) = R_x^{-1}(R_{x \oplus \delta}(c))$, the chart
+at $y$ read in the chart at $x$. It is smooth near $(0, 0)$, with $\varphi(\delta, 0) = \delta$
+and, since $R_{x \oplus 0} = R_x$, $\varphi(0, c) = c$. Hence
+$\varphi(\delta, c) = \delta + c + O(\lVert\delta\rVert\,\lVert c\rVert)$. The coordinate
+$c = x \ominus y$ is the one with $\varphi(\delta, c) = R_x^{-1}(x) = 0$, so
+$c = -\delta + O(\lVert\delta\rVert\,\lVert c\rVert)$, and $\lVert c \rVert = O(\lVert\delta\rVert)$
+gives the claim.
+
+</Proof>
+
+The identity holds exactly in some cases: on $\R^d$, on the positive reals above, and on any Lie
+group whose retraction is $R_x(\delta) = x \operatorname{Exp}(\delta)$, since then
+$x \ominus (x \oplus \delta) = \operatorname{Log}(\operatorname{Exp}(\delta)^{-1}) = -\delta$. It
+fails at second order for other retractions, and a computation that needs "the point whose
+coordinate is $-\delta$" must not assume it.
+
+A manifold whose retraction is $x + \delta$, so that both identities hold exactly and every chart is
+the same affine chart, is called *flat* in these notes.
