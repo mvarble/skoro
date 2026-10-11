@@ -77,12 +77,14 @@ Three kinds of user follow from this, in order of priority:
    algorithms is skoro's first purpose.
 2. **People building real-time estimators** for robots and autonomous systems: heterogeneous
    sequential models that grow, retire old states, and are estimated while measurements stream in,
-   on CPU or GPU, from Rust.
+   on CPU or GPU, from Rust, often under several hypotheses at once about what the measurements
+   came from.
 3. **People doing Bayesian inference** with quantities that live on manifolds, such as rotations
    and poses, or that need second-order derivatives.
 
-Skoro is not a general probabilistic programming language. Its models have a fixed structure (see
-below), and it does not compete with Stan or NumPyro on breadth of distributions or with GTSAM on
+Skoro is not a general probabilistic programming language. Each of its models has a fixed
+structure, and structure that is itself random is handled one level up, over a family of models
+(see below). It does not compete with Stan or NumPyro on breadth of distributions or with GTSAM on
 the maturity of its least-squares solvers. What it offers that they do not is the combination: one
 generative model, a structure that algorithms can read, manifold-aware second-order derivatives,
 and a model that lives across threads and over time.
@@ -109,25 +111,60 @@ uses are worth naming, because they motivated the position:
   measurements actually received. With conditioning in the model, this needed a way to pretend the
   model was joint again; with conditioning in the query, it is one more query.
 
-### 2. Models are built forward, have a fixed structure, and change by appending and retiring
+### 2. Models are built forward, change by appending and retiring, and random structure lives one level up
 
-A model grows by adding quantities, each together with its conditional distribution. Its structure
-is whatever the builder created: a random draw cannot add or remove nodes, so a random number of
-objects, data association, and mixtures over structure are outside skoro's scope. Supporting them,
-as Gen.jl does with traces of programs, would need a model of the model that a typed language
-makes impractical.
+A model grows by adding quantities, each together with its conditional distribution. The one
+shrinking change is *retirement*: in sequential estimation, quantities that were once estimated
+eventually stop mattering, so they are marginalized onto what remains and then removed. Appending
+and retiring are the only mutations a model sees.
 
-The one shrinking change is *retirement*. In sequential estimation, quantities that were once
-estimated eventually stop mattering. They are marginalized onto what remains, and then removed.
-Appending and retiring are the only mutations a model sees.
+Within one model, structure is fixed: it is whatever the builder created, and a random draw does
+not add or remove nodes. Random structure is nevertheless central to skoro's purpose (which
+measurement came from which target, whether a target was born or has died, which motion model is
+in force), and it is handled in two ways.
 
-### 3. One writer, many snapshots
+**Bounded structure, inside one model.** When the structure has a known bound, it is expressed
+with discrete quantities and the selection primitive (position 7). Data association is a
+categorical choice per measurement among target slots and clutter; a random number of objects up
+to a maximum is a set of slots, each with an existence variable gating its terms; a switching model
+is a discrete mode selecting among parameter sets; a nonparametric prior is truncated. The graph
+never changes, and samplers move the discrete quantities. This costs computation on empty slots
+and needs a bound, and asks nothing new of the core.
+
+**Unbounded structure, over a family of models.** In general, the random thing is *which model*.
+A structural hypothesis $S$ (this measurement belongs to that target; a target was born here) lives
+outside any graph, with a prior $p(S)$, and each hypothesis is a model built from it by ordinary
+appending and retiring. Inference over structure (multiple-hypothesis tracking, sequential Monte
+Carlo over hypotheses, reversible-jump Markov chain Monte Carlo with birth and death moves) keeps
+one model per live hypothesis, runs ordinary inference inside each, and weighs the hypotheses by
+$p(S)$ and an estimate of each model's evidence. A birth is an append on one hypothesis's model,
+a death a retirement, and pruning a hypothesis is dropping its model.
+
+Multiple-hypothesis estimation is a first-class use of skoro, and the core is shaped for it in two
+ways. Hypotheses that differ by one association share almost everything, so models *branch*
+cheaply from one another (position 3). And the same quantity must be recognizable across
+hypotheses, so that they can be compared, merged and pruned, which is what *addresses* are for
+(position 4). The algorithms that infer structure are later entries; the core only has to make
+them possible.
+
+This is close to what Gen.jl does, without what made it impractical here. A Gen trace records which
+random choices a program made, which fixes its structure, together with their values. In skoro the
+structure is an explicit hypothesis and the values live in a typed graph, so nothing has to reflect
+over typed programs.
+
+### 3. One writer per branch, many snapshots
 
 A model has one writer, which appends and retires, and publishes immutable *snapshots* that share
 structure with earlier ones. Inference runs on a snapshot, without a lock: a long sampling run
 never blocks the thread adding measurements, and the thread adding measurements never changes a
 model out from under an estimator. Memory belonging to retired quantities is reclaimed when the
 last snapshot holding it is dropped.
+
+A snapshot can also be *forked*: turned into a new writer whose appends and retirements form a
+branch of their own, copying nothing that the branch does not change. Branches are how a model
+under several structural hypotheses is held (position 2): each hypothesis is a branch, a new
+measurement associated three ways is three cheap forks, and a pruned hypothesis is a branch nobody
+holds any longer. There is one writer per branch, never two writers on one.
 
 This replaces the archive's design, in which a shared graph sat behind one lock, every handle
 carried a client that could change it, and drop guards fed a mark-and-sweep collector. It also
@@ -158,6 +195,12 @@ serialized (an autonomous system can write its model out when it fails, to be in
 and what will let Python bindings drive a fixed registry of distributions and operations while new
 ones are written in Rust. Neither the format nor the bindings are part of the core; the principle
 is, because retrofitting it is far costlier than respecting it from the start.
+
+Quantities are nameable too. Each has an *address* chosen by its builder, such as "the position of
+target 3 at tick 40", which stays the same across snapshots, branches and serialization, beside
+the internal identifier the graph uses. Addresses are what let two branches agree that they hold
+the same quantity, what random keys are derived from (position 10), and what a serialized model is
+read back by.
 
 Three things are deliberately absent: code generated and compiled ahead of time (SymForce's
 approach does not fit models built at run time), macro languages for models (hard to reason about
@@ -302,8 +345,9 @@ rule that a quantity generated but not scored had to be scored by a separate fac
 Every sampling call takes a random key, which splits deterministically into independent keys, as in
 JAX. One seed reproduces a whole run; each chain, particle set or thread has its own stream; no
 hidden state couples them. The key a quantity's sampler receives is derived from the run's key and
-the quantity's stable identity, never from the order in which nodes were added, so that sampling
-one quantity disturbs no other and retiring old states does not change the draws of new ones.
+the quantity's address, never from the order in which nodes were added, so that sampling one
+quantity disturbs no other, retiring old states does not change the draws of new ones, and two
+branches holding the same quantity draw it alike.
 
 burn exposes no control over its random-number generation, so a sampler draws its uniform variates
 from the key on the host and moves them to the device when it must. That costs a transfer, never
@@ -349,6 +393,7 @@ keeps that API honest: whatever a feature needs, the core must expose.
 What becomes easy:
 
 - running several algorithms, and several conditionings, on one model, concurrently;
+- holding a model under many structural hypotheses at once, as cheap branches of one another;
 - simulation-based checks of inference algorithms and consistency checks of estimators;
 - adding a distribution or a manifold operation, which is mostly composition of existing pieces,
   with derivatives of both orders for free;
@@ -358,13 +403,18 @@ What becomes easy:
 
 What becomes hard, or costs something:
 
-- **Fixed structure.** Models whose structure is itself random are out of scope.
+- **Random structure is not automatic.** A model's structure is fixed; structure that is itself
+  random needs either a bound (slots and discrete switches) or an algorithm over a family of
+  branches, and those algorithms are later work. Programs whose shape changes as they run, in the
+  manner of Gen.jl, are not supported.
+- **Builders choose addresses.** Every quantity needs a meaningful, stable address, which is one
+  more thing to name while building.
 - **Compiled programs are longer.** Composition yields more, smaller steps than hand-written fused
   operations, until profiling earns a fusion.
 - **Every reader takes an observation set**, and "is this quantity free?" becomes a question about
   the model and the query together.
-- **Snapshots are a new design**, untested in the archive, and their top-level API is not yet
-  sketched.
+- **Snapshots and branches are a new design**, untested in the archive, and their top-level API is
+  not yet sketched.
 - **Registration has a cost.** Every type-erased thing must be named and registered, built-in or
   not.
 - **Products are conditional**, and the core must prove them before they are relied upon.
@@ -377,9 +427,16 @@ of a conditional density, serves one algorithm, and cannot be sampled from. Fact
 available as what a least-squares reader *derives* from a generative model.
 
 **Programs as the model** (Gen.jl). Gen's separation of modeling and inference is adopted; its
-representation is not. Programs with traces support random structure, which a graph built forward
-cannot, but reflecting over typed programs in Rust is impractical, and fixed structure is what lets
-algorithms read a model cheaply.
+representation is not. A model that is a program re-run whenever a random choice changes its shape
+needs efficient re-execution, which is hard, and reflection over typed programs, which Rust makes
+impractical; and a program held as a closure cannot be serialized. Random structure is instead
+handled over families of fixed-structure models held as branches (position 2), which keeps each
+model cheap for algorithms to read.
+
+**Random structure as out of scope.** Simpler, and tempting, since a graph built forward cannot
+express it directly. Rejected because it would abandon multiple-hypothesis estimation, which
+real-time estimation in cluttered environments depends on, when forkable snapshots and addresses
+make it affordable.
 
 **burn's `Autodiff`.** Rejected for the lack of second order and of frame pullbacks. Kept, through
 the bridging operation, for neural networks inside a model.
