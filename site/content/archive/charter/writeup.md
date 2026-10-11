@@ -429,7 +429,7 @@ burn exposes no control over its random-number generation, so a sampler draws it
 from the key on the host and moves them to the device when it must. That costs a transfer, never
 reproducibility.
 
-### 11. burn is the tensor layer, behind a layer of skoro's own
+### 11. burn behind a layer of skoro's own; precision chosen per query; solves on the host
 
 burn was chosen for performant tensor operations that run on CPU and GPU from one Rust codebase,
 with cubecl making custom kernels simple to write. The backend trait is sealed to burn's CPU backend
@@ -442,17 +442,40 @@ burn is not yet at version 1 and breaks between releases; an upgrade should touc
 the primitives' kernels, never a distribution or an estimator. Composition keeps that module small,
 since only the primitives touch tensors.
 
-> [!TODO] Precision
-> The archive ran each backend under a float precision policy, single precision by default and
-> double precision where tests demanded it. Is precision a property of the backend, chosen once per
-> model, or of individual quantities? And is there a user's story, not only a test's, for choosing
-> double precision?
+**Precision belongs to the query.** burn's backend type does not fix float precision: the element
+type it names is largely ignored, and precision is decided at run time, by a process-wide default
+fixed at first use. Precision is also a choice that differs by estimator, not by model:
+Levenberg–Marquardt wants double precision, because its conditioning demands it, while a sampler
+on a GPU wants single precision, for speed. So:
 
-> [!TODO] Host linear algebra
-> The archive solved its least-squares and marginalization problems on the host, in double
-> precision, through faer, because burn has no QR factorization and forming normal equations
-> squares the conditioning. Is that a position for the charter (dense factorizations belong on the
-> host), or a choice for the estimators' own entries to make and argue?
+- **A model commits to no precision.** Constants, observed values and initial points are plain
+  data in the graph, stored on the host in double precision. They must be nameable and serializable
+  anyway (position 4), and storing them as device tensors would fix a precision the moment the
+  model is built.
+- **The estimator chooses precision when it compiles or evaluates.** Compiling a program for a
+  query takes a device and a precision, and that is when stored values become device tensors of
+  the requested type. Compiled programs are cached by snapshot, targets, device and precision, so
+  one snapshot can serve a double-precision solver on the CPU and a single-precision sampler on a
+  GPU at once, as it serves different conditionings at once (position 1).
+- **Skoro's tensor layer manages precision, and never defers to burn's default.** Every tensor
+  skoro creates is created at an explicit precision, and every conversion is an explicit cast.
+  Primitives' kernels are written for both precisions and tested at both. A device that cannot
+  compute in double precision, as many GPUs through `wgpu` cannot, is reported when a query asks it
+  to, before anything runs, like any other unmet requirement (position 6).
+- **Random draws do not depend on precision.** A sampler draws its uniform variates from its key in
+  double precision on the host and casts them, so the same key gives the same draw at either
+  precision, up to rounding.
+
+**The solves where conditioning lives run on the host, in double precision.** Dense
+factorizations (the QR of a least-squares step, Cholesky, triangular solves, the elimination behind
+marginalization) run on the host in double precision, through a dense linear-algebra library
+(faer, as in the archive), whatever precision the model was evaluated at. burn has no QR
+factorization, and the alternative, forming normal equations on the device, squares the condition
+number. The arrangement also serves the mixed case: residuals and Jacobians evaluated in single
+precision on a GPU, for speed, and the step solved in double precision on the host, where the
+conditioning matters. Such a Jacobian arrives already rounded, which is the estimator's trade to
+make knowingly; the solve itself is never the weak point. This is a principle for the estimators'
+entries to build on; how each one uses it is theirs to argue.
 
 ### 12. Two crates and an umbrella
 
@@ -500,6 +523,9 @@ What becomes hard, or costs something:
   not.
 - **Products are conditional**, and the core must prove them before they are relied upon.
 - **Explicit keys** add an argument to every sampling call.
+- **Precision costs a conversion.** A stored value becomes a device tensor, at the precision a
+  query asks for, once per compiled program; and every kernel must be correct, and tested, at two
+  precisions.
 
 ## Alternatives
 
@@ -553,6 +579,14 @@ not, and are left out until a use for them appears.
 **An explicit builder in every signature** (`builder.add_mapped_quantity(...)`, or
 `fn f(b: &mut Builder, x: Q) -> Q`). Rejected: it makes the code that describes a model read like
 code that manipulates a graph, and an operator cannot take a builder at all.
+
+**Precision fixed by the backend or the model** (the archive's precision policy). A backend-wide
+policy cannot serve a double-precision solver and a single-precision sampler on one model, and a
+model that stores device tensors fixes precision before any estimator has been chosen. Precision
+was moved to the query.
+
+**Factorizations on the device.** Rejected while burn has no QR and normal equations square the
+condition number; dense solves stay on the host in double precision.
 
 **Target and proposal flags on terms** (the archive). Replaced by samplers that carry their own
 densities.
