@@ -3,11 +3,11 @@
 
 export const SITE = {
     name: 'skoro',
-    tagline: 'Probabilistic modeling in Rust.',
+    tagline: 'Write a probabilistic model once. Run any inference on it.',
     description:
-        'Skoro is a probabilistic modeling library in Rust. This site tells what it is, from the ' +
-        'top down and from the bottom up, keeps the mathematics it rests on, and archives how each ' +
-        'part of it came to be.',
+        'Skoro is a Rust library for writing a probabilistic model once, generatively, and running ' +
+        'different inference algorithms on it, built for models that grow, branch and are ' +
+        'estimated over time.',
     repo: 'https://github.com/mvarble/skoro',
     branch: 'main',
     // TODO: bump when the crates are versioned for release.
