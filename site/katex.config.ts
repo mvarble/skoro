@@ -90,6 +90,7 @@ const config: KatexOptions & Settings = {
         '\\proposal': 'q', // the density of a sampler's draws
         '\\weight': 'w', // the importance weight
         '\\kernel': '\\kappa', // a probability kernel, such as a regular conditional distribution
+        '\\key': '\\xi', // a random key, from which every draw is derived
         '\\transpose': '^{\\top}',
     },
 };

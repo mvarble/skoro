@@ -530,14 +530,14 @@ Every draw comes from a key (charter, position 10). Mathematically a key is an e
 set $\mathcal K$, with two deterministic maps: $\operatorname{split} : \mathcal K \to \mathcal K^n$,
 and $\operatorname{fold} : \mathcal K \times \Sigma \to \mathcal K$, which folds in one address
 segment from the set $\Sigma$ of names and integers. The key of the quantity at address
-$a = a_1 / \cdots / a_m$ in a run with key $\kappa$ is
+$a = a_1 / \cdots / a_m$ in a run with key $\key$ is
 
 $$
-	\kappa_a = \operatorname{fold}(\cdots \operatorname{fold}(\operatorname{fold}(\kappa, a_1), a_2) \cdots, a_m), @tag(address-key)
+	\key_a = \operatorname{fold}(\cdots \operatorname{fold}(\operatorname{fold}(\key, a_1), a_2) \cdots, a_m), @tag(address-key)
 $$
 
-and its sampler turns $\kappa_a$ into the uniform variates it consumes. Because $\kappa_a$ depends
-on $\kappa$ and $a$ alone, a quantity's draw does not depend on the order in which the model was
+and its sampler turns $\key_a$ into the uniform variates it consumes. Because $\key_a$ depends
+on $\key$ and $a$ alone, a quantity's draw does not depend on the order in which the model was
 built, on what was retired before it, or on which branch holds it, and a namespace's keys share the
 prefix of folds that the namespace's own address determines.
 
