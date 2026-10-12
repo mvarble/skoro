@@ -10,7 +10,7 @@ $$
 	\density_O(\point_O) = \int \density(\point_F, \point_O)\, \nu_F(\dd\point_F) .
 $$
 
-Then $\density_O$ is a density of the law of $X_O$, finite $\nu_O$-almost everywhere, and the
+Then $\density_O$ is a density of the law of $\bfx_O$, finite $\nu_O$-almost everywhere, and the
 kernel
 
 $$
@@ -18,4 +18,4 @@ $$
 	\qquad \text{where } 0 < \density_O(\point_O) < \infty,
 $$
 
-defined arbitrarily elsewhere, is a regular conditional distribution of $X_F$ given $X_O$.
+defined arbitrarily elsewhere, is a regular conditional distribution of $\bfx_F$ given $\bfx_O$.

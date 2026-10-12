@@ -35,7 +35,7 @@ gives such an isomorphism.
 
 Probability is done in an abstract probability space $(\Omega, \mathscr F, \mathrm P)$. A modeller
 working there never says what $\Omega$ is, nor which sets are in $\mathscr F$, nor what
-$\mathrm P$ assigns to them. Instead they introduce random variables $X : \Omega \to \manifold$,
+$\mathrm P$ assigns to them. Instead they introduce random variables $\bfx : \Omega \to \manifold$,
 measurable maps into the spaces where the quantities of the model live, and speak only of those:
 their laws, their joint laws, the independence of one from another, the conditional law of one
 given another. Any number of them may be introduced, and new ones may be introduced later, provided
@@ -48,22 +48,22 @@ once:
 - **The space is underdetermined.** Many triples $(\Omega, \mathscr F, \mathrm P)$ carry random
   variables with the same joint law, and $\mathscr F$ may hold far more than the model ever
   mentions. Nothing in the model says which.
-- **Conditioning needs regularity.** The conditional law of $X$ given $Y$, for $X$ with values in
-  $\manifold$ and $Y$ in $\otherManifold$, exists as a kernel $\kernel$ from $\otherManifold$ to
+- **Conditioning needs regularity.** The conditional law of $\bfx$ given $\bfy$, for $\bfx$ with values in
+  $\manifold$ and $\bfy$ in $\otherManifold$, exists as a kernel $\kernel$ from $\otherManifold$ to
   $\manifold$ characterized by
 
   $$
-  	\mathrm P(X \in A,\ Y \in B) = \int_B \kernel(\otherPoint, A)\, \mathrm P(Y \in \dd\otherPoint)
+  	\mathrm P(\bfx \in A,\ \bfy \in B) = \int_B \kernel(\otherPoint, A)\, \mathrm P(\bfy \in \dd\otherPoint)
   	\qquad \text{for all measurable } A \subseteq \manifold,\ B \subseteq \otherManifold, @tag(regular-conditional)
   $$
 
   a *regular conditional distribution*, only under assumptions on the spaces (standard Borel is the
-  usual one), and even then only up to null sets of $Y$'s law. Conditioning on an event of
+  usual one), and even then only up to null sets of $\bfy$'s law. Conditioning on an event of
   probability zero, which is what observing a continuous quantity does, depends on which version is
   chosen; the Borel–Kolmogorov paradox is the classic example of two natural versions disagreeing.
 - **Densities need a reference.** A density is a Radon–Nikodym derivative, and exists only when
   the law is absolutely continuous with respect to a chosen measure. The law of a function of
-  quantities, such as $(X, X)$ or a projection, often has none.
+  quantities, such as $(\bfx, \bfx)$ or a projection, often has none.
 - **Existence needs a theorem.** Writing down a family of random variables does not make a space
   that carries them. Kolmogorov's extension theorem builds one from consistent finite-dimensional
   laws, but asks for topological regularity of the spaces to do so.
@@ -159,20 +159,20 @@ basis: the old coordinates keep their joint law, and a new one is added with its
 given them.
 
 The second thing the restriction buys is a guarantee about what the model can say. A model speaks
-only of its quantities, so the random variables it can express are the $\sigma(X)$-measurable ones,
-$X = (X_1, \dots, X_n)$, and those are exactly the functions of the quantities.
+only of its quantities, so the random variables it can express are the $\sigma(\bfx)$-measurable ones,
+$\bfx = (\bfx_1, \dots, \bfx_n)$, and those are exactly the functions of the quantities.
 
 <Statement {...doobDynkin} />
 
 <Proof>
 
-If $Y = g \circ X$, then $Y^{-1}(B) = X^{-1}(g^{-1}(B)) \in \sigma(X)$. Conversely, every set in
-$\sigma(X)$ is $X^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{X^{-1}(A)}$ is
-$\mathbf 1_A \circ X$, and by linearity every $\sigma(X)$-measurable simple function is $g \circ X$
-for a simple $g$. A $\sigma(X)$-measurable $Y$ is a pointwise limit of such functions
-$g_k \circ X$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
-elsewhere is measurable with $Y = g \circ X$, because the sequence converges at every point of the
-image of $X$.
+If $\bfy = g \circ \bfx$, then $\bfy^{-1}(B) = \bfx^{-1}(g^{-1}(B)) \in \sigma(\bfx)$. Conversely, every set in
+$\sigma(\bfx)$ is $\bfx^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{\bfx^{-1}(A)}$ is
+$\mathbf 1_A \circ \bfx$, and by linearity every $\sigma(\bfx)$-measurable simple function is $g \circ \bfx$
+for a simple $g$. A $\sigma(\bfx)$-measurable $\bfy$ is a pointwise limit of such functions
+$g_k \circ \bfx$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
+elsewhere is measurable with $\bfy = g \circ \bfx$, because the sequence converges at every point of the
+image of $\bfx$.
 
 </Proof>
 
@@ -180,8 +180,8 @@ image of $X$.
 
 <Proof>
 
-The first claim is [%full](statement:doob-dynkin). For the second, the law of $X$ is $\mu$, so
-$\E[g \circ X] = \int g \,\dd\mu$ by the change of variables for image measures, and
+The first claim is [%full](statement:doob-dynkin). For the second, the law of $\bfx$ is $\mu$, so
+$\E[g \circ \bfx] = \int g \,\dd\mu$ by the change of variables for image measures, and
 $\int g \,\dd\mu = \int g \density \,\dd\nu$ because $\density = \dd\mu / \dd\nu$. The iterated form
 is Fubini's theorem, which applies because $g \density$ is $\nu$-integrable.
 
@@ -205,11 +205,11 @@ the conditional law is written down from the densities.
 <Proof>
 
 By Tonelli, $\density_O$ is measurable and $\int \density_O \,\dd\nu_O = 1$, so it is a density of
-the law of $X_O$ and is finite $\nu_O$-almost everywhere. The set where it is $0$ has probability
+the law of $\bfx_O$ and is finite $\nu_O$-almost everywhere. The set where it is $0$ has probability
 $0$ under that law, and so does the set where it is infinite. For measurable $A$ and $B$,
 
 $$
-	\mathrm P(X_F \in A,\ X_O \in B)
+	\mathrm P(\bfx_F \in A,\ \bfx_O \in B)
 	= \int_B \int_A \density(\point_F, \point_O)\, \nu_F(\dd\point_F)\, \nu_O(\dd\point_O)
 	= \int_B \kernel(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
 $$
@@ -235,10 +235,10 @@ that the model does not carry as a quantity.
 <Proof>
 
 $\mu_L$ is a probability measure because $\int L \,\dd\mu = Z$, and its density with respect to
-$\nu$ is $L \density / Z$. With $Y$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
-so [%full](statement:conditioning), with $X$ free and $Y$ observed at $\otherPoint_0$, gives the
-conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_Y(\otherPoint_0)$,
-where $\density_Y(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
+$\nu$ is $L \density / Z$. With $\bfy$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
+so [%full](statement:conditioning), with $\bfx$ free and $\bfy$ observed at $\otherPoint_0$, gives the
+conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_{\bfy}(\otherPoint_0)$,
+where $\density_{\bfy}(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
 
 </Proof>
 
@@ -256,3 +256,58 @@ joint law above is then a $\sigma$-finite measure rather than a probability. Con
 division of densities still makes sense when the normalizing integral that results, the $Z$ or
 $\density_O$ above, is finite and positive, and then yields a probability measure. Whether it is
 depends on what is observed: it is a condition on the query, not on the model.
+
+## How skoro is built on this
+
+Skoro is designed by this philosophy. A skoro model is not a function $\density$ to be evaluated,
+but a probability space built forward, quantity by quantity, and the library sets out to let its
+users work with that space in every way the measure theory above allows, of which evaluating
+$\density$ is only one.
+
+- **Quantities are specified by their augmenting kernels.** Each quantity $\bfx_i$ enters the model
+  with the kernel that augments the space built so far,
+
+  $$
+  	\kernel_i(\point_{<i}, \dd\point_i) = \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i),
+  	@tag(augmenting-kernel)
+  $$
+
+  the kernel of [%full](statement:joint-law), so that the model is
+  $\mu = \kernel_1 \otimes \kernel_2 \otimes \cdots \otimes \kernel_n$ and appending a quantity is
+  appending a kernel, as in [%full](statement:ionescu-tulcea).
+- **Likelihoods are built incrementally too.** A likelihood factor $L_j$ may be added at any point,
+  as a function of the quantities that exist when it is added, and the model's likelihood is their
+  product $L = \prod_j L_j$. The measure the model describes is then $L\, \mu$, normalized, by
+  [%full](statement:likelihood-factor).
+- **The model can be sampled, with weights.** Drawing from the kernels in order samples $\mu$. In a
+  query that observes $\bfx_O$, drawing the free quantities from their kernels, with the observed
+  ones held at their values, samples a measure whose density with respect to $\nu_F$ is the product
+  of the free quantities' conditional densities, and the target of the query, the conditional law of
+  [%full](statement:conditioning) reweighted by $L$, differs from it by the weight
+
+  $$
+  	\weight(\point_F) = L(\point) \prod_{i \in O} \density_i(\point_i \mid \point_{<i}),
+  	@tag(sampling-weight)
+  $$
+
+  the likelihood of the observations and of the likelihood factors at the drawn point. A kernel
+  drawn from a sampler with a density of its own, $\proposal_i \ne \density_i$, contributes
+  $\density_i / \proposal_i$ to the weight as well. The weight distorts the sampling measure into the
+  target only up to a constant, $\density_O(\point_O)$ and $Z$ among others, and that is all an
+  algorithm needs: a self-normalized estimate
+  $\E[\weight\, h] / \E[\weight]$, a Metropolis–Hastings ratio, a gradient of $\log \weight$ or a
+  resampling step in a particle filter is unchanged when every weight is multiplied by the same
+  number.
+- **Functions of quantities belong in the model.** A mapped value $f(\bfx)$ is never scored, since
+  its law $f_\# \mu$ has no density in general, but it is put *in* the model all the same. It is
+  generated whenever its arguments are, so its law is sampled even without a density; its
+  expectations are integrals by [%full](statement:integral); and, most of all, later kernels may be
+  parameterized by it. A kernel
+  $\kernel_j(\point_{<j}, \cdot) = q_j(\cdot\,; \theta_j(\point_{<j}))$ is written by building its
+  parameters $\theta_j$ out of mapped values, composed as freely as any measurable map allows,
+  and derivatives flow through them to the quantities they are built from.
+
+And so on: the gradient of $\log \density$ or of $\log \weight$ in tangent charts for optimizers and
+Hamiltonian samplers, marginalizing quantities out when they retire, conditioning anew in every
+query, and holding several models at once when the structure itself is uncertain. Each is an
+operation on the probability space the kernels built, rather than on a single density function.
