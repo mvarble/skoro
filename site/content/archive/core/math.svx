@@ -90,7 +90,10 @@ and an edge from each term to the quantity it *scores*, if any.
 
 - It is bipartite: every edge joins a quantity and a term.
 - Each quantity is scored by at most one term: the term of the distribution it was drawn from. A
-  term that scores nothing is a *joint factor* over the quantities it is conditioned on.
+  term that scores nothing is a *likelihood factor* over the quantities it is conditioned on: in
+  Bayesian terms, the likelihood of data that is not a quantity of the model, such as the
+  measurements a retirement conditioned on. A term that scores an observed quantity is a likelihood
+  too, but only in the queries that observe it; a likelihood factor is one in every query.
 - It is acyclic, because a term is conditioned only on quantities that existed before the quantity
   it scores. A topological order of it is therefore an *ancestral* order, in which each quantity
   comes after everything its distribution is conditioned on.
@@ -397,8 +400,8 @@ $$
 $$
 
 which is the charter's [](eq:archive/charter/writeup/weight), with the observed quantities' terms
-(likelihoods) and joint factors contributing $\logterm_t$ alone, and each term whose sampler is
-exact cancelling.
+and the likelihood factors, the likelihoods of this query, contributing $\logterm_t$ alone, and
+each term whose sampler is exact cancelling.
 
 <Statement {...importance} />
 
@@ -490,7 +493,7 @@ for linear-Gaussian terms, where retiring the oldest state of a chain is the upd
 of a Kalman filter; otherwise it is approximated, by a Laplace approximation at the current
 estimate in the archive's sliding windows. Either way, computing it needs the distributions and the
 linear algebra of later entries; what the core needs is the structure: $E$, $\mathcal T_E$, $B$,
-the removal, and a place for the replacement, a joint factor over $B$ whose type, when it is one
+the removal, and a place for the replacement, a likelihood factor over $B$ whose type, when it is one
 density over the blanket's tangent coordinates jointly, is the product of the blanket's types.
 
 Two consequences for the rest of the model:
@@ -557,6 +560,6 @@ Two consequences for the rest of the model:
 
 > [!TODO] Re-scoring a blanket quantity
 > For generation to survive a retirement, the replacement must be able to score blanket quantities
-> that lost their scoring term, which makes retirement more than removal plus a joint factor. Is
+> that lost their scoring term, which makes retirement more than removal plus a likelihood factor. Is
 > that in scope for the core, or is a model that has retired quantities simply not generated from
 > until a later entry says how?
