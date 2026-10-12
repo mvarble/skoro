@@ -31,7 +31,7 @@ export interface NodeSpec {
     x: number;
     y: number;
     kind: NodeKind;
-    /** Radius, or half the side of a square. Defaults to the graph's `nodeRadius`. */
+    /** Radius, or half the side of a square. Defaults to the figure's `nodeRadius`. */
     r?: number;
     /** Defaults to `square` for a log-likelihood term (the factor-graph convention), else `circle`. */
     shape?: 'circle' | 'square';

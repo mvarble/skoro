@@ -15,7 +15,7 @@ const graphModules = import.meta.glob<Record<string, GraphSpec>>('/content/**/*.
 // A document as Markdown for a reader without a browser: the raw source, with its frontmatter
 // kept so its KaTeX macros stay visible, a `# title` heading added after it, the `<script>` block
 // that imports components dropped, every `<ModelGraph spec={name} />` replaced by a text
-// description of the graph, every file reference replaced by the code it quotes, and every link
+// description of the figure, every file reference replaced by the code it quotes, and every link
 // to another document pointed at that document's Markdown.
 //
 // The build runs from `site/`, which is where the content database's filenames start.

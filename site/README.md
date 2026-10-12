@@ -118,12 +118,13 @@ first, under "How this came to be"; an entry that a later one revises says so at
   `katex_macros` belong to the Markdown pipeline and don't reach components.
 - A bad formula renders in KaTeX's red, and the build prints a `katex: component` warning.
 
-## Model-graph figures
+## Graph figures
 
-`<ModelGraph spec={…} />` draws a hand-placed model graph as SVG, colour-coded by node kind
-(`Constant`, `Parameter`, `Stochastic`, `Observed`, `Mapped`, `LogLikelihood`, and `Given` for a
-cut), with solid parent edges, dotted `scores` edges, and dashed bindings coloured by role. It adds a
-legend of whatever the figure uses, and a caption.
+`<ModelGraph spec={…} />` draws a hand-placed figure of one of skoro's graphs (a compilation graph,
+a probabilistic graph, or a program's computation or backpropagation graph) as SVG, colour-coded by
+node kind (`Constant`, `Parameter`, `Stochastic`, `Observed`, `Mapped`, `LogLikelihood`, and
+`Given` for a cut), with solid parent edges, dotted `scores` edges, and dashed bindings coloured by
+role. It adds a legend of whatever the figure uses, and a caption.
 
 Put each spec in a `*.graph.ts` file beside its page, and import it by name:
 

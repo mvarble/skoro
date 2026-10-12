@@ -52,9 +52,9 @@ for what is claimed and proved. Say where an approximation is made and what it c
 
 ## In skoro's terms
 
-How the mathematics meets skoro's own objects (quantities, the graph, manifolds, derivatives),
-still as mathematics: which quantities are random, which are parameters, what is differentiated
-with respect to what. No types or traits; that is the implementation's job.
+How the mathematics meets skoro's own objects (quantities, the compilation and probabilistic
+graphs, manifolds, derivatives), still as mathematics: which quantities are random, which are
+parameters, what is differentiated with respect to what. No types or traits; that is the implementation's job.
 
 ## Open questions
 

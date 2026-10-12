@@ -1,7 +1,7 @@
 import { hasTex } from '$lib/tex';
 import { EDGE_KIND_NAMES, NODE_KIND_NAMES, ROLE_NAMES, type GraphSpec } from './spec';
 
-// A graph as Markdown text, for the `.md` exports: a reader without the SVG still gets every node
+// A graph figure as Markdown text, for the `.md` exports: a reader without the SVG still gets every node
 // and edge, and which kind each one is.
 export function describeGraph(spec: GraphSpec): string {
     // A label with math is left as `$…$`, which Markdown readers treat as math; anything else is

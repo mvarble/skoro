@@ -64,8 +64,31 @@ const config: KatexOptions & Settings = {
         '\\T': '\\mathrm{T}',
         '\\retr': '\\operatorname{retract}',
         '\\invretr': '\\operatorname{retract}^{-1}',
-        // A model's density, which its terms' log-densities sum to.
-        '\\density': 'p',
+
+        // Typography.
+        '\\D': '\\mathrm{D}', // the derivative in tangent charts
+        '\\dd': '\\mathrm{d}', // the differential: `\dd x`, `\frac{\dd}{\dd t}`
+        '\\hvp': '\\operatorname{hvp}', // an operation's second-order map
+
+        // Points, tangents and maps. `\tangent` is a tangent vector or a frame of them alike.
+        '\\manifold': '\\bbX',
+        '\\point': 'x',
+        '\\tangent': 'v',
+        '\\dimension': 'd',
+        '\\otherManifold': '\\bbY',
+        '\\otherPoint': 'y',
+        '\\otherTangent': 'v',
+        '\\map': 'F',
+        '\\discretePoint': 'k',
+        // The order of derivative an operation supports, and the order a pass requires of a step.
+        '\\order': '\\operatorname{order}',
+        '\\req': '\\operatorname{req}',
+
+        // Densities.
+        '\\density': 'p', // a model's density, which its terms' log-densities sum to
+        '\\logterm': '\\ell', // a term's log-density
+        '\\proposal': 'q', // the density of a sampler's draws
+        '\\weight': 'w', // the importance weight
         '\\transpose': '^{\\top}',
     },
 };

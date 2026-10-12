@@ -94,6 +94,34 @@ Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. The site-wide
 `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
 one document goes in its `katex_macros`.
 
+skoro's own notation is written with its macros, never with the letters they stand for, so that it
+can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`, `\tangent`
+and `\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
+`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal` and `\weight`; and the
+typography `\D`, `\dd` and `\hvp`. `katex.config.ts` says what each stands for.
+
+## Graphs
+
+skoro has several graphs, and a document never says "the graph" alone: it names the one it means.
+
+- The **compilation graph** has the model's values as nodes (quantities, constants, and mapped
+  values, among them the terms' log-densities) and an edge from each input of an operation to its
+  output. Its leaves are the quantities and constants. Programs are compiled from it.
+- The **probabilistic graph** has the model's quantities and terms as nodes, an edge from each
+  quantity a term is conditioned on to the term, and an edge from the term to the quantity it
+  scores. Ancestral order and Markov blankets are read on it.
+- A program's **computation graph** has its slots as nodes and an edge from each input of a step to
+  its output; its **backpropagation graph** has the same nodes with every edge reversed, carrying
+  the pull-backs of the reverse pass.
+
+Before a document reasons about a graph's structure (its leaves, edges, paths or neighbours), it
+says what the nodes and edges represent and the properties it relies on ("the leaves are the inputs
+of the map"), and shows a picture (see [Figures](#figures)), or it links to a part of the site that
+does all three. The core's mathematics introduces the compilation and probabilistic graphs
+(`archive/core/math`, under "The compilation graph" and "The probabilistic graph"), and the note
+on automatic differentiation the computation and backpropagation graphs, until the concepts pages
+do.
+
 Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
 and refer to them as `[](eq:slug)`, which renders as "(1)". From another document:
 `[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
@@ -145,7 +173,7 @@ citation out rather than guess one.
 GitHub-style blockquotes, with an optional title after the marker:
 
 ```
-> [!DECISION] Why the graph owns the bindings
+> [!DECISION] Why conditioning belongs to the query
 > ...
 ```
 
@@ -168,6 +196,6 @@ to the archive entry that decided it.
 
 ## Figures
 
-A model graph is drawn with `<ModelGraph spec={name} />` from a `*.graph.ts` file beside the
-document (see `site/README.md`). Any other figure is an image or a Svelte component in the
+A graph of any of the kinds in [Graphs](#graphs) is drawn with `<ModelGraph spec={name} />` from a
+`*.graph.ts` file beside the document (see `site/README.md`). Any other figure is an image or a Svelte component in the
 document's folder, referenced relatively.
