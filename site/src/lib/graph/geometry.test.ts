@@ -17,9 +17,15 @@ function twoNodes(edge: Partial<EdgeSpec> = {}, extra: Partial<GraphSpec> = {}):
         title: 't',
         width: 200,
         height: 100,
+        nodeKinds: {
+            input: { name: 'Input', hue: 'blue' },
+            output: { name: 'Output', hue: 'green' },
+            term: { name: 'Term', hue: 'purple', shape: 'square' },
+        },
+        edgeKinds: { feeds: { name: 'feeds', line: 'dashed' } },
         nodes: [
-            { id: 'a', x: 50, y: 50, kind: 'parameter' },
-            { id: 'b', x: 150, y: 50, kind: 'mapped' },
+            { id: 'a', x: 50, y: 50, kind: 'input' },
+            { id: 'b', x: 150, y: 50, kind: 'output' },
         ],
         edges: [{ from: 'a', to: 'b', ...edge }],
         nodeRadius: 10,
@@ -100,18 +106,26 @@ describe('layoutGraph', () => {
         expect(edge.label).toEqual({ x: 100, y: 50 });
     });
 
-    it('draws a log-likelihood term square by default', () => {
+    it("draws a node in its kind's shape", () => {
         const spec = twoNodes();
-        spec.nodes[1].kind = 'log-likelihood';
+        spec.nodes[1].kind = 'term';
         expect(layoutGraph(spec).nodes[1].shape).toBe('square');
+    });
+
+    it('refuses a node of a kind the figure does not define', () => {
+        const spec = twoNodes();
+        spec.nodes[1].kind = 'nowhere';
+        expect(() => layoutGraph(spec)).toThrow(/"nowhere", which `nodeKinds` does not define/);
     });
 
     it('refuses an edge to a missing node', () => {
         expect(() => layoutGraph(twoNodes({ to: 'nowhere' }))).toThrow(/no node "nowhere"/);
     });
 
-    it('refuses a binding without a role', () => {
-        expect(() => layoutGraph(twoNodes({ kind: 'binding' }))).toThrow(/has no role/);
+    it('refuses an edge of a kind the figure does not define', () => {
+        expect(() => layoutGraph(twoNodes({ kind: 'nowhere' }))).toThrow(
+            /"nowhere", which `edgeKinds` does not define/,
+        );
     });
 });
 
@@ -131,9 +145,13 @@ describe('alongPolyline', () => {
 });
 
 describe('describeGraph', () => {
-    it('names every node and edge with its kind', () => {
-        const text = describeGraph(twoNodes({ kind: 'binding', role: 'fisher_root' }));
-        expect(text).toContain('- `a`: Parameter');
-        expect(text).toContain('- `a` → `b`: binding FISHER_ROOT');
+    it("names every node and edge with the figure's name for its kind", () => {
+        const text = describeGraph(twoNodes({ kind: 'feeds' }));
+        expect(text).toContain('- `a`: Input');
+        expect(text).toContain('- `a` → `b`: feeds');
+    });
+
+    it('leaves an edge without a kind unnamed', () => {
+        expect(describeGraph(twoNodes())).toMatch(/^- `a` → `b`$/m);
     });
 });

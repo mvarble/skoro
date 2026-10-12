@@ -120,11 +120,13 @@ first, under "How this came to be"; an entry that a later one revises says so at
 
 ## Graph figures
 
-`<ModelGraph spec={…} />` draws a hand-placed figure of one of skoro's graphs (a compilation graph,
-a probabilistic graph, or a program's computation or backpropagation graph) as SVG, colour-coded by
-node kind (`Constant`, `Parameter`, `Stochastic`, `Observed`, `Mapped`, `LogLikelihood`, and
-`Given` for a cut), with solid parent edges, dotted `scores` edges, and dashed bindings coloured by
-role. It adds a legend of whatever the figure uses, and a caption.
+`<ModelGraph spec={…} />` draws a hand-placed figure of a graph as SVG: one of skoro's graphs (a
+compilation graph, a probabilistic graph, or a program's computation or backpropagation graph), or
+any other. The component knows nothing of what a node means. Each figure declares its own kinds of
+node and edge, with the name the legend and the Markdown export give each, and how each is drawn: a
+hue from a fixed palette (`gray`, `blue`, `orange`, `green`, `purple`, `teal`, `red`, `sky`,
+`amber`, `olive`, `magenta`), a shape, a fill and an outline for nodes, a line style for edges. It
+adds a legend of the kinds the figure uses, in the order it declares them, and a caption.
 
 Put each spec in a `*.graph.ts` file beside its page, and import it by name:
 
@@ -142,29 +144,43 @@ import { defineGraph } from '$lib/graph/spec';
 
 export const normal = defineGraph({
     title: 'A Gaussian quantity', // accessible name; starts the caption
-    caption: 'What add_quantity adds.', // optional
+    caption: 'Its mean, and the term that scores it.', // optional
     width: 760,
     height: 430, // the viewport
+    nodeKinds: {
+        quantity: { name: 'Quantity', hue: 'orange' },
+        observed: { name: 'Observed quantity', hue: 'orange', fill: 'shaded' },
+        term: { name: 'Term', hue: 'purple', shape: 'square' },
+    },
+    edgeKinds: {
+        conditions: { name: 'conditions a term' },
+        scores: { name: 'scores a quantity', line: 'dotted' },
+    },
     nodes: [
         {
             id: 'mu',
             x: 70,
             y: 300,
-            kind: 'parameter',
+            kind: 'quantity',
             label: 'μ',
             annotation: 'mean',
             annotationAngle: 180,
         },
-        { id: 'p', x: 650, y: 175, kind: 'log-likelihood', label: 'p' },
+        { id: 'x', x: 400, y: 300, kind: 'observed', label: 'x' },
+        { id: 't', x: 650, y: 175, kind: 'term', label: 't' },
     ],
     edges: [
-        { from: 'mu', to: 'p' }, // parent, straight
-        { from: 'p', to: 'mu', kind: 'binding', role: 'location', bend: 30 },
-        { from: 'p', to: 'mu', kind: 'scores', via: [[400, 400]], curve: 'bezier', toAngle: 90 },
+        { from: 'mu', to: 't', kind: 'conditions' }, // straight
+        { from: 't', to: 'x', kind: 'scores', bend: 30 },
+        { from: 'mu', to: 'x', via: [[400, 400]], curve: 'bezier', toAngle: 90 }, // no kind: plain, unlisted
     ],
 });
 ```
 
+- **Kinds are the figure's own.** A node's `kind` and an edge's `kind` are keys of the figure's
+  `nodeKinds` and `edgeKinds`, and a key the figure does not define fails the build. An edge with no
+  kind is a plain solid line in the neutral colour, and the legend leaves it out. Kind names may
+  contain TeX.
 - **Coordinates are mathematical:** the origin is the bottom-left corner and +Y points up. Angles are
   degrees counter-clockwise from +X, so 90 is straight up.
 - **Endpoints are computed for you.** An edge meets a node's boundary (circle, or square for
@@ -178,12 +194,12 @@ export const normal = defineGraph({
   spec's `katexMacros` are added over the site-wide macros for that figure. Text is laid out in an
   HTML layer over the SVG rather than inside it, so it needs no `<foreignObject>` and no JavaScript.
 - **Styling:** `arrow` (`end`, `start`, `both`, `none`), `label` / `labelAt`, `muted`, and the
-  escape hatches `class` / `style` on nodes and edges. Colours are tokens in
+  escape hatches `class` / `style` on nodes and edges. The hues are tokens `--graph-<hue>` in
   `src/styles/tokens/colors.css`, and the rules are in `src/styles/utils/graph.css`.
-- A mistake, such as an edge to a missing node or a binding with no role, fails the build with the
-  figure's title in the message.
-- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with their
-  kinds, so a language model reads the same graph.
+- A mistake, such as an edge to a missing node or a kind the figure does not define, fails the
+  build with the figure's title in the message.
+- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with the
+  figure's names for their kinds, so a language model reads the same figure.
 - The geometry is `src/lib/graph/geometry.ts`, tested by `pnpm test`.
 
 ## For language models

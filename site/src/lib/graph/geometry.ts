@@ -87,8 +87,15 @@ export function layoutGraph(spec: GraphSpec): GraphLayout {
     const nodes: NodeLayout[] = spec.nodes.map((node) => {
         if (resolved.has(node.id))
             throw new Error(`Graph "${spec.title}": duplicate node "${node.id}".`);
+        const kind = spec.nodeKinds[node.kind];
+        if (!kind) {
+            throw new Error(
+                `Graph "${spec.title}": node "${node.id}" is of kind "${node.kind}", which ` +
+                    `\`nodeKinds\` does not define.`,
+            );
+        }
         const r = node.r ?? spec.nodeRadius ?? 22;
-        const shape = node.shape ?? (node.kind == 'log-likelihood' ? 'square' : 'circle');
+        const shape = node.shape ?? kind.shape ?? 'circle';
         const geometry = { x: node.x, y: node.y, r, shape };
         resolved.set(node.id, geometry);
         const [cx, cy] = flip([node.x, node.y]);
@@ -115,9 +122,10 @@ export function layoutGraph(spec: GraphSpec): GraphLayout {
     };
 
     const edges = spec.edges.map((edge): EdgeLayout => {
-        if (edge.kind == 'binding' && !edge.role) {
+        if (edge.kind !== undefined && !spec.edgeKinds?.[edge.kind]) {
             throw new Error(
-                `Graph "${spec.title}": binding ${edge.from} → ${edge.to} has no role.`,
+                `Graph "${spec.title}": edge ${edge.from} → ${edge.to} is of kind ` +
+                    `"${edge.kind}", which \`edgeKinds\` does not define.`,
             );
         }
         return layoutEdge(edge, find(edge.from, edge), find(edge.to, edge), arrowSize, flip);

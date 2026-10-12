@@ -1,5 +1,6 @@
-/* `<ModelGraph>` figures. A node or edge sets `--c` from its kind (or role); everything else is
- * drawn from `--c`, so a new kind needs one rule here and one token in `tokens/colors.css`. */
+/* `<ModelGraph>` figures. A node or edge sets `--c` from its hue; everything else is drawn from
+ * `--c`, so a new hue needs one rule here, one token in `tokens/colors.css` and one entry in
+ * `HUES` (`$lib/graph/spec.ts`). A figure's kinds of node and edge are its own, built from these. */
 
 .model-graph {
     margin: var(--space-6) 0;
@@ -72,7 +73,7 @@
 
 /* ---- nodes ------------------------------------------------------------ */
 .graph-node {
-    --c: var(--graph-constant);
+    --c: var(--graph-gray);
 
     :is(circle, rect) {
         fill: color-mix(in srgb, var(--c) var(--graph-fill-mix), var(--bg-1));
@@ -80,38 +81,12 @@
         stroke-width: 2;
     }
 
-    &.kind-constant {
-        --c: var(--graph-constant);
-    }
-    &.kind-parameter {
-        --c: var(--graph-parameter);
-    }
-    &.kind-stochastic {
-        --c: var(--graph-stochastic);
-    }
-    &.kind-mapped {
-        --c: var(--graph-mapped);
-    }
-    &.kind-log-likelihood {
-        --c: var(--graph-log-likelihood);
+    &.fill-shaded :is(circle, rect) {
+        fill: color-mix(in srgb, var(--c) var(--graph-shaded-mix), var(--bg-1));
     }
 
-    /* Probabilistic-graphical-model convention: an observed quantity is shaded. */
-    &.kind-observed {
-        --c: var(--graph-observed);
-
-        :is(circle, rect) {
-            fill: color-mix(in srgb, var(--c) var(--graph-observed-mix), var(--bg-1));
-        }
-    }
-
-    /* A cut boundary: its value is supplied from outside the compiled program. */
-    &.kind-given {
-        --c: var(--graph-given);
-
-        :is(circle, rect) {
-            stroke-dasharray: 5 3;
-        }
+    &.outline-dashed :is(circle, rect) {
+        stroke-dasharray: 5 3;
     }
 }
 
@@ -129,38 +104,50 @@
         fill: var(--c);
     }
 
-    &.kind-scores path {
+    &.line-dotted path {
         stroke-dasharray: 1.5 4;
         stroke-linecap: round;
         stroke-width: 2;
     }
 
-    &.kind-binding path {
+    &.line-dashed path {
         stroke-dasharray: 6 4;
     }
-
-    &.kind-plain {
-        --c: var(--fg-4);
-    }
 }
 
-.role-argument {
-    --c: var(--role-argument);
+/* ---- the palette, for nodes and edges alike ---------------------------- */
+.hue-gray {
+    --c: var(--graph-gray);
 }
-.role-residual {
-    --c: var(--role-residual);
+.hue-blue {
+    --c: var(--graph-blue);
 }
-.role-location {
-    --c: var(--role-location);
+.hue-orange {
+    --c: var(--graph-orange);
 }
-.role-whitening {
-    --c: var(--role-whitening);
+.hue-green {
+    --c: var(--graph-green);
 }
-.role-normalizer_parent {
-    --c: var(--role-normalizer-parent);
+.hue-purple {
+    --c: var(--graph-purple);
 }
-.role-fisher_root {
-    --c: var(--role-fisher-root);
+.hue-teal {
+    --c: var(--graph-teal);
+}
+.hue-red {
+    --c: var(--graph-red);
+}
+.hue-sky {
+    --c: var(--graph-sky);
+}
+.hue-amber {
+    --c: var(--graph-amber);
+}
+.hue-olive {
+    --c: var(--graph-olive);
+}
+.hue-magenta {
+    --c: var(--graph-magenta);
 }
 
 .graph-muted {

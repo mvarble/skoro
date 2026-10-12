@@ -1,27 +1,55 @@
-// The input to `<ModelGraph>`: a hand-placed diagram of a model's graph.
+// The input to `<ModelGraph>`: a hand-placed figure of a graph.
 //
-// Every piece of text (node labels, annotations, edge labels) may contain inline KaTeX between
-// dollar signs, e.g. String.raw`$\log p(x \mid \mu)$`. `\$` is a literal dollar sign.
+// A figure names its own kinds of node and edge. The component knows nothing of what a node
+// means: each figure says what its kinds are called (in the legend and in the Markdown export) and
+// how each is drawn, from a fixed palette of hues, shapes and line styles.
+//
+// Every piece of text (kind names, node labels, annotations, edge labels, the caption) may contain
+// inline KaTeX between dollar signs, e.g. String.raw`$\log p(x \mid \mu)$`. `\$` is a literal
+// dollar sign.
 //
 // Coordinates are mathematical, not SVG: the origin is the bottom-left corner of the viewport, +X
 // points right and +Y points **up**. Angles are in degrees, counter-clockwise from +X, so 90° is
 // straight up. Lengths are in viewport units; the figure scales to fit its column.
 
-/** The variants of `skoro_graph::node::Node`, plus `given` for a cut boundary. */
-export type NodeKind =
-    'constant' | 'parameter' | 'stochastic' | 'observed' | 'mapped' | 'log-likelihood' | 'given';
+/** The palette. Each hue is a token `--graph-<hue>` in `tokens/colors.css`, tuned for both themes. */
+export const HUES = [
+    'gray',
+    'blue',
+    'orange',
+    'green',
+    'purple',
+    'teal',
+    'red',
+    'sky',
+    'amber',
+    'olive',
+    'magenta',
+] as const;
+export type Hue = (typeof HUES)[number];
 
-/** The binding roles of `skoro_model::roles`, spelled as their `Role` strings. */
-export type Role =
-    'argument' | 'residual' | 'location' | 'whitening' | 'normalizer_parent' | 'fisher_root';
+/** A kind of node: what the figure calls it, and how it is drawn. */
+export interface NodeKindSpec {
+    /** Its name in the legend and the Markdown export, e.g. `Quantity`. */
+    name: string;
+    hue: Hue;
+    /** Defaults to `circle`. */
+    shape?: 'circle' | 'square';
+    /** `shaded` fills the node strongly, the convention for an observed quantity. Defaults to `light`. */
+    fill?: 'light' | 'shaded';
+    /** Defaults to `solid`. */
+    outline?: 'solid' | 'dashed';
+}
 
-/**
- * - `parent`: a DAG edge, drawn from the parent to the child (the generative direction).
- * - `scores`: from a log-likelihood term to the stochastic quantity it is the density of.
- * - `binding`: from a term to the node that plays `role` for it.
- * - `plain`: a neutral connector, for annotation.
- */
-export type EdgeKind = 'parent' | 'scores' | 'binding' | 'plain';
+/** A kind of edge: what the figure calls it, and how it is drawn. */
+export interface EdgeKindSpec {
+    /** Its name in the legend and the Markdown export, e.g. `input of`. */
+    name: string;
+    /** Defaults to the neutral edge colour. */
+    hue?: Hue;
+    /** Defaults to `solid`. */
+    line?: 'solid' | 'dotted' | 'dashed';
+}
 
 export type Point = [x: number, y: number];
 
@@ -30,10 +58,11 @@ export interface NodeSpec {
     /** The center, in mathematical coordinates. */
     x: number;
     y: number;
-    kind: NodeKind;
+    /** A key of the figure's `nodeKinds`. */
+    kind: string;
     /** Radius, or half the side of a square. Defaults to the figure's `nodeRadius`. */
     r?: number;
-    /** Defaults to `square` for a log-likelihood term (the factor-graph convention), else `circle`. */
+    /** Overrides the kind's shape. */
     shape?: 'circle' | 'square';
     /** Text drawn inside the node: plain (`x₁`) or TeX (`$x_1$`). */
     label?: string;
@@ -52,10 +81,11 @@ export interface NodeSpec {
 export interface EdgeSpec {
     from: string;
     to: string;
-    /** Defaults to `parent`. */
-    kind?: EdgeKind;
-    /** Required when `kind` is `binding`, where it picks the colour. */
-    role?: Role;
+    /**
+     * A key of the figure's `edgeKinds`. Without one, the edge is a plain solid line in the
+     * neutral colour, and the legend does not list it.
+     */
+    kind?: string;
     /**
      * Where the edge leaves `from` / meets `to`, as an angle on that node. Defaults to the direction
      * of the edge's next point (the other node's center, or the nearest `via` point).
@@ -92,6 +122,10 @@ export interface GraphSpec {
     title: string;
     /** A sentence or two explaining the figure. Kept in the Markdown export. */
     caption?: string;
+    /** The figure's kinds of node, by key. The legend lists them in this order. */
+    nodeKinds: Record<string, NodeKindSpec>;
+    /** The figure's kinds of edge, by key. The legend lists them in this order. */
+    edgeKinds?: Record<string, EdgeKindSpec>;
     nodes: NodeSpec[];
     edges: EdgeSpec[];
     /** Default node radius. Defaults to 22. */
@@ -109,27 +143,16 @@ export interface GraphSpec {
 /** An identity function that type-checks a spec where it is written. */
 export const defineGraph = (spec: GraphSpec): GraphSpec => spec;
 
-export const NODE_KIND_NAMES: Record<NodeKind, string> = {
-    constant: 'Constant',
-    parameter: 'Parameter',
-    stochastic: 'Stochastic',
-    observed: 'Observed',
-    mapped: 'Mapped',
-    'log-likelihood': 'LogLikelihood',
-    given: 'Given (cut)',
-};
+/** The CSS classes that draw a node of `kind`. */
+export const nodeKindClasses = (kind: NodeKindSpec) =>
+    [
+        `hue-${kind.hue}`,
+        kind.fill == 'shaded' && 'fill-shaded',
+        kind.outline == 'dashed' && 'outline-dashed',
+    ]
+        .filter(Boolean)
+        .join(' ');
 
-export const ROLE_NAMES: Record<Role, string> = {
-    argument: 'ARGUMENT',
-    residual: 'RESIDUAL',
-    location: 'LOCATION',
-    whitening: 'WHITENING',
-    normalizer_parent: 'NORMALIZER_PARENT',
-    fisher_root: 'FISHER_ROOT',
-};
-
-export const EDGE_KIND_NAMES: Record<Exclude<EdgeKind, 'binding'>, string> = {
-    parent: 'parent',
-    scores: 'scores',
-    plain: 'connector',
-};
+/** The CSS classes that draw an edge of `kind`, or a plain edge when there is none. */
+export const edgeKindClasses = (kind: EdgeKindSpec | undefined) =>
+    [kind?.hue && `hue-${kind.hue}`, `line-${kind?.line ?? 'solid'}`].filter(Boolean).join(' ');

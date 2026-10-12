@@ -35,23 +35,22 @@
     --callout-todo: hsl(44, 95%, 42%);
     --callout-tint: 6%;
 
-    /* Model-graph diagrams: one hue per node kind, one per binding role. */
-    --graph-constant: hsl(220, 9%, 46%);
-    --graph-parameter: hsl(212, 72%, 46%);
-    --graph-stochastic: hsl(20, 68%, 46%);
-    --graph-observed: hsl(20, 68%, 46%);
-    --graph-mapped: hsl(152, 55%, 33%);
-    --graph-log-likelihood: hsl(268, 48%, 52%);
-    --graph-given: hsl(186, 70%, 33%);
+    /* Graph figures: the palette a figure's kinds of node and edge are drawn from (the `Hue`s of
+     * `$lib/graph/spec.ts`), and the neutral colour of an edge with no kind. */
+    --graph-gray: hsl(220, 9%, 46%);
+    --graph-blue: hsl(212, 72%, 46%);
+    --graph-orange: hsl(20, 68%, 46%);
+    --graph-green: hsl(152, 55%, 33%);
+    --graph-purple: hsl(268, 48%, 52%);
+    --graph-teal: hsl(186, 70%, 33%);
+    --graph-red: hsl(345, 70%, 50%);
+    --graph-sky: hsl(199, 80%, 42%);
+    --graph-amber: hsl(38, 92%, 42%);
+    --graph-olive: hsl(80, 55%, 36%);
+    --graph-magenta: hsl(310, 60%, 48%);
     --graph-edge: hsl(220, 14%, 38%);
-    --role-argument: hsl(220, 9%, 55%);
-    --role-residual: hsl(345, 70%, 50%);
-    --role-location: hsl(199, 80%, 42%);
-    --role-whitening: hsl(38, 92%, 42%);
-    --role-normalizer-parent: hsl(80, 55%, 36%);
-    --role-fisher-root: hsl(310, 60%, 48%);
     --graph-fill-mix: 12%;
-    --graph-observed-mix: 55%;
+    --graph-shaded-mix: 55%;
 
     --scrollbar: hsla(220, 10%, 20%, 0.25);
     --shadow-sm: 0 1px 2px hsla(220, 30%, 10%, 0.06);
@@ -87,22 +86,20 @@
     --callout-todo: hsl(44, 95%, 58%);
     --callout-tint: 9%;
 
-    --graph-constant: hsl(220, 10%, 64%);
-    --graph-parameter: hsl(212, 85%, 66%);
-    --graph-stochastic: hsl(22, 85%, 64%);
-    --graph-observed: hsl(22, 85%, 64%);
-    --graph-mapped: hsl(152, 50%, 56%);
-    --graph-log-likelihood: hsl(268, 75%, 74%);
-    --graph-given: hsl(186, 65%, 55%);
+    --graph-gray: hsl(220, 10%, 64%);
+    --graph-blue: hsl(212, 85%, 66%);
+    --graph-orange: hsl(22, 85%, 64%);
+    --graph-green: hsl(152, 50%, 56%);
+    --graph-purple: hsl(268, 75%, 74%);
+    --graph-teal: hsl(186, 65%, 55%);
+    --graph-red: hsl(345, 80%, 68%);
+    --graph-sky: hsl(199, 85%, 62%);
+    --graph-amber: hsl(40, 95%, 60%);
+    --graph-olive: hsl(80, 50%, 58%);
+    --graph-magenta: hsl(310, 70%, 72%);
     --graph-edge: hsl(220, 12%, 70%);
-    --role-argument: hsl(220, 9%, 60%);
-    --role-residual: hsl(345, 80%, 68%);
-    --role-location: hsl(199, 85%, 62%);
-    --role-whitening: hsl(40, 95%, 60%);
-    --role-normalizer-parent: hsl(80, 50%, 58%);
-    --role-fisher-root: hsl(310, 70%, 72%);
     --graph-fill-mix: 16%;
-    --graph-observed-mix: 45%;
+    --graph-shaded-mix: 45%;
 
     --scrollbar: hsla(0, 0%, 100%, 0.2);
     --shadow-sm: 0 1px 2px hsla(0, 0%, 0%, 0.4);
