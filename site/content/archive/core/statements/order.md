@@ -5,9 +5,9 @@ title: The order a pass requires
 ---
 
 Fix a pass over a program: the leaves $L$ it differentiates with respect to, the leaves
-$S \subseteq L$ seeded with velocities (for a Hessian pass), and the targets $T$. A step is *on the
-pass* when its output is continuous and reaches a target in $T$, and one of its continuous inputs
-depends on a leaf in $L$. The order the pass requires of a step is
+$S \subseteq L$ seeded with velocities (for a Hessian pass), and the targets $T$. A step $k$ with map $F_k$
+is *on the pass* when its output is continuous and reaches a target in $T$, and one of its
+continuous inputs depends on a leaf in $L$. The order the pass requires of step $k$ is
 
 $$
 	r_k = \begin{cases}
