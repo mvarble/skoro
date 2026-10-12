@@ -250,7 +250,8 @@ the discrete quantities needs.
 
 ## The primitives
 
-The core's primitive operations, on Euclidean quantities, with the derivative maps they carry. In
+The core ships all of the primitive operations below, with the derivative maps they carry; those
+on Euclidean quantities first. In
 the table, $\odot$ is the elementwise product, $\tangent_a$ the velocity of an input $a$ in a
 Hessian pass (or its tangent, in the tangent map), and $\alpha$ the cotangent at the output. Each
 frame is handled column by column, so one column is shown.
@@ -335,14 +336,62 @@ factors' passes, which is the derivative structure of [](eq:math/product-manifol
 </Proof>
 
 The proof introduces no arithmetic beyond additions of zero, so a test may hold the agreement to a
-tolerance of a few units in the last place. On the retraction alone it checks little at second
-order, though, and adding a positive factor does not change that: in the charts of every type in
-the core, a retraction is a translation, so every second-order map along it is zero and the second
-derivatives under test are zeros on both sides. The test means something at second order only when
-the retraction is composed with a function whose second derivative does not vanish, such as one
-that reads a positive factor as a real number, through the inclusion and its non-zero second-order
-map. A type whose charts do not commute, such as the rotations, would also exercise the correction
-term of [%full](statement:math/derivatives-in-charts/chart-hessian); the core has none.
+tolerance of a few units in the last place.
+
+### The acceptance test
+
+The charter accepts its position on products on one condition: that the retraction of a runtime
+product, and its first and second derivatives, agree with the factor-wise computation. On the
+core's own types that is a weak test at second order. In the charts of every one of them a
+retraction is a translation, so every second-order map along it is zero, and the second
+derivatives under test are zeros on both sides. The test is therefore run on a product that
+includes a curved factor, and composed with a function whose second derivative does not vanish.
+
+**A test-only sphere.** The core's tests carry a private type, never shipped: the unit sphere
+$S^2 = \{\point \in \R^3 : \lVert \point \rVert = 1\}$, of dimension $2$ and storage size $3$. Its
+tangent plane at $\point$ is $\point^\perp$, identified with $\R^2$ by a matrix $B(\point)$ whose
+two orthonormal columns span it. No such $B$ is smooth on the whole sphere (a smooth field of
+tangent bases on $S^2$ would give a nowhere-vanishing tangent vector field, which the hairy ball
+theorem rules out), so the identification is smooth on an open part of the sphere, and the tests
+stay inside it. Its retraction projects back onto the sphere:
+
+$$
+	\point \oplus \tangent = \frac{\point + B(\point)\,\tangent}{\lVert \point + B(\point)\,\tangent \rVert},
+	\qquad
+	\otherPoint \ominus \point = \frac{B(\point)\transpose \otherPoint}{\point\transpose \otherPoint}
+	\quad (\point\transpose \otherPoint > 0) . @tag(sphere)
+$$
+
+The inverse follows from $\point\transpose B(\point) = 0$: the point $\otherPoint$ is
+$(\point + B(\point)\tangent)/n$ with $n$ the norm, so $\point\transpose \otherPoint = 1/n$ and
+$B(\point)\transpose \otherPoint = \tangent / n$. The derivative of the retraction at
+$\tangent = 0$ is $B(\point)\tangent - \point\,(\point\transpose B(\point)\tangent) = B(\point)\tangent$,
+whose coordinates are $\tangent$, so it is a retraction. Unlike the core's types, the sphere is
+curved: its tangent charts do not commute, the correction term of
+[%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
+points, and the retraction's second-order maps are not zero. Its retraction is a composite of three
+private primitives with hand-written derivatives in charts: the inclusion $S^2 \subset \R^3$, the
+map $(\point, \tangent) \mapsto B(\point)\tangent$, and the normalization $w \mapsto w / \lVert w \rVert$
+from $\R^3 \setminus \{0\}$ onto the sphere.
+
+**What it compares.** The test builds a runtime product of two Euclidean factors, a real line, a
+positive factor and the sphere, and a nonlinear scalar function $f$ on it that reads the positive
+factor and the sphere as real numbers, through their inclusions. It checks, at points away from
+the singular set of $B$:
+
+1. that every pass over the product's retraction, values, tangent frames, cotangent frames and
+   Hessian products, agrees with the factor-wise computation, block by block, as
+   [%full](statement:product-agreement) says it must;
+2. that the chart gradient and the chart Hessian products of $f$ through the product's retraction,
+   computed by the passes, agree with the factor-wise assembly of
+   [](eq:math/product-manifold/blocks), and with finite differences of their definitions
+   [](eq:math/derivatives-in-charts/gradient) and [](eq:math/derivatives-in-charts/chart-hessian);
+3. that on the sphere's block, away from a stationary point, the chart Hessian differs from the
+   Hessian of the pull-back by the correction term, and on every other block it does not.
+
+The private primitives' own derivatives are checked the same way first, against finite differences
+of [](eq:math/derivatives-in-charts/derivative), so that a failure of the acceptance test points at
+the composition rather than at a primitive.
 
 ## Queries
 
@@ -586,25 +635,6 @@ Two consequences for the rest of the model:
   [](eq:blanket).
 
 ## Open questions
-
-> [!TODO] The acceptance test at second order
-> On the core's types, every second derivative of a retraction is zero in charts, so the charter's
-> acceptance test compares zeros at second order. I propose that it use a product of two Euclidean
-> factors, a real line and a positive factor, and compare not only the retraction's passes but those
-> of a nonlinear scalar function composed with it that reads the positive factor as a real number,
-> so that the chart Hessian has non-zero blocks on every factor. Testing the chart Hessian's
-> correction term needs a type whose charts do not commute; should the core's tests carry a private
-> one (the unit sphere $S^2$ with $\point \oplus \tangent = (\point + \tangent) / \lVert \point + \tangent \rVert$
-> in a basis of its tangent plane, say), or should that wait for the rotations?
-
-> [!TODO] Which primitives the core ships
-> The table in [The primitives](#the-primitives) goes beyond addition, subtraction and
-> multiplication: it adds negation, scaling by a real, matrix products, sums, the elementwise
-> exponential and logarithm, the structural operations (slice, concatenate, transpose, select),
-> and the operations on positive quantities. Slicing and concatenation are needed by products, the
-> positive operations by the positive quantities' retraction, and the Euclidean exponential and
-> logarithm by any test distribution with a scale. Is this the right set, or should the core stop
-> at what the quantity types and the acceptance test strictly need?
 
 > [!TODO] What retirement does in the core
 > Computing the replacement $\logterm_B$ needs distributions and linear algebra the core does not

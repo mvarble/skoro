@@ -20,7 +20,9 @@ $\oplus$ and $\ominus$ used throughout these notes.
 Let $\manifold$ be a smooth manifold of dimension $\dimension$. In computation, a tangent space
 $\T_\point\manifold$ is never handled abstractly: each is identified with $\R^\dimension$ by a basis chosen
 smoothly in $\point$, and a tangent vector is a column of $\dimension$ numbers. We assume such an identification
-throughout.
+throughout. Some manifolds have none that is smooth everywhere: by the hairy ball theorem, no
+smooth choice of tangent bases covers the whole sphere $S^2$. There the identification is smooth on
+an open part of the manifold, and a computation stays inside it.
 
 <Statement {...retraction} />
 
