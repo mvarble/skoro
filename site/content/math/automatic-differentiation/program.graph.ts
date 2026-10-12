@@ -5,13 +5,13 @@ import { defineGraph, type EdgeSpec, type NodeKindSpec, type NodeSpec } from '$l
 // reverse pass accumulates.
 
 const nodeKinds: Record<string, NodeKindSpec> = {
-    leaf: { name: 'Leaf (an input)', hue: 'blue' },
+    root: { name: 'Root (an input)', hue: 'blue' },
     slot: { name: 'Slot written by a step', hue: 'green' },
 };
 
 const nodes: NodeSpec[] = [
-    { id: 'x1', x: 70, y: 200, kind: 'leaf', label: String.raw`$\point_1$` },
-    { id: 'x2', x: 70, y: 70, kind: 'leaf', label: String.raw`$\point_2$` },
+    { id: 'x1', x: 70, y: 200, kind: 'root', label: String.raw`$\point_1$` },
+    { id: 'x2', x: 70, y: 70, kind: 'root', label: String.raw`$\point_2$` },
     {
         id: 's3',
         x: 250,
@@ -49,7 +49,7 @@ const forward: EdgeSpec[] = [
 
 export const computation = defineGraph({
     title: 'A computation graph',
-    caption: String.raw`The program $s_3 \leftarrow \point_1 \odot \point_2$, $s_4 \leftarrow \exp s_3$, $f \leftarrow s_3 + s_4$. Each node is a slot; each edge runs from an input of a step to its output. The leaves $\point_1$ and $\point_2$ are the program's inputs, and $f$ is its target.`,
+    caption: String.raw`The program $s_3 \leftarrow \point_1 \odot \point_2$, $s_4 \leftarrow \exp s_3$, $f \leftarrow s_3 + s_4$. Each node is a slot; each edge runs from an input of a step to its output. The roots $\point_1$ and $\point_2$ are the program's inputs, and $f$ is its target.`,
     width: 660,
     height: 270,
     nodeKinds,
@@ -68,7 +68,7 @@ const labels: Record<string, string> = {
 
 export const backpropagation = defineGraph({
     title: 'Its backpropagation graph',
-    caption: String.raw`The same slots with every edge reversed and labelled by the pull-back it applies. Cotangents enter at the target $f$ and end at the leaves; $s_3$ has two incoming edges, and its cotangent is their sum.`,
+    caption: String.raw`The same slots with every edge reversed and labelled by the pull-back it applies. Cotangents enter at the target $f$ and end at the leaves $\point_1$ and $\point_2$, the computation graph's roots; $s_3$ has two incoming edges, and its cotangent is their sum.`,
     width: 660,
     height: 270,
     nodeKinds,

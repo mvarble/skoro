@@ -106,7 +106,7 @@ skoro has several graphs, and a document never says "the graph" alone: it names 
 
 - The **compilation graph** has the model's values as nodes (quantities, constants, and mapped
   values, among them the terms' log-densities) and an edge from each input of an operation to its
-  output. Its leaves are the quantities and constants. Programs are compiled from it.
+  output. Its roots are the quantities and constants. Programs are compiled from it.
 - The **probabilistic graph** has the model's quantities and terms as nodes, an edge from each
   quantity a term is conditioned on to the term, and an edge from the term to the quantity it
   scores. Ancestral order and Markov blankets are read on it.
@@ -114,8 +114,12 @@ skoro has several graphs, and a document never says "the graph" alone: it names 
   its output; its **backpropagation graph** has the same nodes with every edge reversed, carrying
   the pull-backs of the reverse pass.
 
-Before a document reasons about a graph's structure (its leaves, edges, paths or neighbours), it
-says what the nodes and edges represent and the properties it relies on ("the leaves are the inputs
+A node with no incoming edge, and so no ancestor, is a *root*: the inputs of a computation are the
+roots of its graph, never its leaves. A *leaf* has no outgoing edge, so a node is a root of a
+computation graph if and only if it is a leaf of its backpropagation graph.
+
+Before a document reasons about a graph's structure (its roots, edges, paths or neighbours), it
+says what the nodes and edges represent and the properties it relies on ("the roots are the inputs
 of the map"), and shows a picture (see [Figures](#figures)), or it links to a part of the site that
 does all three. The core's mathematics introduces the compilation and probabilistic graphs
 (`archive/core/math`, under "The compilation graph" and "The probabilistic graph"), and the note

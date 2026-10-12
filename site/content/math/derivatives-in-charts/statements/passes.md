@@ -13,5 +13,5 @@ $$
 $$
 
 Then for a scalar target $f$, the reverse pass delivers the chart gradient $g(\point)$ at the
-leaves, and forward-over-reverse with velocities $\tangent$ delivers the chart Hessian product
+roots, and forward-over-reverse with velocities $\tangent$ delivers the chart Hessian product
 $H(\point)\,\tangent$.

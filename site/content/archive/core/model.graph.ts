@@ -86,7 +86,7 @@ export const probabilistic = defineGraph({
 
 export const compilation = defineGraph({
     title: 'A compilation graph',
-    caption: String.raw`The log-density of the term $t_4$, $\logterm_4 = -\tfrac12 \sum_i (z_0 - (m - \point_0))_i^2$, as it is computed. Each edge runs from an input of an operation to its output. The leaves are the quantities $\point_0$, $m$, $z_0$ and the constant $-\tfrac12$; every other node is a function of them.`,
+    caption: String.raw`The log-density of the term $t_4$, $\logterm_4 = -\tfrac12 \sum_i (z_0 - (m - \point_0))_i^2$, as it is computed. Each edge runs from an input of an operation to its output. The roots are the quantities $\point_0$, $m$, $z_0$ and the constant $-\tfrac12$; every other node is a function of them.`,
     width: 780,
     height: 280,
     nodeKinds: {

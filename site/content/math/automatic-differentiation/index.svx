@@ -33,8 +33,9 @@ A program is pictured by its *computation graph*. Its nodes are the slots, and i
 each input of a step to that step's output, so a node with incoming edges is computed by the step
 that writes it, from the nodes those edges come from. Because each step reads only slots written
 before it, the computation graph has no cycles, and the order of the steps is one of its
-topological orders. Its *leaves*, the nodes with no incoming edge, are the slots no step writes:
-the program's inputs, the variables $\point$ we differentiate with respect to. Some nodes are
+topological orders. Its *roots*, the nodes with no incoming edge and so no ancestor, are the
+slots no step writes: the program's inputs, the variables $\point$ we differentiate with respect
+to. Some nodes are
 *targets*, the values to differentiate, $f(\point)$. A node with several outgoing edges is a slot
 read by several steps.
 
@@ -47,7 +48,7 @@ columns. Below, $\tangent_s$ and $\alpha_s$ are the frames held at slot $s$.
 
 ## Forward: pushing tangent frames
 
-Seed each leaf with a tangent frame $\tangent_{\point}$ (missing means zero), and run the steps in
+Seed each root with a tangent frame $\tangent_{\point}$ (missing means zero), and run the steps in
 order, each pushing its inputs' frames forward along the computation graph's edges by its
 *Jacobian–vector product*:
 
@@ -63,9 +64,11 @@ an identity gives the whole Jacobian.
 
 The reverse pass runs on the *backpropagation graph*: the same nodes as the computation graph, with
 every edge reversed and labelled by the pull-back $\partial_j \map_k\transpose$ of the step it came
-from. Cotangents enter at the targets, flow along its edges, and end at the leaves of the
-computation graph, which have no outgoing edges here. A node with several incoming edges, a slot
-read by several steps, receives a cotangent along each, and holds their sum.
+from. Since reversing the edges swaps incoming for outgoing, a node is a root of the computation
+graph if and only if it is a *leaf* of the backpropagation graph, a node with no outgoing edge.
+Cotangents enter at the targets, flow along its edges, and end at those leaves, the program's
+inputs. A node with several incoming edges, a slot read by several steps, receives a cotangent
+along each, and holds their sum.
 
 <ModelGraph spec={backpropagation} />
 
@@ -79,9 +82,9 @@ $$
 
 The accumulation, which sums the cotangents arriving along every incoming edge of the
 backpropagation graph, is the chain rule for a slot with several consumers. When the steps are done,
-each leaf holds $\alpha_{\point_l} = \sum_f (\partial f / \partial \point_l)\transpose \alpha_f$. For a scalar
+each root holds $\alpha_{\point_l} = \sum_f (\partial f / \partial \point_l)\transpose \alpha_f$. For a scalar
 target seeded with $\alpha_f = 1$, that is the gradient $\nabla_{\point_l} f$, whatever the number
-of leaves.
+of roots.
 
 Each column of a frame costs a small multiple of one evaluation of the program, in either
 direction. A Jacobian with few rows is cheaper in reverse, one with few columns forward.
@@ -89,7 +92,7 @@ direction. A Jacobian with few rows is cheaper in reverse, one with few columns 
 ## Forward-over-reverse: Hessian products
 
 For second derivatives, differentiate the reverse pass itself along a path $\point + t\tangent$. Run
-the forward pass of [](eq:jvp) with velocities $\tangent$ seeded at the leaves, so that every slot
+the forward pass of [](eq:jvp) with velocities $\tangent$ seeded at the roots, so that every slot
 holds its value $s$ and its velocity $\tangent_s$, then run the reverse pass over the
 backpropagation graph carrying two cotangents per slot: $\alpha_s$, as in [](eq:vjp), and
 $\beta_s$, its derivative along the path. One column of $\tangent$ is one path; a frame of $n$
@@ -117,17 +120,17 @@ nothing to $\hvp_{k,j}$.
 
 <Proof>
 
-The cotangents $\alpha_s$ are functions of the leaves: the reverse recurrence holds as an identity
+The cotangents $\alpha_s$ are functions of the roots: the reverse recurrence holds as an identity
 in $\point$, with every $\partial_j \map_k$ evaluated at the slot values the program computes from
 $\point$. Differentiate that identity along $\point + t\tangent$ for one column $\tangent$. By the
 product rule, $\beta_s \defeq \frac{\dd}{\dd t}\alpha_s(\point + t\tangent)\big|_{t=0}$ satisfies
 [](eq:leibniz), because the slot values move with the velocities the forward pass computed, and the
-seeds $\alpha_f = 1$ and $\beta_f = 0$ are the value and the derivative of a constant. At a leaf,
+seeds $\alpha_f = 1$ and $\beta_f = 0$ are the value and the derivative of a constant. At a root,
 $\alpha_{\point_i}(\point) = \nabla_{\point_i} f(\point)$ identically in $\point$, so its derivative
 along the path is $\sum_l \nabla_{\point_i} \nabla_{\point_l} f(\point)\,\tangent_{\point_l}$.
 
 </Proof>
 
-With all leaves stacked into one vector, $\beta_\point = \nabla^2 f(\point)\,\tangent$: a frame of
+With all roots stacked into one vector, $\beta_\point = \nabla^2 f(\point)\,\tangent$: a frame of
 $n$ velocities gives $n$ columns of the Hessian for about $n$ times the cost of a gradient, and the
 identity frame gives all of it.

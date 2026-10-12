@@ -134,7 +134,7 @@ whose velocity in the chart at $s(\point)$ is $\tangent_s = \D s(\point)\, \tang
 the forward pass computes. The derivative of the smooth function
 $s \mapsto \partial_j \map(s)\transpose \alpha$ along a curve depends only on the curve's velocity,
 so it equals the derivative along $s \oplus t \tangent_s$, which is $\hvp_j(\alpha)$. The product
-rule then gives the forward-over-reverse recurrence, and at a leaf the differentiated quantity is
+rule then gives the forward-over-reverse recurrence, and at a root the differentiated quantity is
 $g(\point_t)$, whose derivative is [](eq:chart-hessian).
 
 </Proof>
