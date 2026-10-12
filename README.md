@@ -2,6 +2,10 @@
 
 Probabilistic modeling in Rust.
 
+The documentation, with the mathematics and the archive of how each part came to be, is at
+**[mvarble.github.io/skoro](https://mvarble.github.io/skoro/)**. It is rebuilt from every push
+that passes CI, so it also shows drafts in progress.
+
 This repository started over on 2026-10-09. Everything written before then (the crates, the
 documentation site, and their history) is kept on the
 [`archive`](https://github.com/mvarble/skoro/tree/archive) branch. It is being brought back one
