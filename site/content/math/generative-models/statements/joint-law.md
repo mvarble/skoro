@@ -10,7 +10,7 @@ $\prod_{j \le i} \density_j(\point_j \mid \point_{<j})$ with respect to
 $\nu_1 \otimes \cdots \otimes \nu_i$, and
 
 $$
-	K_i(\point_{<i}, A) = \int_A \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i)
+	\kernel_i(\point_{<i}, A) = \int_A \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i)
 $$
 
 is a regular conditional distribution of the $i$-th quantity given the ones before it.

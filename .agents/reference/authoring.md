@@ -97,7 +97,7 @@ one document goes in its `katex_macros`.
 skoro's own notation is written with its macros, never with the letters they stand for, so that it
 can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`, `\tangent`
 and `\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
-`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal` and `\weight`; and the
+`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal`, `\weight` and `\kernel`; and the
 typography `\D`, `\dd` and `\hvp`. `katex.config.ts` says what each stands for.
 
 ## Graphs

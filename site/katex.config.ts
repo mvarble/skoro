@@ -89,6 +89,7 @@ const config: KatexOptions & Settings = {
         '\\logterm': '\\ell', // a term's log-density
         '\\proposal': 'q', // the density of a sampler's draws
         '\\weight': 'w', // the importance weight
+        '\\kernel': '\\kappa', // a probability kernel, such as a regular conditional distribution
         '\\transpose': '^{\\top}',
     },
 };
