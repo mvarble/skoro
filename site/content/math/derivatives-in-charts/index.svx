@@ -19,28 +19,31 @@ what an optimizer or a sampler needs at a point, and none needs a metric.
 
 ## The derivative
 
-Let $f : \mathcal M \to \mathcal N$ be smooth, between manifolds of dimensions $d$ and $e$, each with
-a retraction, and let $y = f(x)$. The derivative of $f$ at $x$ is the $e \times d$ matrix of $f$
-read in the chart at $x$ and the chart at $y$:
+Let $\map : \manifold \to \otherManifold$ be smooth, between manifolds of dimensions $\dimension$
+and $e$, each with a retraction, and let $\otherPoint = \map(\point)$. The derivative of $\map$ at
+$\point$ is the $e \times \dimension$ matrix of $\map$ read in the chart at $\point$ and the chart at
+$\otherPoint$:
 
 $$
-	\mathrm D f(x)\, a \defeq \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} \bigl(f(x \oplus t a) \ominus y\bigr),
-	\qquad a \in \R^d . @tag(derivative)
+	\D \map(\point)\, \tangent \defeq \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point \oplus t \tangent) \ominus \otherPoint\bigr),
+	\qquad \tangent \in \R^\dimension . @tag(derivative)
 $$
 
-Equivalently, $\mathrm D f(x)$ is the ordinary Jacobian at $0$ of the *local representative*
-$\hat f_x = R_y^{-1} \circ f \circ R_x$, a map from a neighbourhood of $0$ in $\R^d$ to $\R^e$.
-Because each $\mathrm D R_x(0)$ is the identity, it is also the intrinsic differential of $f$,
-written in the bases that identify the tangent spaces with $\R^d$ and $\R^e$.
+Equivalently, $\D \map(\point)$ is the ordinary Jacobian at $0$ of the *local representative*
+$\hat \map_\point = R_\otherPoint^{-1} \circ \map \circ R_\point$, a map from a neighbourhood of $0$
+in $\R^\dimension$ to $\R^e$. Because each $\D R_\point(0)$ is the identity, it is also the
+intrinsic differential of $\map$, written in the bases that identify the tangent spaces with
+$\R^\dimension$ and $\R^e$.
 
 <Statement {...chainRule} />
 
 <Proof>
 
-Near $0$, $\widehat{h \circ f}_x = R_z^{-1} \circ h \circ f \circ R_x
-= (R_z^{-1} \circ h \circ R_y) \circ (R_y^{-1} \circ f \circ R_x) = \hat h_y \circ \hat f_x$, with
-$z = h(y)$, because $R_y \circ R_y^{-1}$ is the identity near $y$. The ordinary chain rule at $0$,
-with $\hat f_x(0) = 0$, gives the claim.
+Near $0$, $\widehat{G \circ \map}_\point = R_z^{-1} \circ G \circ \map \circ R_\point
+= (R_z^{-1} \circ G \circ R_\otherPoint) \circ (R_\otherPoint^{-1} \circ \map \circ R_\point)
+= \hat G_\otherPoint \circ \hat \map_\point$, with $z = G(\otherPoint)$, because
+$R_\otherPoint \circ R_\otherPoint^{-1}$ is the identity near $\otherPoint$. The ordinary chain rule
+at $0$, with $\hat \map_\point(0) = 0$, gives the claim.
 
 </Proof>
 
@@ -49,66 +52,70 @@ So derivatives in charts compose exactly as Jacobians do, and the passes of
 are maps between manifolds, as long as each step's derivative is taken in charts. To derive one by
 hand:
 
-1. perturb the input, $x_t = x \oplus t a$;
-2. push it through, $y_t = f(x_t)$;
-3. solve $y_t = y \oplus c(t)$ for $c(t)$;
-4. the Jacobian–vector product is $c'(0)$, and the vector–Jacobian product is its transpose.
+1. perturb the input, $\point_t = \point \oplus t \tangent$;
+2. push it through, $\otherPoint_t = \map(\point_t)$;
+3. solve $\otherPoint_t = \otherPoint \oplus \otherTangent(t)$ for $\otherTangent(t)$;
+4. the Jacobian–vector product is $\otherTangent'(0)$, and the vector–Jacobian product is its
+   transpose.
 
-The transpose is taken in coordinates: a cotangent at $y$ is a row of $e$ numbers acting on tangent
-coordinates, and $\mathrm D f(x)\transpose$ maps it to a cotangent at $x$. No inner product on the
-tangent spaces is involved.
+The transpose is taken in coordinates: a cotangent at $\otherPoint$ is a row of $e$ numbers acting
+on tangent coordinates, and $\D \map(\point)\transpose$ maps it to a cotangent at $\point$. No inner
+product on the tangent spaces is involved.
 
 ## The gradient
 
-For a scalar function $f : \mathcal M \to \R$, its gradient in the chart at $x$ is
+For a scalar function $f : \manifold \to \R$, its gradient in the chart at $\point$ is
 
 $$
-	g(x) \defeq \nabla (f \circ R_x)(0) = \mathrm D f(x)\transpose 1 \in \R^d, @tag(gradient)
+	g(\point) \defeq \nabla (f \circ R_\point)(0) = \D f(\point)\transpose 1 \in \R^\dimension, @tag(gradient)
 $$
 
 the cotangent that a reverse pass seeded with $1$ delivers. It says how $f$ changes along a step:
-$f(x \oplus \delta) = f(x) + g(x)\transpose \delta + O(\lVert\delta\rVert^2)$. With no metric in
-play, it is the differential of $f$ written in chart coordinates, not a Riemannian gradient.
+$f(\point \oplus \tangent) = f(\point) + g(\point)\transpose \tangent + O(\lVert\tangent\rVert^2)$.
+With no metric in play, it is the differential of $f$ written in chart coordinates, not a
+Riemannian gradient.
 
 ## The Hessian product
 
 The second derivative needs a choice that the first does not, because moving along a direction
-moves the chart as well. The *chart Hessian* differentiates the gradient along a direction $v$,
-reading the gradient at each point in that point's own chart:
+moves the chart as well. The *chart Hessian* differentiates the gradient along a direction
+$\tangent$, reading the gradient at each point in that point's own chart:
 
 $$
-	H(x)\, v \defeq \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} g(x \oplus t v) . @tag(chart-hessian)
+	H(\point)\, \tangent \defeq \frac{\dd}{\dd t}\Big|_{t=0} g(\point \oplus t \tangent) . @tag(chart-hessian)
 $$
 
-The other candidate is the Hessian of the pull-back $f \circ R_x$, which keeps the chart at $x$
-fixed. On a flat manifold the two are the same matrix, the ordinary Hessian. On a curved one they
-differ by a term proportional to the gradient.
+The other candidate is the Hessian of the pull-back $f \circ R_\point$, which keeps the chart at
+$\point$ fixed. On a flat manifold the two are the same matrix, the ordinary Hessian. On a curved
+one they differ by a term proportional to the gradient.
 
 <Statement {...chartHessian} />
 
 <Proof>
 
-For small $t$ and $\delta$ near $0$, $R_{x_t}(\delta) = R_x(\varphi_t(\delta))$, with
-$\varphi_0$ the identity and $\varphi_t(0) = R_x^{-1}(x_t) = t v$ by [](eq:math/retraction/roundtrip).
-So $f \circ R_{x_t} = (f \circ R_x) \circ \varphi_t$ near $0$, and
+For small $t$ and $u$ near $0$, $R_{\point_t}(u) = R_\point(\varphi_t(u))$, with $\varphi_0$ the
+identity and $\varphi_t(0) = R_\point^{-1}(\point_t) = t \tangent$ by
+[](eq:math/retraction/roundtrip). So $f \circ R_{\point_t} = (f \circ R_\point) \circ \varphi_t$ near
+$0$, and
 
 $$
-	g(x_t) = \mathrm D \varphi_t(0)\transpose\, \nabla (f \circ R_x)(t v) .
+	g(\point_t) = \D \varphi_t(0)\transpose\, \nabla (f \circ R_\point)(t \tangent) .
 $$
 
-Differentiating at $t = 0$, with $\mathrm D \varphi_0(0) = I$ and $\nabla (f \circ R_x)(0) = g(x)$,
+Differentiating at $t = 0$, with $\D \varphi_0(0) = I$ and $\nabla (f \circ R_\point)(0) = g(\point)$,
 gives the claim.
 
 </Proof>
 
-On the rotations, with the retraction $R_x(\delta) = x \operatorname{Exp}(\delta)$, the
+On the rotations, with the retraction $R_\point(u) = \point \operatorname{Exp}(u)$, the
 Baker–Campbell–Hausdorff formula gives
-$\varphi_t(\delta) = t v + \delta + \tfrac{t}{2}\, v \times \delta$, up to terms of order $t^2 \lVert\delta\rVert$ and $t \lVert\delta\rVert^2$,
-so the correction is $\tfrac12 [g(x)]_\times v$: the chart Hessian is the Hessian of the pull-back
-plus the skew-symmetric matrix $\tfrac12 [g(x)]_\times$, and it is not symmetric away from a
-stationary point. Which symmetric matrix to use there, if one is needed, is the algorithm's
-decision. At a stationary point, which is where curvature is most often read (a Laplace
-approximation, a Newton step's convergence), the two agree.
+$\varphi_t(u) = t \tangent + u + \tfrac{t}{2}\, \tangent \times u$, up to terms of order
+$t^2 \lVert u\rVert$ and $t \lVert u\rVert^2$, so the correction is
+$\tfrac12 [g(\point)]_\times \tangent$: the chart Hessian is the Hessian of the pull-back plus the
+skew-symmetric matrix $\tfrac12 [g(\point)]_\times$, and it is not symmetric away from a stationary
+point. Which symmetric matrix to use there, if one is needed, is the algorithm's decision. At a
+stationary point, which is where curvature is most often read (a Laplace approximation, a Newton
+step's convergence), the two agree.
 
 ## Programs over manifolds
 
@@ -120,14 +127,14 @@ second-order map is read in charts the same way.
 <Proof>
 
 First order is [%full](statement:chain-rule) applied step by step. For the second, the reverse
-recurrence holds identically in $x$, with every $\partial_j F$ evaluated at the slot values computed
-from $x$ and read in the charts at those values. Differentiate it along $x_t = x \oplus t v$. Each
-slot traces a curve $s(x_t)$ through $s(x)$ whose velocity in the chart at $s(x)$ is
-$\dot s = \mathrm D s(x)\, v$, the velocity the forward pass computes. The derivative of the smooth
-function $s \mapsto \partial_j F(s)\transpose \alpha$ along a curve depends only on the curve's
-velocity, so it equals the derivative along $s \oplus t \dot s$, which is
-$\operatorname{hvp}_j(\alpha)$. The product rule then gives the forward-over-reverse recurrence,
-and at a leaf the differentiated quantity is $g(x_t)$, whose derivative is
-[](eq:chart-hessian).
+recurrence holds identically in $\point$, with every $\partial_j \map$ evaluated at the slot values
+computed from $\point$ and read in the charts at those values. Differentiate it along
+$\point_t = \point \oplus t \tangent$. Each slot traces a curve $s(\point_t)$ through $s(\point)$
+whose velocity in the chart at $s(\point)$ is $\tangent_s = \D s(\point)\, \tangent$, the velocity
+the forward pass computes. The derivative of the smooth function
+$s \mapsto \partial_j \map(s)\transpose \alpha$ along a curve depends only on the curve's velocity,
+so it equals the derivative along $s \oplus t \tangent_s$, which is $\hvp_j(\alpha)$. The product
+rule then gives the forward-over-reverse recurrence, and at a leaf the differentiated quantity is
+$g(\point_t)$, whose derivative is [](eq:chart-hessian).
 
 </Proof>

@@ -4,13 +4,14 @@ kind: proposition
 title: The passes compute chart derivatives
 ---
 
-Let a program's steps be maps between manifolds, with partial derivatives $\partial_j F$ taken in
+Let a program's steps be maps between manifolds, with partial derivatives $\partial_j \map$ taken in
 tangent charts, and define each step's second-order map at its inputs $s$, with velocities
-$\dot s$, by
+$\tangent_s$, by
 
 $$
-	\operatorname{hvp}_j(\alpha) = \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} \partial_j F(s \oplus t\dot s)\transpose \alpha .
+	\hvp_j(\alpha) = \frac{\dd}{\dd t}\Big|_{t=0} \partial_j \map(s \oplus t\tangent_s)\transpose \alpha .
 $$
 
-Then for a scalar target $f$, the reverse pass delivers the chart gradient $g(x)$ at the leaves, and
-forward-over-reverse with velocities $v$ delivers the chart Hessian product $H(x)\,v$.
+Then for a scalar target $f$, the reverse pass delivers the chart gradient $g(\point)$ at the
+leaves, and forward-over-reverse with velocities $\tangent$ delivers the chart Hessian product
+$H(\point)\,\tangent$.

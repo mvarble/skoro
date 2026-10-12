@@ -4,6 +4,6 @@ kind: proposition
 title: The chain rule in tangent charts
 ---
 
-For smooth $f : \mathcal M \to \mathcal N$ and $h : \mathcal N \to \mathcal P$,
-$\mathrm D(h \circ f)(x) = \mathrm D h(f(x))\,\mathrm D f(x)$, every derivative taken in tangent
+For smooth $\map : \manifold \to \otherManifold$ and $G : \otherManifold \to \bbZ$,
+$\D(G \circ \map)(\point) = \D G(\map(\point))\,\D \map(\point)$, every derivative taken in tangent
 charts.

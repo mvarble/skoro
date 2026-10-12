@@ -10,16 +10,16 @@ summary: A retraction moves a point of a manifold along a tangent vector; it mak
 	import * as mirror from './statements/mirror.md';
 </script>
 
-Estimation moves points. On $\R^d$ a step is an addition, $x + \delta$; on a curved manifold, such
+Estimation moves points. On $\R^\dimension$ a step is an addition, $\point + \tangent$; on a curved manifold, such
 as the rotations or the unit sphere, there is no addition, and a *retraction* takes its place. This
 note defines it, shows how it turns every tangent space into a chart, and introduces the notation
 $\oplus$ and $\ominus$ used throughout these notes.
 
 ## The definition
 
-Let $\mathcal M$ be a smooth manifold of dimension $d$. In computation, a tangent space
-$\T_x\mathcal M$ is never handled abstractly: each is identified with $\R^d$ by a basis chosen
-smoothly in $x$, and a tangent vector is a column of $d$ numbers. We assume such an identification
+Let $\manifold$ be a smooth manifold of dimension $\dimension$. In computation, a tangent space
+$\T_\point\manifold$ is never handled abstractly: each is identified with $\R^\dimension$ by a basis chosen
+smoothly in $\point$, and a tangent vector is a column of $\dimension$ numbers. We assume such an identification
 throughout.
 
 <Statement {...retraction} />
@@ -29,59 +29,59 @@ exponential map of a Riemannian manifold. The exponential map is a retraction, b
 so is any map that agrees with it to first order, which is usually cheaper. Nothing here needs a
 metric.
 
-Two examples. On $\R^d$, $R_x(\delta) = x + \delta$. On the positive reals, with
-$\T_x(0, \infty)$ identified with $\R$ by measuring relative change,
-$R_x(\delta) = x\,e^{\delta}$: it is defined for every $\delta$, never leaves the positive reals,
-and satisfies $\frac{\mathrm d}{\mathrm d\delta} x e^\delta \big|_{0} = x$, which is the identity
-in the chosen identification (a tangent at $x$ of coordinate $1$ is the velocity $x$).
+Two examples. On $\R^\dimension$, $R_\point(\tangent) = \point + \tangent$. On the positive reals, with
+$\T_\point(0, \infty)$ identified with $\R$ by measuring relative change,
+$R_\point(\tangent) = \point\,e^{\tangent}$: it is defined for every $\tangent$, never leaves the positive reals,
+and satisfies $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity
+in the chosen identification (a tangent at $\point$ of coordinate $1$ is the velocity $\point$).
 
 ## Tangent charts
 
-Because $\mathrm D R_x(0)$ is invertible, the inverse function theorem makes $R_x$ a diffeomorphism
-from a neighbourhood of $0 \in \R^d$ onto a neighbourhood of $x$. So $R_x$ is a *chart* of
-$\mathcal M$ around $x$, the tangent chart at $x$, and every point near $x$ has coordinates in it.
+Because $\D R_\point(0)$ is invertible, the inverse function theorem makes $R_\point$ a diffeomorphism
+from a neighbourhood of $0 \in \R^\dimension$ onto a neighbourhood of $\point$. So $R_\point$ is a *chart* of
+$\manifold$ around $\point$, the tangent chart at $\point$, and every point near $\point$ has coordinates in it.
 As is common in robotics, we write
 
 $$
-	x \oplus \delta \defeq R_x(\delta), \qquad y \ominus x \defeq R_x^{-1}(y), @tag(oplus)
+	\point \oplus \tangent \defeq R_\point(\tangent), \qquad \otherPoint \ominus \point \defeq R_\point^{-1}(\otherPoint), @tag(oplus)
 $$
 
-the second for $y$ in the neighbourhood where $R_x$ is invertible. In words, $y \ominus x$ is where
-$y$ sits in the chart at $x$. By construction,
+the second for $\otherPoint$ in the neighbourhood where $R_\point$ is invertible. In words, $\otherPoint \ominus \point$ is where
+$\otherPoint$ sits in the chart at $\point$. By construction,
 
 $$
-	(x \oplus \delta) \ominus x = \delta @tag(roundtrip)
+	(\point \oplus \tangent) \ominus \point = \tangent @tag(roundtrip)
 $$
 
-for every $\delta$ in the chart's domain, and $x \oplus (y \ominus x) = y$ for every $y$ in its
-image. On $\R^d$, $\oplus$ and $\ominus$ are addition and subtraction; on the positive reals above,
-$y \ominus x = \log(y / x)$.
+for every $\tangent$ in the chart's domain, and $\point \oplus (\otherPoint \ominus \point) = \otherPoint$ for every $\otherPoint$ in its
+image. On $\R^\dimension$, $\oplus$ and $\ominus$ are addition and subtraction; on the positive reals above,
+$\otherPoint \ominus \point = \log(\otherPoint / \point)$.
 
 ## The mirror identity
 
-On $\R^d$, $x \ominus (x \oplus \delta) = -\delta$ as well: the step back from $x \oplus \delta$ to
-$x$ is the reverse of the step forward. On a curved manifold it generally is not, because the left
-side is measured in the chart at the *moved* point $x \oplus \delta$, not at $x$.
+On $\R^\dimension$, $\point \ominus (\point \oplus \tangent) = -\tangent$ as well: the step back from $\point \oplus \tangent$ to
+$\point$ is the reverse of the step forward. On a curved manifold it generally is not, because the left
+side is measured in the chart at the *moved* point $\point \oplus \tangent$, not at $\point$.
 
 <Statement {...mirror} />
 
 <Proof>
 
-Write $y = x \oplus \delta$ and $\varphi(\delta, c) = R_x^{-1}(R_{x \oplus \delta}(c))$, the chart
-at $y$ read in the chart at $x$. It is smooth near $(0, 0)$, with $\varphi(\delta, 0) = \delta$
-and, since $R_{x \oplus 0} = R_x$, $\varphi(0, c) = c$. Hence
-$\varphi(\delta, c) = \delta + c + O(\lVert\delta\rVert\,\lVert c\rVert)$. The coordinate
-$c = x \ominus y$ is the one with $\varphi(\delta, c) = R_x^{-1}(x) = 0$, so
-$c = -\delta + O(\lVert\delta\rVert\,\lVert c\rVert)$, and $\lVert c \rVert = O(\lVert\delta\rVert)$
+Write $\otherPoint = \point \oplus \tangent$ and $\varphi(\tangent, c) = R_\point^{-1}(R_{\point \oplus \tangent}(c))$, the chart
+at $\otherPoint$ read in the chart at $\point$. It is smooth near $(0, 0)$, with $\varphi(\tangent, 0) = \tangent$
+and, since $R_{\point \oplus 0} = R_\point$, $\varphi(0, c) = c$. Hence
+$\varphi(\tangent, c) = \tangent + c + O(\lVert\tangent\rVert\,\lVert c\rVert)$. The coordinate
+$c = \point \ominus \otherPoint$ is the one with $\varphi(\tangent, c) = R_\point^{-1}(\point) = 0$, so
+$c = -\tangent + O(\lVert\tangent\rVert\,\lVert c\rVert)$, and $\lVert c \rVert = O(\lVert\tangent\rVert)$
 gives the claim.
 
 </Proof>
 
-The identity holds exactly in some cases: on $\R^d$, on the positive reals above, and on any Lie
-group whose retraction is $R_x(\delta) = x \operatorname{Exp}(\delta)$, since then
-$x \ominus (x \oplus \delta) = \operatorname{Log}(\operatorname{Exp}(\delta)^{-1}) = -\delta$. It
+The identity holds exactly in some cases: on $\R^\dimension$, on the positive reals above, and on any Lie
+group whose retraction is $R_\point(\tangent) = \point \operatorname{Exp}(\tangent)$, since then
+$\point \ominus (\point \oplus \tangent) = \operatorname{Log}(\operatorname{Exp}(\tangent)^{-1}) = -\tangent$. It
 fails at second order for other retractions, and a computation that needs "the point whose
-coordinate is $-\delta$" must not assume it.
+coordinate is $-\tangent$" must not assume it.
 
-A manifold whose retraction is $x + \delta$, so that both identities hold exactly and every chart is
+A manifold whose retraction is $\point + \tangent$, so that both identities hold exactly and every chart is
 the same affine chart, is called *flat* in these notes.

@@ -16,14 +16,14 @@ retraction from its factors, and how derivatives in its charts break into blocks
 
 ## The product and its tangent space
 
-Let $\mathcal M_1, \dots, \mathcal M_k$ be manifolds of dimensions $d_1, \dots, d_k$, each with a
-[retraction](../retraction/). Their product $\mathcal M = \mathcal M_1 \times \cdots \times \mathcal M_k$
-is a manifold of dimension $d = \sum_i d_i$, whose points are tuples $x = (x_1, \dots, x_k)$. Its
-tangent space at $x$ is the direct sum of the factors', identified with $\R^d$ by stacking:
+Let $\manifold_1, \dots, \manifold_k$ be manifolds of dimensions $\dimension_1, \dots, \dimension_k$, each with a
+[retraction](../retraction/). Their product $\manifold = \manifold_1 \times \cdots \times \manifold_k$
+is a manifold of dimension $\dimension = \sum_i \dimension_i$, whose points are tuples $\point = (\point_1, \dots, \point_k)$. Its
+tangent space at $\point$ is the direct sum of the factors', identified with $\R^\dimension$ by stacking:
 
 $$
-	\T_x \mathcal M = \T_{x_1}\mathcal M_1 \oplus \cdots \oplus \T_{x_k}\mathcal M_k \;\cong\; \R^d,
-	\qquad \delta = (\delta_1; \dots; \delta_k) . @tag(stack)
+	\T_\point \manifold = \T_{\point_1}\manifold_1 \oplus \cdots \oplus \T_{\point_k}\manifold_k \;\cong\; \R^\dimension,
+	\qquad \tangent = (\tangent_1; \dots; \tangent_k) . @tag(stack)
 $$
 
 (The $\oplus$ of vector spaces here is the direct sum, not the retraction.)
@@ -32,33 +32,33 @@ $$
 
 <Proof>
 
-$R_x(0) = (x_1, \dots, x_k) = x$. The derivative of $R_x$ at $0$ is block diagonal, its $i$-th
-block the derivative of $R^i_{x_i}$ at $0$, which is $I_{d_i}$; so it is $I_d$. The inverse and
+$R_\point(0) = (\point_1, \dots, \point_k) = \point$. The derivative of $R_\point$ at $0$ is block diagonal, its $i$-th
+block the derivative of $R^i_{\point_i}$ at $0$, which is $I_{\dimension_i}$; so it is $I_\dimension$. The inverse and
 flatness follow factor by factor.
 
 </Proof>
 
 ## Derivatives in product charts
 
-Let $f : \mathcal M \to \mathcal N$ be smooth, with $y = f(x)$. Because a step in the product chart
-moves each factor in its own chart, the [derivative in charts](../derivatives-in-charts/) of $f$ is
+Let $\map : \manifold \to \otherManifold$ be smooth, with $\otherPoint = \map(\point)$. Because a step in the product chart
+moves each factor in its own chart, the [derivative in charts](../derivatives-in-charts/) of $\map$ is
 a row of blocks,
 
 $$
-	\mathrm D f(x) = \bigl[\, \mathrm D_1 f(x) \;\; \cdots \;\; \mathrm D_k f(x) \,\bigr],
+	\D \map(\point) = \bigl[\, \D_1 \map(\point) \;\; \cdots \;\; \D_k \map(\point) \,\bigr],
 	\qquad
-	\mathrm D_i f(x)\, a_i = \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} \bigl(f(x_1, \dots, x_i \oplus t a_i, \dots, x_k) \ominus y\bigr),
+	\D_i \map(\point)\, \tangent_i = \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point_1, \dots, \point_i \oplus t \tangent_i, \dots, \point_k) \ominus \otherPoint\bigr),
 	@tag(blocks)
 $$
 
 each the derivative in the $i$-th factor's chart with the other factors held fixed. A map into a
-product is a column of blocks in the same way, one per factor of the output. For a scalar $f$, the
+product is a column of blocks in the same way, one per factor of the output. For a scalar $f : \manifold \to \R$, the
 chart gradient stacks the factors' partial gradients, $g = (g_1; \dots; g_k)$, and the chart
 Hessian is the block matrix whose $(i, j)$ block differentiates $g_i$ along the $j$-th factor:
-$H_{ij}(x)\, v_j = \frac{\mathrm d}{\mathrm dt} g_i(x_1, \dots, x_j \oplus t v_j, \dots, x_k)$ at
+$H_{ij}(\point)\, \tangent_j = \frac{\dd}{\dd t} g_i(\point_1, \dots, \point_j \oplus t \tangent_j, \dots, \point_k)$ at
 $t = 0$.
 
-In particular, the retraction of the product is, as a map of the pair $(x, \delta)$, the factors'
+In particular, the retraction of the product is, as a map of the pair $(\point, \tangent)$, the factors'
 retractions side by side, and its derivatives of every order are block diagonal in the factors.
 Nothing about a product's derivatives requires more than its factors' derivatives and the
 bookkeeping of [](eq:stack).

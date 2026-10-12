@@ -1,12 +1,14 @@
 ---
 title: Automatic differentiation over frames
-summary: How a straight-line program is differentiated by composing each step's derivative maps, forward with frames of tangents, in reverse with frames of cotangents, and forward-over-reverse for Hessian products.
+summary: How a straight-line program is differentiated by composing each step's derivative maps over its computation graph, forward with frames of tangents, backwards over its backpropagation graph with frames of cotangents, and forward-over-reverse for Hessian products.
 ---
 
 <script>
 	import Statement from '$lib/components/Statement.svelte';
 	import Proof from '$lib/components/Proof.svelte';
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
 	import * as forwardOverReverse from './statements/forward-over-reverse.md';
+	import { computation, backpropagation } from './program.graph';
 </script>
 
 Automatic differentiation computes the derivatives of a program exactly, up to rounding, from the
@@ -14,98 +16,118 @@ derivatives of the steps it is made of. This note states the three ways of compo
 library needs (pushing tangents forward, pulling cotangents back, and differentiating the pull-back
 once more for second order), each over a *frame* of several directions at once.
 
-## Programs
+## Programs and their computation graphs
 
 A *straight-line program* has slots $s_0, s_1, \dots$, each holding a vector, and runs a sequence of
 steps
 
 $$
-	s_{o_k} \leftarrow F_k\bigl(s_{i_{k,1}}, \dots, s_{i_{k,m_k}}\bigr), @tag(step)
+	s_{o_k} \leftarrow \map_k\bigl(s_{i_{k,1}}, \dots, s_{i_{k,m_k}}\bigr), @tag(step)
 $$
 
-each writing one slot from slots written earlier. Some slots are *leaves*, supplied from outside:
-the variables $x$. Some are *targets*, the values to differentiate, $f(x)$. Each step's function is
-smooth, with partial Jacobians $\partial_j F_k$, one per input, of shape (output dimension) by
-(dimension of input $j$). When an input is not differentiated, its partial Jacobian is simply never
-used.
+each writing one slot from slots written earlier. Each step's map $\map_k$ is smooth, with partial
+Jacobians $\partial_j \map_k$, one per input, of shape (output dimension) by (dimension of input
+$j$). When an input is not differentiated, its partial Jacobian is simply never used.
 
-A *frame* is a matrix whose $k$ columns are directions: a tangent frame at a slot of dimension $d$
-is a $d \times k$ matrix $\dot S$, a cotangent frame a $d \times k$ matrix $\alpha$ whose columns
-are linear functionals, written as columns.
+A program is pictured by its *computation graph*. Its nodes are the slots, and it has an edge from
+each input of a step to that step's output, so a node with incoming edges is computed by the step
+that writes it, from the nodes those edges come from. Because each step reads only slots written
+before it, the computation graph has no cycles, and the order of the steps is one of its
+topological orders. Its *leaves*, the nodes with no incoming edge, are the slots no step writes:
+the program's inputs, the variables $\point$ we differentiate with respect to. Some nodes are
+*targets*, the values to differentiate, $f(\point)$. A node with several outgoing edges is a slot
+read by several steps.
+
+<ModelGraph spec={computation} />
+
+A *frame* is a matrix whose columns are directions: a tangent frame at a slot of dimension
+$\dimension$ is a $\dimension \times n$ matrix $\tangent$ of $n$ tangent vectors, and a cotangent
+frame a $\dimension \times n$ matrix $\alpha$ whose columns are linear functionals, written as
+columns. Below, $\tangent_s$ and $\alpha_s$ are the frames held at slot $s$.
 
 ## Forward: pushing tangent frames
 
-Seed each leaf with a tangent frame $\dot X$ (missing means zero), and run the steps in order, each
-pushing its inputs' frames forward by its *Jacobian–vector product*:
+Seed each leaf with a tangent frame $\tangent_{\point}$ (missing means zero), and run the steps in
+order, each pushing its inputs' frames forward along the computation graph's edges by its
+*Jacobian–vector product*:
 
 $$
-	\dot S_{o_k} = \sum_j \partial_j F_k \; \dot S_{i_{k,j}} . @tag(jvp)
+	\tangent_{s_{o_k}} = \sum_j \partial_j \map_k \; \tangent_{s_{i_{k,j}}} . @tag(jvp)
 $$
 
-By the chain rule, the frame reaching a target is $\sum_l \partial f / \partial x_l \cdot \dot X_l$:
-one pass with a frame of $k$ columns gives $k$ directional derivatives, and seeding the columns of
+By the chain rule, the frame reaching a target is $\sum_l \partial f / \partial \point_l \cdot \tangent_{\point_l}$:
+one pass with a frame of $n$ columns gives $n$ directional derivatives, and seeding the columns of
 an identity gives the whole Jacobian.
 
-## Reverse: pulling cotangent frames
+## Reverse: pulling cotangent frames over the backpropagation graph
+
+The reverse pass runs on the *backpropagation graph*: the same nodes as the computation graph, with
+every edge reversed and labelled by the pull-back $\partial_j \map_k\transpose$ of the step it came
+from. Cotangents enter at the targets, flow along its edges, and end at the leaves of the
+computation graph, which have no outgoing edges here. A node with several incoming edges, a slot
+read by several steps, receives a cotangent along each, and holds their sum.
+
+<ModelGraph spec={backpropagation} />
 
 Seed each target with a cotangent frame $\alpha_f$, every other slot with zero, and run the steps
 backwards, each adding its *vector–Jacobian product*, the pull-back of its output's cotangent, into
 each input:
 
 $$
-	\alpha_{i_{k,j}} \mathrel{+}= \partial_j F_k\transpose \, \alpha_{o_k} . @tag(vjp)
+	\alpha_{s_{i_{k,j}}} \mathrel{+}= \partial_j \map_k\transpose \, \alpha_{s_{o_k}} . @tag(vjp)
 $$
 
-The accumulation, which sums the contributions of every step that reads a slot, is the chain rule
-for a slot with several consumers. When the steps are done, each leaf holds
-$\alpha_{x_l} = \sum_f (\partial f / \partial x_l)\transpose \alpha_f$. For a scalar target seeded
-with $\alpha_f = 1$, that is the gradient $\nabla_{x_l} f$, whatever the number of leaves.
+The accumulation, which sums the cotangents arriving along every incoming edge of the
+backpropagation graph, is the chain rule for a slot with several consumers. When the steps are done,
+each leaf holds $\alpha_{\point_l} = \sum_f (\partial f / \partial \point_l)\transpose \alpha_f$. For a scalar
+target seeded with $\alpha_f = 1$, that is the gradient $\nabla_{\point_l} f$, whatever the number
+of leaves.
 
 Each column of a frame costs a small multiple of one evaluation of the program, in either
 direction. A Jacobian with few rows is cheaper in reverse, one with few columns forward.
 
 ## Forward-over-reverse: Hessian products
 
-For second derivatives, differentiate the reverse pass itself along a path $x + t\dot x$. Run the
-forward pass of [](eq:jvp) with velocities $\dot X$ seeded at the leaves, so that every slot holds
-its value $s$ and its velocity $\dot S$, then run the reverse pass carrying two cotangents per slot:
-$\alpha_s$, as in [](eq:vjp), and $\beta_s$, its derivative along the path. One column of
-$\dot X$ is one path; a frame of $k$ columns runs $k$ paths at once, and then $\beta_s$ is a frame
-of $k$ columns while $\alpha_s$ is the same for all of them. (A cotangent frame of several columns
-together with a velocity frame of several columns would make $\beta$ a three-way array; the passes
-here take one cotangent column.)
+For second derivatives, differentiate the reverse pass itself along a path $\point + t\tangent$. Run
+the forward pass of [](eq:jvp) with velocities $\tangent$ seeded at the leaves, so that every slot
+holds its value $s$ and its velocity $\tangent_s$, then run the reverse pass over the
+backpropagation graph carrying two cotangents per slot: $\alpha_s$, as in [](eq:vjp), and
+$\beta_s$, its derivative along the path. One column of $\tangent$ is one path; a frame of $n$
+columns runs $n$ paths at once, and then $\beta_s$ is a frame of $n$ columns while $\alpha_s$ is the
+same for all of them. (A cotangent frame of several columns together with a velocity frame of
+several columns would make $\beta$ a three-way array; the passes here take one cotangent column.)
 
 Differentiating [](eq:vjp) along the path by the product rule gives
 
 $$
-	\beta_{i_{k,j}} \mathrel{+}= \operatorname{hvp}_{k,j}(\alpha_{o_k}) + \partial_j F_k\transpose \, \beta_{o_k},
+	\beta_{s_{i_{k,j}}} \mathrel{+}= \hvp_{k,j}(\alpha_{s_{o_k}}) + \partial_j \map_k\transpose \, \beta_{s_{o_k}},
 	\qquad
-	\operatorname{hvp}_{k,j}(\alpha) \defeq \frac{\mathrm d}{\mathrm dt}\Big|_{t=0} \partial_j F_k(s + t\dot S)\transpose \alpha
-	= \sum_l \bigl(\partial_l \partial_j F_k\,[\dot S_{i_{k,l}}]\bigr)\transpose \alpha . @tag(leibniz)
+	\hvp_{k,j}(\alpha) \defeq \frac{\dd}{\dd t}\Big|_{t=0} \partial_j \map_k(s + t\tangent_s)\transpose \alpha
+	= \sum_l \bigl(\partial_l \partial_j \map_k\,[\tangent_{s_{i_{k,l}}}]\bigr)\transpose \alpha . @tag(leibniz)
 $$
 
 The first term is the step's own second-order map, which depends on the velocities of its inputs;
 the second is the step's ordinary pull-back, applied to $\beta$. A library writes the first for
-each step and the program applies the rule. Two consequences are useful when writing
-$\operatorname{hvp}$ for a step. If a step is linear, its partial Jacobians are constant and its
-$\operatorname{hvp}$ is zero. If the pull-back into input $j$ does not involve input $l$, then the
-velocity of input $l$ contributes nothing to $\operatorname{hvp}_{k,j}$.
+each step and the program applies the rule. Two consequences are useful when writing $\hvp$ for a
+step. If a step is linear, its partial Jacobians are constant and its $\hvp$ is zero. If the
+pull-back into input $j$ does not involve input $l$, then the velocity of input $l$ contributes
+nothing to $\hvp_{k,j}$.
 
 <Statement {...forwardOverReverse} />
 
 <Proof>
 
 The cotangents $\alpha_s$ are functions of the leaves: the reverse recurrence holds as an identity
-in $x$, with every $\partial_j F_k$ evaluated at the slot values the program computes from $x$.
-Differentiate that identity along $x + t\dot x$ for one column $\dot x$ of $\dot X$. By the
-product rule, $\beta_s \defeq \frac{\mathrm d}{\mathrm dt}\alpha_s(x + t\dot x)\big|_{t=0}$
-satisfies [](eq:leibniz), because the slot values move with the velocities the forward pass
-computed, and the seeds $\alpha_f = 1$ and $\beta_f = 0$ are the value and the derivative of a
-constant. At a leaf, $\alpha_{x_i}(x) = \nabla_{x_i} f(x)$ identically in $x$, so its derivative
-along the path is $\sum_l \nabla_{x_i} \nabla_{x_l} f(x)\,\dot x_l$.
+in $\point$, with every $\partial_j \map_k$ evaluated at the slot values the program computes from
+$\point$. Differentiate that identity along $\point + t\tangent$ for one column $\tangent$. By the
+product rule, $\beta_s \defeq \frac{\dd}{\dd t}\alpha_s(\point + t\tangent)\big|_{t=0}$ satisfies
+[](eq:leibniz), because the slot values move with the velocities the forward pass computed, and the
+seeds $\alpha_f = 1$ and $\beta_f = 0$ are the value and the derivative of a constant. At a leaf,
+$\alpha_{\point_i}(\point) = \nabla_{\point_i} f(\point)$ identically in $\point$, so its derivative
+along the path is $\sum_l \nabla_{\point_i} \nabla_{\point_l} f(\point)\,\tangent_{\point_l}$.
 
 </Proof>
 
-With all leaves stacked into one vector, $\beta_x = \nabla^2 f(x)\,\dot X$: a frame of $k$
-velocities gives $k$ columns of the Hessian for about $k$ times the cost of a gradient, and the
+With all leaves stacked into one vector, $\beta_\point = \nabla^2 f(\point)\,\tangent$: a frame of
+$n$ velocities gives $n$ columns of the Hessian for about $n$ times the cost of a gradient, and the
 identity frame gives all of it.

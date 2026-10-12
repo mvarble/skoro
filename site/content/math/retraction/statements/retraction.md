@@ -4,9 +4,9 @@ kind: definition
 title: Retraction
 ---
 
-A _retraction_ on a manifold $\mathcal M$ of dimension $d$ is a smooth map
-$R : \T\mathcal M \to \mathcal M$, written $(x, \delta) \mapsto R_x(\delta)$, such that for every
-$x \in \mathcal M$, with $\T_x\mathcal M$ identified with $\R^d$,
+A _retraction_ on a manifold $\manifold$ of dimension $\dimension$ is a smooth map
+$R : \T\manifold \to \manifold$, written $(\point, \tangent) \mapsto R_\point(\tangent)$, such that for every
+$\point \in \manifold$, with $\T_\point\manifold$ identified with $\R^\dimension$,
 
-1. $R_x(0) = x$, and
-2. the derivative of $R_x$ at $0$ is the identity: $\mathrm D R_x(0) = I_d$.
+1. $R_\point(0) = \point$, and
+2. the derivative of $R_\point$ at $0$ is the identity: $\D R_\point(0) = I_\dimension$.
