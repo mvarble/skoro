@@ -64,6 +64,8 @@ const config: KatexOptions & Settings = {
         '\\T': '\\mathrm{T}',
         '\\retr': '\\operatorname{retract}',
         '\\invretr': '\\operatorname{retract}^{-1}',
+        // A model's density, which its terms' log-densities sum to.
+        '\\density': 'p',
         '\\transpose': '^{\\top}',
     },
 };
