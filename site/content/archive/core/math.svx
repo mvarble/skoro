@@ -1,6 +1,6 @@
 ---
 summary: The mathematics the core rests on, from quantities, their charts and their products, through operations and their derivatives of first and second order composed over programs, to queries, terms, importance weights, random keys and retirement.
-depends_on: [retraction, automatic-differentiation, derivatives-in-charts, product-manifold]
+depends_on: [retraction, automatic-differentiation, derivatives-in-charts, product-manifold, generative-models]
 ---
 
 <script>
@@ -37,7 +37,8 @@ random keys make draws reproducible, and what retiring a quantity means.
 A *model* is a set of *quantities* and a set of *terms*. Each quantity takes values in its *type*:
 a manifold $\manifold$ of dimension $\dimension$ with a retraction, or a countable set. Each term
 $t$ is a real-valued function $\logterm_t$ of some of the quantities, its *log-density*, and the
-model's log-density is their sum,
+model's log-density is their sum (the measure theory underneath is in
+[the appendix](#appendix-the-probability-space-of-a-model)),
 
 $$
 	\log \density(\point) = \sum_t \logterm_t(\point) . @tag(log-density)
@@ -633,6 +634,44 @@ Two consequences for the rest of the model:
 - **Retirement** removes a namespace's quantities $E$, conditioning on the given values of $E_O$ and
   integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one term over the blanket
   [](eq:blanket).
+
+## Appendix: the probability space of a model
+
+A skoro model is a *model built forward* in the sense of
+[models built forward, for the measure theorist](../../math/generative-models/), and every object
+in this document has a place in that note's measure theory.
+
+- **Quantities are the coordinates.** Each quantity lives in a space with a reference measure:
+  Lebesgue measure on $\R^n$ and $\R^{m \times n}$ and on the open subset $(0, \infty)^n$, counting
+  measure on $\mathrm{Categorical}(n)$ and on $\mathbb Z$, and product measures on products. The
+  probability space can be taken to be the product of the quantities' spaces, with the quantities as
+  its coordinates, and the probabilistic graph's ancestral order as the order in which they were
+  built.
+- **Terms are conditional densities.** A term that scores a quantity has, as its $\exp \logterm_t$,
+  that quantity's conditional density given those it is conditioned on, so [](eq:log-density) is the
+  logarithm of the joint density of
+  [%full](statement:math/generative-models/joint-law). A likelihood factor is the change of measure
+  of [%full](statement:math/generative-models/likelihood-factor).
+- **Mapped values are functions of the quantities,** and by
+  [%full](statement:math/generative-models/doob-dynkin) they are all the random variables a model can
+  express. Their laws are image measures, with no density in general, which is why no term scores
+  one.
+- **A query conditions by dividing densities.** Its log-density [](eq:query) is that of the
+  regular conditional distribution of [%full](statement:math/generative-models/conditioning), up to
+  the constant $\log \density_O$, which is why a query may drop it.
+- **Every number an algorithm estimates is an integral** against the joint density, by
+  [%full](statement:math/generative-models/integral): an expectation, a marginal, the evidence
+  $\density_O$. Generation draws from the conditional densities in the order the model was built,
+  which is Ionescu-Tulcea's construction, and importance weighting [](eq:weight) estimates such an
+  integral from those draws.
+- **Retirement integrates and conditions.** [%full](statement:retirement) integrates the retired
+  free quantities out of the terms that touch them and conditions on the retired observed ones,
+  which is the same marginalization and the same division of densities, carried out once and kept.
+
+The test-only sphere has no reference measure in this sense, since it is not an open subset of a
+coordinate space; it carries no density in the core's tests. Manifold-valued quantities beyond the
+positive orthant will need reference measures of their own (surface measure on a sphere, Haar
+measure on the rotations) when they arrive.
 
 ## Open questions
 

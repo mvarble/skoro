@@ -1,0 +1,250 @@
+---
+title: Models built forward, for the measure theorist
+summary: Why an abstract probability space serves modelling as an abstract vector space serves linear algebra, why the way back to coordinates is harder in probability, and how building a model forward from densities restores it, so that every random variable factors through the quantities and every expectation is an explicit integral.
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as radonNikodym from './statements/radon-nikodym.md';
+	import * as mass from './statements/mass.md';
+	import * as model from './statements/model.md';
+	import * as jointLaw from './statements/joint-law.md';
+	import * as ionescuTulcea from './statements/ionescu-tulcea.md';
+	import * as doobDynkin from './statements/doob-dynkin.md';
+	import * as integral from './statements/integral.md';
+	import * as conditioning from './statements/conditioning.md';
+	import * as likelihoodFactor from './statements/likelihood-factor.md';
+</script>
+
+This note is for the reader who knows measure theory far better than statistics, and who wants to
+know what a probabilistic model *is* before being told how to compute with one. Its argument is an
+analogy with linear algebra, and its conclusion is that the models skoro builds sit in a corner of
+probability theory where the analogy is exact: one can reason abstractly and compute concretely,
+and move between the two without meeting the edge cases that usually make the move painful.
+
+## The abstraction, and the way back
+
+Linear algebra is done in an abstract vector space $V$. A mathematician working there never says
+which coordinate of which $\R^\dimension$ holds which quantity of interest: vectors are added,
+subspaces $W \subseteq V$ are taken, linear maps are composed, and the dimension can be anything.
+When a computation is needed, a basis is chosen, $V$ becomes $\R^\dimension$, and the abstract
+statements become statements about arrays of numbers. The way back is a single theorem: every
+finite-dimensional vector space is isomorphic to a coordinate space, and every choice of basis
+gives such an isomorphism.
+
+Probability is done in an abstract probability space $(\Omega, \mathscr F, \mathrm P)$. A modeller
+working there never says what $\Omega$ is, nor which sets are in $\mathscr F$, nor what
+$\mathrm P$ assigns to them. Instead they introduce random variables $X : \Omega \to \manifold$,
+measurable maps into the spaces where the quantities of the model live, and speak only of those:
+their laws, their joint laws, the independence of one from another, the conditional law of one
+given another. Any number of them may be introduced, and new ones may be introduced later, provided
+the space is rich enough to carry them. The abstraction does for the modeller what $V$ does for the
+linear algebraist: it relieves them of a coordinate system they do not need.
+
+The way back to coordinates is where the analogy usually breaks. Several things can go wrong at
+once:
+
+- **The space is underdetermined.** Many triples $(\Omega, \mathscr F, \mathrm P)$ carry random
+  variables with the same joint law, and $\mathscr F$ may hold far more than the model ever
+  mentions. Nothing in the model says which.
+- **Conditioning needs regularity.** The conditional law of $X$ given $Y$ exists as a kernel, a
+  *regular conditional distribution*, only under assumptions on the spaces (standard Borel is the
+  usual one), and even then only up to null sets of $Y$'s law. Conditioning on an event of
+  probability zero, which is what observing a continuous quantity does, depends on which version is
+  chosen; the Borel–Kolmogorov paradox is the classic example of two natural versions disagreeing.
+- **Densities need a reference.** A density is a Radon–Nikodym derivative, and exists only when
+  the law is absolutely continuous with respect to a chosen measure. The law of a function of
+  quantities, such as $(X, X)$ or a projection, often has none.
+- **Existence needs a theorem.** Writing down a family of random variables does not make a space
+  that carries them. Kolmogorov's extension theorem builds one from consistent finite-dimensional
+  laws, but asks for topological regularity of the spaces to do so.
+
+So the modeller who wants to compute, to write a probability as an integral and evaluate it, has
+to justify every step back from $(\Omega, \mathscr F, \mathrm P)$, and usually does not.
+
+## A corner of probability where the way back is clean
+
+Applied models are almost never as general as the theory allows. They are built from two
+ingredients, and both remove an edge case.
+
+**Seeds with densities.** Every quantity lives in a space with a *reference measure*: Lebesgue
+measure on $\R^\dimension$ (or an open subset of it, such as the positive orthant), or counting
+measure on a countable set, which may itself sit inside a vector space, such as the integers. Every
+distribution a quantity is drawn from is absolutely continuous with respect to its reference
+measure, so it is given by a function.
+
+<Statement {...radonNikodym} />
+
+With respect to Lebesgue measure, $\density$ is a *probability density function*:
+$\mu(\dd\point) = \density(\point)\, \dd\point$, its values are not probabilities, every single
+point has measure zero, and $\density$ is determined only up to a Lebesgue-null set. With respect to
+counting measure, nothing is null but the empty set, and the density is pinned down completely by
+the mass it gives to points.
+
+<Statement {...mass} />
+
+<Proof>
+
+If $\nu(A) = 0$ then $A = \emptyset$, so $\mu \ll \nu$, and $\nu$ is $\sigma$-finite because
+$\manifold$ is countable. Countable additivity gives
+$\mu(A) = \sum_{\point_k \in A} \mu(\{\point_k\}) = \int_A \density \,\dd\nu$ with
+$\density(\point_k) = \mu(\{\point_k\})$, and uniqueness almost everywhere is uniqueness
+everywhere, since the only null set is empty.
+
+</Proof>
+
+This is why $\density$ is called a *probability mass function* in that case, and why the two cases
+can be treated as one: a density is always with respect to a reference measure, and a mass function
+is a density with respect to counting measure.
+
+**Quantities introduced one at a time.** Each quantity is drawn from a distribution whose
+parameters may depend on any quantity introduced before it, through any measurable map, however
+nonlinear. A vehicle's position is drawn given its previous position, pushed through a motion
+model; a range measurement is drawn given the vehicle and a landmark, through the distance between
+them.
+
+<Statement {...model} />
+
+A conditional density written as $\density_i(\point_i \mid \point_{<i}) = q_i(\point_i; \theta_i(\point_{<i}))$,
+a family of densities $q_i$ with parameters computed from earlier quantities by a measurable map
+$\theta_i$, is measurable as a composition of measurable maps, so any such nonlinear dependence is
+allowed. Nothing else is: there are no quantities without a density, and no dependence on a
+quantity introduced later.
+
+## What the restriction buys
+
+The first thing it buys is a canonical coordinate space, in the role of $\R^\dimension$.
+
+<Statement {...jointLaw} />
+
+<Proof>
+
+The function $\density$ is non-negative and measurable on the product. By Tonelli's theorem,
+integrating over $\point_n$ first, then $\point_{n-1}$, and so on, each factor
+$\density_i(\cdot \mid \point_{<i})$ integrates to $1$ against $\nu_i$ whatever the earlier
+coordinates are, so $\int \density \,\dd\nu = 1$, and stopping after the last $n - i$ integrals
+leaves the marginal density on the first $i$. For measurable $B \subseteq \manifold_{<i}$ and
+$A \subseteq \manifold_i$, Tonelli again gives
+$\mu(\point_{<i} \in B,\ \point_i \in A) = \int_B K_i(\point_{<i}, A)\, \mu_{<i}(\dd\point_{<i})$,
+with $\mu_{<i}$ the marginal on the first $i - 1$, and $K_i(\point_{<i}, \cdot)$ is a probability
+measure for every $\point_{<i}$ and measurable in $\point_{<i}$ for every $A$, again by Tonelli.
+
+</Proof>
+
+The probability space can then be taken to be $\Omega = \manifold$, with its product
+$\sigma$-algebra, $\mathrm P = \mu$, and the quantities the coordinate projections. This is the
+analogue of choosing a basis: the quantities are the coordinates. Nothing is lost by the choice,
+because every statement the model makes is about the joint law of its quantities, and that law is
+$\mu$ on any space that carries them.
+
+Nor is the restriction to finitely many quantities essential. The construction never used anything
+about the spaces beyond measurability, and it extends to infinitely many quantities built forward,
+with no topological assumption, by a theorem that is the right one for models built this way.
+
+<Statement {...ionescuTulcea} />
+
+Kolmogorov's theorem builds a law from consistent marginals, and needs the spaces to be nice for
+the marginals to determine one. Ionescu-Tulcea builds it from successive conditional laws, which is
+exactly what a model built forward provides, and needs nothing. Appending a quantity is extending a
+basis: the old coordinates keep their joint law, and a new one is added with its conditional law
+given them.
+
+The second thing the restriction buys is a guarantee about what the model can say. A model speaks
+only of its quantities, so the random variables it can express are the $\sigma(X)$-measurable ones,
+$X = (X_1, \dots, X_n)$, and those are exactly the functions of the quantities.
+
+<Statement {...doobDynkin} />
+
+<Proof>
+
+If $Y = g \circ X$, then $Y^{-1}(B) = X^{-1}(g^{-1}(B)) \in \sigma(X)$. Conversely, every set in
+$\sigma(X)$ is $X^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{X^{-1}(A)}$ is
+$\mathbf 1_A \circ X$, and by linearity every $\sigma(X)$-measurable simple function is $g \circ X$
+for a simple $g$. A $\sigma(X)$-measurable $Y$ is a pointwise limit of such functions
+$g_k \circ X$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
+elsewhere is measurable with $Y = g \circ X$, because the sequence converges at every point of the
+image of $X$.
+
+</Proof>
+
+<Statement {...integral} />
+
+<Proof>
+
+The first claim is [%full](statement:doob-dynkin). For the second, the law of $X$ is $\mu$, so
+$\E[g \circ X] = \int g \,\dd\mu$ by the change of variables for image measures, and
+$\int g \,\dd\mu = \int g \density \,\dd\nu$ because $\density = \dd\mu / \dd\nu$. The iterated form
+is Fubini's theorem, which applies because $g \density$ is $\nu$-integrable.
+
+</Proof>
+
+This is the probabilistic half of the analogy made precise. In linear algebra, a vector of $V$ is
+a combination of basis vectors and a linear functional is a combination of coordinates. Here, a
+random variable is a function of the quantities, an event of the model is a measurable set of
+their values, and its probability, an expectation, a marginal or a moment is an integral against
+the product of the conditional densities, in the order the model was built. The integral is
+explicit, though it is rarely available in closed form; estimating it is what inference
+algorithms are for.
+
+## Conditioning and likelihoods
+
+Observing quantities is conditioning on them, and in this corner it needs no existence theorem:
+the conditional law is written down from the densities.
+
+<Statement {...conditioning} />
+
+<Proof>
+
+By Tonelli, $\density_O$ is measurable and $\int \density_O \,\dd\nu_O = 1$, so it is a density of
+the law of $X_O$ and is finite $\nu_O$-almost everywhere. The set where it is $0$ has probability
+$0$ under that law, and so does the set where it is infinite. For measurable $A$ and $B$,
+
+$$
+	\mathrm P(X_F \in A,\ X_O \in B)
+	= \int_B \int_A \density(\point_F, \point_O)\, \nu_F(\dd\point_F)\, \nu_O(\dd\point_O)
+	= \int_B K(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
+$$
+
+the two exceptional sets contributing nothing to either side, which is the defining property of a
+regular conditional distribution.
+
+</Proof>
+
+The version is chosen, not discovered: changing the densities on a null set, or the reference
+measures by a change of coordinates, changes $K$ on a null set of observations, which is all the
+freedom the Borel–Kolmogorov paradox exploits. In a model built forward the choice is made once,
+by the densities and reference measures the model was written with, and every observation is
+conditioned on by that same rule. That is also why two densities may only be compared, or divided,
+when they are with respect to the same reference measure.
+
+The same computation explains a factor that scores no quantity. Multiplying the joint density by a
+non-negative function and normalizing is a change of measure, and it is always conditioning on data
+that the model does not carry as a quantity.
+
+<Statement {...likelihoodFactor} />
+
+<Proof>
+
+$\mu_L$ is a probability measure because $\int L \,\dd\mu = Z$, and its density with respect to
+$\nu$ is $L \density / Z$. With $Y$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
+so [%full](statement:conditioning), with $X$ free and $Y$ observed at $\otherPoint_0$, gives the
+conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_Y(\otherPoint_0)$,
+where $\density_Y(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
+
+</Proof>
+
+So a *likelihood factor* is exactly what its name says: the likelihood of an observation that is
+not a quantity of the model, already conditioned on.
+
+## What is left outside
+
+Two things a measure theorist might expect are deliberately absent. A function of quantities, a
+*mapped value*, has a law, the image of $\mu$, but in general no density with respect to any
+reference measure, so a model built forward never scores one: densities are given for quantities,
+which were introduced with them, and for nothing else. And an *improper* seed, a "density" with
+infinite integral such as a flat density on a line, is not a probability measure at all, and the
+joint law above is then a $\sigma$-finite measure rather than a probability. Conditioning by
+division of densities still makes sense when the normalizing integral that results, the $Z$ or
+$\density_O$ above, is finite and positive, and then yields a probability measure. Whether it is
+depends on what is observed: it is a condition on the query, not on the model.
