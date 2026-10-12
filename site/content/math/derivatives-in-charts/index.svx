@@ -113,7 +113,10 @@ $\varphi_t(u) = t \tangent + u + \tfrac{t}{2}\, \tangent \times u$, up to terms 
 $t^2 \lVert u\rVert$ and $t \lVert u\rVert^2$, so the correction is
 $\tfrac12 [g(\point)]_\times \tangent$: the chart Hessian is the Hessian of the pull-back plus the
 skew-symmetric matrix $\tfrac12 [g(\point)]_\times$, and it is not symmetric away from a stationary
-point. Which symmetric matrix to use there, if one is needed, is the algorithm's decision. At a
+point. On the positive reals, with $R_\point(u) = \point\, e^{u}$, the charts commute instead:
+$\varphi_t(u) = t \tangent + u$, whose derivative does not move with $t$, so the correction vanishes
+and the two Hessians agree everywhere. Which symmetric matrix to use where they differ, if one is
+needed, is the algorithm's decision. At a
 stationary point, which is where curvature is most often read (a Laplace approximation, a Newton
 step's convergence), the two agree.
 

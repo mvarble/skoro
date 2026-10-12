@@ -104,11 +104,33 @@ and an edge from each term to the quantity it *scores*, if any.
 
 ## Quantities
 
-**Euclidean quantities.** The core's continuous types are the flat ones: the real line $\R$,
+**Euclidean quantities.** The core's flat types are the real line $\R$,
 vectors $\R^n$ and matrices $\R^{m \times n}$, with $\point \oplus \tangent = \point + \tangent$ and
 $\otherPoint \ominus \point = \otherPoint - \point$. A matrix is flattened column by column into
 $\R^{mn}$ for its tangent coordinates, so its dimension equals its storage size. The dimensions
 $n$, $m$ are fixed for each quantity when it is created, and every operation checks them then.
+
+**Positive quantities.** Scales, rates and variances live on the positive orthant
+$(0, \infty)^n$, with the retraction of [the example in retractions](../../math/retraction/#the-definition),
+elementwise:
+
+$$
+	\point \oplus \tangent = \point \odot e^{\tangent}, \qquad
+	\otherPoint \ominus \point = \log \otherPoint - \log \point . @tag(positive)
+$$
+
+A tangent coordinate is a relative change, and a point is stored as its $n$ values, so its
+dimension equals its storage size. The positive orthant is not flat in the sense of the notes, since
+$\oplus$ is not addition, but it is flat in disguise: $\log(\point \oplus \tangent) = \log \point +
+\tangent$, so the logarithm is one chart of the whole space in which every retraction is a
+translation. Three things follow. The retraction is defined for every $\tangent \in \R^n$ and never
+leaves the space. The identities $(\point \oplus \tangent) \ominus \point = \tangent$ and
+$\point \ominus (\point \oplus \tangent) = -\tangent$ both hold exactly. And the chart Hessian equals
+the Hessian of the pull-back everywhere, not only at stationary points: in
+[%full](statement:math/derivatives-in-charts/chart-hessian), $\varphi_t(u) = t\tangent + u$, whose
+derivative does not move, so the correction vanishes. What is not trivial is reading a positive
+quantity as a real number, through the inclusion $(0, \infty)^n \subset \R^n$: its derivative in
+charts is $\operatorname{diag}(\point)$, which moves with the point.
 
 **Discrete quantities.** The core's discrete types are the finite sets
 $\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$, with $\mathrm{Boolean} = \mathrm{Categorical}(2)$,
@@ -247,6 +269,26 @@ frame is handled column by column, so one column is shown.
 | slice, concatenate, transpose | the same map | its adjoint | $0$ |
 | select | [](eq:select) | to the selected value | $0$ |
 
+The operations on positive quantities read their tangents and cotangents in the charts
+[](eq:positive), that is, in logarithmic coordinates, where all but the inclusion are linear. Here
+$a$ and $b$ are positive, $c$ is Euclidean, and the products, quotients and powers are
+elementwise.
+
+| operation | from, to | tangent | cotangent per input | second order per input |
+| --- | --- | --- | --- | --- |
+| $a$ as a real | $(0, \infty)^n \to \R^n$ | $a \odot \tangent_a$ | $a \odot \alpha$ | $a \odot \tangent_a \odot \alpha$ |
+| $e^{c}$ | $\R^n \to (0, \infty)^n$ | $\tangent_c$ | $\alpha$ | $0$ |
+| $\log a$ | $(0, \infty)^n \to \R^n$ | $\tangent_a$ | $\alpha$ | $0$ |
+| $a \odot b$ | $(0, \infty)^n \to (0, \infty)^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $1 / a$ | $(0, \infty)^n \to (0, \infty)^n$ | $-\tangent_a$ | $-\alpha$ | $0$ |
+
+The exponential and logarithm here are not the rows of the first table: those map $\R^n$ to
+$\R^n$, read in the flat charts, where their derivatives are $e^{a}$ and $1/a$; these change type,
+and in the charts of the positive side their derivatives are identities. Both are kept, because a
+model may want either. The retraction [](eq:positive) is the composite $\point \odot e^{\tangent}$
+of the second and fourth rows, and its inverse $\log \otherPoint - \log \point$ of the third and a
+Euclidean subtraction, so every derivative of both, of either order, is an identity or zero.
+
 Every row is checked the same way: the tangent map is the derivative of the forward map, the
 cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
 velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) are the
@@ -293,13 +335,14 @@ factors' passes, which is the derivative structure of [](eq:math/product-manifol
 </Proof>
 
 The proof introduces no arithmetic beyond additions of zero, so a test may hold the agreement to a
-tolerance of a few units in the last place. On Euclidean factors alone it checks little, though:
-every second-order map along the way is zero, so the second derivatives under test are zeros on
-both sides. The test means something only when a factor is curved, and when the retraction is
-composed with a function whose second derivative does not vanish. A private test-only type with a
-curved retraction, the positive reals with $\point \oplus \tangent = \point\, e^{\tangent}$
-([retractions](../../math/retraction/)), needs only the exponential and the logarithm, and makes
-every block of the chart Hessian non-trivial.
+tolerance of a few units in the last place. On the retraction alone it checks little at second
+order, though, and adding a positive factor does not change that: in the charts of every type in
+the core, a retraction is a translation, so every second-order map along it is zero and the second
+derivatives under test are zeros on both sides. The test means something at second order only when
+the retraction is composed with a function whose second derivative does not vanish, such as one
+that reads a positive factor as a real number, through the inclusion and its non-zero second-order
+map. A type whose charts do not commute, such as the rotations, would also exercise the correction
+term of [%full](statement:math/derivatives-in-charts/chart-hessian); the core has none.
 
 ## Queries
 
@@ -416,11 +459,20 @@ $\E_\proposal[\weight h] = \int h\, \density(\point_F, \point_O)\, \dd \point_F$
 
 </Proof>
 
-Two conditions in the statement are the core's to check or to state. The base measures must match:
-in the core, a continuous quantity's density is with respect to Lebesgue measure on its Euclidean
-space and a discrete quantity's with respect to counting measure, so this holds; densities on
-curved manifolds will need a stated base measure when the first curved type arrives. Positivity is
-the distribution's responsibility, and the core cannot check it.
+Two conditions in the statement are the core's to check or to state. The base measures must match.
+In the core, a continuous quantity's density is with respect to Lebesgue measure on the space its
+values lie in, $\R^n$ or the open subset $(0, \infty)^n$ of it, and a discrete quantity's with
+respect to counting measure, so this holds as long as every distribution keeps to that convention.
+The one place it is easy to break is a density written in the logarithmic chart of a positive
+quantity, such as a log-normal written as a normal in $u = \log \point$: with respect to Lebesgue
+measure on $(0, \infty)^n$, it carries the Jacobian of the chart,
+
+$$
+	\log \density_{\point}(\point) = \log \density_u(\log \point) - \sum_i \log \point_i . @tag(log-chart-density)
+$$
+
+Densities on manifolds without such a chart will need a base measure of their own when the first
+of them arrives. Positivity is the distribution's responsibility, and the core cannot check it.
 
 ## Random keys
 
@@ -510,8 +562,9 @@ Two consequences for the rest of the model:
 
 ## In skoro's terms
 
-- **Quantities** are Euclidean (real, vector, matrix) and discrete (categorical, boolean, integer),
-  and products of continuous quantities. Dimensions are fixed when a quantity is created, and every
+- **Quantities** are Euclidean (real, vector, matrix), positive ($(0, \infty)^n$, with the
+  retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
+  continuous quantities. Dimensions are fixed when a quantity is created, and every
   derivative coordinate is indexed by tangent dimension.
 - **The compilation graph** holds values and operations, and programs are compiled from it; **the
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
@@ -534,21 +587,24 @@ Two consequences for the rest of the model:
 
 ## Open questions
 
-> [!TODO] The acceptance test needs a curved factor
-> On Euclidean factors, every second derivative the charter's acceptance test compares is zero. I
-> propose that the test also use a private, test-only factor with a curved retraction (the positive
-> reals with $\point \oplus \tangent = \point\, e^{\tangent}$), and compare not only the
-> retraction's passes but those of a nonlinear scalar function composed with it, so that every
-> block of the chart Hessian is non-trivial. This needs the exponential and the logarithm among the
-> primitives.
+> [!TODO] The acceptance test at second order
+> On the core's types, every second derivative of a retraction is zero in charts, so the charter's
+> acceptance test compares zeros at second order. I propose that it use a product of two Euclidean
+> factors, a real line and a positive factor, and compare not only the retraction's passes but those
+> of a nonlinear scalar function composed with it that reads the positive factor as a real number,
+> so that the chart Hessian has non-zero blocks on every factor. Testing the chart Hessian's
+> correction term needs a type whose charts do not commute; should the core's tests carry a private
+> one (the unit sphere $S^2$ with $\point \oplus \tangent = (\point + \tangent) / \lVert \point + \tangent \rVert$
+> in a basis of its tangent plane, say), or should that wait for the rotations?
 
 > [!TODO] Which primitives the core ships
 > The table in [The primitives](#the-primitives) goes beyond addition, subtraction and
 > multiplication: it adds negation, scaling by a real, matrix products, sums, the elementwise
-> exponential and logarithm, and the structural operations (slice, concatenate, transpose,
-> select). Slicing and concatenation are needed by products, the exponential and logarithm by the
-> curved test factor and by any test distribution with a scale. Is this the right set, or should
-> the core stop at what the products and the acceptance test strictly need?
+> exponential and logarithm, the structural operations (slice, concatenate, transpose, select),
+> and the operations on positive quantities. Slicing and concatenation are needed by products, the
+> positive operations by the positive quantities' retraction, and the Euclidean exponential and
+> logarithm by any test distribution with a scale. Is this the right set, or should the core stop
+> at what the quantity types and the acceptance test strictly need?
 
 > [!TODO] What retirement does in the core
 > Computing the replacement $\logterm_B$ needs distributions and linear algebra the core does not
