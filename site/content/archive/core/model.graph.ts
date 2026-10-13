@@ -11,7 +11,7 @@ const quantity: NodeKindSpec = { name: 'Quantity', hue: 'orange' };
 
 export const probabilistic = defineGraph({
     title: 'A probabilistic graph',
-    caption: String.raw`Each term is labelled by the regular conditional distribution it gives the density of, or, if it scores nothing, by its likelihood. An arrow into a term comes from a quantity it is conditioned on; a dotted arrow out of a term points to the quantity it scores. The motion noise $\boldsymbol\sigma$ is a parameter, scored by no term, with the improper score $S$; $L$ is an external sighting of the vehicle's second position. Retiring $\randomPoint_0$ and $\bfz_0$ replaces the terms $t_1$, $t_3$ and $t_4$ by one term over the Markov blanket $\{\randomPoint_1, \bfm, \boldsymbol\sigma\}$.`,
+    caption: String.raw`A term that scores a quantity is labelled by the regular conditional distribution it gives the density of; a likelihood factor, by the factor itself, $\exp \logterm_t$. A solid arrow runs from a quantity to a term conditioned on it, a dotted arrow from a term to the quantity it scores. No term scores the motion noise $\bfsigma$, a parameter; its improper prior is the likelihood factor $S$. $L$ is an external sighting of the vehicle's second position. Retiring $\randomPoint_0$ and $\bfz_0$ would replace $t_1$, $t_3$ and $t_4$ by one term over their Markov blanket $\{\randomPoint_1, \bfm, \bfsigma\}$.`,
     width: 780,
     height: 410,
     // Larger than the default, so that the subscripts of the distributions stay legible.
@@ -32,7 +32,7 @@ export const probabilistic = defineGraph({
             x: 370,
             y: 370,
             kind: 'parameter',
-            label: String.raw`$\boldsymbol\sigma$`,
+            label: String.raw`$\bfsigma$`,
         },
         {
             id: 'score',
@@ -40,7 +40,7 @@ export const probabilistic = defineGraph({
             y: 370,
             kind: 'factor',
             label: String.raw`$t_7$`,
-            annotation: String.raw`$S(\boldsymbol\sigma)$`,
+            annotation: String.raw`$S(\bfsigma)$`,
             annotationAngle: 0,
         },
         {
@@ -58,7 +58,7 @@ export const probabilistic = defineGraph({
             y: 270,
             kind: 'term',
             label: String.raw`$t_3$`,
-            annotation: String.raw`$\rmP_{\randomPoint_1 \mid \randomPoint_0, \boldsymbol\sigma}$`,
+            annotation: String.raw`$\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfsigma}$`,
             annotationAngle: 140,
         },
         { id: 'x1', x: 440, y: 270, kind: 'quantity', label: String.raw`$\randomPoint_1$` },
