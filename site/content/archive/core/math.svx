@@ -484,34 +484,49 @@ $t_4$ scores $z_0$, so it is conditioned on $\point_0$ and $m$.
 
 **The generative reading.** A distribution may provide a sampler for the quantity it scores, which
 draws $s_t$ given $C_t$, with a log-density $\log \proposal_t(s_t \mid C_t)$ of its own; an exact
-sampler has $\proposal_t = \density_t$ (charter, position 9). A query generates its free
-quantities, continuous and discrete, ancestrally: each from the sampler of the term that scores it,
-in a topological order of the probabilistic graph. In this section, $\point_F$ stands for all of
-them. Generation is possible exactly when every free quantity is scored by a term with a sampler,
-or is a parameter the query supplies a proposal for; it is refused otherwise, naming a quantity
-that is neither. A proposal for a parameter enters the second sum below as a sampler's density
-would, and an optimizer, which generates nothing, is given each free parameter's starting value
-instead. The importance weight of a generated point
-is
+sampler has $\proposal_t = \density_t$ (charter, position 9).
+
+A parameter has no distribution, and so no sampler; the core supplies a *proposal* for it instead.
+A proposal is a conditional density $\proposal_\theta(\theta \mid C_\theta)$ attached to the
+parameter $\theta$ in the model, with respect to the parameter's base measure and conditioned on
+quantities $C_\theta$ that existed before the parameter, from which the parameter is drawn when it
+is generated. It is not a term: it contributes nothing to $\log \density$, and enters only the
+weights below. Ancestral order places each parameter after its $C_\theta$, as it places a scored
+quantity after the quantities its term is conditioned on. A parameter without a proposal is legal,
+as a distribution without a sampler is.
+
+A query generates its free quantities, continuous and discrete, ancestrally: each scored quantity
+from the sampler of the term that scores it, and each parameter from its proposal, in a
+topological order of the probabilistic graph. In this section, $\point_F$ stands for all of them,
+and $\Theta_F$ for the parameters among them. Generation is possible exactly when every free
+quantity is scored by a term with a sampler or is a parameter with a proposal; it is refused
+otherwise, naming a quantity that is neither. The importance weight of a generated point is
 
 $$
-	\log \weight(\point_F) = \sum_t \logterm_t(\point_F, \point_O) - \sum_{t \,:\, s_t \in F} \log \proposal_t(s_t \mid C_t), @tag(weight)
+	\log \weight(\point_F) = \sum_t \logterm_t(\point_F, \point_O)
+	- \sum_{t \,:\, s_t \in F} \log \proposal_t(s_t \mid C_t)
+	- \sum_{\theta \in \Theta_F} \log \proposal_\theta(\theta \mid C_\theta), @tag(weight)
 $$
 
-which is the charter's [](eq:archive/charter/writeup/weight), with the observed quantities' terms
-and the likelihood factors, the likelihoods of this query, contributing $\logterm_t$ alone, and
-each term whose sampler is exact cancelling.
+which is the charter's [](eq:archive/charter/writeup/weight), with the observed quantities' terms,
+the likelihood factors and the parameters' scores, the likelihoods of this query, contributing
+$\logterm_t$ alone, each term whose sampler is exact cancelling, and each free parameter
+contributing its proposal. An optimizer generates nothing, and needs a starting value for each free
+parameter instead: the query gives one, or it is drawn from the parameter's proposal.
 
 <Statement {...importance} />
 
 <Proof>
 
 Ancestral generation draws $\point_F$ with density
-$\proposal(\point_F) = \prod_{t : s_t \in F} \proposal_t(s_t \mid C_t)$ with respect to the product
-of the base measures, since each quantity is drawn given quantities drawn or fixed before it. Then
-$\weight = \density(\point_F, \point_O) / \proposal(\point_F)$ wherever $\proposal > 0$, which covers
-the support of $\density(\cdot, \point_O)$ by the positivity condition, and
-$\E_\proposal[\weight h] = \int h\, \density(\point_F, \point_O)\, \dd \point_F$.
+$\proposal(\point_F) = \prod_{t : s_t \in F} \proposal_t(s_t \mid C_t) \prod_{\theta \in \Theta_F} \proposal_\theta(\theta \mid C_\theta)$
+with respect to the product of the base measures, since each free quantity is drawn given
+quantities drawn or fixed before it. Then
+$\weight = \density(\point_F, \point_O) / \proposal(\point_F)$ wherever $\proposal > 0$, which
+covers the set where $\density(\cdot, \point_O) > 0$ by the positivity condition, and
+$\E_\proposal[\weight h] = \int h\, \density(\point_F, \point_O)\, \dd \point_F$. When $Z$ is
+finite and positive, $\pi = \density(\cdot, \point_O)\, \dd\point_F / Z$ is a probability
+measure, and the integral is $Z\, \E_\pi[h]$.
 
 </Proof>
 
@@ -634,8 +649,9 @@ Two consequences for the rest of the model:
   differentiating with respect to a query's free continuous quantities in their charts, refused
   before running when not admissible by [%full](statement:order).
 - **The density** is the sum of terms [](eq:log-density). A query fixes the observed quantities and
-  the discrete ones, and its density is [](eq:query). Generation is ancestral from samplers, and its
-  weight is [](eq:weight).
+  the discrete ones, and its density is [](eq:query). Generation is ancestral, from the samplers of
+  scored quantities and the proposals the core supplies for parameters, and its weight is
+  [](eq:weight).
 - **Random keys** are derived from addresses by [](eq:address-key).
 - **Retirement** removes a namespace's quantities $E$, conditioning on the given values of $E_O$ and
   integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one term over the blanket

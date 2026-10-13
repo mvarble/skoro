@@ -273,8 +273,9 @@ $S \equiv 1$, maximum likelihood estimation.
 In every other respect a parameter is a quantity: it is a coordinate of the space the model
 describes, functions of it are random variables of the model, and it is conditioned on or left free
 like the rest. The one difference is that nothing generates it. An optimizer must be given its
-starting value, and a sampler must draw it from a proposal $\proposal_\Theta$ of its own, whose
-density, $S / \proposal_\Theta$ in all, enters the weight as any sampler's does.
+starting value, and a sampler must draw it from a proposal $\proposal_\Theta$ of its own, a
+density that may depend on earlier quantities like a kernel, and contributes
+$S / \proposal_\Theta$ in all to the weight.
 
 ## How skoro is built on this
 
@@ -318,8 +319,8 @@ $\density$ is only one.
   resampling step in a particle filter is unchanged when every weight is multiplied by the same
   number.
 - **Parameters are quantities without a seed.** An improper prior is a parameter with a score
-  [](eq:parameter): an optimizer is given its starting value, a sampler a proposal for it, and in
-  every other way it is treated as a quantity.
+  [](eq:parameter). The model carries a proposal for it, from which a sampler draws it and an
+  optimizer may take its starting value, and in every other way it is treated as a quantity.
 - **Functions of quantities belong in the model.** A mapped value $f(\randomPoint)$ is never scored, since
   its law $f_\# \mu$ has no density in general, but it is put *in* the model all the same. It is
   generated whenever its arguments are, so its law is sampled even without a density; its
