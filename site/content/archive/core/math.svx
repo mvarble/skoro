@@ -502,30 +502,34 @@ the product rather than at the type.
 
 The charter puts conditioning in the query: the model holds the joint density
 [](eq:log-density), and each question asked of it says which quantities are fixed. A *query*
-partitions the quantities its targets reach in the compilation graph into
+partitions the quantities its targets reach in the compilation graph twice over, into observed and
+free, and into continuous and discrete:
 
-- the *observed* quantities $\point_O$, fixed at values the query gives;
-- the *free continuous* quantities $\point_F$, the variables of the query;
-- the *free discrete* quantities $\discretePoint_D$, which a generation draws, and whose values any
-  other query gives and holds fixed.
+- the *observed* quantities, continuous $\point_O$ and discrete $\discretePoint_O$, fixed at values
+  the query gives: what the query conditions on;
+- the *free* quantities, continuous $\point_F$ and discrete $\discretePoint_F$: the variables of the
+  query, whose values are the point at which it is evaluated.
 
-The query's log-density is then a function of $\point_F$ alone,
+The query's log-density is then a function of the free values,
 
 $$
-	\log \density(\point_F;\, \point_O, \discretePoint_D) = \sum_t \logterm_t(\point_F, \point_O, \discretePoint_D), @tag(query)
+	\log \density(\point_F, \discretePoint_F;\, \point_O, \discretePoint_O) = \sum_t \logterm_t(\point_F, \discretePoint_F, \point_O, \discretePoint_O), @tag(query)
 $$
 
-which is, up to the constant $\log \density(\point_O, \discretePoint_D)$, the log-density of the
-conditional distribution of $\point_F$ given the rest. One model answers many queries: with the
-measurements observed it is a posterior; with nothing observed, a prior to simulate from; with the
-states observed, a likelihood of measurements. Parameters are quantities like any other here: a
+which is, up to the constant $\log \density(\point_O, \discretePoint_O)$, the log-density of the
+conditional distribution of the free quantities given the observed ones, with respect to Lebesgue
+measure on the continuous free quantities and counting measure on the discrete ones. One model
+answers many queries: with the measurements observed it is a posterior; with nothing observed, a
+prior to simulate from; with the states observed, a likelihood of measurements. A switching model's
+mode, or the association of a measurement with the landmark it came from, is observed when it is
+known and free when it is not. Parameters are quantities like any other here: a
 query for the example's positions observes the IMU reading $\bfzeta_1$ along with the measurements,
 and either observes the scale $\bfsigma$ or leaves it free, to be estimated with the positions.
 
 **Roots.** The roots of a query's program, the roots of its computation graph, are the
 quantities and constants its targets reach. Of these, the free continuous quantities are the ones
-every pass differentiates with respect to, in their tangent charts; the observed and discrete
-quantities and the constants are fixed inputs. A quantity's value is an input of the query even
+every pass differentiates with respect to, in their tangent charts; the observed quantities, the
+free discrete ones and the constants are inputs no pass differentiates. A quantity's value is an input of the query even
 when the quantity was drawn from a distribution whose parameters depend on other quantities, since
 it is a root of the compilation graph: $\partial \log \density / \partial \point_i$ counts
 $\point_i$'s appearances in the terms, never its role in generating its children.
@@ -540,9 +544,9 @@ fixed at one of two levels, and is folded at that level.
   result, in double precision on the host like every value it stores. A query casts it to its own
   precision like any other constant. Conditioning in the query does not prevent this: a constant is
   not a quantity, so no query can observe or free it.
-- **In a compiled query.** A value reached from observed quantities, and from constants, is fixed
-  only for the queries that observe those quantities, so it is folded when such a query is
-  compiled, and reused by every evaluation of the compiled program.
+- **In a compiled query.** A value reached from observed quantities, continuous or discrete, and
+  from constants, is fixed only for the queries that observe those quantities, so it is folded when
+  such a query is compiled, and reused by every evaluation of the compiled program.
 
 A value reached from a free quantity is not folded. The difference shows in a Gaussian term written
 with a covariance factor $L$, whose log-density reads its inverse and the logarithms of its diagonal
@@ -550,15 +554,28 @@ with a covariance factor $L$, whose log-density reads its inverse and the logari
 folded once in the model; if it is an observed quantity, once per compiled query; if it is free,
 they are computed on every evaluation, together with their derivatives with respect to $L$.
 
-**Discrete quantities in a query.** The gradient of [](eq:query) at fixed $\discretePoint_D$ is the
-gradient of the conditional density of $\point_F$ given $\discretePoint_D$. An algorithm that
-targets the distribution of $\point_F$ alone, with $\discretePoint_D$ unobserved, needs
-$\discretePoint_D$ summed or sampled out, which a gradient cannot do; that is why the charter has a
-gradient-based algorithm refuse a query with a free discrete quantity, rather than silently
-condition on the value it was given.
+Selection by an observed index folds further than its value. Since
+$\operatorname{select}(\discretePoint;\, \point_0, \dots, \point_{n-1})$ is $\point_\discretePoint$,
+an observed $\discretePoint$ makes the selection the chosen input itself, and the compiled program
+takes that input in its place. The inputs not chosen, and every value that reaches the program's
+targets only through them, drop out of the program: a mixture with its component observed computes
+that component alone.
+
+**Discrete quantities in a query.** Observing a discrete quantity and leaving it free give the same
+density at the same values, since [](eq:query) is the same sum either way. What differs is the
+distribution the query targets. An observed $\discretePoint_O$ is conditioned on: the target is the
+distribution of the free quantities given its value, which every evaluation holds. A free
+$\discretePoint_F$ is part of the target: an algorithm evaluates the density at values of
+$\discretePoint_F$ it chooses (the current state of a Markov chain, or a drawn particle) and must
+sum or sample over them to answer for the target. Derivatives stop at discrete quantities, so the
+gradient of [](eq:query) at given values of $\discretePoint_F$ is the gradient of the conditional
+density of $\point_F$ given those values, not of the target. A gradient cannot sum or sample out
+$\discretePoint_F$, so a gradient-based algorithm refuses a query with a free discrete quantity
+(charter, position 7), rather than silently condition on the values it was given. Observing the
+discrete quantities is how a model that has them is given to such an algorithm.
 
 **Flattened coordinates.** An estimator works with vectors, not with quantities. Ordered as the
-estimator chooses, the free quantities $\point_F = (\point_1, \dots, \point_n)$ are one point of the
+estimator chooses, the free continuous quantities $\point_F = (\point_1, \dots, \point_n)$ are one point of the
 product manifold $\manifold_1 \times \cdots \times \manifold_n$, a tangent of which is a vector
 $\tangent \in \R^\dimension$, $\dimension = \sum_i \dimension_i$, stacked by
 [](eq:math/product-manifold/stack). An estimator's step is that product's retraction,
@@ -605,7 +622,8 @@ as a distribution without a sampler is.
 A query generates its free quantities, continuous and discrete, ancestrally: each scored quantity
 from the sampler of the term that scores it, and each parameter from its proposal, in a
 topological order of the probabilistic graph. In this section, $\point_F$ stands for all of them,
-and $\Theta_F$ for the parameters among them. Generation is possible exactly when every free
+$\discretePoint_F$ included, $\point_O$ for all the observed quantities, $\discretePoint_O$
+included, and $\Theta_F$ for the parameters among the free ones. Generation is possible exactly when every free
 quantity is scored by a term with a sampler or is a parameter with a proposal; it is refused
 otherwise, naming a quantity that is neither. The importance weight of a generated point is
 
@@ -758,8 +776,9 @@ Two consequences for the rest of the model:
 - **Passes** are the forward, tangent, cotangent and Hessian passes over a compiled program,
   differentiating with respect to a query's free continuous quantities in their charts, refused
   before running when not admissible by [%full](statement:order).
-- **The density** is the sum of terms [](eq:log-density). A query fixes the observed quantities and
-  the discrete ones, and its density is [](eq:query). Generation is ancestral, from the samplers of
+- **The density** is the sum of terms [](eq:log-density). A query fixes the observed quantities,
+  continuous and discrete, and its density [](eq:query) is a function of the free ones,
+  differentiated in the continuous ones alone. Generation is ancestral, from the samplers of
   scored quantities and the proposals the core supplies for parameters, and its weight is
   [](eq:weight).
 - **Random keys** are derived from addresses by [](eq:address-key).

@@ -4,7 +4,8 @@ kind: proposition
 title: Importance weights
 ---
 
-Let a query leave the quantities $\point_F$ free and fix $\point_O$, and suppose that every free
+Let a query leave the quantities $\point_F$ free and fix $\point_O$, each of them continuous or
+discrete, with $\dd\point_F$ the product of the free quantities' base measures, and suppose that every free
 quantity is either scored by exactly one term, whose sampler has density $\proposal_t$, or is a
 parameter with a proposal of density $\proposal_\theta$; that every one of these densities is
 positive wherever the query's density $\density(\cdot, \point_O)$ is; and that each pair of
