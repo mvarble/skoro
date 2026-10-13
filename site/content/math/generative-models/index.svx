@@ -148,8 +148,14 @@ measure for every $\point_{<i}$ and measurable in $\point_{<i}$ for every $A$, a
 </Proof>
 
 The probability space can then be taken to be the product space
-$(\Omega, \scrF, \rmP) = (\manifold, \scrX, \mu)$, and the quantities the coordinate projections. This is the
-analogue of choosing a basis: the quantities are the coordinates. Nothing is lost by the choice,
+$(\Omega, \scrF, \rmP) = (\manifold, \scrX, \mu)$, and the quantities the coordinate projections
+from $(\Omega, \scrF)$ to $(\manifold_i, \scrX_i)$,
+
+$$
+	\randomPoint_i : \Omega \to \manifold_i, \qquad \randomPoint_i(\omega) = \randomPoint_i(\point_1, \dots, \point_n) = \point_i .
+$$
+
+This is the analogue of choosing a basis: the quantities are the coordinates. Nothing is lost by the choice,
 because every statement the model makes is about the joint law of its quantities, and that law is
 $\mu$ on any space that carries them.
 
