@@ -14,7 +14,7 @@ Then $\density_O$ is a density of the law of $\randomPoint_O$, finite $\nu_O$-al
 kernel
 
 $$
-	\kernel(\point_O, \dd\point_F) = \frac{\density(\point_F, \point_O)}{\density_O(\point_O)}\, \nu_F(\dd\point_F)
+	\rmP_{\randomPoint_F \mid \randomPoint_O}(\point_O, \dd\point_F) = \frac{\density(\point_F, \point_O)}{\density_O(\point_O)}\, \nu_F(\dd\point_F)
 	\qquad \text{where } 0 < \density_O(\point_O) < \infty,
 $$
 

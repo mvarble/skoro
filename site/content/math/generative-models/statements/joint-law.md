@@ -13,4 +13,5 @@ $$
 	\kernel_i(\point_{<i}, A) = \int_A \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i)
 $$
 
-is a regular conditional distribution of the $i$-th quantity given the ones before it.
+is a version of $\rmP_{\randomPoint_i \mid \randomPoint_{<i}}$, the regular conditional distribution of the
+$i$-th quantity given the ones before it.

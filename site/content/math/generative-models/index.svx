@@ -33,9 +33,9 @@ statements become statements about arrays of numbers. The way back is a single t
 finite-dimensional vector space is isomorphic to a coordinate space, and every choice of basis
 gives such an isomorphism.
 
-Probability is done in an abstract probability space $(\Omega, \mathscr F, \mathrm P)$. A modeller
-working there never says what $\Omega$ is, nor which sets are in $\mathscr F$, nor what
-$\mathrm P$ assigns to them. Instead they introduce random variables $\randomPoint : \Omega \to \manifold$,
+Probability is done in an abstract probability space $(\Omega, \scrF, \rmP)$. A modeller
+working there never says what $\Omega$ is, nor which sets are in $\scrF$, nor what
+$\rmP$ assigns to them. Instead they introduce random variables $\randomPoint : \Omega \to \manifold$,
 measurable maps into the spaces where the quantities of the model live, and speak only of those:
 their laws, their joint laws, the independence of one from another, the conditional law of one
 given another. Any number of them may be introduced, and new ones may be introduced later, provided
@@ -45,16 +45,18 @@ linear algebraist: it relieves them of a coordinate system they do not need.
 The way back to coordinates is where the analogy usually breaks. Several things can go wrong at
 once:
 
-- **The space is underdetermined.** Many triples $(\Omega, \mathscr F, \mathrm P)$ carry random
-  variables with the same joint law, and $\mathscr F$ may hold far more than the model ever
+- **The space is underdetermined.** Many triples $(\Omega, \scrF, \rmP)$ carry random
+  variables with the same joint law, and $\scrF$ may hold far more than the model ever
   mentions. Nothing in the model says which.
-- **Conditioning needs regularity.** The conditional law of $\randomPoint$ given $\otherRandomPoint$, for $\randomPoint$ with values in
-  $\manifold$ and $\otherRandomPoint$ in $\otherManifold$, defined as a kernel $\kernel$ from $\otherManifold$ to
-  $\manifold$ characterized by
+- **Conditioning needs regularity.** The conditional law of $\randomPoint$ given $\otherRandomPoint$,
+  for $\randomPoint$ with values in $(\manifold, \scrX)$ and $\otherRandomPoint$ in
+  $(\otherManifold, \scrY)$, defined as a kernel
+  $\rmP_{\randomPoint \mid \otherRandomPoint} : \otherManifold \times \scrX \to [0, 1]$
+  characterized by
 
   $$
-  	\mathrm P(\randomPoint \in A,\ \otherRandomPoint \in B) = \int_B \kernel(\otherPoint, A)\, \mathrm P(\otherRandomPoint \in \dd\otherPoint)
-  	\qquad \text{for all measurable } A \subseteq \manifold,\ B \subseteq \otherManifold, @tag(regular-conditional)
+  	\rmP(\randomPoint \in A,\ \otherRandomPoint \in B) = \int_B \rmP_{\randomPoint \mid \otherRandomPoint}(\otherPoint, A)\, \rmP(\otherRandomPoint \in \dd\otherPoint)
+  	\qquad \text{for all } A \in \scrX,\ B \in \scrY, @tag(regular-conditional)
   $$
 
   a *regular conditional distribution*, exists only under assumptions on the spaces (standard Borel is the
@@ -69,7 +71,7 @@ once:
   laws, but asks for topological regularity of the spaces to do so.
 
 So the modeller who wants to compute, to write a probability as an integral and evaluate it, has
-to justify every step back from $(\Omega, \mathscr F, \mathrm P)$, and usually does not.
+to justify every step back from $(\Omega, \scrF, \rmP)$, and usually does not.
 
 ## A corner of probability where the way back is clean
 
@@ -106,6 +108,11 @@ This is why $\density$ is called a *probability mass function* in that case, and
 can be treated as one: a density is always with respect to a reference measure, and a mass function
 is a density with respect to counting measure.
 
+Nothing in what follows needs these two in particular: a reference measure $\nu$ need only be
+$\sigma$-finite, for [%full](statement:radon-nikodym) and Tonelli's theorem to apply. But Lebesgue
+measure and counting measure, and products of them, are typically the only reference measures
+adopted in practice, and they are the ones meant below.
+
 **Quantities introduced one at a time.** Each quantity is drawn from a distribution whose
 parameters may depend on any quantity introduced before it, through any measurable map, however
 nonlinear. A vehicle's position is drawn given its previous position, pushed through a motion
@@ -140,8 +147,8 @@ measure for every $\point_{<i}$ and measurable in $\point_{<i}$ for every $A$, a
 
 </Proof>
 
-The probability space can then be taken to be $\Omega = \manifold$, with its product
-$\sigma$-algebra, $\mathrm P = \mu$, and the quantities the coordinate projections. This is the
+The probability space can then be taken to be the product space
+$(\Omega, \scrF, \rmP) = (\manifold, \scrX, \mu)$, and the quantities the coordinate projections. This is the
 analogue of choosing a basis: the quantities are the coordinates. Nothing is lost by the choice,
 because every statement the model makes is about the joint law of its quantities, and that law is
 $\mu$ on any space that carries them.
@@ -167,7 +174,7 @@ $\randomPoint = (\randomPoint_1, \dots, \randomPoint_n)$, and those are exactly 
 <Proof>
 
 If $\otherRandomPoint = g \circ \randomPoint$, then $\otherRandomPoint^{-1}(B) = \randomPoint^{-1}(g^{-1}(B)) \in \sigma(\randomPoint)$. Conversely, every set in
-$\sigma(\randomPoint)$ is $\randomPoint^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{\randomPoint^{-1}(A)}$ is
+$\sigma(\randomPoint)$ is $\randomPoint^{-1}(A)$ for some $A \in \scrX$, so an indicator $\mathbf 1_{\randomPoint^{-1}(A)}$ is
 $\mathbf 1_A \circ \randomPoint$, and by linearity every $\sigma(\randomPoint)$-measurable simple function is $g \circ \randomPoint$
 for a simple $g$. A $\sigma(\randomPoint)$-measurable $\otherRandomPoint$ is a pointwise limit of such functions
 $g_k \circ \randomPoint$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
@@ -233,9 +240,9 @@ the law of $\randomPoint_O$ and is finite $\nu_O$-almost everywhere. The set whe
 $0$ under that law, and so does the set where it is infinite. For measurable $A$ and $B$,
 
 $$
-	\mathrm P(\randomPoint_F \in A,\ \randomPoint_O \in B)
+	\rmP(\randomPoint_F \in A,\ \randomPoint_O \in B)
 	= \int_B \int_A \density(\point_F, \point_O)\, \nu_F(\dd\point_F)\, \nu_O(\dd\point_O)
-	= \int_B \kernel(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
+	= \int_B \rmP_{\randomPoint_F \mid \randomPoint_O}(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
 $$
 
 the two exceptional sets contributing nothing to either side, which is the defining property of a
@@ -244,7 +251,7 @@ regular conditional distribution.
 </Proof>
 
 The version is chosen, not discovered: changing the densities on a null set, or the reference
-measures by a change of coordinates, changes $\kernel$ on a null set of observations, which is all the
+measures by a change of coordinates, changes $\rmP_{\randomPoint_F \mid \randomPoint_O}$ on a null set of observations, which is all the
 freedom the Borel–Kolmogorov paradox exploits. In a model built forward the choice is made once,
 by the densities and reference measures the model was written with, and every observation is
 conditioned on by that same rule. That is also why two densities may only be compared, or divided,
