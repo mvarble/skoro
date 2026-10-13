@@ -1,16 +1,20 @@
 import { defineGraph, type NodeKindSpec } from '$lib/graph/spec';
 
 // A small sequential model drawn two ways. A vehicle at x₀ then x₁ measures a landmark m once from
-// each position (z₀ and z₁). The probabilistic graph shows its quantities and terms; the
-// compilation graph shows how one of those terms, the density of z₀, is computed.
+// each position (z₀ and z₁). The probabilistic graph shows its quantities and terms, labelled by the
+// quantities themselves and by the regular conditional distributions the terms give densities of,
+// since it holds structure rather than values; the compilation graph shows how one of those terms,
+// the density of z₀, is computed from values.
 
 const quantity: NodeKindSpec = { name: 'Quantity', hue: 'orange' };
 
 export const probabilistic = defineGraph({
     title: 'A probabilistic graph',
-    caption: String.raw`An arrow into a term comes from a quantity it is conditioned on; a dotted arrow out of a term points to the quantity it scores. Retiring $\point_0$ and $z_0$ replaces the terms of $\point_0$, $\point_1$ and $z_0$ by one term over the Markov blanket $\{\point_1, m\}$.`,
+    caption: String.raw`Each term is labelled by the regular conditional distribution it gives the density of. An arrow into a term comes from a quantity it is conditioned on; a dotted arrow out of a term points to the quantity it scores. Retiring $\randomPoint_0$ and $\bfz_0$ replaces the terms of $\randomPoint_0$, $\randomPoint_1$ and $\bfz_0$ by one term over the Markov blanket $\{\randomPoint_1, \bfm\}$.`,
     width: 720,
     height: 300,
+    // Larger than the default, so that the subscripts of the distributions stay legible.
+    fontSize: 20,
     nodeKinds: {
         quantity,
         term: { name: 'Term', hue: 'purple', shape: 'square' },
@@ -26,7 +30,7 @@ export const probabilistic = defineGraph({
             y: 240,
             kind: 'term',
             label: String.raw`$t_1$`,
-            annotation: String.raw`$\density(\point_0)$`,
+            annotation: String.raw`$\rmP_{\randomPoint_0}$`,
         },
         {
             id: 'tm',
@@ -34,18 +38,18 @@ export const probabilistic = defineGraph({
             y: 60,
             kind: 'term',
             label: String.raw`$t_2$`,
-            annotation: String.raw`$\density(m)$`,
+            annotation: String.raw`$\rmP_{\bfm}$`,
             annotationAngle: 90,
         },
-        { id: 'x0', x: 170, y: 240, kind: 'quantity', label: String.raw`$\point_0$` },
-        { id: 'm', x: 170, y: 60, kind: 'quantity', label: String.raw`$m$` },
+        { id: 'x0', x: 170, y: 240, kind: 'quantity', label: String.raw`$\randomPoint_0$` },
+        { id: 'm', x: 170, y: 60, kind: 'quantity', label: String.raw`$\bfm$` },
         {
             id: 'tx1',
             x: 300,
             y: 240,
             kind: 'term',
             label: String.raw`$t_3$`,
-            annotation: String.raw`$\density(\point_1 \mid \point_0)$`,
+            annotation: String.raw`$\rmP_{\randomPoint_1 \mid \randomPoint_0}$`,
             annotationAngle: 90,
         },
         {
@@ -54,21 +58,21 @@ export const probabilistic = defineGraph({
             y: 150,
             kind: 'term',
             label: String.raw`$t_4$`,
-            annotation: String.raw`$\density(z_0 \mid \point_0, m)$`,
+            annotation: String.raw`$\rmP_{\bfz_0 \mid \randomPoint_0, \bfm}$`,
             annotationAngle: -60,
         },
-        { id: 'x1', x: 430, y: 240, kind: 'quantity', label: String.raw`$\point_1$` },
-        { id: 'z0', x: 430, y: 150, kind: 'quantity', label: String.raw`$z_0$` },
+        { id: 'x1', x: 430, y: 240, kind: 'quantity', label: String.raw`$\randomPoint_1$` },
+        { id: 'z0', x: 430, y: 150, kind: 'quantity', label: String.raw`$\bfz_0$` },
         {
             id: 'tz1',
             x: 560,
             y: 150,
             kind: 'term',
             label: String.raw`$t_5$`,
-            annotation: String.raw`$\density(z_1 \mid \point_1, m)$`,
+            annotation: String.raw`$\rmP_{\bfz_1 \mid \randomPoint_1, \bfm}$`,
             annotationAngle: 90,
         },
-        { id: 'z1', x: 670, y: 150, kind: 'quantity', label: String.raw`$z_1$` },
+        { id: 'z1', x: 670, y: 150, kind: 'quantity', label: String.raw`$\bfz_1$` },
     ],
     edges: [
         { from: 'tx0', to: 'x0', kind: 'scores' },
