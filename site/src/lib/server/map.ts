@@ -4,7 +4,6 @@ import type { GraphLink, GraphNode, IndexEntry } from '@mvarble/mesearch-ui';
 
 import { hrefOf } from '$lib/documents';
 import { MAP_TUNING } from '$lib/map';
-import { DOCUMENTS } from '$lib/site';
 import katex from '../../../katex.config';
 
 export interface DocumentMapData {
@@ -15,19 +14,15 @@ export interface DocumentMapData {
 
 // The map of the math notes and the archive's documents, linked by what each builds on and links
 // to. It is laid out here, at build time, so it is drawn before any script runs. An archive
-// document is named by its entry and its stage ("The core: Mathematics"), whatever its first
-// heading is.
+// document is named by its entry and its own title ("The core: Mathematics").
 export function documentMap(): DocumentMapData {
     const macros = katex.macros as Record<string, string>;
-    const stageTitles = new Map<string, string>(DOCUMENTS.map((doc) => [doc.name, doc.title]));
     const graph = cms.graph();
     const entries: Record<string, IndexEntry> = {};
     for (const key of graph.nodes) {
         const doc = cms.get(key)!;
         const title =
-            doc.kind == 'entry-document'
-                ? `${cms.get(doc.entry)!.title}: ${stageTitles.get(doc.name) ?? doc.title}`
-                : doc.title;
+            doc.kind == 'entry-document' ? `${cms.get(doc.entry)!.title}: ${doc.title}` : doc.title;
         entries[key] = {
             key,
             kind: doc.kind,

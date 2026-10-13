@@ -19,8 +19,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.12.0)
       '@mvarble/mesearch-cms':
-        specifier: ^0.2.0
-        version: 0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@24.19.1))
+        specifier: ^0.2.1
+        version: 0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@24.19.1))
       '@mvarble/mesearch-markdown':
         specifier: ^0.1.0
         version: 0.1.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))
@@ -207,8 +207,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@mvarble/mesearch-cms@0.2.0':
-    resolution: {integrity: sha512-YT0I3RbDiKg068VhNvq9F/o6LlGBTrZ5kSFdiXYCg8q4Qubj/G1+WTM9TbtCCj+aQkhGskOF2FeaNnOnUbh5Dw==}
+  '@mvarble/mesearch-cms@0.2.1':
+    resolution: {integrity: sha512-qjGVrDUBn7IToX7renou7Ef4TYRxVSb7rBUSCwzOnmePFuG9Dl3TmDlVnBMZfMRBOywDw3INVikhXEPh825tVQ==}
     engines: {node: '>=22.18'}
     peerDependencies:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -1669,7 +1669,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@mvarble/mesearch-cms@0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@24.19.1))':
+  '@mvarble/mesearch-cms@0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@24.19.1))':
     dependencies:
       '@mvarble/mesearch-markdown': 0.1.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))
       bibtex: 0.9.0
