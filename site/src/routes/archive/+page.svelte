@@ -1,4 +1,5 @@
 <script lang="ts">
+    import DocumentMap from '$lib/components/DocumentMap.svelte';
     import PageList from '$lib/components/PageList.svelte';
     import { ARCHIVE, SITE } from '$lib/site';
 
@@ -25,6 +26,9 @@
                 rather than rewriting it.
             </p>
         </div>
+        {#if data.map.nodes.length}
+            <DocumentMap {...data.map} />
+        {/if}
         {#if data.active.length}
             <h2>In progress</h2>
             <PageList links={data.active} empty="" />

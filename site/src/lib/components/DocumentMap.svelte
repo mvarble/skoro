@@ -7,9 +7,12 @@
         type IndexEntry,
     } from '@mvarble/mesearch-ui';
 
-    // mesearch's map of documents: math notes, and the archive documents that build on them.
-    // Solid arrows run from what a document builds on to the document; dashed lines join documents
-    // that link to each other. Its colours come from skoro's tokens (`styles/utils/map.css`).
+    import { MAP_TUNING } from '$lib/map';
+
+    // mesearch's map of documents: math notes, and the archive documents that build on them, shown
+    // on the Mathematics and Archive pages alike. Solid arrows run from what a document builds on
+    // to the document; dashed lines join documents that link to each other. Its colours come from
+    // skoro's tokens (`styles/utils/map.css`).
     let {
         nodes,
         links,
@@ -30,6 +33,6 @@
     };
 </script>
 
-<div class="math-map">
-    <Graph {nodes} {links} {entries} {legend} />
+<div class="document-map">
+    <Graph {nodes} {links} {entries} {legend} tuning={MAP_TUNING} />
 </div>

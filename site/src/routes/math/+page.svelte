@@ -1,5 +1,5 @@
 <script lang="ts">
-    import MathMap from '$lib/components/MathMap.svelte';
+    import DocumentMap from '$lib/components/DocumentMap.svelte';
     import PageList from '$lib/components/PageList.svelte';
     import { MATH, SITE } from '$lib/site';
 
@@ -18,7 +18,7 @@
             <p class="lede">{MATH.blurb}</p>
         </header>
         {#if data.map.nodes.length}
-            <MathMap {...data.map} />
+            <DocumentMap {...data.map} />
         {/if}
         <h2>Notes</h2>
         <PageList links={data.notes} empty="No notes yet." />
