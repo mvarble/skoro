@@ -118,7 +118,7 @@ $\R^{mn}$ for its tangent coordinates, so its dimension equals its storage size.
 $n$, $m$ are fixed for each quantity when it is created, and every operation checks them then.
 
 **Positive quantities.** Scales, rates and variances live on the positive orthant
-$(0, \infty)^n$, with the retraction of [the example in retractions](../../math/retraction/#the-definition),
+$\positive^n$, where $\positive = (0, \infty)$, with the retraction of [the example in retractions](../../math/retraction/#the-definition),
 elementwise:
 
 $$
@@ -136,7 +136,7 @@ $\point \ominus (\point \oplus \tangent) = -\tangent$ both hold exactly. And the
 the Hessian of the pull-back everywhere, not only at stationary points: in
 [%full](statement:math/derivatives-in-charts/chart-hessian), $\varphi_t(u) = t\tangent + u$, whose
 derivative does not move, so the correction vanishes. What is not trivial is reading a positive
-quantity as a real number, through the inclusion $(0, \infty)^n \subset \R^n$: its derivative in
+quantity as a real number, through the inclusion $\positive^n \subset \R^n$: its derivative in
 charts is $\operatorname{diag}(\point)$, which moves with the point.
 
 **Discrete quantities.** The core's discrete types are the finite sets
@@ -284,11 +284,11 @@ elementwise.
 
 | operation | from, to | tangent | cotangent per input | second order per input |
 | --- | --- | --- | --- | --- |
-| $a$ as a real | $(0, \infty)^n \to \R^n$ | $a \odot \tangent_a$ | $a \odot \alpha$ | $a \odot \tangent_a \odot \alpha$ |
-| $e^{c}$ | $\R^n \to (0, \infty)^n$ | $\tangent_c$ | $\alpha$ | $0$ |
-| $\log a$ | $(0, \infty)^n \to \R^n$ | $\tangent_a$ | $\alpha$ | $0$ |
-| $a \odot b$ | $(0, \infty)^n \times (0, \infty)^n \to (0, \infty)^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
-| $1 / a$ | $(0, \infty)^n \to (0, \infty)^n$ | $-\tangent_a$ | $-\alpha$ | $0$ |
+| $a$ as a real | $\positive^n \to \R^n$ | $a \odot \tangent_a$ | $a \odot \alpha$ | $a \odot \tangent_a \odot \alpha$ |
+| $e^{c}$ | $\R^n \to \positive^n$ | $\tangent_c$ | $\alpha$ | $0$ |
+| $\log a$ | $\positive^n \to \R^n$ | $\tangent_a$ | $\alpha$ | $0$ |
+| $a \odot b$ | $\positive^n \times \positive^n \to \positive^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $1 / a$ | $\positive^n \to \positive^n$ | $-\tangent_a$ | $-\alpha$ | $0$ |
 
 The exponential and logarithm here are not the rows of the first table: those map $\R^n$ to
 $\R^n$, read in the flat charts, where their derivatives are $e^{a}$ and $1/a$; these change type,
@@ -536,11 +536,11 @@ measure, and the integral is $Z\, \E_\pi[h]$.
 
 Two conditions in the statement are the core's to check or to state. The base measures must match.
 In the core, a continuous quantity's density is with respect to Lebesgue measure on the space its
-values lie in, $\R^n$ or the open subset $(0, \infty)^n$ of it, and a discrete quantity's with
+values lie in, $\R^n$ or the open subset $\positive^n$ of it, and a discrete quantity's with
 respect to counting measure, so this holds as long as every distribution keeps to that convention.
 The one place it is easy to break is a density written in the logarithmic chart of a positive
 quantity, such as a log-normal written as a normal in $u = \log \point$: with respect to Lebesgue
-measure on $(0, \infty)^n$, it carries the Jacobian of the chart,
+measure on $\positive^n$, it carries the Jacobian of the chart,
 
 $$
 	\log \density_{\point}(\point) = \log \density_u(\log \point) - \sum_i \log \point_i . @tag(log-chart-density)
@@ -638,7 +638,7 @@ Two consequences for the rest of the model:
 
 ## In skoro's terms
 
-- **Quantities** are Euclidean (real, vector, matrix), positive ($(0, \infty)^n$, with the
+- **Quantities** are Euclidean (real, vector, matrix), positive ($\positive^n$, with the
   retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
   continuous quantities. Dimensions are fixed when a quantity is created, and every
   derivative coordinate is indexed by tangent dimension.
@@ -669,7 +669,7 @@ A skoro model is a *model built forward* in the sense of
 in this document has a place in that note's measure theory.
 
 - **Quantities are the coordinates.** Each quantity lives in a space with a reference measure:
-  Lebesgue measure on $\R^n$ and $\R^{m \times n}$ and on the open subset $(0, \infty)^n$, counting
+  Lebesgue measure on $\R^n$ and $\R^{m \times n}$ and on the open subset $\positive^n$, counting
   measure on $\mathrm{Categorical}(n)$ and on $\mathbb Z$, and product measures on products. The
   probability space can be taken to be the product of the quantities' spaces, with the quantities as
   its coordinates, and the probabilistic graph's ancestral order as the order in which they were

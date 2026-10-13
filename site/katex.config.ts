@@ -60,6 +60,7 @@ const config: KatexOptions & Settings = {
 
         // Skoro-wide notation.
         '\\R': '\\mathbb{R}',
+        '\\positive': '\\mathbb{R}_{>0}', // the positive reals, (0, ∞), and never [0, ∞)
         '\\E': '\\mathbb{E}',
         '\\T': '\\mathrm{T}',
         '\\retr': '\\operatorname{retract}',

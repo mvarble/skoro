@@ -32,7 +32,7 @@ so is any map that agrees with it to first order, which is usually cheaper. Noth
 metric.
 
 Two examples. On $\R^\dimension$, $R_\point(\tangent) = \point + \tangent$. On the positive reals, with
-$\T_\point(0, \infty)$ identified with $\R$ by measuring relative change,
+$\T_\point\positive$, with $\positive = (0, \infty)$, identified with $\R$ by measuring relative change,
 $R_\point(\tangent) = \point\,e^{\tangent}$: it is defined for every $\tangent$, never leaves the positive reals,
 and satisfies $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity
 in the chosen identification (a tangent at $\point$ of coordinate $1$ is the velocity $\point$).

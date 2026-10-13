@@ -98,9 +98,10 @@ skoro's own notation is written with its macros, never with the letters they sta
 can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`,
 `\randomPoint` and `\otherRandomPoint` (the random variables, in boldface), `\tangent` and
 `\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
-`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal`, `\weight`, `\kernel`
-and `\key`; and the typography `\D`, `\dd` and `\hvp`. `katex.config.ts` says what each stands
-for.
+`\discretePoint`, `\order` and `\req`; `\positive` for the positive reals $(0, \infty)$, written
+$\mathbb R_{>0}$ and never $\mathbb R_+$, which some read as $[0, \infty)$; `\density`, `\logterm`,
+`\proposal`, `\weight`, `\kernel` and `\key`; and the typography `\D`, `\dd` and `\hvp`.
+`katex.config.ts` says what each stands for.
 
 ## Graphs
 
