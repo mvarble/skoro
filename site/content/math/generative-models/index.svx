@@ -174,26 +174,39 @@ given them.
 The second thing the restriction buys is a guarantee about what the model can say. A model speaks
 only of its quantities, so the random variables it can express are the $\sigma(\randomPoint)$-measurable ones,
 $\randomPoint = (\randomPoint_1, \dots, \randomPoint_n)$, and those are exactly the functions of the quantities.
+That is a lemma about any measurable map whatever, on any space, not only about the quantities.
 
 <Statement {...doobDynkin} />
 
 <Proof>
 
-If $\otherRandomPoint = g \circ \randomPoint$, then $\otherRandomPoint^{-1}(B) = \randomPoint^{-1}(g^{-1}(B)) \in \sigma(\randomPoint)$. Conversely, every set in
-$\sigma(\randomPoint)$ is $\randomPoint^{-1}(A)$ for some $A \in \scrX$, so an indicator $\mathbf 1_{\randomPoint^{-1}(A)}$ is
-$\mathbf 1_A \circ \randomPoint$, and by linearity every $\sigma(\randomPoint)$-measurable simple function is $g \circ \randomPoint$
-for a simple $g$. A $\sigma(\randomPoint)$-measurable $\otherRandomPoint$ is a pointwise limit of such functions
-$g_k \circ \randomPoint$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
-elsewhere is measurable with $\otherRandomPoint = g \circ \randomPoint$, because the sequence converges at every point of the
-image of $\randomPoint$.
+If $\bfz = g \circ \otherRandomPoint$, then $\bfz^{-1}(C) = \otherRandomPoint^{-1}(g^{-1}(C)) \in \sigma(\otherRandomPoint)$
+for every Borel $C \subseteq \R$. Conversely, every set in $\sigma(\otherRandomPoint)$ is
+$\otherRandomPoint^{-1}(B)$ for some $B \in \scrY$, so an indicator $\mathbf 1_{\otherRandomPoint^{-1}(B)}$
+is $\mathbf 1_B \circ \otherRandomPoint$, and by linearity every $\sigma(\otherRandomPoint)$-measurable
+simple function is $g \circ \otherRandomPoint$ for a simple $g$. A
+$\sigma(\otherRandomPoint)$-measurable $\bfz$ is a pointwise limit of such functions
+$g_k \circ \otherRandomPoint$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$
+there and $0$ elsewhere is measurable with $\bfz = g \circ \otherRandomPoint$, because the sequence
+converges at every point of the image of $\otherRandomPoint$.
 
 </Proof>
+
+In a model built forward, apply it to the quantities taken together. On the product space,
+$\randomPoint = (\randomPoint_1, \dots, \randomPoint_n) : \Omega \to \manifold$ is the identity map, since
+$\Omega = \manifold$ and each $\randomPoint_i$ is a coordinate projection. So
+$\sigma(\randomPoint) = \scrX = \scrF$: every event is an event about the quantities, every
+scalar-valued random variable on $\Omega$ is $\sigma(\randomPoint)$-measurable, and by the lemma
+every one of them takes the form $g \circ \randomPoint$. On any other space that carries the
+quantities, $\scrF$ may be larger than $\sigma(\randomPoint)$, but the random variables the model
+can express are still the $\sigma(\randomPoint)$-measurable ones, and the conclusion is the same.
 
 <Statement {...integral} />
 
 <Proof>
 
-The first claim is [%full](statement:doob-dynkin). For the second, the law of $\randomPoint$ is $\mu$, so
+The first claim is [%full](statement:doob-dynkin), with $\otherRandomPoint$ there the quantities
+$\randomPoint$ here. For the second, the law of $\randomPoint$ is $\mu$, so
 $\E[g \circ \randomPoint] = \int g \,\dd\mu$ by the change of variables for image measures, and
 $\int g \,\dd\mu = \int g \density \,\dd\nu$ because $\density = \dd\mu / \dd\nu$. The iterated form
 is Fubini's theorem, which applies because $g \density$ is $\nu$-integrable.

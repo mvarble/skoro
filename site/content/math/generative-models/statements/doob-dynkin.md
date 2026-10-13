@@ -4,6 +4,7 @@ kind: lemma
 title: Doob–Dynkin
 ---
 
-Let $\randomPoint : \Omega \to \manifold$ be a measurable map from a measurable space $(\Omega, \scrF)$ to
-any measurable space $(\manifold, \scrX)$, and $\otherRandomPoint : \Omega \to \R$. Then $\otherRandomPoint$ is
-$\sigma(\randomPoint)$-measurable if and only if $\otherRandomPoint = g \circ \randomPoint$ for some measurable $g : \manifold \to \R$.
+Let $\otherRandomPoint : \Omega \to \otherManifold$ be any measurable map from a measurable space
+$(\Omega, \scrF)$ to any measurable space $(\otherManifold, \scrY)$, and $\bfz : \Omega \to \R$.
+Then $\bfz$ is $\sigma(\otherRandomPoint)$-measurable if and only if $\bfz = g \circ \otherRandomPoint$
+for some measurable $g : \otherManifold \to \R$.
