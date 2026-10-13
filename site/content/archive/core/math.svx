@@ -59,7 +59,10 @@ needs to keep it straight.
 A model is two graphs over the same objects, and the rest of this document uses both. Each answers
 different questions, and neither is ever called simply "the graph". The running example is a
 vehicle whose positions are the quantities $\randomPoint_0$ and then $\randomPoint_1$, which measures
-a landmark $\bfm$ once from each position, as $\bfz_0$ and $\bfz_1$.
+a landmark $\bfm$ once from each position, as $\bfz_0$ and $\bfz_1$. The noise of its motion from
+one position to the next is a parameter $\boldsymbol\sigma$ with an improper prior, a score
+$S(\boldsymbol\sigma)$, and an external sighting of its second position, a measurement that is not
+a quantity of the model, enters as a likelihood factor $L(\randomPoint_1)$.
 
 ### The compilation graph
 
@@ -589,7 +592,8 @@ $$
 
 their *Markov blanket*: the other quantities joined to those terms. In the example, retiring the
 first tick, $E = \{\randomPoint_0, \bfz_0\}$, touches the terms $t_1$, $t_3$ and $t_4$, and its
-blanket is $\{\randomPoint_1, \bfm\}$.
+blanket is $\{\randomPoint_1, \bfm, \boldsymbol\sigma\}$: the parameter joins it, because the
+transition $t_3$ it conditions is among the terms replaced.
 
 Retirement must condition as well as marginalize. The retired namespace of a tick holds that tick's
 measurements as well as its states, and integrating the measurements out of the joint would discard
