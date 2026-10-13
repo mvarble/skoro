@@ -51,11 +51,11 @@ once:
 - **Conditioning needs regularity.** The conditional law of $\randomPoint$ given $\otherRandomPoint$,
   for $\randomPoint$ with values in $(\manifold, \scrX)$ and $\otherRandomPoint$ in
   $(\otherManifold, \scrY)$, defined as a kernel
-  $\rmP_{\randomPoint \mid \otherRandomPoint} : \otherManifold \times \scrX \to [0, 1]$
-  characterized by
+  $\rmP_{\randomPoint \mid \otherRandomPoint} : \scrX \times \otherManifold \to [0, 1]$, written
+  $\rmP_{\randomPoint \mid \otherRandomPoint}(A \mid \otherPoint)$ and characterized by
 
   $$
-  	\rmP(\randomPoint \in A,\ \otherRandomPoint \in B) = \int_B \rmP_{\randomPoint \mid \otherRandomPoint}(\otherPoint, A)\, \rmP(\otherRandomPoint \in \dd\otherPoint)
+  	\rmP(\randomPoint \in A,\ \otherRandomPoint \in B) = \int_B \rmP_{\randomPoint \mid \otherRandomPoint}(A \mid \otherPoint)\, \rmP(\otherRandomPoint \in \dd\otherPoint)
   	\qquad \text{for all } A \in \scrX,\ B \in \scrY, @tag(regular-conditional)
   $$
 
@@ -141,8 +141,8 @@ $\density_i(\cdot \mid \point_{<i})$ integrates to $1$ against $\nu_i$ whatever 
 coordinates are, so $\int \density \,\dd\nu = 1$, and stopping after the last $n - i$ integrals
 leaves the marginal density on the first $i$. For measurable $B \subseteq \manifold_{<i}$ and
 $A \subseteq \manifold_i$, Tonelli again gives
-$\mu(\point_{<i} \in B,\ \point_i \in A) = \int_B \kernel_i(\point_{<i}, A)\, \mu_{<i}(\dd\point_{<i})$,
-with $\mu_{<i}$ the marginal on the first $i - 1$, and $\kernel_i(\point_{<i}, \cdot)$ is a probability
+$\mu(\point_{<i} \in B,\ \point_i \in A) = \int_B \kernel_i(A \mid \point_{<i})\, \mu_{<i}(\dd\point_{<i})$,
+with $\mu_{<i}$ the marginal on the first $i - 1$, and $\kernel_i(\cdot \mid \point_{<i})$ is a probability
 measure for every $\point_{<i}$ and measurable in $\point_{<i}$ for every $A$, again by Tonelli.
 
 </Proof>
@@ -261,7 +261,7 @@ $0$ under that law, and so does the set where it is infinite. For measurable $A$
 $$
 	\rmP(\randomPoint_F \in A,\ \randomPoint_O \in B)
 	= \int_B \int_A \density(\point_F, \point_O)\, \nu_F(\dd\point_F)\, \nu_O(\dd\point_O)
-	= \int_B \rmP_{\randomPoint_F \mid \randomPoint_O}(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
+	= \int_B \rmP_{\randomPoint_F \mid \randomPoint_O}(A \mid \point_O)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
 $$
 
 the two exceptional sets contributing nothing to either side, which is the defining property of a
@@ -334,7 +334,7 @@ $\density$ is only one.
   with the kernel that augments the space built so far,
 
   $$
-  	\kernel_i(\point_{<i}, \dd\point_i) = \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i),
+  	\kernel_i(\dd\point_i \mid \point_{<i}) = \density_i(\point_i \mid \point_{<i})\, \nu_i(\dd\point_i),
   	@tag(augmenting-kernel)
   $$
 
@@ -371,7 +371,7 @@ $\density$ is only one.
   carried by the model as a value computed from its arguments: sampling them samples it, weighing
   them weighs it, its expectations are integrals by [%full](statement:integral), and, most of all,
   later kernels may be parameterized by it. A kernel
-  $\kernel_j(\point_{<j}, \dd\point_j) = \phi_j(\point_j; \eta_j(\point_{<j}))\, \nu_j(\dd\point_j)$ is
+  $\kernel_j(\dd\point_j \mid \point_{<j}) = \phi_j(\point_j; \eta_j(\point_{<j}))\, \nu_j(\dd\point_j)$ is
   written by building its parameters $\eta_j$ out of mapped values, composed as freely as any measurable map allows,
   and derivatives flow through them to the quantities they are built from.
 - **Everything is a logarithm.** Every product above becomes a sum once its logarithm is taken:
