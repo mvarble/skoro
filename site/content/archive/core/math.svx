@@ -59,10 +59,17 @@ needs to keep it straight.
 A model is two graphs over the same objects, and the rest of this document uses both. Each answers
 different questions, and neither is ever called simply "the graph". The running example is a
 vehicle whose positions are the quantities $\randomPoint_0$ and then $\randomPoint_1$, which measures
-a landmark $\bfm$ once from each position, as $\bfz_0$ and $\bfz_1$. The noise of its motion from
-one position to the next is a parameter $\bfsigma$ with an improper prior, a score
-$S(\bfsigma)$, and an external sighting of its second position, a measurement that is not
-a quantity of the model, enters as a likelihood factor $L(\randomPoint_1)$.
+a landmark $\bfm$ once from each position, as $\bfz_0$ and $\bfz_1$. Its second position is drawn
+from $\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfzeta_1}$, the motion model of an inertial
+measurement unit (IMU), driven by the unit's reading $\bfzeta_1$ between the two positions. The
+reading is a parameter that nothing scores: it has no distribution and no prior, and a query for the
+positions observes it. The IMU's model knows nothing of the platform's own physics, how far it can
+plausibly move in one step, say, and that knowledge enters as a likelihood factor
+$L(\randomPoint_0, \randomPoint_1, \bfsigma)$: a second motion model, over positions the first one
+already scores, whose scale $\bfsigma$ is a parameter with an improper prior, the score
+$S(\bfsigma)$. The example thus has a parameter with a score and one without, and shows a
+likelihood factor adding information about quantities already in the model, as any number of
+further factors could.
 
 ### The probabilistic graph
 
@@ -420,7 +427,9 @@ $$
 which is, up to the constant $\log \density(\point_O, \discretePoint_D)$, the log-density of the
 conditional distribution of $\point_F$ given the rest. One model answers many queries: with the
 measurements observed it is a posterior; with nothing observed, a prior to simulate from; with the
-states observed, a likelihood of measurements.
+states observed, a likelihood of measurements. Parameters are quantities like any other here: a
+query for the example's positions observes the IMU reading $\bfzeta_1$ along with the measurements,
+and either observes the scale $\bfsigma$ or leaves it free, to be estimated with the positions.
 
 **Roots.** The roots of a query's program, the roots of its computation graph, are the
 quantities and constants its targets reach. Of these, the free continuous quantities are the ones
@@ -482,10 +491,12 @@ structural question the core answers: which terms touch a quantity, what a quant
 blanket is, and what retiring it disturbs. They are only right if they contain every quantity
 $\logterm_t$ depends on, so the core reads $V_t$ off the compilation graph, as the quantities among
 the roots $\logterm_t$ is reached from, rather than trusting a declaration; $C_t$ is then $V_t$
-without $s_t$. In the example, $\logterm_3$ is reached from $\randomPoint_0$, $\randomPoint_1$
-and $\bfsigma$ (and two constants, which are not quantities), and the term $t_3$ scores
-$\randomPoint_1$, so it is conditioned on $\randomPoint_0$ and $\bfsigma$: it is the density of
-$\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfsigma}$.
+without $s_t$. In the example, $\logterm_6$ is reached from $\randomPoint_0$, $\randomPoint_1$
+and $\bfsigma$ (and two constants, which are not quantities), and the term $t_6$ scores nothing,
+so it is conditioned on all three: it is the likelihood factor $L(\randomPoint_0, \randomPoint_1,
+\bfsigma)$. The motion term's $\logterm_3$ is reached from $\randomPoint_0$, $\randomPoint_1$ and
+$\bfzeta_1$, and $t_3$ scores $\randomPoint_1$, so it is conditioned on $\randomPoint_0$ and
+$\bfzeta_1$: it is the density of $\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfzeta_1}$.
 
 **The generative reading.** A distribution may provide a sampler for the quantity it scores, which
 draws $s_t$ given $C_t$, with a log-density $\log \proposal_t(s_t \mid C_t)$ of its own; an exact
@@ -592,9 +603,10 @@ $$
 $$
 
 their *Markov blanket*: the other quantities joined to those terms. In the example, retiring the
-first tick, $E = \{\randomPoint_0, \bfz_0\}$, touches the terms $t_1$, $t_3$ and $t_4$, and its
-blanket is $\{\randomPoint_1, \bfm, \bfsigma\}$: the parameter joins it, because the
-transition $t_3$ it conditions is among the terms replaced.
+first tick, $E = \{\randomPoint_0, \bfz_0\}$, touches the terms $t_1$, $t_3$, $t_4$ and $t_6$,
+and its blanket is $\{\randomPoint_1, \bfm, \bfzeta_1, \bfsigma\}$: both parameters join it,
+because the motion model $t_3$ and the likelihood factor $t_6$ they condition are among the terms
+replaced. The score $t_7$ of $\bfsigma$ is not touched, and stays.
 
 Retirement must condition as well as marginalize. The retired namespace of a tick holds that tick's
 measurements as well as its states, and integrating the measurements out of the joint would discard

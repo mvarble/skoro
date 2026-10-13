@@ -1,19 +1,21 @@
 import { defineGraph, type NodeKindSpec } from '$lib/graph/spec';
 
 // A small sequential model drawn two ways. A vehicle at x₀ then x₁ measures a landmark m once from
-// each position (z₀ and z₁); its motion noise σ is a parameter with an improper score, and an
-// external sighting of x₁ is a likelihood factor. The probabilistic graph shows its quantities and terms, labelled by the
-// quantities themselves and by the regular conditional distributions the terms give densities of,
-// since it holds structure rather than values; the compilation graph shows, for one term, how its
-// log-density is computed from them, primitive by primitive.
+// each position (z₀ and z₁). Its motion is an IMU's model, driven by the IMU's reading ζ₁, a
+// parameter nothing scores; a second motion model, for the platform's own physics, is a likelihood
+// factor over x₀, x₁ and its scale σ, a parameter with an improper score. The probabilistic graph
+// shows the quantities and terms, labelled by the quantities themselves and by the regular
+// conditional distributions the terms give densities of, since it holds structure rather than
+// values; the compilation graph shows, for one term, how its log-density is computed from them,
+// primitive by primitive.
 
 const quantity: NodeKindSpec = { name: 'Quantity', hue: 'orange' };
 
 export const probabilistic = defineGraph({
     title: 'A probabilistic graph',
-    caption: String.raw`A term that scores a quantity is labelled by the regular conditional distribution it gives the density of; a likelihood factor, by the factor itself, $\exp \logterm_t$. A solid arrow runs from a quantity to a term conditioned on it, a dotted arrow from a term to the quantity it scores. No term scores the motion noise $\bfsigma$, a parameter; its improper prior is the likelihood factor $S$. $L$ is an external sighting of the vehicle's second position. Retiring $\randomPoint_0$ and $\bfz_0$ would replace $t_1$, $t_3$ and $t_4$ by one term over their Markov blanket $\{\randomPoint_1, \bfm, \bfsigma\}$.`,
+    caption: String.raw`A term that scores a quantity is labelled by the regular conditional distribution it gives the density of; a likelihood factor, by the factor itself, $\exp \logterm_t$. A solid arrow runs from a quantity to a term conditioned on it, a dotted arrow from a term to the quantity it scores. The IMU reading $\bfzeta_1$ is a parameter with no score at all; the scale $\bfsigma$ of the platform's motion model $L$ is a parameter whose improper prior is the likelihood factor $S$. Retiring $\randomPoint_0$ and $\bfz_0$ would replace $t_1$, $t_3$, $t_4$ and $t_6$ by one term over their Markov blanket $\{\randomPoint_1, \bfm, \bfzeta_1, \bfsigma\}$.`,
     width: 780,
-    height: 410,
+    height: 500,
     // Larger than the default, so that the subscripts of the distributions stay legible.
     fontSize: 20,
     nodeKinds: {
@@ -28,100 +30,96 @@ export const probabilistic = defineGraph({
     },
     nodes: [
         {
-            id: 'sigma',
-            x: 370,
-            y: 370,
-            kind: 'parameter',
-            label: String.raw`$\bfsigma$`,
+            id: 'physics',
+            x: 300,
+            y: 440,
+            kind: 'factor',
+            label: String.raw`$t_6$`,
+            annotation: String.raw`$L(\randomPoint_0, \randomPoint_1, \bfsigma)$`,
+            annotationAngle: 180,
         },
+        { id: 'sigma', x: 440, y: 440, kind: 'parameter', label: String.raw`$\bfsigma$` },
         {
             id: 'score',
-            x: 510,
-            y: 370,
+            x: 580,
+            y: 440,
             kind: 'factor',
             label: String.raw`$t_7$`,
             annotation: String.raw`$S(\bfsigma)$`,
             annotationAngle: 0,
         },
+        { id: 'zeta', x: 300, y: 365, kind: 'parameter', label: String.raw`$\bfzeta_1$` },
         {
             id: 'tx0',
             x: 50,
-            y: 270,
+            y: 300,
             kind: 'term',
             label: String.raw`$t_1$`,
             annotation: String.raw`$\rmP_{\randomPoint_0}$`,
         },
-        { id: 'x0', x: 170, y: 270, kind: 'quantity', label: String.raw`$\randomPoint_0$` },
+        { id: 'x0', x: 170, y: 300, kind: 'quantity', label: String.raw`$\randomPoint_0$` },
         {
             id: 'tx1',
             x: 300,
-            y: 270,
+            y: 300,
             kind: 'term',
             label: String.raw`$t_3$`,
-            annotation: String.raw`$\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfsigma}$`,
-            annotationAngle: 140,
+            annotation: String.raw`$\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfzeta_1}$`,
         },
-        { id: 'x1', x: 440, y: 270, kind: 'quantity', label: String.raw`$\randomPoint_1$` },
-        {
-            id: 'sight',
-            x: 600,
-            y: 270,
-            kind: 'factor',
-            label: String.raw`$t_6$`,
-            annotation: String.raw`$L(\randomPoint_1)$`,
-            annotationAngle: 0,
-        },
+        { id: 'x1', x: 440, y: 300, kind: 'quantity', label: String.raw`$\randomPoint_1$` },
         {
             id: 'tz0',
             x: 300,
-            y: 170,
+            y: 190,
             kind: 'term',
             label: String.raw`$t_4$`,
             annotation: String.raw`$\rmP_{\bfz_0 \mid \randomPoint_0, \bfm}$`,
             annotationAngle: -60,
         },
-        { id: 'z0', x: 440, y: 170, kind: 'quantity', label: String.raw`$\bfz_0$` },
+        { id: 'z0', x: 440, y: 190, kind: 'quantity', label: String.raw`$\bfz_0$` },
         {
             id: 'tz1',
             x: 600,
-            y: 170,
+            y: 190,
             kind: 'term',
             label: String.raw`$t_5$`,
             annotation: String.raw`$\rmP_{\bfz_1 \mid \randomPoint_1, \bfm}$`,
             annotationAngle: -60,
         },
-        { id: 'z1', x: 730, y: 170, kind: 'quantity', label: String.raw`$\bfz_1$` },
+        { id: 'z1', x: 730, y: 190, kind: 'quantity', label: String.raw`$\bfz_1$` },
         {
             id: 'tm',
             x: 50,
-            y: 70,
+            y: 80,
             kind: 'term',
             label: String.raw`$t_2$`,
             annotation: String.raw`$\rmP_{\bfm}$`,
             annotationAngle: 90,
         },
-        { id: 'm', x: 170, y: 70, kind: 'quantity', label: String.raw`$\bfm$` },
+        { id: 'm', x: 170, y: 80, kind: 'quantity', label: String.raw`$\bfm$` },
     ],
     edges: [
         { from: 'tx0', to: 'x0', kind: 'scores' },
         { from: 'tm', to: 'm', kind: 'scores' },
         { from: 'x0', to: 'tx1', kind: 'conditions' },
-        { from: 'sigma', to: 'tx1', kind: 'conditions' },
-        { from: 'sigma', to: 'score', kind: 'conditions' },
+        { from: 'zeta', to: 'tx1', kind: 'conditions' },
         { from: 'tx1', to: 'x1', kind: 'scores' },
-        { from: 'x1', to: 'sight', kind: 'conditions' },
+        { from: 'x0', to: 'physics', kind: 'conditions' },
+        { from: 'x1', to: 'physics', kind: 'conditions' },
+        { from: 'sigma', to: 'physics', kind: 'conditions' },
+        { from: 'sigma', to: 'score', kind: 'conditions' },
         { from: 'x0', to: 'tz0', kind: 'conditions' },
         { from: 'm', to: 'tz0', kind: 'conditions' },
         { from: 'tz0', to: 'z0', kind: 'scores' },
         { from: 'x1', to: 'tz1', kind: 'conditions' },
-        { from: 'm', to: 'tz1', kind: 'conditions', via: [[440, 70]], curve: 'bezier' },
+        { from: 'm', to: 'tz1', kind: 'conditions', via: [[440, 80]], curve: 'bezier' },
         { from: 'tz1', to: 'z1', kind: 'scores' },
     ],
 });
 
 export const compilation = defineGraph({
     title: 'A compilation graph',
-    caption: String.raw`The part of the compilation graph of the model above that computes $\logterm_3$, the log-density of the motion $t_3$, which draws $\randomPoint_1$ from a normal distribution about $\randomPoint_0$ with covariance $\bfsigma^2 I$: up to a constant, $\logterm_3 = -\tfrac12 \sigma^{-2} \sum_i (\point_1 - \point_0)_i^2 - \dimension \log \sigma$. Its roots are the two positions, the parameter and two constants, and each mapped value is the output of one primitive, labelled by what it computes, and $\logterm_3$ is the sum of the last two. The products $r \odot r$ and $\sigma \odot \sigma$ take the same input twice. The motion noise is positive, so $\sigma \odot \sigma$ and $\sigma^{-2}$ are operations on $\positive$, and $\sigma^{-2}$ is included in $\R$ before it multiplies the real $s$. The other terms' log-densities are computed in the same way, and the model's log-density is their sum.`,
+    caption: String.raw`The part of the compilation graph of the model above that computes $\logterm_6 = \log L$, the platform's own motion model, a normal density for the step $\randomPoint_1 - \randomPoint_0$ with covariance $\bfsigma^2 I$: up to a constant, $\logterm_6 = -\tfrac12 \sigma^{-2} \sum_i (\point_1 - \point_0)_i^2 - \dimension \log \sigma$. Its roots are the two positions, the parameter and two constants, and each mapped value is the output of one primitive, labelled by what it computes, and $\logterm_6$ is the sum of the last two. The products $r \odot r$ and $\sigma \odot \sigma$ take the same input twice. The scale is positive, so $\sigma \odot \sigma$ and $\sigma^{-2}$ are operations on $\positive$, and $\sigma^{-2}$ is included in $\R$ before it multiplies the real $s$. The other terms' log-densities are computed in the same way, and the model's log-density is their sum.`,
     width: 790,
     height: 390,
     fontSize: 18,
@@ -161,7 +159,7 @@ export const compilation = defineGraph({
             kind: 'mapped',
             annotation: String.raw`$-\dimension \log \sigma$`,
         },
-        { id: 'l3', x: 750, y: 150, kind: 'logDensity', label: String.raw`$\logterm_3$` },
+        { id: 'l6', x: 750, y: 150, kind: 'logDensity', label: String.raw`$\logterm_6$` },
     ],
     edges: [
         { from: 'x1', to: 'r', kind: 'input' },
@@ -180,7 +178,7 @@ export const compilation = defineGraph({
         { from: 'sigma', to: 'log', kind: 'input' },
         { from: 'log', to: 'dlog', kind: 'input' },
         { from: 'd', to: 'dlog', kind: 'input' },
-        { from: 'scaled', to: 'l3', kind: 'input' },
-        { from: 'dlog', to: 'l3', kind: 'input' },
+        { from: 'scaled', to: 'l6', kind: 'input' },
+        { from: 'dlog', to: 'l6', kind: 'input' },
     ],
 });
