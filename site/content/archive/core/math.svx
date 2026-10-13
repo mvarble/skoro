@@ -482,9 +482,10 @@ structural question the core answers: which terms touch a quantity, what a quant
 blanket is, and what retiring it disturbs. They are only right if they contain every quantity
 $\logterm_t$ depends on, so the core reads $V_t$ off the compilation graph, as the quantities among
 the roots $\logterm_t$ is reached from, rather than trusting a declaration; $C_t$ is then $V_t$
-without $s_t$. In the example, $\logterm_4$ is reached from $\randomPoint_0$, $\bfm$ and
-$\bfz_0$, and the term $t_4$ scores $\bfz_0$, so it is conditioned on $\randomPoint_0$ and $\bfm$: it
-is the density of $\rmP_{\bfz_0 \mid \randomPoint_0, \bfm}$.
+without $s_t$. In the example, $\logterm_3$ is reached from $\randomPoint_0$, $\randomPoint_1$
+and $\bfsigma$ (and two constants, which are not quantities), and the term $t_3$ scores
+$\randomPoint_1$, so it is conditioned on $\randomPoint_0$ and $\bfsigma$: it is the density of
+$\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfsigma}$.
 
 **The generative reading.** A distribution may provide a sampler for the quantity it scores, which
 draws $s_t$ given $C_t$, with a log-density $\log \proposal_t(s_t \mid C_t)$ of its own; an exact
