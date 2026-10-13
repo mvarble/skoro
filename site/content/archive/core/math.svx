@@ -287,7 +287,7 @@ elementwise.
 | $a$ as a real | $(0, \infty)^n \to \R^n$ | $a \odot \tangent_a$ | $a \odot \alpha$ | $a \odot \tangent_a \odot \alpha$ |
 | $e^{c}$ | $\R^n \to (0, \infty)^n$ | $\tangent_c$ | $\alpha$ | $0$ |
 | $\log a$ | $(0, \infty)^n \to \R^n$ | $\tangent_a$ | $\alpha$ | $0$ |
-| $a \odot b$ | $(0, \infty)^n \to (0, \infty)^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $a \odot b$ | $(0, \infty)^n \times (0, \infty)^n \to (0, \infty)^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
 | $1 / a$ | $(0, \infty)^n \to (0, \infty)^n$ | $-\tangent_a$ | $-\alpha$ | $0$ |
 
 The exponential and logarithm here are not the rows of the first table: those map $\R^n$ to
