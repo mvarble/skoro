@@ -64,28 +64,6 @@ one position to the next is a parameter $\boldsymbol\sigma$ with an improper pri
 $S(\boldsymbol\sigma)$, and an external sighting of its second position, a measurement that is not
 a quantity of the model, enters as a likelihood factor $L(\randomPoint_1)$.
 
-### The compilation graph
-
-The *compilation graph* records how values are computed. Its nodes are the model's values: its
-quantities, its constants, and its *mapped values*, the outputs of operations, among which are the
-terms' log-densities. It has an edge from each input of an operation to the operation's output, so
-a node with incoming edges is a mapped value, computed from the nodes those edges come from.
-
-- It is acyclic, because a model is built forward: an operation is added only after its inputs.
-- Its *roots*, the nodes with no incoming edge and so no ancestor, are the quantities and the
-  constants. They are the inputs of the map that the model computes, and every mapped value is a
-  function of the roots it is reached from.
-- A quantity is a root even when it was drawn from a distribution whose parameters are mapped
-  values. That dependence belongs to the probabilistic graph below, not to this one, which is why
-  no derivative ever flows through a sampler.
-
-<ModelGraph spec={compilation} />
-
-Evaluating a model compiles a program from the compilation graph: the subgraph of the nodes from
-which a requested target is reached, its operations taken in a topological order. That subgraph is
-the program's [computation graph](../../math/automatic-differentiation/#programs-and-their-computation-graphs),
-and its roots are the roots of the compilation graph that the targets reach.
-
 ### The probabilistic graph
 
 The *probabilistic graph* records what depends on what in distribution. Its nodes are the model's
@@ -104,10 +82,32 @@ and an edge from each term to the quantity it *scores*, if any.
 - It is acyclic, because a term is conditioned only on quantities that existed before the quantity
   it scores. A topological order of it is therefore an *ancestral* order, in which each quantity
   comes after everything its distribution is conditioned on.
-- Its edges are read off the compilation graph rather than declared: a term is conditioned on the
+- Its edges are read off the compilation graph below rather than declared: a term is conditioned on the
   quantities among the roots its log-density is reached from, other than the one it scores.
 
 <ModelGraph spec={probabilistic} />
+
+### The compilation graph
+
+The *compilation graph* records how values are computed. Its nodes are the model's values: its
+quantities, its constants, and its *mapped values*, the outputs of operations, among which are the
+terms' log-densities. It has an edge from each input of an operation to the operation's output, so
+a node with incoming edges is a mapped value, computed from the nodes those edges come from.
+
+- It is acyclic, because a model is built forward: an operation is added only after its inputs.
+- Its *roots*, the nodes with no incoming edge and so no ancestor, are the quantities and the
+  constants. They are the inputs of the map that the model computes, and every mapped value is a
+  function of the roots it is reached from.
+- A quantity is a root even when it was drawn from a distribution whose parameters are mapped
+  values. That dependence belongs to the probabilistic graph above, not to this one, which is why
+  no derivative ever flows through a sampler.
+
+<ModelGraph spec={compilation} />
+
+Evaluating a model compiles a program from the compilation graph: the subgraph of the nodes from
+which a requested target is reached, its operations taken in a topological order. That subgraph is
+the program's [computation graph](../../math/automatic-differentiation/#programs-and-their-computation-graphs),
+and its roots are the roots of the compilation graph that the targets reach.
 
 ## Quantities
 
