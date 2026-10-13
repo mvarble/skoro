@@ -348,6 +348,40 @@ $\density$ is only one.
   $\kernel_j(\point_{<j}, \dd\point_j) = \phi_j(\point_j; \eta_j(\point_{<j}))\, \nu_j(\dd\point_j)$ is
   written by building its parameters $\eta_j$ out of mapped values, composed as freely as any measurable map allows,
   and derivatives flow through them to the quantities they are built from.
+- **Everything is a logarithm.** Every product above becomes a sum once its logarithm is taken:
+
+  $$
+  	\log \density(\point) = \sum_{i=1}^n \log \density_i(\point_i \mid \point_{<i}),
+  	\qquad
+  	\log \weight(\point_F) = \sum_j \log L_j(\point) + \sum_{i \in O} \log \density_i(\point_i \mid \point_{<i}),
+  $$
+
+  and skoro states a model in that form, as a sum of log-densities, its
+  [terms](../../archive/core/math.svx#the-probabilistic-graph), one for each kernel, likelihood
+  factor and score. Sums suit what is done with them. A product of many densities underflows where a
+  sum of their logarithms does not; the derivative of a sum is the sum of the derivatives of its
+  terms, each reading only the few quantities it involves; and a normalizing constant becomes an
+  additive constant, which every algorithm that ignores the normalization simply drops.
+- **Dependence on predecessors is a directed graph.** A quantity's density seldom reads every
+  quantity before it: it reads a few, its *parents* $\operatorname{pa}(i) \subseteq \{1, \dots, i - 1\}$,
+  so that $\density_i(\point_i \mid \point_{<i}) = \density_i(\point_i \mid \point_{\operatorname{pa}(i)})$.
+  The quantities, with an edge from each parent to its child, form the model's *dependence graph*.
+  It is acyclic, because every edge points forward in the order the model was built, and the joint
+  density factorizes over it:
+
+  $$
+  	\density(\point) = \prod_{i=1}^n \density_i(\point_i \mid \point_{\operatorname{pa}(i)}) .
+  $$
+
+  The dependence graph serves intuition, since a model can be read off a picture of it, and
+  computation, since its sparsity is what makes large models tractable: a quantity's Markov
+  blanket, the terms that touch it, an order in which to generate, and conditional independences
+  are all read off it. Skoro keeps two graphs in its place, the
+  [probabilistic graph](../../archive/core/math.svx#the-probabilistic-graph) of quantities and terms,
+  and the [compilation graph](../../archive/core/math.svx#the-compilation-graph) of the values each
+  term is computed from, over which derivatives are taken; both are drawn there. Contracting each
+  term of the probabilistic graph into edges from the quantities it is conditioned on to the
+  quantity it scores gives back the dependence graph.
 
 And so on: the gradient of $\log \density$ or of $\log \weight$ in tangent charts for optimizers and
 Hamiltonian samplers, marginalizing quantities out when they retire, conditioning anew in every
