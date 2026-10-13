@@ -14,7 +14,8 @@ import { rehypeHeadingAnchors } from './plugins/rehype-heading-anchors.ts';
 import { remarkCallouts } from './plugins/remark-callouts.ts';
 import { ARCHIVE, DOCUMENTS, MATH, TRACKS } from './src/lib/site.ts';
 
-// Where the site is served from: `/` by default, or e.g. `BASE_PATH=/skoro` for GitHub Pages.
+// Where the site is served from: the root of its domain by default (https://skoro.dev), or a subpath
+// such as `BASE_PATH=/docs`.
 const base = (process.env.BASE_PATH ?? '') as '' | `/${string}`;
 
 const REPO_URL = 'https://github.com/mvarble/skoro';

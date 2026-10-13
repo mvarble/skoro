@@ -10,9 +10,8 @@ permissions:
     contents: read
 
 env:
-    # Where GitHub Pages serves the site: https://mvarble.github.io/skoro/.
-    SITE_ORIGIN: https://mvarble.github.io
-    SITE_BASE: /skoro
+    # Where GitHub Pages serves the site, at the root of its own domain.
+    SITE_ORIGIN: https://skoro.dev
 
 jobs:
     workflow:
@@ -73,7 +72,6 @@ jobs:
             - name: Build the site
               run: pnpm build
               env:
-                  BASE_PATH: ${{ env.SITE_BASE }}
                   SITE_URL: ${{ env.SITE_ORIGIN }}
             - name: Keep the site for publishing
               if: github.event_name == 'push' && !github.event.repository.private

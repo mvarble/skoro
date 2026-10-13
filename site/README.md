@@ -6,8 +6,8 @@ A static SvelteKit site whose pages are `.svx` (Markdown + Svelte, via mdsvex) w
 pnpm install
 pnpm dev                          # http://localhost:5173
 pnpm build                        # static site in build/
-BASE_PATH=/skoro pnpm build       # when served under a subpath (e.g. GitHub Pages)
-SITE_URL=https://… pnpm build     # makes the links in llms.txt absolute
+BASE_PATH=/docs pnpm build        # when served under a subpath, not at the root of a domain
+SITE_URL=https://skoro.dev pnpm build  # makes the links in llms.txt absolute, as CI does
 pnpm check && pnpm lint && pnpm test
 pnpm todos                        # every `[!TODO]` left in the content
 SITE_CONTENT=test/content pnpm build   # the fixture, with a document of every kind
