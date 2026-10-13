@@ -114,9 +114,9 @@ them.
 
 <Statement {...model} />
 
-A conditional density written as $\density_i(\point_i \mid \point_{<i}) = q_i(\point_i; \theta_i(\point_{<i}))$,
-a family of densities $q_i$ with parameters computed from earlier quantities by a measurable map
-$\theta_i$, is measurable as a composition of measurable maps, so any such nonlinear dependence is
+A conditional density written as $\density_i(\point_i \mid \point_{<i}) = \phi_i(\point_i; \eta_i(\point_{<i}))$,
+a family of densities $\phi_i$ with parameters computed from earlier quantities by a measurable map
+$\eta_i$, is measurable as a composition of measurable maps, so any such nonlinear dependence is
 allowed. Nothing else is: there are no quantities without a density, and no dependence on a
 quantity introduced later.
 
@@ -345,8 +345,8 @@ $\density$ is only one.
   carried by the model as a value computed from its arguments: sampling them samples it, weighing
   them weighs it, its expectations are integrals by [%full](statement:integral), and, most of all,
   later kernels may be parameterized by it. A kernel
-  $\kernel_j(\point_{<j}, \cdot) = q_j(\cdot\,; \theta_j(\point_{<j}))$ is written by building its
-  parameters $\theta_j$ out of mapped values, composed as freely as any measurable map allows,
+  $\kernel_j(\point_{<j}, \dd\point_j) = \phi_j(\point_j; \eta_j(\point_{<j}))\, \nu_j(\dd\point_j)$ is
+  written by building its parameters $\eta_j$ out of mapped values, composed as freely as any measurable map allows,
   and derivatives flow through them to the quantities they are built from.
 
 And so on: the gradient of $\log \density$ or of $\log \weight$ in tangent charts for optimizers and
