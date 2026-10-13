@@ -91,10 +91,13 @@ and an edge from each term to the quantity it *scores*, if any.
 
 - It is bipartite: every edge joins a quantity and a term.
 - Each quantity is scored by at most one term: the term of the distribution it was drawn from. A
-  term that scores nothing is a *likelihood factor* over the quantities it is conditioned on: in
-  Bayesian terms, the likelihood of data that is not a quantity of the model, such as the
-  measurements a retirement conditioned on. A term that scores an observed quantity is a likelihood
-  too, but only in the queries that observe it; a likelihood factor is one in every query.
+  quantity scored by no term is a *parameter*: it has no seed distribution, and an improper prior on
+  it is a score, a likelihood factor conditioned on it
+  ([parameters](../../math/generative-models/#mapped-values-and-parameters)). A term that scores
+  nothing is a *likelihood factor* over the quantities it is conditioned on: in Bayesian terms, the
+  likelihood of data that is not a quantity of the model, such as the measurements a retirement
+  conditioned on. A term that scores an observed quantity is a likelihood too, but only in the
+  queries that observe it; a likelihood factor is one in every query.
 - It is acyclic, because a term is conditioned only on quantities that existed before the quantity
   it scores. A topological order of it is therefore an *ancestral* order, in which each quantity
   comes after everything its distribution is conditioned on.
@@ -484,8 +487,11 @@ draws $s_t$ given $C_t$, with a log-density $\log \proposal_t(s_t \mid C_t)$ of 
 sampler has $\proposal_t = \density_t$ (charter, position 9). A query generates its free
 quantities, continuous and discrete, ancestrally: each from the sampler of the term that scores it,
 in a topological order of the probabilistic graph. In this section, $\point_F$ stands for all of
-them. Generation is possible exactly when every free quantity is scored by a term with a sampler;
-it is refused otherwise, naming a quantity that is not. The importance weight of a generated point
+them. Generation is possible exactly when every free quantity is scored by a term with a sampler,
+or is a parameter the query supplies a proposal for; it is refused otherwise, naming a quantity
+that is neither. A proposal for a parameter enters the second sum below as a sampler's density
+would, and an optimizer, which generates nothing, is given each free parameter's starting value
+instead. The importance weight of a generated point
 is
 
 $$

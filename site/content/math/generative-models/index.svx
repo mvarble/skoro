@@ -245,17 +245,36 @@ where $\density_{\otherRandomPoint}(\otherPoint_0) = \int h(\otherPoint_0 \mid \
 So a *likelihood factor* is exactly what its name says: the likelihood of an observation that is
 not a quantity of the model, already conditioned on.
 
-## What is left outside
+## Mapped values and parameters
 
-Two things a measure theorist might expect are deliberately absent. A function of quantities, a
-*mapped value*, has a law, the image of $\mu$, but in general no density with respect to any
-reference measure, so a model built forward never scores one: densities are given for quantities,
-which were introduced with them, and for nothing else. And an *improper* seed, a "density" with
-infinite integral such as a flat density on a line, is not a probability measure at all, and the
-joint law above is then a $\sigma$-finite measure rather than a probability. Conditioning by
-division of densities still makes sense when the normalizing integral that results, the $Z$ or
-$\density_O$ above, is finite and positive, and then yields a probability measure. Whether it is
-depends on what is observed: it is a condition on the query, not on the model.
+A function of quantities, a *mapped value*, has a law, the image of $\mu$, but in general no
+density with respect to any reference measure, so a model built forward never scores one: densities
+are given for quantities, which were introduced with them, and for nothing else.
+
+An *improper prior*, a "density" with infinite integral such as a flat density on a line, cannot be
+a seed, since it is not a probability measure. It is expressed instead by a *parameter* and a
+*score*. A parameter $\theta$ takes values in a space $\Theta$ with a reference measure
+$\nu_\Theta$, like a quantity, but enters with no kernel: the model becomes a family
+$(\mu_\theta)_{\theta \in \Theta}$, each of its kernels free to depend on $\theta$ measurably,
+as on any earlier quantity. A score is a likelihood factor $S(\theta) \ge 0$ on the parameter,
+$S \equiv 1$ for the flat prior. With $\point_O$ observed, the model then describes
+
+$$
+	\pi(\dd\theta, \dd\point_F) \propto S(\theta)\, \density_\theta(\point_F, \point_O)\,
+	\nu_\Theta(\dd\theta)\, \nu_F(\dd\point_F), @tag(parameter)
+$$
+
+a $\sigma$-finite measure, which is a posterior, after normalizing, exactly when its total mass is
+finite and positive. Whether it is depends on what is observed: it is a condition on the query, not
+on the model. Either way, [](eq:parameter) is the objective of optimization, and maximizing
+$\log S(\theta) + \log \density_\theta(\point_F, \point_O)$ is maximum a posteriori or, with
+$S \equiv 1$, maximum likelihood estimation.
+
+In every other respect a parameter is a quantity: it is a coordinate of the space the model
+describes, functions of it are random variables of the model, and it is conditioned on or left free
+like the rest. The one difference is that nothing generates it. An optimizer must be given its
+starting value, and a sampler must draw it from a proposal $\proposal_\Theta$ of its own, whose
+density, $S / \proposal_\Theta$ in all, enters the weight as any sampler's does.
 
 ## How skoro is built on this
 
@@ -298,6 +317,9 @@ $\density$ is only one.
   $\E[\weight\, h] / \E[\weight]$, a Metropolis–Hastings ratio, a gradient of $\log \weight$ or a
   resampling step in a particle filter is unchanged when every weight is multiplied by the same
   number.
+- **Parameters are quantities without a seed.** An improper prior is a parameter with a score
+  [](eq:parameter): an optimizer is given its starting value, a sampler a proposal for it, and in
+  every other way it is treated as a quantity.
 - **Functions of quantities belong in the model.** A mapped value $f(\randomPoint)$ is never scored, since
   its law $f_\# \mu$ has no density in general, but it is put *in* the model all the same. It is
   generated whenever its arguments are, so its law is sampled even without a density; its
