@@ -16,7 +16,8 @@ $$
 	\E_\proposal\bigl[\weight(\point_F)\, h(\point_F)\bigr] = \int h(\point_F)\, \density(\point_F, \point_O)\, \dd \point_F .
 $$
 
-When the model has no parameters, the right side is $\density(\point_O)\, \E[h(\point_F) \mid \point_O]$.
+When the model has no parameters, the right side is $\E[h(\randomPoint_F) \mid \randomPoint_O = \point_O]$
+times the marginal density of $\randomPoint_O$ at $\point_O$.
 In general it is $Z\, \E_\pi[h]$ whenever
 $Z = \int \density(\point_F, \point_O)\, \dd\point_F$ is finite and positive, with $\pi$ the
 query's target normalized, which a score of a parameter may prevent.

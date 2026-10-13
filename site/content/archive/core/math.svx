@@ -516,8 +516,7 @@ $$
 	\log \density(\point_F, \discretePoint_F;\, \point_O, \discretePoint_O) = \sum_t \logterm_t(\point_F, \discretePoint_F, \point_O, \discretePoint_O), @tag(query)
 $$
 
-which is, up to the constant $\log \density(\point_O, \discretePoint_O)$, the log-density of the
-conditional distribution of the free quantities given the observed ones, with respect to Lebesgue
+which is, up to an additive constant, the log-density of the conditional distribution of the free quantities given the observed ones, with respect to Lebesgue
 measure on the continuous free quantities and counting measure on the discrete ones. One model
 answers many queries: with the measurements observed it is a posterior; with nothing observed, a
 prior to simulate from; with the states observed, a likelihood of measurements. A switching model's
@@ -660,11 +659,12 @@ In the core, a continuous quantity's density is with respect to Lebesgue measure
 values lie in, $\R^n$ or the open subset $\positive^n$ of it, and a discrete quantity's with
 respect to counting measure, so this holds as long as every distribution keeps to that convention.
 The one place it is easy to break is a density written in the logarithmic chart of a positive
-quantity, such as a log-normal written as a normal in $u = \log \point$: with respect to Lebesgue
-measure on $\positive^n$, it carries the Jacobian of the chart,
+quantity, such as a log-normal written as a normal in $u = \log \point$. If $g$ is the density of
+$\log \randomPoint$ with respect to Lebesgue measure on $\R^n$, the density $f$ of $\randomPoint$
+with respect to Lebesgue measure on $\positive^n$ carries the Jacobian of the chart,
 
 $$
-	\log \density_{\point}(\point) = \log \density_u(\log \point) - \sum_i \log \point_i . @tag(log-chart-density)
+	\log f(\point) = \log g(\log \point) - \sum_i \log \point_i . @tag(log-chart-density)
 $$
 
 Densities on manifolds without such a chart will need a base measure of their own when the first
@@ -809,10 +809,9 @@ in this document has a place in that note's measure theory.
   and weighed through them, and needs no term of its own.
 - **A query conditions by dividing densities.** Its log-density [](eq:query) is that of the
   regular conditional distribution of [%full](statement:math/generative-models/conditioning), up to
-  the constant $\log \density_O$, which is why a query may drop it.
+  an additive constant, which is why a query may drop it.
 - **Every number an algorithm estimates is an integral** against the joint density, by
-  [%full](statement:math/generative-models/integral): an expectation, a marginal, the evidence
-  $\density_O$. Generation draws from the conditional densities in the order the model was built,
+  [%full](statement:math/generative-models/integral): an expectation, a marginal, the evidence. Generation draws from the conditional densities in the order the model was built,
   which is Ionescu-Tulcea's construction, and importance weighting [](eq:weight) estimates such an
   integral from those draws.
 - **Retirement integrates and conditions.** [%full](statement:retirement) integrates the retired

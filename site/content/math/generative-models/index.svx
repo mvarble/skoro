@@ -287,8 +287,8 @@ that the model does not carry as a quantity.
 $\mu_L$ is a probability measure because $\int L \,\dd\mu = Z$, and its density with respect to
 $\nu$ is $L \density / Z$. With $\otherRandomPoint$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
 so [%full](statement:conditioning), with $\randomPoint$ free and $\otherRandomPoint$ observed at $\otherPoint_0$, gives the
-conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_{\otherRandomPoint}(\otherPoint_0)$,
-where $\density_{\otherRandomPoint}(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
+conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_O(\otherPoint_0)$,
+where the marginal density of that statement is $\density_O(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
 
 </Proof>
 
