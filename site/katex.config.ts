@@ -78,6 +78,9 @@ const config: KatexOptions & Settings = {
         '\\otherManifold': '\\bbY',
         '\\otherPoint': 'y',
         '\\otherTangent': 'v',
+        // A random variable, in boldface: the measurable function whose values are points.
+        '\\randomPoint': '\\boldsymbol{\\point}',
+        '\\otherRandomPoint': '\\boldsymbol{\\otherPoint}',
         '\\map': 'F',
         '\\discretePoint': 'k',
         // The order of derivative an operation supports, and the order a pass requires of a step.

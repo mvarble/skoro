@@ -35,7 +35,7 @@ gives such an isomorphism.
 
 Probability is done in an abstract probability space $(\Omega, \mathscr F, \mathrm P)$. A modeller
 working there never says what $\Omega$ is, nor which sets are in $\mathscr F$, nor what
-$\mathrm P$ assigns to them. Instead they introduce random variables $\bfx : \Omega \to \manifold$,
+$\mathrm P$ assigns to them. Instead they introduce random variables $\randomPoint : \Omega \to \manifold$,
 measurable maps into the spaces where the quantities of the model live, and speak only of those:
 their laws, their joint laws, the independence of one from another, the conditional law of one
 given another. Any number of them may be introduced, and new ones may be introduced later, provided
@@ -48,22 +48,22 @@ once:
 - **The space is underdetermined.** Many triples $(\Omega, \mathscr F, \mathrm P)$ carry random
   variables with the same joint law, and $\mathscr F$ may hold far more than the model ever
   mentions. Nothing in the model says which.
-- **Conditioning needs regularity.** The conditional law of $\bfx$ given $\bfy$, for $\bfx$ with values in
-  $\manifold$ and $\bfy$ in $\otherManifold$, exists as a kernel $\kernel$ from $\otherManifold$ to
+- **Conditioning needs regularity.** The conditional law of $\randomPoint$ given $\otherRandomPoint$, for $\randomPoint$ with values in
+  $\manifold$ and $\otherRandomPoint$ in $\otherManifold$, defined as a kernel $\kernel$ from $\otherManifold$ to
   $\manifold$ characterized by
 
   $$
-  	\mathrm P(\bfx \in A,\ \bfy \in B) = \int_B \kernel(\otherPoint, A)\, \mathrm P(\bfy \in \dd\otherPoint)
+  	\mathrm P(\randomPoint \in A,\ \otherRandomPoint \in B) = \int_B \kernel(\otherPoint, A)\, \mathrm P(\otherRandomPoint \in \dd\otherPoint)
   	\qquad \text{for all measurable } A \subseteq \manifold,\ B \subseteq \otherManifold, @tag(regular-conditional)
   $$
 
-  a *regular conditional distribution*, only under assumptions on the spaces (standard Borel is the
-  usual one), and even then only up to null sets of $\bfy$'s law. Conditioning on an event of
+  a *regular conditional distribution*, exists only under assumptions on the spaces (standard Borel is the
+  usual one), and even then only up to null sets of $\otherRandomPoint$'s law. Conditioning on an event of
   probability zero, which is what observing a continuous quantity does, depends on which version is
   chosen; the Borel–Kolmogorov paradox is the classic example of two natural versions disagreeing.
 - **Densities need a reference.** A density is a Radon–Nikodym derivative, and exists only when
   the law is absolutely continuous with respect to a chosen measure. The law of a function of
-  quantities, such as $(\bfx, \bfx)$ or a projection, often has none.
+  quantities, such as $(\randomPoint, \randomPoint)$ or a projection, often has none.
 - **Existence needs a theorem.** Writing down a family of random variables does not make a space
   that carries them. Kolmogorov's extension theorem builds one from consistent finite-dimensional
   laws, but asks for topological regularity of the spaces to do so.
@@ -159,20 +159,20 @@ basis: the old coordinates keep their joint law, and a new one is added with its
 given them.
 
 The second thing the restriction buys is a guarantee about what the model can say. A model speaks
-only of its quantities, so the random variables it can express are the $\sigma(\bfx)$-measurable ones,
-$\bfx = (\bfx_1, \dots, \bfx_n)$, and those are exactly the functions of the quantities.
+only of its quantities, so the random variables it can express are the $\sigma(\randomPoint)$-measurable ones,
+$\randomPoint = (\randomPoint_1, \dots, \randomPoint_n)$, and those are exactly the functions of the quantities.
 
 <Statement {...doobDynkin} />
 
 <Proof>
 
-If $\bfy = g \circ \bfx$, then $\bfy^{-1}(B) = \bfx^{-1}(g^{-1}(B)) \in \sigma(\bfx)$. Conversely, every set in
-$\sigma(\bfx)$ is $\bfx^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{\bfx^{-1}(A)}$ is
-$\mathbf 1_A \circ \bfx$, and by linearity every $\sigma(\bfx)$-measurable simple function is $g \circ \bfx$
-for a simple $g$. A $\sigma(\bfx)$-measurable $\bfy$ is a pointwise limit of such functions
-$g_k \circ \bfx$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
-elsewhere is measurable with $\bfy = g \circ \bfx$, because the sequence converges at every point of the
-image of $\bfx$.
+If $\otherRandomPoint = g \circ \randomPoint$, then $\otherRandomPoint^{-1}(B) = \randomPoint^{-1}(g^{-1}(B)) \in \sigma(\randomPoint)$. Conversely, every set in
+$\sigma(\randomPoint)$ is $\randomPoint^{-1}(A)$ for some $A \in \mathscr X$, so an indicator $\mathbf 1_{\randomPoint^{-1}(A)}$ is
+$\mathbf 1_A \circ \randomPoint$, and by linearity every $\sigma(\randomPoint)$-measurable simple function is $g \circ \randomPoint$
+for a simple $g$. A $\sigma(\randomPoint)$-measurable $\otherRandomPoint$ is a pointwise limit of such functions
+$g_k \circ \randomPoint$; the set where $(g_k)$ converges is measurable, and $g = \lim_k g_k$ there and $0$
+elsewhere is measurable with $\otherRandomPoint = g \circ \randomPoint$, because the sequence converges at every point of the
+image of $\randomPoint$.
 
 </Proof>
 
@@ -180,8 +180,8 @@ image of $\bfx$.
 
 <Proof>
 
-The first claim is [%full](statement:doob-dynkin). For the second, the law of $\bfx$ is $\mu$, so
-$\E[g \circ \bfx] = \int g \,\dd\mu$ by the change of variables for image measures, and
+The first claim is [%full](statement:doob-dynkin). For the second, the law of $\randomPoint$ is $\mu$, so
+$\E[g \circ \randomPoint] = \int g \,\dd\mu$ by the change of variables for image measures, and
 $\int g \,\dd\mu = \int g \density \,\dd\nu$ because $\density = \dd\mu / \dd\nu$. The iterated form
 is Fubini's theorem, which applies because $g \density$ is $\nu$-integrable.
 
@@ -205,11 +205,11 @@ the conditional law is written down from the densities.
 <Proof>
 
 By Tonelli, $\density_O$ is measurable and $\int \density_O \,\dd\nu_O = 1$, so it is a density of
-the law of $\bfx_O$ and is finite $\nu_O$-almost everywhere. The set where it is $0$ has probability
+the law of $\randomPoint_O$ and is finite $\nu_O$-almost everywhere. The set where it is $0$ has probability
 $0$ under that law, and so does the set where it is infinite. For measurable $A$ and $B$,
 
 $$
-	\mathrm P(\bfx_F \in A,\ \bfx_O \in B)
+	\mathrm P(\randomPoint_F \in A,\ \randomPoint_O \in B)
 	= \int_B \int_A \density(\point_F, \point_O)\, \nu_F(\dd\point_F)\, \nu_O(\dd\point_O)
 	= \int_B \kernel(\point_O, A)\, \density_O(\point_O)\, \nu_O(\dd\point_O),
 $$
@@ -235,10 +235,10 @@ that the model does not carry as a quantity.
 <Proof>
 
 $\mu_L$ is a probability measure because $\int L \,\dd\mu = Z$, and its density with respect to
-$\nu$ is $L \density / Z$. With $\bfy$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
-so [%full](statement:conditioning), with $\bfx$ free and $\bfy$ observed at $\otherPoint_0$, gives the
-conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_{\bfy}(\otherPoint_0)$,
-where $\density_{\bfy}(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
+$\nu$ is $L \density / Z$. With $\otherRandomPoint$ appended, the joint density is $\density(\point)\, h(\otherPoint \mid \point)$,
+so [%full](statement:conditioning), with $\randomPoint$ free and $\otherRandomPoint$ observed at $\otherPoint_0$, gives the
+conditional density $\density(\point)\, h(\otherPoint_0 \mid \point) / \density_{\otherRandomPoint}(\otherPoint_0)$,
+where $\density_{\otherRandomPoint}(\otherPoint_0) = \int h(\otherPoint_0 \mid \point)\, \mu(\dd\point) = Z$.
 
 </Proof>
 
@@ -264,7 +264,7 @@ but a probability space built forward, quantity by quantity, and the library set
 users work with that space in every way the measure theory above allows, of which evaluating
 $\density$ is only one.
 
-- **Quantities are specified by their augmenting kernels.** Each quantity $\bfx_i$ enters the model
+- **Quantities are specified by their augmenting kernels.** Each quantity $\randomPoint_i$ enters the model
   with the kernel that augments the space built so far,
 
   $$
@@ -280,7 +280,7 @@ $\density$ is only one.
   product $L = \prod_j L_j$. The measure the model describes is then $L\, \mu$, normalized, by
   [%full](statement:likelihood-factor).
 - **The model can be sampled, with weights.** Drawing from the kernels in order samples $\mu$. In a
-  query that observes $\bfx_O$, drawing the free quantities from their kernels, with the observed
+  query that observes $\randomPoint_O$, drawing the free quantities from their kernels, with the observed
   ones held at their values, samples a measure whose density with respect to $\nu_F$ is the product
   of the free quantities' conditional densities, and the target of the query, the conditional law of
   [%full](statement:conditioning) reweighted by $L$, differs from it by the weight
@@ -298,7 +298,7 @@ $\density$ is only one.
   $\E[\weight\, h] / \E[\weight]$, a Metropolis–Hastings ratio, a gradient of $\log \weight$ or a
   resampling step in a particle filter is unchanged when every weight is multiplied by the same
   number.
-- **Functions of quantities belong in the model.** A mapped value $f(\bfx)$ is never scored, since
+- **Functions of quantities belong in the model.** A mapped value $f(\randomPoint)$ is never scored, since
   its law $f_\# \mu$ has no density in general, but it is put *in* the model all the same. It is
   generated whenever its arguments are, so its law is sampled even without a density; its
   expectations are integrals by [%full](statement:integral); and, most of all, later kernels may be

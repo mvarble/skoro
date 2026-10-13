@@ -95,10 +95,12 @@ Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. The site-wide
 one document goes in its `katex_macros`.
 
 skoro's own notation is written with its macros, never with the letters they stand for, so that it
-can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`, `\tangent`
-and `\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
-`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal`, `\weight`, `\kernel` and `\key`; and the
-typography `\D`, `\dd` and `\hvp`. `katex.config.ts` says what each stands for.
+can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`,
+`\randomPoint` and `\otherRandomPoint` (the random variables, in boldface), `\tangent` and
+`\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
+`\discretePoint`, `\order` and `\req`; `\density`, `\logterm`, `\proposal`, `\weight`, `\kernel`
+and `\key`; and the typography `\D`, `\dd` and `\hvp`. `katex.config.ts` says what each stands
+for.
 
 ## Graphs
 
