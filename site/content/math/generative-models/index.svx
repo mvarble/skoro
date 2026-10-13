@@ -195,6 +195,30 @@ the product of the conditional densities, in the order the model was built. The 
 explicit, though it is rarely available in closed form; estimating it is what inference
 algorithms are for.
 
+## Mapped values
+
+A model built forward carries more than its quantities. A *mapped value*
+$\otherRandomPoint = f(\randomPoint)$, for a measurable $f$, such as a distance between two
+positions, a predicted measurement, or the parameters of a later kernel, is a random variable of the
+model like any other, and by [%full](statement:doob-dynkin) every random variable the model can
+express is one.
+
+A mapped value is a *target*, determined by the quantities, not a further source of randomness.
+Once the quantities are drawn or fixed at $\point$, it is computed, $\otherPoint = f(\point)$, and
+never drawn. So nothing about it needs to be sampled or weighed on its own account. Computing $f$
+on draws of $\randomPoint$ samples its law $f_\# \mu$; a weight attached to a draw $\point$ is
+already the weight of the pair $(\point, f(\point))$, since $\otherPoint$ adds no randomness to
+it; and its expectations are those of [%full](statement:integral) for the function $h \circ f$:
+
+$$
+	\E[h(\otherRandomPoint)] = \int_{\manifold} h(f(\point))\, \density(\point)\, \nu(\dd\point) .
+$$
+
+Its law can be awkward (concentrated on a lower-dimensional set, for instance, with no density
+with respect to any reference measure), but nothing requires that density: a model's densities are
+those of its quantities, and a mapped value enters them only as the argument of a later kernel or
+likelihood factor, through the quantities it is computed from.
+
 ## Conditioning and likelihoods
 
 Observing quantities is conditioning on them, and in this corner it needs no existence theorem:
@@ -245,11 +269,7 @@ where $\density_{\otherRandomPoint}(\otherPoint_0) = \int h(\otherPoint_0 \mid \
 So a *likelihood factor* is exactly what its name says: the likelihood of an observation that is
 not a quantity of the model, already conditioned on.
 
-## Mapped values and parameters
-
-A function of quantities, a *mapped value*, has a law, the image of $\mu$, but in general no
-density with respect to any reference measure, so a model built forward never scores one: densities
-are given for quantities, which were introduced with them, and for nothing else.
+## Parameters and improper priors
 
 An *improper prior*, a "density" with infinite integral such as a flat density on a line, cannot be
 a seed, since it is not a probability measure. It is expressed instead by a *parameter* and a
@@ -321,11 +341,10 @@ $\density$ is only one.
 - **Parameters are quantities without a seed.** An improper prior is a parameter with a score
   [](eq:parameter). The model carries a proposal for it, from which a sampler draws it and an
   optimizer may take its starting value, and in every other way it is treated as a quantity.
-- **Functions of quantities belong in the model.** A mapped value $f(\randomPoint)$ is never scored, since
-  its law $f_\# \mu$ has no density in general, but it is put *in* the model all the same. It is
-  generated whenever its arguments are, so its law is sampled even without a density; its
-  expectations are integrals by [%full](statement:integral); and, most of all, later kernels may be
-  parameterized by it. A kernel
+- **Mapped values live in the model.** A mapped value $\otherRandomPoint = f(\randomPoint)$ is
+  carried by the model as a value computed from its arguments: sampling them samples it, weighing
+  them weighs it, its expectations are integrals by [%full](statement:integral), and, most of all,
+  later kernels may be parameterized by it. A kernel
   $\kernel_j(\point_{<j}, \cdot) = q_j(\cdot\,; \theta_j(\point_{<j}))$ is written by building its
   parameters $\theta_j$ out of mapped values, composed as freely as any measurable map allows,
   and derivatives flow through them to the quantities they are built from.

@@ -93,7 +93,7 @@ and an edge from each term to the quantity it *scores*, if any.
 - Each quantity is scored by at most one term: the term of the distribution it was drawn from. A
   quantity scored by no term is a *parameter*: it has no seed distribution, and an improper prior on
   it is a score, a likelihood factor conditioned on it
-  ([parameters](../../math/generative-models/#mapped-values-and-parameters)). A term that scores
+  ([parameters](../../math/generative-models/#parameters-and-improper-priors)). A term that scores
   nothing is a *likelihood factor* over the quantities it is conditioned on: in Bayesian terms, the
   likelihood of data that is not a quantity of the model, such as the measurements a retirement
   conditioned on. A term that scores an observed quantity is a likelihood too, but only in the
@@ -676,8 +676,8 @@ in this document has a place in that note's measure theory.
   of [%full](statement:math/generative-models/likelihood-factor).
 - **Mapped values are functions of the quantities,** and by
   [%full](statement:math/generative-models/doob-dynkin) they are all the random variables a model can
-  express. Their laws are image measures, with no density in general, which is why no term scores
-  one.
+  express. Each is determined by the quantities it is computed from, so it is generated with them
+  and weighed through them, and needs no term of its own.
 - **A query conditions by dividing densities.** Its log-density [](eq:query) is that of the
   regular conditional distribution of [%full](statement:math/generative-models/conditioning), up to
   the constant $\log \density_O$, which is why a query may drop it.
