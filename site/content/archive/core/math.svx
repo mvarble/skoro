@@ -11,6 +11,7 @@ depends_on: [retraction, automatic-differentiation, derivatives-in-charts, produ
 	import * as productAgreement from './statements/product-agreement.md';
 	import * as importance from './statements/importance.md';
 	import * as retirement from './statements/retirement.md';
+	import * as embedded from './statements/embedded.md';
 	import { probabilistic, compilation } from './model.graph';
 </script>
 
@@ -145,6 +146,71 @@ the Hessian of the pull-back everywhere, not only at stationary points: in
 derivative does not move, so the correction vanishes. What is not trivial is reading a positive
 quantity as a real number, through the inclusion $\positive^n \subset \R^n$: its derivative in
 charts is $\operatorname{diag}(\point)$, which moves with the point.
+
+**Embedded types.** The curved types that later entries add, a sphere for one, are most simply
+written as submanifolds $\manifold \subset \R^n$ of a coordinate space, each point stored as the
+vector of $\R^n$ it is. The charter has each such type added by a crate of its own, built only on
+the core's public interface, and has only the core's primitives touch tensors (positions 11 and
+12). Most of such a type composes from the core's primitives, since its retraction and its inverse
+are arithmetic in $\R^n$. What does not is the boundary between the type and its storage: the
+inclusion $\iota$, which reads a point as the vector that stores it, and a projection $\pi$, which
+maps a vector back onto the type. Each changes type, so neither is a composite of Euclidean
+primitives, and the derivatives of both depend on the type's charts. The core therefore provides the
+two once, for every *embedded type*: a type declared by its storage size $n$, its dimension
+$\dimension$, and three composites of Euclidean primitives, a tangent basis $B$, a projection $P$
+and an inverse retraction $Q$.
+
+<Statement {...embedded} />
+
+<Proof>
+
+Write $R_\point(\tangent) = P(\point + B(\point)\, \tangent)$. Since $P$ is the identity on
+$\manifold \cap U$, differentiating $P(\gamma(t)) = \gamma(t)$ along a curve $\gamma$ in it gives
+$\D P(\point)\, u = u$ for every $u \in T_\point \manifold$. So $R_\point(0) = \point$, and
+$\D R_\point(0)\, \tangent = \D P(\point)\, B(\point)\, \tangent = B(\point)\, \tangent$, the tangent
+vector whose coordinates in the basis $B(\point)$ are $\tangent$. In those coordinates the
+derivative is the identity, which makes $R$ a [retraction](../../math/retraction/), with a local
+inverse $\ominus$ by the inverse function theorem.
+
+For the inclusion, $\iota(\point \oplus t \tangent) - \iota(\point) = P(\point + t B(\point)\, \tangent) - \point$,
+whose derivative at $t = 0$ is $B(\point)\, \tangent$ by the above, so the cotangent map is
+$\alpha \mapsto B(\point)\transpose \alpha$. By the definition of the second-order map in
+[Operations](#operations), $\hvp_\iota(\alpha)\, \tangent$ is the derivative of
+$B(\point \oplus t \tangent)\transpose \alpha$ at $t = 0$, and the curve $\point \oplus t \tangent$
+has velocity $B(\point)\, \tangent$, which gives [](eq:inclusion).
+
+For the projection, differentiating $(\otherPoint \oplus u) \ominus \otherPoint = u$ at $u = 0$
+shows that the derivative $L$ of $z \mapsto z \ominus \otherPoint$ at $\otherPoint$, a linear map on
+$T_\otherPoint \manifold$, satisfies $L\, B(\otherPoint) = I$. The columns of $B(\otherPoint)$ are an
+orthonormal basis of $T_\otherPoint \manifold$, so $L = B(\otherPoint)\transpose$ there. The curve
+$P(w + t \dot w)$ lies in $\manifold$, with velocity $\D P(w)\, \dot w \in T_\otherPoint \manifold$,
+so $\D \pi(w)\, \dot w = B(\otherPoint)\transpose \D P(w)\, \dot w$. Its input is flat, so
+$\hvp_\pi(\alpha)\, \dot w$ is the derivative of
+$\D P(w + t \dot w)\transpose B(P(w + t \dot w))\, \alpha$ at $t = 0$, which is [](eq:projection)
+by the product rule.
+
+</Proof>
+
+Every map in [](eq:inclusion) and [](eq:projection) is one that the composites $B$ and $P$ already
+provide: the tangent map of $B$, along $B(\point)\, \tangent$ or along $\D P(w)\, \dot w$, and the
+tangent, cotangent and second-order maps of $P$. So the core's two boundary operations are generic
+over embedded types: they assemble their derivative maps from passes over the type's own
+composites, rather than from derivatives written by hand, and the order of each is the least that
+those passes need under [%full](statement:order). The type's retraction and its inverse are then
+composites themselves,
+
+$$
+	\point \oplus \tangent = \pi\bigl(\iota(\point) + B(\iota(\point))\, \tangent\bigr), \qquad
+	\otherPoint \ominus \point = Q\bigl(\iota(\point), \iota(\otherPoint)\bigr), @tag(embedded)
+$$
+
+where $Q$ must invert the retraction, $Q(\point, \point \oplus \tangent) = \tangent$ near
+$\tangent = 0$, which the type's own tests check. A type declared this way is defined on
+$\manifold \cap U$ only, and a basis smooth on the whole of $\manifold$ need not exist: on the
+sphere of [the acceptance test](#the-acceptance-test) it does not. Where a type's points may stray
+outside $U$, and what then happens, is that type's entry's question, not the core's. The positive
+orthant is not an embedded type in this sense: it is an open subset of $\R^n$, of dimension $n$,
+and its inclusion has the derivative $\operatorname{diag}(\point)$ of its own chart.
 
 **Discrete quantities.** The core's discrete types are the finite sets
 $\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$, with $\mathrm{Boolean} = \mathrm{Categorical}(2)$,
@@ -304,6 +370,10 @@ model may want either. The retraction [](eq:positive) is the composite $\point \
 of the second and fourth rows, and its inverse $\log \otherPoint - \log \point$ of the third and a
 Euclidean subtraction, so every derivative of both, of either order, is an identity or zero.
 
+Beside the rows of both tables, every embedded type has the two boundary operations of
+[Embedded types](#quantities), $\iota$ and $\pi$, whose derivative maps [](eq:inclusion) and
+[](eq:projection) are assembled from the type's composites rather than written in a table.
+
 Every row is checked the same way: the tangent map is the derivative of the forward map, the
 cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
 velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) are the
@@ -361,37 +431,57 @@ retraction is a translation, so every second-order map along it is zero, and the
 derivatives under test are zeros on both sides. The test is therefore run on a product that
 includes a curved factor, and composed with a function whose second derivative does not vanish.
 
-**A test-only sphere.** The core's tests carry a private type, never shipped: the unit sphere
-$S^2 = \{\point \in \R^3 : \lVert \point \rVert = 1\}$, of dimension $2$ and storage size $3$. Its
-tangent plane at $\point$ is $\point^\perp$, identified with $\R^2$ by a matrix $B(\point)$ whose
-two orthonormal columns span it. No such $B$ is smooth on the whole sphere (a smooth field of
-tangent bases on $S^2$ would give a nowhere-vanishing tangent vector field, which the hairy ball
-theorem rules out), so the identification is smooth on an open part of the sphere, and the tests
-stay inside it. Its retraction projects back onto the sphere:
+**A sphere outside the core.** The test's curved factor is the unit sphere
+$S^2 = \{\point \in \R^3 : \lVert \point \rVert = 1\}$, of dimension $2$ and storage size $3$,
+declared as an embedded type. The test is written as a later entry's crate would be written,
+outside the core and with nothing but its public interface, so that it also shows a curved type
+being added with no derivative written by hand. The sphere is not a type of the core. skoro means
+to support it, but in an entry of its own, which settles what this test can leave aside: a basis
+for the whole sphere, the choice of retraction, and the sphere's reference measure. When that entry
+adds it, the acceptance test runs on that sphere instead, and this one is removed.
+
+The tangent plane at $\point$ is $\point^\perp$. No basis of it is smooth on the whole sphere (a
+smooth field of tangent bases on $S^2$ would give a nowhere-vanishing tangent vector field, which
+the hairy ball theorem rules out), so the test's basis is smooth on $U = \{\point : \point_3 > -1\}$,
+the sphere without its south pole, and the tests stay inside it:
+
+$$
+	B(\point) = \begin{pmatrix}
+		1 - c\, \point_1^2 & -c\, \point_1 \point_2 \\
+		-c\, \point_1 \point_2 & 1 - c\, \point_2^2 \\
+		-\point_1 & -\point_2
+	\end{pmatrix},
+	\qquad c = \frac{1}{1 + \point_3} .
+$$
+
+Its columns are orthogonal to $\point$ and orthonormal on the sphere, as expanding with
+$\point_1^2 + \point_2^2 = (1 - \point_3)(1 + \point_3)$ shows: the first column's product with
+$\point$, for one, is $\point_1 (1 - \point_3) - c\, \point_1 (1 - \point_3^2) = 0$. The projection
+normalizes, $P(w) = w / \lVert w \rVert$ on $\R^3 \setminus \{0\}$, so by [](eq:embedded) the
+retraction and its inverse are
 
 $$
 	\point \oplus \tangent = \frac{\point + B(\point)\,\tangent}{\lVert \point + B(\point)\,\tangent \rVert},
 	\qquad
-	\otherPoint \ominus \point = \frac{B(\point)\transpose \otherPoint}{\point\transpose \otherPoint}
+	\otherPoint \ominus \point = Q(\point, \otherPoint) = \frac{B(\point)\transpose \otherPoint}{\point\transpose \otherPoint}
 	\quad (\point\transpose \otherPoint > 0) . @tag(sphere)
 $$
 
 The inverse follows from $\point\transpose B(\point) = 0$: the point $\otherPoint$ is
 $(\point + B(\point)\tangent)/n$ with $n$ the norm, so $\point\transpose \otherPoint = 1/n$ and
-$B(\point)\transpose \otherPoint = \tangent / n$. The derivative of the retraction at
-$\tangent = 0$ is $B(\point)\tangent - \point\,(\point\transpose B(\point)\tangent) = B(\point)\tangent$,
-whose coordinates are $\tangent$, so it is a retraction. Unlike the core's types, the sphere is
-curved: its tangent charts do not commute, the correction term of
+$B(\point)\transpose \otherPoint = \tangent / n$. Each of $B$, $P$ and $Q$ is a composite of the
+core's Euclidean primitives. The reciprocals are exponentials of logarithms, $c = e^{-\log(1 + \point_3)}$,
+$1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$ and
+$1 / \point\transpose \otherPoint = e^{-\log \point\transpose \otherPoint}$, each logarithm taken of
+a number positive on the domain; the rest is products, sums, slicing and concatenation. Unlike the
+core's types, the sphere is curved: its tangent charts do not commute, the correction term of
 [%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
-points, and the retraction's second-order maps are not zero. Its retraction is a composite of three
-private primitives with hand-written derivatives in charts: the inclusion $S^2 \subset \R^3$, the
-map $(\point, \tangent) \mapsto B(\point)\tangent$, and the normalization $w \mapsto w / \lVert w \rVert$
-from $\R^3 \setminus \{0\}$ onto the sphere.
+points, and the second-order maps of its boundary operations are not zero, since its basis turns
+as the point moves.
 
 **What it compares.** The test builds a runtime product of two Euclidean factors, a real line, a
 positive factor and the sphere, and a nonlinear scalar function $f$ on it that reads the positive
-factor and the sphere as real numbers, through their inclusions. It checks, at points away from
-the singular set of $B$:
+factor and the sphere as real numbers, through their inclusions. It checks, at points of $U$:
 
 1. that every pass over the product's retraction, values, tangent frames, cotangent frames and
    Hessian products, agrees with the factor-wise computation, block by block, as
@@ -403,9 +493,10 @@ the singular set of $B$:
 3. that on the sphere's block, away from a stationary point, the chart Hessian differs from the
    Hessian of the pull-back by the correction term, and on every other block it does not.
 
-The private primitives' own derivatives are checked the same way first, against finite differences
-of [](eq:math/derivatives-in-charts/derivative), so that a failure of the acceptance test points at
-the composition rather than at a primitive.
+The sphere's boundary operations are checked the same way first, [](eq:inclusion) and
+[](eq:projection) against finite differences of [](eq:math/derivatives-in-charts/derivative), and
+its $Q$ against the retraction it must invert, so that a failure of the acceptance test points at
+the product rather than at the type.
 
 ## Queries
 
@@ -653,7 +744,8 @@ Two consequences for the rest of the model:
 
 - **Quantities** are Euclidean (real, vector, matrix), positive ($\positive^n$, with the
   retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
-  continuous quantities. Dimensions are fixed when a quantity is created, and every
+  continuous quantities. Later entries add curved types as embedded types, declared by the
+  composites of [%full](statement:embedded), whose boundary operations the core provides. Dimensions are fixed when a quantity is created, and every
   derivative coordinate is indexed by tangent dimension.
 - **The compilation graph** holds values and operations, and programs are compiled from it; **the
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
@@ -708,8 +800,9 @@ in this document has a place in that note's measure theory.
   free quantities out of the terms that touch them and conditions on the retired observed ones,
   which is the same marginalization and the same division of densities, carried out once and kept.
 
-The test-only sphere has no reference measure in this sense, since it is not an open subset of a
-coordinate space; it carries no density in the core's tests. Manifold-valued quantities beyond the
+An embedded type, such as the acceptance test's sphere, has no reference measure in this sense,
+since it is not an open subset of a coordinate space; the sphere carries no density in the core's
+tests. Manifold-valued quantities beyond the
 positive orthant will need reference measures of their own (surface measure on a sphere, Haar
 measure on the rotations) when they arrive.
 
