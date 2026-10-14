@@ -29,6 +29,7 @@ import {
     repoRoot,
     setActive,
     today,
+    tryGit,
     type Kind,
     type Stage,
     type Workflow,
@@ -502,8 +503,8 @@ function resume(root: string, args: Args, io: Output): Result {
 // ---------------------------------------------------------------------------
 // check, guard
 
-// Documents changed after they were approved, and documents written before
-// their stage.
+// Documents changed after they were approved, documents written before their
+// stage, and drafts changed while the entry was reopened at an earlier stage.
 function lockProblems(root: string, slug: string, workflow: Workflow): string[] {
     const problems: string[] = [];
     const stages = KINDS[workflow.kind];
@@ -520,7 +521,17 @@ function lockProblems(root: string, slug: string, workflow: Workflow): string[] 
                 );
             }
         } else if (exists && current != 'done') {
-            problems.push(`${doc} was written before its stage; '${slug}' is at ${current}.`);
+            // A draft the entry had reached before it was reopened waits, unchanged, for its
+            // stage to come round again.
+            const reopened = workflow.events.findLast((event) => event.action == 'reopen')?.commit;
+            const kept = reopened && tryGit(root, 'cat-file', '-e', `${reopened}:${doc}`) != undefined;
+            if (!kept) {
+                problems.push(`${doc} was written before its stage; '${slug}' is at ${current}.`);
+            } else if (tryGit(root, 'diff', '--quiet', reopened, '--', doc) == undefined) {
+                problems.push(
+                    `${doc} changed after '${slug}' was reopened at ${reopened}; it waits for its stage.`,
+                );
+            }
         }
         if (current == 'done' && (!approval || approval.stale)) {
             problems.push(`'${slug}' is done, but its ${stage} stage was never approved.`);

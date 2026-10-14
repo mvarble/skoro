@@ -130,6 +130,32 @@ test('a document cannot be written before its stage', () => {
     assert.match(r.wf('check').stderr, /plan\.md was written before its stage/);
 });
 
+test('a draft written before a reopening waits, unchanged, for its stage', () => {
+    const r = repo();
+    r.wf('start', 'normal', '--kind', 'feature');
+    write(r.root, `${entry}/math.md`, '# Math\n\n$x$\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, `${entry}/implementation.md`, 'A draft.\n');
+    r.commit();
+    assert.equal(r.wf('reopen', 'math', '--reason', 'the chart was wrong').code, 0);
+    r.commit();
+    assert.equal(r.wf('check').code, 0, 'the draft may stay');
+
+    write(r.root, `${entry}/implementation.md`, 'A changed draft.\n');
+    assert.match(r.wf('check').stderr, /implementation\.md changed after 'normal' was reopened/);
+    write(r.root, `${entry}/implementation.md`, 'A draft.\n');
+    write(r.root, `${entry}/plan.md`, '- [ ] Early.\n');
+    assert.match(r.wf('check').stderr, /plan\.md was written before its stage/);
+    fs.rmSync(path.join(r.root, `${entry}/plan.md`));
+
+    write(r.root, `${entry}/math.md`, '# Math\n\n$y$\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, `${entry}/implementation.md`, 'A changed draft.\n');
+    assert.equal(r.wf('check').code, 0, 'back at its stage, the draft may change');
+});
+
 test('code waits for the build stage', () => {
     const r = repo();
     write(r.root, 'crates/skoro/src/lib.rs', '// code\n');
