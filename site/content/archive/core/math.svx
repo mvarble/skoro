@@ -225,19 +225,43 @@ declares a retraction of order two.
 **Smooth as computed.** The passes in the table are taken at two places in particular: over $R$
 at $\tangent = 0$, and over $Q$ on the diagonal $(\otherPoint, \otherPoint)$. Every evaluation of
 a boundary operation's derivatives goes through them. [%full](statement:embedded) asks $R$ and $Q$
-to be smooth there, and they are, but a composite must also *compute* them smoothly there, which is
-a stronger requirement. A retraction from an exponential map, such as $R \operatorname{Exp}(\tangent)$
-on the rotations, is smooth at $\tangent = 0$, yet its textbook formula divides $\sin \theta$ by
-$\theta = \lVert \tangent \rVert$, and a composite of that formula computes $0/0$ at $\tangent = 0$,
-and so a meaningless value for every derivative there; a logarithm written with $\operatorname{atan2}$
-over $\theta$ does the same on the diagonal. So a type's $R$ and $Q$ must be smooth as computed at
-$\tangent = 0$ and on the diagonal, to the order the type claims. A formula with a removable
-singularity there switches near it, by a discretization of $\theta$ and
-[selection](#selection), to a truncation of its Taylor series, keeping the terms through
-$\theta^2$ for a type of order two, so that the derivatives the boundary operations take at the
-singularity are exact. Where to switch, and how many terms to keep, is a matter of rounding on both
-sides of the switch, and is the type's entry's to settle. The acceptance test's retraction and its
-inverse are rational, with no such singularity.
+to be smooth there, and they are, but the operations that compute them must also *compute* them
+smoothly there, which is a stronger requirement. A retraction from an exponential map, such as
+$R \operatorname{Exp}(\tangent)$ on the rotations, is smooth at $\tangent = 0$, yet its textbook
+formula divides $\sin \theta$ by $\theta = \lVert \tangent \rVert$, and the coefficients of its
+derivatives, $(1 - \cos \theta) / \theta^2$ and the like, divide too: computed as written, each is
+$0/0$ at $\tangent = 0$, and so is every derivative taken there. A logarithm written with
+$\operatorname{atan2}$ over $\theta$ does the same on the diagonal. So a type's $R$ and $Q$ must be
+smooth as computed at $\tangent = 0$ and on the diagonal, to the order the type claims. A formula
+with a removable singularity there switches, below a cutoff in $\theta^2$, to a truncation of its
+Taylor series in $\theta^2$, and the switch can be written in one of two places.
+
+- **Inside a fused operation's kernels**, element by element: each kernel compares $\theta^2$ with
+  the cutoff and evaluates either the series or the closed form, never both. This is how the
+  archive's rotations computed their exponential and logarithm, with the tangent, cotangent and
+  second-order maps of each, and it is the way for a type that is to be fast or precise. The type's
+  $R$ and $Q$ are then composites around the fused exponential and logarithm,
+  $R(\point, \tangent) = \point \operatorname{Exp}(\tangent)$ and
+  $Q(\point, \otherPoint) = \operatorname{Log}(\point\transpose \otherPoint)$, or fused operations
+  themselves. Either way, the boundary operations' passes reach the kernels' own derivative maps,
+  which take the series at the singularity.
+- **In a composite**, by a discretization of $\theta^2$ and [selection](#selection) between the two
+  formulas. A composite evaluates both formulas on every row, and the closed form still divides by
+  zero on the rows where the series is selected. Selection pulls a zero cotangent back into it there,
+  but the closed form's own partial derivatives are $0/0$ there, and zero times them is undefined,
+  which reaches $\theta$'s cotangent through the sum of its uses. So the closed form's input must be
+  guarded as well, by a second selection that gives it a harmless value, $\theta = 1$ say, on the
+  rows where it is not selected.
+
+Either way, the series keeps at least the terms through $\theta^2$ for a type of order two, so that
+the derivatives taken at the singularity are exact, and in practice more: it must be accurate across
+the whole region below the cutoff, and the closed form above it, where its cancellation grows as
+$\theta$ shrinks. The archive's exponential kept the terms through $\theta^8$, with the cutoff at
+$\theta^2 \approx 1.37$ in single precision and $\theta^2 \approx 0.025$ in double. Where to switch
+and how many terms to keep is a matter of rounding on both sides of the cutoff, and the type's
+entry's to settle. A fused kernel's branch is tested like the rest of it, against its composite or
+against finite differences, on both sides of the cutoff and at both precisions. The acceptance
+test's retraction and its inverse are rational, with no such singularity.
 
 The inverse retraction needs no boundary operation of its own, since its output is a tangent
 vector. It is the composite
@@ -550,7 +574,8 @@ composite in its place, slower but right, and the upgrade does not wait on the f
 a fused operation should have a composite whenever one can be written, and why numerical care is
 first sought in the composite itself, where it can often be had: a logarithm of
 $\operatorname{SO}(3)$ can switch formulas near angle $\pi$ by a discretization of the angle and
-[selection](#selection), whose derivatives are exact away from the switch.
+[selection](#selection), whose derivatives are exact away from the switch, provided the formula not
+selected is guarded as [Embedded types](#quantities) describes.
 
 The mathematics here assumes the tensor layer is public: the tensor shapes skoro uses (batched
 points, tangent frames, integer values) and the operations on them that kernels need. What it
