@@ -400,8 +400,30 @@ frame is handled column by column, so one column is shown.
 | $\sum_i a_i$ | $\sum_i (\tangent_a)_i$ | $\alpha \mathbf 1$ | $0$ |
 | $e^{a}$ (elementwise) | $e^{a} \odot \tangent_a$ | $e^{a} \odot \alpha$ | $e^{a} \odot \tangent_a \odot \alpha$ |
 | $\log a$ (elementwise) | $\tangent_a / a$ | $\alpha / a$ | $-\tangent_a \odot \alpha / a^2$ |
+| $\sin a$ (elementwise) | $\cos a \odot \tangent_a$ | $\cos a \odot \alpha$ | $-\sin a \odot \tangent_a \odot \alpha$ |
+| $\cos a$ (elementwise) | $-\sin a \odot \tangent_a$ | $-\sin a \odot \alpha$ | $-\cos a \odot \tangent_a \odot \alpha$ |
+| $\operatorname{atan2}(a, b)$ (elementwise) | $(b \odot \tangent_a - a \odot \tangent_b) / r$ | $b \odot \alpha / r,\ -a \odot \alpha / r$ | [](eq:atan2) |
 | slice, concatenate, transpose | the same map | its adjoint | $0$ |
 | select | [](eq:select) | to the selected value | $0$ |
+
+The trigonometric rows are there because the retraction that a curved type's geometry suggests is
+often built from sines and cosines, and its inverse from an inverse tangent: with them, such a
+retraction is a composite, whose derivatives follow from the table, rather than a fused operation
+whose derivatives are written by hand, with no composite to fall back on while an upgrade of burn
+breaks its kernels. $\operatorname{atan2}(a, b) \in (-\pi, \pi]$ is the angle of the point
+$(b, a)$, defined where $r = a \odot a + b \odot b$ is positive. Its derivatives, with the second
+order read off the first by differentiating $b / r$ and $-a / r$, are
+
+$$
+	\hvp_a = \frac{(a^2 - b^2) \odot \tangent_b - 2\, a \odot b \odot \tangent_a}{r^2} \odot \alpha,
+	\qquad
+	\hvp_b = \frac{(a^2 - b^2) \odot \tangent_a + 2\, a \odot b \odot \tangent_b}{r^2} \odot \alpha, @tag(atan2)
+$$
+
+squares, products and quotients taken elementwise. They hold off the half-line $a = 0$, $b < 0$,
+where the angle jumps by $2\pi$; there the map is a discretization in the sense of
+[Operations](#operations), and a composite that must cross it, as an inverse retraction near a half
+turn may, switches formulas by [selection](#selection).
 
 The operations on positive quantities read their tangents and cotangents in the charts
 [](eq:positive), that is, in logarithmic coordinates, where all but the inclusion are linear. Here
@@ -431,9 +453,9 @@ over the type's own operations rather than written in a table.
 
 Every row is checked the same way: the tangent map is the derivative of the forward map, the
 cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
-velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) are the
-only ones whose second-order maps mix inputs: the pull-back into one input involves the other, so
-the other's velocity appears. The linear ones have none. The discrete operations the core needs
+velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) and
+$\operatorname{atan2}$ are the only ones whose second-order maps mix inputs: the pull-back into one
+input involves the other, so the other's velocity appears. The linear ones have none. The discrete operations the core needs
 (integer arithmetic and comparison) and the embedding of an integer as a real carry no
 derivatives, by the conventions of [Operations](#operations).
 
@@ -507,8 +529,8 @@ for its logarithm near angle $\pi$. It owes three things.
    rather than misread.
 
 This is what keeps the core stable as feature crates arrive. The core's primitives are the
-operations every feature shares (arithmetic, exponentials and logarithms, products of matrices,
-slicing and selection), and no feature's needs, however particular, add to them: what composes is
+operations every feature shares (arithmetic, exponentials and logarithms, trigonometric functions,
+products of matrices, slicing and selection), and no feature's needs, however particular, add to them: what composes is
 a composite, and what must be faster or more careful than its composite is a fused operation in
 the feature's own crate. The core changes for a feature only when the feature needs something its
 public interface cannot express, such as the boundary operations of embedded types, and such a
@@ -1028,15 +1050,7 @@ measure on the rotations) when they arrive.
 
 ## Open questions
 
-> [!TODO] Should the primitives include trigonometric functions?
-> The retraction a type's geometry suggests is often built from sines and cosines, and its inverse
-> from an inverse tangent, which the primitives lack. Such a retraction can then be declared only as
-> a fused operation, whose derivative maps are written by hand and checked against finite
-> differences, and which has no composite to fall back on while an upgrade of burn breaks its
-> kernels. Elementwise $\sin$ and $\cos$ and a two-argument $\operatorname{atan2}$, each of order
-> two, would let those retractions be composites. They would be shared by every such type, which is
-> the test [Operations in feature crates](#operations-in-feature-crates) sets for a primitive,
-> though none of the core's own types needs them.
+None remain.
 
 ## Revisions
 
@@ -1049,4 +1063,5 @@ $P$ is declared, the projection, whose derivative maps [%full](statement:embedde
 passes over $R$, $Q$ and $P$. The tangent basis is now the derivative of the retraction, and need no
 longer be orthonormal, since the inverse retraction supplies the derivative of the chart at the
 output. The acceptance test's sphere now uses a retraction that is
-not a projection, and an open question asks whether trigonometric functions should be primitives.
+not a projection. The elementwise sine, cosine and two-argument inverse tangent were added to the
+primitives, so that retractions built from them can be composites.
