@@ -12,10 +12,7 @@ $\point \in \manifold$:
 - $(\point, 0) \in U$, $R(\point, 0) = \point$, $R(\point, \tangent) \in \manifold$ whenever
   $(\point, \tangent) \in U$, and $B(\point) = \partial_2 R(\point, 0) \in \R^{n \times \dimension}$
   has rank $\dimension$;
-- $Q(\point, R(\point, \tangent)) = \tangent$ for every $\tangent$ in a neighbourhood of $0$;
-
-and, optionally, $P : W \to \manifold$ a smooth map on an open set $W \subseteq \R^n$ containing
-$\manifold$, with $P(\point) = \point$ for every $\point \in \manifold$.
+- $Q(\point, R(\point, \tangent)) = \tangent$ for every $\tangent$ in a neighbourhood of $0$.
 
 Then $\point \oplus \tangent = R(\point, \tangent)$ is a retraction on $\manifold$, where it is
 defined, with $T_\point \manifold$ identified with $\R^\dimension$ by the basis $B(\point)$, and
@@ -53,17 +50,4 @@ where $u$ and $v$ are the velocities of $\point$ and $\tangent$, $\dot \point = 
 $\dot \otherPoint = \partial_1 R\, \dot \point + \partial_2 R\, v$ are the velocities of $\point$ and
 $\otherPoint$ in $\R^n$, $g_j = \partial_j R\transpose L(\otherPoint)\transpose \alpha$, every
 $\partial_j R$ is taken at $(\point, \tangent)$, and $\D \partial_j R\,[\dot \point, v]$ is its
-derivative along $(\dot \point, v)$. When $P$ is given, the projection $\pi : W \to \manifold$,
-$\pi(w) = P(w)$, has, with $\otherPoint = P(w)$ and $\dot \otherPoint = \D P(w)\, \dot w$ for a
-velocity $\dot w$ of $w$, the derivative maps
-
-$$
-	\D \pi(w) = L(\otherPoint)\, \D P(w), \qquad
-	\hvp_\pi(\alpha)\, \dot w = \bigl(\D^2 P(w)[\dot w]\bigr)\transpose L(\otherPoint)\transpose \alpha
-	+ \D P(w)\transpose \bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha, @tag(projection)
-$$
-
-where $\D^2 P(w)[\dot w]$ is the derivative of $\D P$ along $\dot w$.
-
-Each of these derivative maps holds with $B$ and $L$ replaced by any smooth maps $\hat B$ and
-$\hat L$, on open sets of $\R^n$ containing $\manifold$, that agree with them on $\manifold$.
+derivative along $(\dot \point, v)$.
