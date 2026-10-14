@@ -58,10 +58,11 @@ The pieces map to [the mathematics](math.svx) as follows. A model's density is t
 terms [](eq:archive/core/math/log-density), and a query's density is that sum as a function of the
 free quantities [](eq:archive/core/math/query). Operations are the maps
 [](eq:archive/core/math/operation) with up to four derivative maps, and each pass over a compiled
-program is admitted or refused by [%full](statement:archive/core/math/order). Spaces carry the
-retractions [](eq:archive/core/math/positive) and [](eq:archive/core/math/embedded), products
-retract as [%full](statement:archive/core/math/product-agreement) requires, and embedded types get
-their boundary operations from [%full](statement:archive/core/math/embedded). Generation weighs
+program is admitted or refused by [%full](statement:archive/core/math/order). Spaces carry their
+retractions, [](eq:archive/core/math/positive) among them, products retract as
+[%full](statement:archive/core/math/product-agreement) requires, and an embedded type, declared by
+its retraction and that retraction's inverse [](eq:archive/core/math/embedded), gets its boundary
+operations, the inclusion and the retraction, from [%full](statement:archive/core/math/embedded). Generation weighs
 its draws by [](eq:archive/core/math/weight), keys are derived by
 [](eq:archive/core/math/address-key), and retirement applies
 [%full](statement:archive/core/math/retirement) over the blanket [](eq:archive/core/math/blanket).
@@ -262,7 +263,7 @@ members.
 | `writer`, `scope` | `Writer`, `Reader`, the building scope and namespaces |
 | `query`, `compile`, `program`, `layout` | `Observations`, `Query`, the compiler, `Program` and its passes, `Layout` |
 | `generate`, `retire` | generation with weights, retirement |
-| `testing` | the finite-difference and agreement checks, public so that feature crates check fused operations as the core checks primitives |
+| `testing` | the finite-difference, agreement and declaration checks, public so that feature crates check fused operations and embedded types as the core checks primitives |
 
 `testing` is an ordinary public module, not a Cargo feature. It needs nothing the crate does not
 already depend on, and a feature would make `cargo test -p skoro-core` fail unless the feature
@@ -442,11 +443,11 @@ pub struct Block { pub space: Space, pub storage: Range<usize>, pub tangent: Ran
 > layout can match on it. What the charter's position asked of the trait is kept: a space *builds*
 > its retraction as a subgraph, which is what makes a product's retraction differentiable.
 >
-> The cost is that an embedded type chooses its retraction only by choosing $B$ and $P$: it always
-> retracts by [](eq:archive/core/math/embedded), a step in the basis followed by the projection.
-> A retraction of another form, such as the archive's $R \operatorname{Exp}(\tangent)$ on the
-> rotations, is not a declaration this enumeration can hold. The entry that needs one is where the
-> core grows, once, for every type of the kind.
+> An embedded type is declared by its retraction and that retraction's inverse, two composites of
+> any form, so a retraction such as the archive's $R \operatorname{Exp}(\tangent)$ on the rotations
+> is a declaration like any other. What the enumeration cannot hold is a projection from storage
+> onto a type, which the mathematics leaves out; the entry that first needs one adds a boundary
+> operation, and every type declared before it is unchanged.
 
 The retractions, each a composite cached per space in a process-wide map:
 
@@ -455,7 +456,7 @@ The retractions, each a composite cached per space in a process-wide map:
 | `Real`, `Vector`, `Matrix` | `x + reshape(t)` | `reshape(y - x)` |
 | `Positive` | `positive_mul(x, positive_exp(t))` | `positive_log(y) - positive_log(x)`, [](eq:archive/core/math/positive) |
 | `Product` | slice `x` and `t` by `blocks()`, retract each factor, concatenate | the same, factor by factor |
-| `Embedded` | `project(include(x) + matmul(B(include(x)), t))` | `Q(include(x), include(y))`, [](eq:archive/core/math/embedded) |
+| `Embedded` | `skoro.retract(x, t)`, the boundary operation | `Q(include(x), include(y))`, [](eq:archive/core/math/embedded) |
 
 The tangent of every space is a `Vector` of the space's dimension.
 
@@ -497,6 +498,7 @@ nothing is implemented twice:
 | `s * a`, `c * a` | a `Real` handle or an `f64` literal, and a Euclidean value | `scale` |
 | `a.matmul(b)` | a matrix and a matrix or vector | `matmul` |
 | `a.sum()`, `a.exp()`, `a.log()`, `a.transpose()` | a Euclidean value | `sum`, `exp`, `log`, `transpose` |
+| `a.sin()`, `a.cos()`, `a.atan2(b)` | Euclidean values, elementwise | `sin`, `cos`, `atan2` |
 | `a.slice(range)`, `scope::concatenate(parts, space)`, `a.reshape(space)` | Euclidean values and products | `slice`, `concatenate` |
 | `scope::select(index, values)` | a categorical index and values of one space | `select` |
 | `p.as_real()`, `c.exp_positive()`, `p.log()`, `p * q`, `p.recip()`, `p / q` | positive values | the positive rows |
@@ -504,7 +506,7 @@ nothing is implemented twice:
 | `i.to_real()`, `a.is_nonnegative()` | a discrete value; a `Real` | embedding, discretization |
 | `x.retract(t)`, `y.local(x)` | any continuous value | the space's composites |
 | `p.factor(i)`, `scope::product(parts)` | products | `slice`, `concatenate` |
-| `e.include()`, `E::project(w)` | an embedded value; a vector | `include`, `project` |
+| `e.include()` | an embedded value | `include` |
 
 A literal is sugar for a constant node. The table of primitives has no reciprocal of a Euclidean
 value, so the core offers division only by a literal (a `scale`) and between positive values;
@@ -598,7 +600,8 @@ code at both precisions.
 | name | inputs to output | notes |
 | --- | --- | --- |
 | `skoro.add`, `skoro.sub`, `skoro.mul` | two of one Euclidean space, to that space | |
-| `skoro.neg`, `skoro.exp`, `skoro.log` | one Euclidean value, to its space | elementwise |
+| `skoro.neg`, `skoro.exp`, `skoro.log`, `skoro.sin`, `skoro.cos` | one Euclidean value, to its space | elementwise |
+| `skoro.atan2` | two of one Euclidean space, to that space | elementwise, [](eq:archive/core/math/atan2) |
 | `skoro.scale` | `Real` and a Euclidean value, to its space | |
 | `skoro.matmul` | `Matrix(m, k)` and `Matrix(k, n)` or `Vector(k)`, to `Matrix(m, n)` or `Vector(m)` | a vector is a one-column matrix |
 | `skoro.sum` | a Euclidean value, to `Real` | |
@@ -607,7 +610,7 @@ code at both precisions.
 | `skoro.concatenate` | values whose storage sizes sum to the output's, to a Euclidean space or a product | parameter: the output space; with one input it is a reshape |
 | `skoro.select` | `Categorical(n)` and $n$ values of one continuous space, to that space | [](eq:archive/core/math/select) |
 | `skoro.positive.as_real`, `.exp`, `.log`, `.mul`, `.recip` | the rows of the second table | read in the charts [](eq:archive/core/math/positive) |
-| `skoro.include`, `skoro.project` | an embedded value to `Vector(n)`; `Vector(n)` to an embedded value | parameter: the declaration; [below](#embedded-types) |
+| `skoro.include`, `skoro.retract` | an embedded value to `Vector(n)`; an embedded value and `Vector(d)` to that type | parameter: the declaration; [below](#embedded-types) |
 | `skoro.integer.add`, `.sub`, `.mul`, `.eq`, `.lt`, `.le` | integers to `Integer` or `Categorical(2)` | order zero |
 | `skoro.to_real`, `skoro.is_nonnegative` | a discrete value to `Real`; `Real` to `Categorical(2)` | order zero: an embedding and a discretization |
 
@@ -679,61 +682,80 @@ registry lacks is refused as `UnknownOperation`, naming it.
 ### Embedded types
 
 ```rust
-pub struct Embedded { /* name, params, storage n, dimension d, the three composites */ }
+pub struct Embedded { /* name, params, storage n, dimension d, the two composites */ }
 
 impl Embedded {
-    /// `basis`: Vector(n) to Matrix(n, d). `projection`: Vector(n) to Vector(n).
-    /// `inverse`: two of Vector(n) to Vector(d). Any other signature is refused.
+    /// `retraction`: Vector(n) and Vector(d) to Vector(n), the R of the mathematics.
+    /// `inverse`: two of Vector(n) to Vector(d), its Q. Any other signature is refused.
     pub fn declare(
         name: &'static str,
         params: Vec<Param>,
         storage: usize,
         dimension: usize,
-        basis: Arc<Composite>,
-        projection: Arc<Composite>,
+        retraction: Arc<Composite>,
         inverse: Arc<Composite>,
     ) -> Result<Arc<Embedded>, Error>;
 }
 ```
 
-The boundary operations `skoro.include` ($\iota$) and `skoro.project` ($\pi$) are the only
+A type whose $R$ or $Q$ is a fused operation declares the composite of one call to it, so that
+`declare` takes composites alone and the boundary kernels compile every declaration the same way.
+The declaration is plain data, nameable through the registry like an operation.
+
+The boundary operations `skoro.include` ($\iota$) and `skoro.retract` ($\oplus$) are the only
 primitives whose kernels are not written in tensor operations. When lowered, each compiles the
 declaration's composites for the target (`Composite::compile`, cached in `Lowering`), and its
 derivative maps are passes over those programs, assembled as
-[](eq:archive/core/math/inclusion) and [](eq:archive/core/math/projection) say. Write
-$\mathcal B$ and $\mathcal P$ for the programs of $B$ and $P$, each with one root.
+[](eq:archive/core/math/inclusion), [](eq:archive/core/math/retraction-maps) and
+[](eq:archive/core/math/retraction-second) say, with the passes of the table under
+[Embedded types](math.svx#quantities). Write $\mathcal R$ and $\mathcal Q$ for the programs of $R$
+and $Q$, each with two roots, and read a pass "at an input" as its frame at that root. Both roots of
+each are flat, so their tangent coordinates are their storage.
 
-For $\iota$ at a point stored as $x$, with $B = \mathcal B.\mathtt{forward}(x)$ reshaped to
-`[N, n, d]`:
+For $\iota$ at a point stored as $x$:
 
 | map | computed as |
 | --- | --- |
 | forward | $x$ itself |
-| tangent of $\tangent$ | $B\, \tangent$, `[N, n, K]` |
-| cotangent of $\alpha$ | $B\transpose \alpha$, `[N, d, K]` |
-| second order | record $\dot B = \mathcal B.\mathtt{tangent}(x;\, B \tangent)$, `[N, nd, K]`, the derivative of $B$ along each column of $B \tangent$; then $\hvp_\iota(\alpha)$ is $\dot B_k\transpose \alpha$ in column $k$ |
+| tangent of $u$ | $B u = \mathcal R.\mathtt{tangent}((x, 0);\, (0, u))$, `[N, n, K]` |
+| cotangent of $\alpha$ | $B\transpose \alpha = \mathcal R.\mathtt{cotangent}((x, 0);\, \alpha)$ at the second input, `[N, d, K]` |
+| second order | record $\dot x = B u$; then $\hvp_\iota(\alpha)$ is the $\beta$ of $\mathcal R.\mathtt{hessian}((x, 0);\, (\dot x, 0);\, \alpha)$ at the second input |
 
-For $\pi$ at $w$, with $\otherPoint = \mathcal P.\mathtt{forward}(w)$ and
-$B = \mathcal B.\mathtt{forward}(\otherPoint)$:
+For $\oplus$ at $(x, \tangent)$, with $\otherPoint = \mathcal R.\mathtt{forward}(x, \tangent)$:
 
 | map | computed as |
 | --- | --- |
 | forward | $\otherPoint$ |
-| tangent of $\dot w$ | $B\transpose V$, with $V = \mathcal P.\mathtt{tangent}(w;\, \dot w)$ |
-| cotangent of $\alpha$ | $\mathcal P.\mathtt{cotangent}(w;\, B \alpha)$ |
-| second order | record $V$ and $\dot B = \mathcal B.\mathtt{tangent}(\otherPoint;\, V)$; then $\hvp_\pi(\alpha)$ is the $\beta$ of $\mathcal P.\mathtt{hessian}(w;\, \dot w;\, B \alpha)$, plus $\mathcal P.\mathtt{cotangent}(w;\, M)$ with column $k$ of $M$ equal to $\dot B_k\, \alpha$ |
+| tangent of $(u, v)$ | $\dot x = B u$ as above, $\dot \otherPoint = \mathcal R.\mathtt{tangent}((x, \tangent);\, (\dot x, v))$, then $\mathcal Q.\mathtt{tangent}((\otherPoint, \otherPoint);\, (0, \dot \otherPoint))$ |
+| cotangent of $\alpha$ | $h = \mathcal Q.\mathtt{cotangent}((\otherPoint, \otherPoint);\, \alpha)$ at the second input; $(g_1, g_2) = \mathcal R.\mathtt{cotangent}((x, \tangent);\, h)$; then $B\transpose g_1$ into $x$ and $g_2$ into $\tangent$ |
+| second order | record $\dot x$ and $\dot \otherPoint$; then, with $h$, $g_1$, $g_2$ as above: $m$ the $\beta$ of $\mathcal Q.\mathtt{hessian}((\otherPoint, \otherPoint);\, (\dot \otherPoint, \dot \otherPoint);\, \alpha)$ at the second input; $(\dot g_1, \dot g_2)$ the cotangent of $\mathcal R$ at $(x, \tangent)$ of $m$, plus the $\beta$ of $\mathcal R.\mathtt{hessian}((x, \tangent);\, (\dot x, v);\, h)$; $\hvp_x(\alpha) = B\transpose \dot g_1$ plus the $\beta$ of $\mathcal R.\mathtt{hessian}((x, 0);\, (\dot x, 0);\, g_1)$ at the second input; $\hvp_\tangent(\alpha) = \dot g_2$ |
 
-The first summand of the last row is the first term of [](eq:archive/core/math/projection): a
-Hessian pass over $\mathcal P$ with velocities $\dot w$ and the single cotangent column $B\alpha$
-delivers $(\D^2 P(w)[\dot w_k])\transpose B \alpha$ in column $k$ of $\beta$, which is why a
-Hessian pass takes one cotangent column. The second summand is the second term.
+Every row is a term of the mathematics' equations, in order: $m$ is
+$(\D L(\otherPoint)[\dot \otherPoint])\transpose \alpha$, the Hessian pass over $\mathcal Q$ seeds
+both inputs because $L$ moves with both arguments of $Q$, and the last Hessian pass over
+$\mathcal R$ at $(x, 0)$ is $(\D B(x)[\dot x])\transpose g_1$. A Hessian pass takes one cotangent
+column, which is why $\alpha$, $h$ and $g_1$ are single columns while the velocities have $K$. The
+second-order map of $\oplus$ runs about ten inner passes over programs of a few steps each; that is
+the price of deriving a curved type's derivatives rather than writing them, and the first place to
+look if profiling a model with curved quantities points at the core.
 
 The order of each boundary kernel is the most its inner passes admit, found with the same
-admissibility function as any pass: $\iota$ has order two when $\mathcal B$ admits a tangent pass
-and order one otherwise; $\pi$ has order two when $\mathcal P$ admits a Hessian pass seeded at its
-root and $\mathcal B$ a tangent pass, order one when $\mathcal P$ admits first-order passes, and
-order zero otherwise. No derivative of an embedded type is written by hand, in the core or in the
-crate that declares it.
+admissibility function as any pass: $\iota$ has order two when $\mathcal R$ admits a Hessian pass
+seeded at its first input, and order one when it admits first-order passes; $\oplus$ has order two
+when $\mathcal R$ and $\mathcal Q$ both admit Hessian passes, and order one when both admit
+first-order passes; each has order zero otherwise. No derivative of an embedded type is written by
+hand in the core, and none in the crate that declares it unless it fuses $R$ or $Q$.
+
+**Smooth as computed.** Every inner pass at $(x, 0)$ or on the diagonal $(\otherPoint, \otherPoint)$
+evaluates $R$ and $Q$ where an exponential map's textbook formula is $0/0$
+([smooth as computed](math.svx#quantities)). The core cannot see a removable singularity inside a
+declaration, and a declaration that has one gives NaN in every derivative of its boundary
+operations, silently. So `testing::check_embedded(declaration, points, target)` is the check a type's
+crate runs, as `check_operation` is for an operation: at each point $x$ given, on the manifold, it
+checks that $R(x, 0) = x$, that $Q(x, R(x, \tangent)) = \tangent$ for random small $\tangent$, that
+$B(x)$ has rank $\dimension$, that every inner pass at $(x, 0)$ and $(x, x)$ is finite at the
+declaration's order, and then `check_operation` on both boundary operations, at $\tangent = 0$ and
+away from it. A type with a small-angle branch also passes points on both sides of its cutoff.
 
 ### The model
 
@@ -1316,11 +1338,13 @@ rests on, so an upgrade that changes one fails here first.
 
 **Primitives** (`crates/skoro-core/tests/primitives.rs`). One test per row of the tables, each a
 call of `testing::check_operation` at random inputs: `add`, `sub`, `neg`, `mul`, `scale`,
-`matmul_matrix`, `matmul_vector`, `sum`, `exp`, `log`, `slice`, `concatenate`, `reshape`,
-`transpose`, `select`, `positive_as_real`, `positive_exp`, `positive_log`, `positive_mul`,
+`matmul_matrix`, `matmul_vector`, `sum`, `exp`, `log`, `sin`, `cos`, `atan2`, `slice`,
+`concatenate`, `reshape`, `transpose`, `select`, `positive_as_real`, `positive_exp`, `positive_log`, `positive_mul`,
 `positive_recip`. Beside them:
 
 - `select_routes_the_cotangent_to_the_chosen_value`, row by row, and nothing to the index.
+- `atan2_is_checked_off_its_branch_cut`: `atan2` at random points off the half-line $a = 0$,
+  $b < 0$, and its value on both sides of the cut differs by $2\pi$.
 - `integer_arithmetic_is_exact`, `comparisons_yield_booleans`.
 - `embedding_and_discretization_have_order_zero`: `to_real` and `is_nonnegative` give no
   first-order maps, and a pass through them is admitted with nothing pulled back.
@@ -1421,17 +1445,28 @@ example.
 **The sphere and the acceptance test** (`crates/skoro/tests/sphere.rs` and `acceptance.rs`, with
 the sphere declared in `tests/common/sphere.rs` from `skoro`'s public interface alone, which an
 integration test of the umbrella crate enforces). The sphere is the embedded type of
-[the acceptance test](math.svx#the-acceptance-test), with the basis $B$, $P(w) = w / \lVert w \rVert$
-and $Q$ of [](eq:archive/core/math/sphere), each a composite. All points are in $U$.
+[the acceptance test](math.svx#the-acceptance-test), with the stereographic $R$ and its $Q$ of
+[](eq:archive/core/math/sphere), each a composite. All points are in $U$.
 
-- `sphere_basis_is_orthonormal_and_tangent`.
-- `sphere_inclusion_matches_finite_differences` and
-  `sphere_projection_matches_finite_differences`: `testing::check_operation` on
-  `skoro.include` and `skoro.project`, which checks [](eq:archive/core/math/inclusion) and
-  [](eq:archive/core/math/projection) at both orders.
-- `sphere_inverse_inverts_the_retraction`.
-- `boundary_orders_follow_the_composites`: with a first-order operation inside $P$, `project`
-  has order one.
+- `sphere_passes_check_embedded`: `testing::check_embedded` at random points, which checks the
+  conditions of [%full](statement:archive/core/math/embedded), that the inner passes are finite at
+  $\tangent = 0$ and on the diagonal, and [](eq:archive/core/math/inclusion),
+  [](eq:archive/core/math/retraction-maps) and [](eq:archive/core/math/retraction-second) at both
+  orders, by `check_operation` on `skoro.include` and `skoro.retract`.
+- `sphere_basis_is_the_derivative_of_its_retraction`: $\partial_2 R(x, 0)$, read off the tangent
+  pass, is the $B(x)$ of [the acceptance test](math.svx#the-acceptance-test), with orthonormal
+  columns orthogonal to $x$.
+- `sphere_retraction_reaches_the_far_side`: at $\lVert \tangent \rVert = 10$, $x \oplus \tangent$
+  is on the sphere and $(x \oplus \tangent) \ominus x = \tangent$: the stereographic inverse is
+  defined wherever $x\transpose y > -1$, near the antipode too.
+- `boundary_orders_follow_the_composites`: with a first-order operation inside $Q$, `retract` has
+  order one and `include` keeps order two.
+- `removable_singularity_is_reported`: a private sphere whose $R$ is the exponential map written
+  as $\cos \lVert \tangent \rVert\, x + (\sin \lVert \tangent \rVert / \lVert \tangent \rVert)\,
+  B(x)\, \tangent$ fails `check_embedded` at $\tangent = 0$, naming the boundary operation and
+  the pass. The same formula switched to its series by `select` alone still fails, with NaN in the
+  cotangent, and passes once the closed form's input is guarded by a second `select`, as
+  [smooth as computed](math.svx#quantities) says.
 - `product_retraction_agrees_with_its_factors`: on the product of two Euclidean factors, a real
   line, a positive factor and the sphere, values, tangent frames, cotangent frames and Hessian
   products of the product's retraction equal the factor-wise ones block by block, to four units in
