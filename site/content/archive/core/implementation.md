@@ -1,0 +1,1451 @@
+---
+summary: Three crates (skoro-tensor, skoro-core and skoro) in which a model is built inside a writer's scope from typed quantities and operations, read as two graphs, compiled per query for a device and a precision, and differentiated to second order in tangent charts.
+depends_on: [archive/core/math, archive/charter/writeup, automatic-differentiation, derivatives-in-charts, product-manifold]
+---
+
+## Overview
+
+When this is built, skoro is three crates. `skoro-tensor` is the layer over burn: the tensor
+shapes skoro computes with, each created at an explicit precision on a device skoro supports.
+`skoro-core` is everything that makes a model a model: quantities and their spaces, operations and
+their derivative maps, the compilation graph and the probabilistic graph, terms, the writer with
+its snapshots and branches, building scopes, addresses, random keys, queries, the compiler,
+generation and retirement. `skoro` re-exports both. No distribution ships: the tests write the two
+they need, a sphere and a normal, outside the core and on its public interface alone.
+
+A user meets the core in three places. A model is *built* inside a scope that a writer opens, by
+ordinary functions of quantities:
+
+```rust
+use skoro::{scope, Q, Real, Vector, Writer};
+
+// The range from `x` to `y`. No writer, device or precision appears in the signature.
+fn range(x: Q<Vector<3>>, y: Q<Vector<3>>) -> Q<Real> {
+    let r = y - x;
+    (0.5 * (r * r).sum().log()).exp() // the norm, from the core's primitives
+}
+
+let mut writer = Writer::new();
+let (x, y, z) = writer.build(|| {
+    let x = scope::quantity("x", Vector::<3>);
+    let y = scope::quantity("y", Vector::<3>);
+    let z = scope::quantity("z", Real);
+    let e = z - range(x, y);
+    scope::score(z, -0.5 * e * e); // a term that scores z, conditioned on x and y
+    (x, y, z)
+})?;
+```
+
+It is *queried* on a snapshot, by saying what is observed and where to compute:
+
+```rust
+use skoro::{Device, Frames, Observations, Precision, Query, Target, Values};
+
+let snapshot = writer.snapshot();
+let target = Target::new(Device::flex(), Precision::Double)?;
+let given = Observations::new().observe(z, 2.0).observe(y, [0.0, 0.0, 1.0]);
+let program = snapshot.compile(&Query::log_density().given(given), &target)?;
+
+let at = Values::new().with(x, [[1.0, 0.0, 0.0]]); // one row
+let (value, gradient) = program.gradient(&at)?; // the chart gradient with respect to x
+let second = program.hessian_products(&at, &Frames::identity(program.layout()))?; // every column
+```
+
+And it is *changed* only through the writer, by building again, by forking a snapshot into a
+branch, or by retiring a namespace.
+
+The pieces map to [the mathematics](math.svx) as follows. A model's density is the sum of its
+terms [](eq:archive/core/math/log-density), and a query's density is that sum as a function of the
+free quantities [](eq:archive/core/math/query). Operations are the maps
+[](eq:archive/core/math/operation) with up to four derivative maps, and each pass over a compiled
+program is admitted or refused by [%full](statement:archive/core/math/order). Spaces carry the
+retractions [](eq:archive/core/math/positive) and [](eq:archive/core/math/embedded), products
+retract as [%full](statement:archive/core/math/product-agreement) requires, and embedded types get
+their boundary operations from [%full](statement:archive/core/math/embedded). Generation weighs
+its draws by [](eq:archive/core/math/weight), keys are derived by
+[](eq:archive/core/math/address-key), and retirement applies
+[%full](statement:archive/core/math/retirement) over the blanket [](eq:archive/core/math/blanket).
+
+## Constraints
+
+### burn 0.22
+
+The core is designed against burn 0.22.0, with cubecl 0.11.0 beneath its GPU backends. Every
+excerpt below was read from the published crate sources of that release, named by crate and file.
+
+**A tensor has no backend type.** Through burn 0.21 a tensor was `Tensor<B, D, K>`, generic over a
+backend. In 0.22 the backend is chosen at run time by the tensor's device:
+
+```rust
+// burn-tensor 0.22.0, src/tensor/api/base.rs
+#[derive(new, Clone, Debug)]
+pub struct Tensor<const D: usize, K = Float>
+where
+    K: Basic,
+{
+    pub(crate) primitive: BridgeTensor,
+    _kind: PhantomData<K>,
+}
+```
+
+```rust
+// burn-dispatch 0.22.0, src/device.rs
+pub enum DispatchDevice {
+    /// A device of the [cubecl backend](crate::backends::Cube): CUDA, ROCm, Metal, Vulkan,
+    /// WebGPU, wgpu or the CPU runtime.
+    #[cfg(cube_backend)]
+    Cube(CubeDevice),
+
+    /// The [Flex backend](crate::backends::Flex) device (CPU-only).
+    #[cfg(feature = "flex")]
+    Flex(FlexDevice),
+    // NdArray, LibTorch, Remote and Capture, each behind its feature
+
+    /// The [autodiff enabled backend](crate::backends::Autodiff) device.
+    #[cfg(feature = "autodiff")]
+    Autodiff(AutodiffDevice),
+}
+```
+
+So nothing in skoro can be generic over a backend, and nothing needs to be. The charter's sketches
+write `Q<B, T>` and `fn range<B: Backend>(..)`, and say the names are illustrative; here a handle
+is `Q<T>`. The charter's "backend trait sealed to burn's CPU backend and its cubecl GPU backends"
+(position 11) cannot be a trait any longer, and becomes a check made when a target is constructed:
+the device must be a `Flex` or `Cube` device, and must not be an autodiff device
+(`Device::is_autodiff`, burn-tensor 0.22.0, `src/device.rs`). The check is at run time because
+Cargo unifies features: another crate in a build may enable a burn backend skoro does not test,
+and its devices are then constructible. The charter's remark that a building scope's draft must be
+held type-erased, because a thread-local cannot be generic over the backend, no longer applies:
+the draft has no type parameter.
+
+**Precision is per tensor, if every creation says so.** A tensor created without a data type takes
+its device's default, and a device's defaults lock at first use:
+
+```rust
+// burn-tensor 0.22.0, src/tensor/api/options.rs
+/// Options for tensor creation.
+///
+/// This struct allows specifying the `device` and overriding the data type when creating a tensor.
+/// When the `dtype` is not specified, the [device's default settings](crate::DeviceSettings) is used.
+pub struct TensorCreationOptions {
+    /// Device where the tensor will be created.
+    pub device: Device,
+    /// Optional data type.
+    /// If `None`, the dtype will be inferred on creation from the [device settings](crate::DeviceSettings).
+    pub dtype: Option<DType>,
+}
+```
+
+```rust
+// burn-tensor 0.22.0, src/device.rs, on `Device::configure`
+/// Settings can only be initialized once per device. Configure defaults before creating
+/// tensors or initializing model parameters: tensor creation locks them to the backend's
+/// defaults, even with an explicit dtype, and any later call returns
+/// [`DeviceError::AlreadyInitialized`]. Querying [`settings`](Device::settings) does not lock them.
+///
+/// Individual tensors can still use an explicit supported dtype at creation or be converted
+/// with [`Tensor::cast`](crate::Tensor::cast); neither changes the defaults.
+```
+
+Position 11 of the charter needs one snapshot to serve a double-precision query and a
+single-precision query in one process, without deferring to that default. Measured on the Flex
+device of burn 0.22.0: tensors of `F32` and of `F64` coexist on one device, and addition,
+subtraction, negation, elementwise and matrix products, exponential, logarithm, sums, slicing,
+concatenation, transposition, gathering, `zeros_like`, `ones_like` and multiplication by a scalar
+each return the data type of their float input. Three behaviours do not follow the input, and the
+tensor layer must own all three.
+
+- An integer tensor converted to float takes the device default, not a precision anyone chose:
+
+    ```rust
+    // burn-tensor 0.22.0, src/tensor/api/int.rs
+    fn int_to_float_impl(p: BridgeTensor, device: Device) -> BridgeTensor {
+        let out_dtype = device.get_or_init_settings().float_dtype;
+        BridgeTensor::float(Dispatch::int_into_float(p.into(), out_dtype))
+    }
+    ```
+
+    Measured, it returned `F32` beside `F64` operands. A comparison converted to an integer tensor
+    likewise returned the default integer type, `I32`.
+
+- Every creation without options (`Tensor::zeros`, `from_floats`, a bare `from_data`) takes the
+  default.
+- Mixing data types is not an error a release build reports:
+
+    ```rust
+    // burn-flex 0.22.0, src/ops/binary.rs
+    debug_assert_eq!(lhs.dtype(), rhs.dtype(), "binary_op: dtype mismatch");
+    ```
+
+So skoro never creates a tensor without a data type, never converts kinds without one, and never
+lets two precisions meet in one operation; and since nothing depends on a device's default, skoro
+never calls `Device::configure`, which leaves the default free for the user's own burn code.
+
+**Whether a device computes at a precision can be asked.** `Device::supports_dtype` (burn-tensor
+0.22.0, `src/device.rs`) is documented as "Returns `true` if this device supports `dtype` for
+general computation: storage, conversion, *and* arithmetic." A target is refused at construction when its device does
+not support its precision, which is the charter's "reported when a query asks it to, before
+anything runs".
+
+**Custom kernels go through the extension interface.** With burn's `extension` feature a tensor
+gives up its backend primitive and takes one back:
+
+```rust
+// burn-tensor 0.22.0, src/tensor/api/extension.rs
+pub fn try_into_primitive<B: Backend>(
+    self,
+) -> Result<<K as BackendPrimitive<B>>::Primitive, PrimitiveConversionError>
+
+pub fn from_primitive<B: Backend>(primitive: <K as BackendPrimitive<B>>::Primitive) -> Self
+```
+
+The core's primitives need none of this: each is expressible in burn's tensor operations. It is
+what a fused operation in a feature crate uses for a kernel of its own, so the tensor layer must
+let a burn tensor out and back in.
+
+**Toolchain.** burn 0.22.0 declares `rust-version = "1.95"`, so the workspace does too.
+
+### The charter and the mathematics
+
+[The charter](../charter/writeup.md) binds the design at these points, beyond the two it shares
+with burn above.
+
+- **Errors are values** (position 4). No public function panics on a user's mistake. An operator
+  such as `y - x` cannot return a `Result`, so it returns a handle marked failed, and the scope
+  reports the first failure (position 3).
+- **Everything stored type-erased is nameable** (position 4): each operation, sampler and embedded
+  type has a registered identifier and plain parameters. No format is part of the core.
+- **A model commits to no precision and no device** (position 11): its values are plain data on
+  the host, in double precision.
+- **Structure is read, never declared** (position 6): an operation's order, a term's neighbours and
+  a quantity's kind are facts of what was built.
+- **Two crates and an umbrella** (position 12), and every later feature built on the public
+  interface alone.
+
+[The mathematics](math.svx) fixes the rest: derivative coordinates are indexed by dimension, never
+by storage; a matrix is flattened column by column; rows of a batch never interact; a Hessian pass
+takes a velocity frame of several columns and one cotangent column; a pass is admitted by
+[%full](statement:archive/core/math/order), step by step; a term's neighbours are read off the
+compilation graph; folding happens in the model for constants and in a compiled query for observed
+quantities; and the core retires but does not compute the replacement.
+
+### The repository
+
+There is no `crates/` directory and no `Cargo.toml` yet: both arrive with this entry's build, when
+`bin/wf guard` opens them. `REVISIT.md` at the root of the repository, the tooling and the CI
+configuration are outside the gated areas. The prior art is the `archive` branch, read at commit
+`019e888`; what is kept from it and what is not is said in [Design](#kept-from-the-archive-and-not).
+
+## Design
+
+### Workspace and crates
+
+A workspace at the root of the repository, edition 2024, `rust-version = "1.95"`, with three
+members.
+
+| crate | depends on | holds |
+| --- | --- | --- |
+| `skoro-tensor` | `burn` 0.22 (features `std`, `flex`, `extension`; `wgpu`, `cuda` and the other cubecl runtimes behind features of the same names) | `Target`, `Precision`, `Points`, `Frame`, `Integers`, `Value`, `HostValue` |
+| `skoro-core` | `skoro-tensor`, `blake3`, `rpds` | everything else, in the modules below |
+| `skoro` | both | re-exports, and the integration tests that may use only the public interface |
+
+`skoro-core`'s modules, each private with its public items re-exported from the crate root:
+
+| module | holds |
+| --- | --- |
+| `id`, `address`, `key` | `NodeId`, `Segment`, `Address`, `Key` |
+| `error` | `Error`, `Failure` |
+| `space`, `q` | `Space`, the typed markers, `Q<T>`, `QDyn`, the operators |
+| `operation`, `primitive` | `Operation`, `Kernel`, `Order`, and the primitives' kernels |
+| `composite`, `embedded`, `registry` | `Composite`, `Embedded`, the boundary operations, `Registry` |
+| `model`, `term`, `role` | `Snapshot` and its reading surface, `Term`, `Sampler`, `Proposal`, `Role` |
+| `writer`, `scope` | `Writer`, `Reader`, the building scope and namespaces |
+| `query`, `compile`, `program`, `layout` | `Observations`, `Query`, the compiler, `Program` and its passes, `Layout` |
+| `generate`, `retire` | generation with weights, retirement |
+| `testing` (feature `testing`) | the finite-difference and agreement checks, public so that feature crates check fused operations as the core checks primitives |
+
+Both library crates deny `clippy::unwrap_used`, `clippy::expect_used` and `clippy::panic` outside
+tests. A broken internal invariant is the one thing that may still stop the process, through
+`unreachable!` with the invariant stated.
+
+### The tensor layer
+
+`skoro-tensor` exists so that a burn upgrade touches it and the kernels, and so that the three
+behaviours measured in [Constraints](#burn-0-22) cannot be reached.
+
+```rust
+pub use burn::tensor::Device;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Precision { Single, Double } // F32, F64
+
+/// Where a program computes, and at what precision. Checked once, here.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Target { device: Device, precision: Precision, wide_integers: bool }
+
+impl Target {
+    /// Refuses a device that is not Flex or cubecl (`UnsupportedDevice`), an autodiff device
+    /// (`AutodiffDevice`), and a precision the device does not compute in (`UnsupportedPrecision`).
+    pub fn new(device: Device, precision: Precision) -> Result<Target, TensorError>;
+    /// The Flex device at double precision: where the model folds constants.
+    pub fn host() -> Target;
+}
+
+pub struct Points(Tensor<2>);        // [rows, storage], a batch of continuous values
+pub struct Frame(Tensor<3>);         // [rows, dimension, columns], tangents or cotangents
+pub struct Integers(Tensor<2, Int>); // [rows, storage], a batch of discrete values
+
+pub enum Value { Continuous(Points), Discrete(Integers) }
+```
+
+Integers are `I64` where the device supports it and `I32` otherwise (`wide_integers`); a discrete
+value that does not fit the narrower type is refused when it is loaded.
+
+Every float tensor in a wrapper has the precision of the target it was made for. That invariant is
+kept by construction rather than by checks in each operation:
+
+- **Creation takes a target.** `Points::from_host(data: &[f64], rows, storage, &Target)`,
+  `Points::zeros(rows, storage, &Target)`, and the same for `Frame` and `Integers`. Host data
+  enters as `TensorData` of `f64` or `i64` with the target's data type given explicitly.
+- **Kind changes take a target.** `Integers::to_points(&Target)` and the comparisons that produce
+  `Integers` cast explicitly, covering the first measured behaviour.
+- **Arithmetic is burn's.** `into_burn(self)` gives the tensor up, and
+  `from_burn(tensor, &Target) -> Result<Self, TensorError>` takes one back, refusing a tensor of
+  another data type or device (`ForeignTensor`). A kernel is burn code between the two. Since burn's
+  operations return their input's data type, a kernel that creates nothing preserves the
+  invariant, and one that does create goes through the layer.
+- **Reading returns double precision.** `Points::to_host(&self) -> Vec<f64>`, whatever the target.
+
+`skoro-tensor` re-exports `burn::tensor` as `skoro_tensor::burn`, so a feature crate's kernels use
+the burn the core was built with.
+
+> [!DECISION] Why the wrappers carry no arithmetic
+> Wrapping each tensor operation would copy burn's interface into skoro and protect nothing, since
+> the operations that preserve a data type cannot break the invariant. Using burn's `Tensor`
+> directly, as the archive's aliases did, leaves the three measured behaviours one careless call
+> away from a single-precision value inside a double-precision solve. The wrappers therefore own
+> exactly the calls that choose a data type, and hand everything else to burn.
+
+A value on the host is plain data, and is what a model stores and what a query observes:
+
+```rust
+pub struct HostValue { rows: Option<usize>, storage: usize, data: HostData }
+pub enum HostData { Continuous(Vec<f64>), Discrete(Vec<i64>) }
+```
+
+`rows: None` is one value shared by every row of a batch, and loads as `[1, storage]`, expanded to
+the batch a pass runs at. `rows: Some(n)` is one value per row and pins the batch to `n`: run at
+another size, it is an error (`BatchSize`), never a broadcast, even for `n = 1`.
+
+### Identities, addresses and keys
+
+```rust
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct NodeId(u64);
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub enum Segment { Index(u64), Name(Arc<str>) }
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct Address(Arc<[Segment]>);
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Key([u8; 32]);
+```
+
+**Identifiers** come from one process-wide atomic counter. They are therefore unique across
+models and across branches, so a handle from another model is simply not found, and they increase
+with time, so "existed before" is a comparison of identifiers.
+
+**Addresses.** An integer converts to `Segment::Index` and a string to a path: `"40/target/3"` is
+the three segments `Index(40)`, `Name("target")`, `Index(3)`, a segment of ASCII digits being an
+index. A name that looks like a number is made explicitly, with `Segment::name("3")`, and is
+displayed quoted. Addresses order lexicographically by segment, so the addresses under a
+namespace are contiguous in an ordered map. Quantities have addresses; constants and mapped values
+do not, and are identified by what computes them.
+
+**Keys** implement [](eq:archive/core/math/address-key) with BLAKE3's keyed mode as the
+pseudorandom function, each use under its own domain tag:
+
+```rust
+impl Key {
+    pub fn from_seed(seed: u64) -> Key;
+    /// keyed_hash(self, [0x01] ++ len ++ utf8) for a name, keyed_hash(self, [0x02] ++ le(u64)) for an index.
+    pub fn fold(&self, segment: &Segment) -> Key;
+    /// Folds the segments of `address` in order: the key of the quantity at that address.
+    pub fn at(&self, address: &Address) -> Key;
+    /// The i-th of n is keyed_hash(self, [0x03] ++ le(i)).
+    pub fn split(&self, n: usize) -> Vec<Key>;
+    /// n variates in the open interval (0, 1), from the extendable output keyed by self under tag 0x04:
+    /// each takes 8 bytes, as ((u >> 11) + 0.5) * 2^-53.
+    pub fn uniforms(&self, n: usize) -> Vec<f64>;
+}
+```
+
+The kind tags make a name and an integer differ, and folding one segment at a time makes `ab/c`
+and `a/bc` differ, as the mathematics requires. A run over `N` rows splits its key into `N`, and
+row `i`'s key for the quantity at address `a` is `run.split(N)[i].at(a)`. Variates are doubles on
+the host, cast when loaded, so one key gives the same draws at either precision up to that cast.
+
+> [!DECISION] Why BLAKE3
+> A key must be a pseudorandom function of a path of arbitrary names, which a block cipher such as
+> ChaCha is not without a hash in front of it, and a 64-bit hash such as SipHash collides too
+> readily over the addresses of a long run. BLAKE3's keyed mode is that function, and its
+> extendable output is the stream of variates, in one dependency burn already brings into the
+> build.
+
+### Spaces and typed handles
+
+A quantity's type, in the mathematics' sense, is its `Space`: a closed enumeration, dimensioned at
+run time.
+
+```rust
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Space {
+    Real,
+    Vector(usize),
+    Matrix(usize, usize),     // rows, columns; stored column by column
+    Positive(usize),
+    Product(Arc<[Space]>),    // continuous factors only
+    Embedded(Arc<Embedded>),  // equal when name and parameters are
+    Categorical(usize),
+    Integer,
+}
+
+impl Space {
+    pub fn is_continuous(&self) -> bool;
+    pub fn storage(&self) -> usize;
+    pub fn dimension(&self) -> Option<usize>; // None for a discrete space
+    pub fn cardinality(&self) -> Option<usize>;
+    /// A product's factors with their ranges in storage and in tangent coordinates.
+    pub fn blocks(&self) -> Vec<Block>;
+    /// The composites of point ⊕ tangent and of to ⊖ from; an error for a discrete space.
+    pub fn retraction(&self) -> Result<Arc<Composite>, Error>;
+    pub fn inverse_retraction(&self) -> Result<Arc<Composite>, Error>;
+}
+
+pub struct Block { pub space: Space, pub storage: Range<usize>, pub tangent: Range<usize> }
+```
+
+`Product` is refused a discrete factor when it is constructed, and nests. `Boolean` is
+`Categorical(2)`.
+
+> [!DECISION] Why spaces are an enumeration and not a trait
+> The charter sketched a `DynManifold` trait that builds its retraction into the graph. The
+> mathematics has since closed the set of structures: a later entry's curved type is an embedded
+> type, declared by composites, and needs no code of its own in the core. An enumeration is then
+> plain data, so it is nameable, comparable and hashable for nothing, and the compiler and the
+> layout can match on it. What the charter's position asked of the trait is kept: a space *builds*
+> its retraction as a subgraph, which is what makes a product's retraction differentiable.
+
+The retractions, each a composite cached per space in a process-wide map:
+
+| space | $\point \oplus \tangent$ | $\otherPoint \ominus \point$ |
+| --- | --- | --- |
+| `Real`, `Vector`, `Matrix` | `x + reshape(t)` | `reshape(y - x)` |
+| `Positive` | `positive_mul(x, positive_exp(t))` | `positive_log(y) - positive_log(x)`, [](eq:archive/core/math/positive) |
+| `Product` | slice `x` and `t` by `blocks()`, retract each factor, concatenate | the same, factor by factor |
+| `Embedded` | `project(include(x) + matmul(B(include(x)), t))` | `Q(include(x), include(y))`, [](eq:archive/core/math/embedded) |
+
+The tangent of every space is a `Vector` of the space's dimension.
+
+**Handles.** A handle is an identifier and a marker, cheap to copy and bound to no writer:
+
+```rust
+pub struct Q<T> { id: NodeId, marker: PhantomData<fn() -> T> } // Copy, Send, Sync
+pub struct QDyn { id: NodeId }                                 // the same, with no static type
+
+pub trait Typed: Copy + Send + Sync + 'static {
+    /// Whether a node of `space` may be handled as this marker.
+    fn admits(space: &Space) -> bool;
+}
+
+/// A marker whose value fixes a space, so that a quantity can be made from it.
+pub trait Declares: Typed {
+    fn space(&self) -> Space;
+}
+```
+
+The markers: `Real`; `Vector<const N: usize>` and `VectorDyn(pub usize)`;
+`Matrix<const M: usize, const N: usize>` and `MatrixDyn(pub usize, pub usize)`;
+`Positive<const N: usize>` and `PositiveDyn(pub usize)`; `Categorical<const N: usize>`,
+`CategoricalDyn(pub usize)` and `Boolean`; `Integer`; and `ProductDyn`, which admits any product. A
+fixed-size marker is a thin wrapper, as the charter has it: `Q<Vector<3>>` converts to
+`Q<VectorDyn>` by `widen()`, which cannot fail, and back by `narrow::<Vector<3>>()`, which checks
+the node's space inside the open scope. Every marker but `ProductDyn` implements `Declares`; a product
+quantity is made from its `Space`, untyped. A feature crate's embedded type is a marker of its own
+whose `space()` is its `Space::Embedded`. Two reserved identifiers mark a failed handle: one for an
+operation that failed inside a scope, and one for an operation attempted with no scope open.
+
+Every typed operator converts its handles to `QDyn` and calls the one untyped implementation, so
+nothing is implemented twice:
+
+| written | on | primitive |
+| --- | --- | --- |
+| `a + b`, `a - b`, `-a` | two values of one Euclidean space | `add`, `sub`, `neg` |
+| `a * b` | two values of one Euclidean space, elementwise | `mul` |
+| `s * a`, `c * a` | a `Real` handle or an `f64` literal, and a Euclidean value | `scale` |
+| `a.matmul(b)` | a matrix and a matrix or vector | `matmul` |
+| `a.sum()`, `a.exp()`, `a.log()`, `a.transpose()` | a Euclidean value | `sum`, `exp`, `log`, `transpose` |
+| `a.slice(range)`, `scope::concatenate(parts, space)`, `a.reshape(space)` | Euclidean values and products | `slice`, `concatenate` |
+| `scope::select(index, values)` | a categorical index and values of one space | `select` |
+| `p.as_real()`, `c.exp_positive()`, `p.log()`, `p * q`, `p.recip()`, `p / q` | positive values | the positive rows |
+| `i + j`, `i - j`, `i * j`, `i.eq(j)`, `i.lt(j)`, `i.le(j)` | integers | the discrete operations |
+| `i.to_real()`, `a.is_nonnegative()` | a discrete value; a `Real` | embedding, discretization |
+| `x.retract(t)`, `y.local(x)` | any continuous value | the space's composites |
+| `p.factor(i)`, `scope::product(parts)` | products | `slice`, `concatenate` |
+| `e.include()`, `E::project(w)` | an embedded value; a vector | `include`, `project` |
+
+A literal is sugar for a constant node. The table of primitives has no reciprocal of a Euclidean
+value, so the core offers division only by a literal (a `scale`) and between positive values;
+$e^{-\log b}$ serves where $b$ is positive on the domain, as the acceptance test's sphere uses it.
+
+### Operations, kernels and order
+
+An operation is described once, without a device, and lowered to a kernel when a query is
+compiled:
+
+```rust
+pub trait Operation: Debug + Send + Sync + 'static {
+    /// The registered identifier, such as "skoro.add", and the plain parameters.
+    fn name(&self) -> &'static str;
+    fn params(&self) -> Vec<Param>;
+    /// Checks the inputs' spaces and gives the output's. Called when the node is added.
+    fn output(&self, inputs: &[Space]) -> Result<Space, Error>;
+    /// What computes this operation on `target`.
+    fn lower(&self, inputs: &[Space], lowering: &mut Lowering<'_>) -> Result<Lowered, Error>;
+}
+
+pub enum Lowered {
+    Kernel(Arc<dyn Kernel>),
+    /// Expand this composite in place of the operation.
+    Composite(Arc<Composite>),
+}
+```
+
+`Lowering` carries the target and a cache of what has been lowered for it. A kernel is the
+operation on one target, and its order is read off what it implements, never stated:
+
+```rust
+pub trait Kernel: Send + Sync + 'static {
+    fn forward(&self, inputs: &[Value]) -> Value;
+    fn first(&self) -> Option<&dyn FirstOrder> { None }
+}
+
+pub trait FirstOrder {
+    /// The value and the tangent frame of the output. A missing frame is zero.
+    fn tangent(&self, inputs: &[Value], tangents: &[Option<Frame>]) -> (Value, Option<Frame>);
+    /// The value and the pull-back at these inputs, into the inputs marked differentiable.
+    fn record(&self, inputs: &[Value], differentiable: &[bool]) -> (Value, Box<dyn Pullback>);
+    fn second(&self) -> Option<&dyn SecondOrder> { None }
+}
+
+pub trait Pullback: Send {
+    /// One frame per input: `None` for an input that is not differentiable.
+    fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>>;
+}
+
+pub trait SecondOrder {
+    /// As `FirstOrder::record`, with the inputs' velocities, and returning the output's.
+    fn record(
+        &self,
+        inputs: &[Value],
+        differentiable: &[bool],
+        velocities: &[Option<Frame>],
+    ) -> (Value, Option<Frame>, Box<dyn SecondPullback>);
+}
+
+pub trait SecondPullback: Pullback {
+    /// hvp_j(alpha) per input, at the velocities recorded: `alpha` has one column, each result
+    /// as many columns as the velocities.
+    fn second(&self, alpha: &Frame) -> Vec<Option<Frame>>;
+}
+
+pub enum Order { Zero, One, Two }
+```
+
+A kernel's order is `Zero` when `first()` is `None`, `One` when `first()` is given and its
+`second()` is `None`, and `Two` otherwise. The four maps of the mathematics' table are `forward`,
+`tangent`, `Pullback::cotangent` and `SecondPullback::second`. Kernel methods do not return errors:
+every space was checked when the node was added, and every pass is admitted before it runs.
+
+**Shapes.** A continuous value of storage size $s$ is `[N, s]`; a tangent or cotangent frame at a
+value of dimension $\dimension$ is `[N, d, K]`, with $K$ columns. In a Hessian pass the velocities
+are `[N, d, K]`, one Hessian direction per column, $\alpha$ is `[N, d, 1]`, and $\beta$ is
+`[N, d, K]`.
+
+**The two gates** of the mathematics are the two arguments of `SecondOrder::record`.
+`differentiable[j]` says the pull-back into input $j$ is wanted; `velocities[j]` is `None` when no
+seeded velocity reaches input $j$, and counts as zero. They are separate because the second
+implies the first and not conversely. A discrete input is never differentiable.
+
+### The primitives
+
+Each row of the tables in [the primitives](math.svx#the-primitives) is one operation in
+`skoro_core::primitive`, with a kernel of order two written in burn's tensor operations, the same
+code at both precisions.
+
+| name | inputs to output | notes |
+| --- | --- | --- |
+| `skoro.add`, `skoro.sub`, `skoro.mul` | two of one Euclidean space, to that space | |
+| `skoro.neg`, `skoro.exp`, `skoro.log` | one Euclidean value, to its space | elementwise |
+| `skoro.scale` | `Real` and a Euclidean value, to its space | |
+| `skoro.matmul` | `Matrix(m, k)` and `Matrix(k, n)` or `Vector(k)`, to `Matrix(m, n)` or `Vector(m)` | a vector is a one-column matrix |
+| `skoro.sum` | a Euclidean value, to `Real` | |
+| `skoro.transpose` | `Matrix(m, n)` to `Matrix(n, m)` | |
+| `skoro.slice` | a Euclidean value or a product, to a space | parameters: the output space, a range of storage, a range of tangent coordinates |
+| `skoro.concatenate` | values whose storage sizes sum to the output's, to a Euclidean space or a product | parameter: the output space; with one input it is a reshape |
+| `skoro.select` | `Categorical(n)` and $n$ values of one continuous space, to that space | [](eq:archive/core/math/select) |
+| `skoro.positive.as_real`, `.exp`, `.log`, `.mul`, `.recip` | the rows of the second table | read in the charts [](eq:archive/core/math/positive) |
+| `skoro.include`, `skoro.project` | an embedded value to `Vector(n)`; `Vector(n)` to an embedded value | parameter: the declaration; [below](#embedded-types) |
+| `skoro.integer.add`, `.sub`, `.mul`, `.eq`, `.lt`, `.le` | integers to `Integer` or `Categorical(2)` | order zero |
+| `skoro.to_real`, `skoro.is_nonnegative` | a discrete value to `Real`; `Real` to `Categorical(2)` | order zero: an embedding and a discretization |
+
+Slicing and concatenation carry two ranges because a product's factor sits at different offsets
+in storage and in tangent coordinates when a factor is embedded; for Euclidean values the two
+coincide. They are linear in both, so their tangent maps are the slice or the concatenation of
+tangent coordinates, their cotangent maps the adjoints, and their second-order maps zero, which is
+all that [%full](statement:archive/core/math/product-agreement) uses. Selection gathers the chosen
+value row by row, and its pull-back multiplies $\alpha$ by each input's mask of rows.
+
+### Composites, fused operations and the registry
+
+A composite is a named subgraph with designated inputs and one output:
+
+```rust
+pub struct Composite { /* name, params, input spaces, output space, body */ }
+
+impl Composite {
+    /// Runs `body` with one handle per input. Operations inside build into the composite.
+    pub fn define(
+        name: &'static str,
+        params: Vec<Param>,
+        inputs: &[Space],
+        body: impl FnOnce(&[QDyn]) -> QDyn,
+    ) -> Result<Arc<Composite>, Failure>;
+    /// Adds one node to the open scope: this composite applied to `inputs`.
+    pub fn call(self: &Arc<Self>, inputs: &[QDyn]) -> QDyn;
+    /// A program of the composite alone, whose roots are its inputs.
+    pub fn compile(&self, target: &Target) -> Result<Program, Error>;
+}
+```
+
+`define` opens a definition frame on the same stack as a building scope, so the code inside is the
+code a model would use; a quantity or a term cannot be made there (`NotInAModel`). A call is one
+node of the model, whose operation lowers to `Lowered::Composite`, and the compiler expands it,
+recursively, into its parts. Its derivative maps are therefore those of its parts by construction,
+and its order is whatever [%full](statement:archive/core/math/order) finds of the parts.
+
+A **fused operation** is an `Operation` a feature crate implements, whose `lower` returns a kernel
+of its own on the targets its kernels cover, and `Lowered::Composite` of the composite it fuses on
+the others. That one mechanism is the mathematics' three obligations: the composite is the
+reference `testing::check_agreement` compares against, the fallback covers every backend, and the
+operation has a name.
+
+The **registry** is how a name finds its code again:
+
+```rust
+pub enum Param { Integer(i64), Float(f64), Text(Arc<str>), Space(Space), List(Vec<Param>) }
+
+pub struct Registry { /* constructors by name */ }
+
+impl Registry {
+    /// The core's operations.
+    pub fn core() -> Registry;
+    pub fn register_operation(
+        &mut self,
+        name: &'static str,
+        make: fn(&[Param]) -> Result<Arc<dyn Operation>, Error>,
+    ) -> Result<(), Error>; // DuplicateName
+    pub fn operation(&self, name: &str, params: &[Param]) -> Result<Arc<dyn Operation>, Error>; // UnknownOperation
+    // and the same pair for embedded declarations and for samplers
+}
+```
+
+A registry is a value, not global state: whoever reads a serialized model, in a later entry, is
+handed one. A feature crate exports a function that adds its names to a registry, and a name the
+registry lacks is refused as `UnknownOperation`, naming it.
+
+### Embedded types
+
+```rust
+pub struct Embedded { /* name, params, storage n, dimension d, the three composites */ }
+
+impl Embedded {
+    /// `basis`: Vector(n) to Matrix(n, d). `projection`: Vector(n) to Vector(n).
+    /// `inverse`: two of Vector(n) to Vector(d). Any other signature is refused.
+    pub fn declare(
+        name: &'static str,
+        params: Vec<Param>,
+        storage: usize,
+        dimension: usize,
+        basis: Arc<Composite>,
+        projection: Arc<Composite>,
+        inverse: Arc<Composite>,
+    ) -> Result<Arc<Embedded>, Error>;
+}
+```
+
+The boundary operations `skoro.include` ($\iota$) and `skoro.project` ($\pi$) are the only
+primitives whose kernels are not written in tensor operations. When lowered, each compiles the
+declaration's composites for the target (`Composite::compile`, cached in `Lowering`), and its
+derivative maps are passes over those programs, assembled as
+[](eq:archive/core/math/inclusion) and [](eq:archive/core/math/projection) say. Write
+$\mathcal B$ and $\mathcal P$ for the programs of $B$ and $P$, each with one root.
+
+For $\iota$ at a point stored as $x$, with $B = \mathcal B.\mathtt{forward}(x)$ reshaped to
+`[N, n, d]`:
+
+| map | computed as |
+| --- | --- |
+| forward | $x$ itself |
+| tangent of $\tangent$ | $B\, \tangent$, `[N, n, K]` |
+| cotangent of $\alpha$ | $B\transpose \alpha$, `[N, d, K]` |
+| second order | record $\dot B = \mathcal B.\mathtt{tangent}(x;\, B \tangent)$, `[N, nd, K]`, the derivative of $B$ along each column of $B \tangent$; then $\hvp_\iota(\alpha)$ is $\dot B_k\transpose \alpha$ in column $k$ |
+
+For $\pi$ at $w$, with $\otherPoint = \mathcal P.\mathtt{forward}(w)$ and
+$B = \mathcal B.\mathtt{forward}(\otherPoint)$:
+
+| map | computed as |
+| --- | --- |
+| forward | $\otherPoint$ |
+| tangent of $\dot w$ | $B\transpose V$, with $V = \mathcal P.\mathtt{tangent}(w;\, \dot w)$ |
+| cotangent of $\alpha$ | $\mathcal P.\mathtt{cotangent}(w;\, B \alpha)$ |
+| second order | record $V$ and $\dot B = \mathcal B.\mathtt{tangent}(\otherPoint;\, V)$; then $\hvp_\pi(\alpha)$ is the $\beta$ of $\mathcal P.\mathtt{hessian}(w;\, \dot w;\, B \alpha)$, plus $\mathcal P.\mathtt{cotangent}(w;\, M)$ with column $k$ of $M$ equal to $\dot B_k\, \alpha$ |
+
+The first summand of the last row is the first term of [](eq:archive/core/math/projection): a
+Hessian pass over $\mathcal P$ with velocities $\dot w$ and the single cotangent column $B\alpha$
+delivers $(\D^2 P(w)[\dot w_k])\transpose B \alpha$ in column $k$ of $\beta$, which is why a
+Hessian pass takes one cotangent column. The second summand is the second term.
+
+The order of each boundary kernel is the most its inner passes admit, found with the same
+admissibility function as any pass: $\iota$ has order two when $\mathcal B$ admits a tangent pass
+and order one otherwise; $\pi$ has order two when $\mathcal P$ admits a Hessian pass seeded at its
+root and $\mathcal B$ a tangent pass, order one when $\mathcal P$ admits first-order passes, and
+order zero otherwise. No derivative of an embedded type is written by hand, in the core or in the
+crate that declares it.
+
+### The model
+
+A snapshot is an immutable model that shares structure with the snapshots before it:
+
+```rust
+#[derive(Clone)]
+pub struct Snapshot(Arc<Model>);
+
+struct Model {
+    nodes: HashTrieMapSync<NodeId, Arc<Node>>,
+    consumers: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>, // compilation graph, forward
+    terms: RedBlackTreeMapSync<NodeId, Arc<Term>>,               // by log-density node
+    scoring: HashTrieMapSync<NodeId, NodeId>,                    // quantity to the term scoring it
+    joined: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>,    // quantity to the terms it is in
+    proposals: HashTrieMapSync<NodeId, Arc<Proposal>>,
+    addresses: RedBlackTreeMapSync<Address, NodeId>,
+    programs: Mutex<Vec<(ProgramKey, Arc<Program>)>>,
+}
+
+struct Node { id: NodeId, space: Space, kind: NodeKind }
+
+enum NodeKind {
+    Quantity { address: Address },
+    Constant { value: HostValue },
+    Mapped { operation: Arc<dyn Operation>, inputs: Box<[NodeId]>, folded: Option<HostValue> },
+}
+```
+
+The maps are `rpds`'s persistent tries and trees, so cloning a model is a handful of reference
+counts and a change copies only the path it touches. That is what makes a draft, a snapshot and a
+fork cheap, and what reclaims a retired node when the last snapshot holding it is dropped.
+
+The **compilation graph** is `nodes` with each mapped node's `inputs`, and `consumers` is the same
+edges read forward. A node is *fixed in the model* when it is a constant or a mapped node with a
+`folded` value. When a mapped node is added whose inputs are all fixed in the model, its operation
+is lowered for `Target::host()`, run once, and the result read back into `folded`: the model-level
+folding of [Queries](math.svx#queries), in double precision on the host. The node keeps its
+operation and inputs, so a serialized model still shows the call.
+
+The **probabilistic graph** is `terms`, `scoring` and `joined`:
+
+```rust
+pub struct Term {
+    pub log_density: NodeId,     // a mapped node of space Real
+    pub scores: Option<NodeId>,  // s_t
+    pub involves: Box<[NodeId]>, // V_t, sorted
+    pub sampler: Option<Sampler>,
+    bindings: Vec<(&'static str, NodeId)>,
+}
+```
+
+`involves` is computed when the term is added: the quantities among the roots `log_density` is
+reached from, found by walking `inputs` backwards and stopping at nodes fixed in the model,
+together with `scores`. Nothing declares it. A term is added by one of two functions, each
+returning a builder that attaches the optional parts:
+
+```rust
+pub fn score<T: Typed>(scored: Q<T>, log_density: Q<Real>) -> TermBuilder;
+pub fn factor(log_density: Q<Real>) -> TermBuilder; // a likelihood factor
+
+impl TermBuilder {
+    pub fn sampler(self, sampler: Sampler) -> Self;
+    pub fn bind<M: Multiplicity>(self, role: &Role<M>, node: QDyn) -> Self;
+}
+```
+
+They refuse a log-density that is not a mapped `Real` (`NotALogDensity`), a quantity already
+scored (`AlreadyScored`), and a term conditioned on a quantity made after the one it scores
+(`ConditionedOnLater`). The last keeps the probabilistic graph acyclic and makes increasing
+identifier an ancestral order. A quantity no term scores is a parameter, by definition and with no
+flag. `scope::propose(parameter, proposal)` attaches a proposal to one, under the same rule for
+what it may be conditioned on.
+
+**Roles.** The core defines none. A role is a typed key carrying its name and its multiplicity:
+
+```rust
+pub struct Role<M: Multiplicity> { name: &'static str, multiplicity: PhantomData<M> }
+pub struct ExactlyOne; pub struct AtMostOne; pub struct AnyNumber;
+
+impl Snapshot {
+    /// QDyn, Option<QDyn> or Vec<QDyn> by multiplicity; `Binding` when the count is wrong.
+    pub fn bound<M: Multiplicity>(&self, term: NodeId, role: &Role<M>) -> Result<M::Handles, Error>;
+}
+```
+
+A bound node must be reached from no quantity outside the term's `involves` (`BindingOutsideTerm`).
+That is what lets a binding count as a reference without a collector: retirement can then never
+remove a node that a surviving term binds.
+
+**The reading surface** of a snapshot is what an algorithm discovers a model through: `quantities()`
+in ancestral order, `space(q)`, `address(q)`, `lookup(address)`, `under(namespace)`, `terms()`,
+`term(id)`, `scored_by(q)`, `terms_of(q)`, `is_parameter(q)`, `proposal(q)`, `blanket(quantities)`
+by [](eq:archive/core/math/blanket), and `node(id)` with its operation's name, parameters and
+inputs.
+
+### Building
+
+```rust
+pub struct Writer { /* the latest snapshot, and the cell readers load it from */ }
+
+impl Writer {
+    pub fn new() -> Writer;
+    /// Runs `body` with a building scope open on this thread, and publishes what it built.
+    pub fn build<R>(&mut self, body: impl FnOnce() -> R) -> Result<R, Failure>;
+    pub fn snapshot(&self) -> Snapshot;
+    pub fn reader(&self) -> Reader; // Clone, Send, Sync; `latest()` gives the newest snapshot
+    pub fn retire(&mut self, namespace: impl Into<Address>, observed: &Observations)
+        -> Result<Retirement<'_>, Error>;
+}
+
+impl Snapshot {
+    /// A writer for a new branch, sharing everything with this snapshot.
+    pub fn fork(&self) -> Writer;
+}
+
+pub struct Failure { pub error: Error, pub location: &'static Location<'static> }
+```
+
+`build` borrows the writer mutably for the length of the closure, clones the latest model into a
+draft, and pushes the draft onto a thread-local stack of frames. A guard pops it when the closure
+returns or unwinds. If the draft recorded a failure, `build` returns it and publishes nothing; if
+the closure panicked, the draft is dropped with the unwind; otherwise the draft becomes the latest
+snapshot, stored into the reader's cell under a lock held for one assignment. A reader therefore
+loads the model before the scope or after it. A branch is a writer returned by `fork`, with a cell
+of its own.
+
+The stack's frames are building scopes, composite definitions, and namespaces. An operation acts
+on the innermost scope or definition, and borrows it only to insert its node, so user code and a
+distribution's own building run with nothing borrowed. Every public building function is
+`#[track_caller]` and does the following.
+
+1. With no scope or definition open, it returns a handle marked as made outside a scope. Nothing
+   can report the mistake there, so the mark carries it to the scope the handle is next used in.
+2. Given a failed handle, it returns one. If the draft has no failure yet it records one:
+   `OutsideScope` for a handle so marked, `FailedOperand` for any other, which can only have
+   escaped a scope that failed.
+3. It reads its inputs' spaces from the draft (`UnknownNode` for a handle the draft does not hold,
+   such as one from another model or a retired quantity), and asks the operation for its output
+   space.
+4. On an error it records the error and the caller's location, if the draft has none yet, and
+   returns a failed handle. Otherwise it inserts the node, folds it if its inputs are fixed in the
+   model, and returns its handle.
+
+The functions of `scope`, beside the operators of [Spaces and typed handles](#spaces-and-typed-handles):
+
+```rust
+pub fn quantity<T: Declares>(address: impl Into<Address>, marker: T) -> Q<T>; // AddressTaken
+pub fn quantity_in(address: impl Into<Address>, space: Space) -> QDyn;
+pub fn constant<T: Declares>(marker: T, value: impl IntoHostValue<T>) -> Q<T>;
+pub fn namespace<R>(prefix: impl Into<Address>, body: impl FnOnce() -> R) -> R;
+pub fn lookup<T: Typed>(address: impl Into<Address>) -> Q<T>; // relative to the open namespaces
+pub fn apply(operation: Arc<dyn Operation>, inputs: &[QDyn]) -> QDyn;
+```
+
+A quantity's address is the open namespaces' prefixes, outermost first, then the address given.
+Only the namespaces opened inside the innermost scope apply to it. `IntoHostValue<T>` is
+implemented for the Rust values a marker suggests (`f64` for `Real`, `[f64; N]` for `Vector<N>`,
+slices for the dynamic markers, `bool`, `usize` and `i64` for the discrete ones) and for `Rows` of
+any of them, which gives one value per row.
+
+### Queries and the compiler
+
+```rust
+#[derive(Clone)]
+pub struct Observations { /* an identity, and values by quantity */ }
+
+impl Observations {
+    pub fn new() -> Observations;
+    pub fn observe<T: Typed>(self, quantity: Q<T>, value: impl IntoHostValue<T>) -> Observations;
+    pub fn observe_dyn(self, quantity: QDyn, value: HostValue) -> Observations;
+}
+
+pub struct Query { /* targets and observations */ }
+
+impl Query {
+    pub fn of(targets: impl IntoIterator<Item = QDyn>) -> Query;
+    /// The sum of every term's log-density.
+    pub fn log_density() -> Query;
+    pub fn given(self, observations: Observations) -> Query;
+}
+
+impl Snapshot {
+    pub fn compile(&self, query: &Query, target: &Target) -> Result<Arc<Program>, Error>;
+}
+```
+
+`observe` builds an observation set and changes no model. A set that is extended is a new set,
+with a new identity. Compiling is where a query's partition of [Queries](math.svx#queries) is
+made, and it goes in these steps.
+
+1. **Reach.** Walk the compilation graph backwards from the targets, stopping at quantities,
+   constants and nodes fixed in the model. For `Query::log_density()` the targets are the terms'
+   log-density nodes, and the program's one target is their sum, added by `skoro.add` steps that
+   take the fixed terms first, so that their sum folds. The quantities met are the query's; those with an observed value are
+   *observed*, the rest *free*. An observed value of the wrong storage size, or for a node that is
+   not a quantity, is refused; one for a quantity the targets do not reach is ignored, so that one
+   set serves many queries.
+2. **Lower.** Each mapped node met is lowered for the target, and a composite is expanded into its
+   parts, recursively. The result is a list of steps over slots, in topological order.
+3. **Classify.** A slot is *fixed* when it is a constant, a node fixed in the model, an observed
+   quantity, or a step all of whose inputs are fixed. Every other slot is *live*.
+4. **Fold.** Fixed steps are run once, forward, on the target, and their outputs become constants
+   of the program: the query-level folding. A selection whose index is fixed and shared by every
+   row is replaced by its chosen input; one whose index differs by row stays a step.
+5. **Prune.** Slots that no longer reach a target are dropped, with the steps that write them, so a
+   mixture with its component observed computes that component alone.
+6. **Finish.** Each slot records the last step that reads it, so that a pass frees a value as soon
+   as nothing needs it.
+
+Programs are cached in the snapshot they were compiled from, under the query's targets, its
+observation set's identity, and the target's device and precision.
+
+> [!DECISION] Why the cache key includes the observations
+> The charter caches a program by snapshot, targets, device and precision. The mathematics then
+> asked for values reached from observed quantities to be folded once per compiled query, which
+> bakes the observed values into the program. A program whose observed values were inputs of each
+> evaluation would keep the charter's key and lose that folding, recomputing the inverse of an
+> observed covariance factor on every evaluation. The key uses the observation set's identity
+> rather than its contents, so that looking a program up never hashes the data.
+
+```rust
+pub struct Program { /* target, slots, steps, free quantities, targets, pinned batch */ }
+
+pub struct Values { /* values by node */ }
+pub struct Frames { /* frames by node */ }
+pub struct Second { pub values: Values, pub alpha: Frames, pub beta: Frames }
+
+impl Program {
+    pub fn free(&self) -> &[Free];            // node, space, in ancestral order
+    pub fn free_discrete(&self) -> &[NodeId];
+    pub fn layout(&self) -> &Layout;          // over the free continuous quantities
+    pub fn admits(&self, pass: &Pass) -> Result<(), Error>;
+
+    pub fn forward(&self, at: &Values) -> Result<Values, Error>;
+    /// Tangent frames at free continuous quantities in, at the targets out.
+    pub fn tangent(&self, at: &Values, tangents: &Frames) -> Result<(Values, Frames), Error>;
+    /// Cotangent frames at the targets in, at every free continuous quantity out.
+    pub fn cotangent(&self, at: &Values, seeds: &Frames) -> Result<(Values, Frames), Error>;
+    /// Velocities at some free continuous quantities, one cotangent column at the targets.
+    pub fn hessian(&self, at: &Values, velocities: &Frames, seeds: &Frames) -> Result<Second, Error>;
+    /// `cotangent`, and `hessian`, of a program's single `Real` target seeded with one.
+    pub fn gradient(&self, at: &Values) -> Result<(Values, Frames), Error>;
+    pub fn hessian_products(&self, at: &Values, velocities: &Frames) -> Result<Second, Error>;
+}
+
+pub enum Pass<'a> {
+    Tangent { seeded: &'a [NodeId] },
+    Cotangent { targets: &'a [NodeId] },
+    Hessian { seeded: &'a [NodeId], targets: &'a [NodeId] },
+}
+```
+
+`at` gives a value to every free quantity, continuous and discrete, all of one number of rows
+(`MissingValue`, `BatchSize`). `Frames::identity(layout)` is the velocity frame whose columns are
+the coordinate directions of a layout, which makes `beta` the whole chart Hessian. The passes are those of
+[automatic differentiation over frames](../../math/automatic-differentiation/): `tangent` is
+[](eq:math/automatic-differentiation/jvp), `cotangent` is
+[](eq:math/automatic-differentiation/vjp), and `hessian` is
+[](eq:math/automatic-differentiation/leibniz), which for a step with pull-back $p$ adds
+`p.cotangent(beta)` and, where the step is of the second kind below, `p.second(alpha)`.
+Derivatives are collected at the free continuous quantities only, each returned in its own tangent
+coordinates; a quantity nothing reached gets a frame of zeros.
+
+**Admissibility** is [%full](statement:archive/core/math/order), computed before anything runs.
+The roots $L$ a pass differentiates are the program's free continuous quantities, fixed when it is
+compiled, so "reached from $L$" is stored per slot. The seeded roots $S$ are the quantities given
+a velocity, and the targets $T$ those given a seed, so "reached from $S$" and "reaches $T$" are one
+sweep each over the steps, per call. A step is *on the pass* when its output is continuous and
+reaches $T$ and one of its continuous inputs is reached from $L$; it then requires order two when
+the pass is a Hessian pass and one of its inputs is reached from $S$, and order one otherwise. A
+step that is not on the pass runs `forward` alone. The first step whose kernel's order is too low
+is reported as `OrderTooLow`, naming its operation, the composites it was expanded from, and the
+node it came from. Under this rule a Hessian pass uses `FirstOrder::record` for a step no velocity
+reaches, and never asks it for a second-order map.
+
+A program reports its free discrete quantities and runs its passes whatever they are: at given
+discrete values a gradient is that of the conditional density, as the mathematics says. Refusing a
+query with a free discrete quantity is the gradient-based algorithm's to do, with
+`Program::free_discrete` and the error `FreeDiscrete` the core provides for it.
+
+### Layouts
+
+The flattened coordinates of [Queries](math.svx#queries) and a product space are one
+construction:
+
+```rust
+pub struct Layout { /* quantities, and Space::Product of their spaces */ }
+
+impl Layout {
+    pub fn new(snapshot: &Snapshot, quantities: &[QDyn]) -> Result<Layout, Error>; // NotContinuous
+    pub fn product(&self) -> &Space;
+    pub fn dimension(&self) -> usize;
+    pub fn blocks(&self) -> Vec<Block>; // those of `product()`
+    /// The step of an estimator: the product's retraction, run on `target`.
+    pub fn retract(&self, at: &Values, tangent: &Points, target: &Target) -> Result<Values, Error>;
+    pub fn flatten(&self, frames: &Frames) -> Result<Frame, Error>; // rows by `blocks()`
+}
+```
+
+`retract` stacks the quantities' values into one point of `product()`, runs the compiled
+composite `product().retraction()`, and slices the result back, which is
+[](eq:archive/core/math/step) by the same subgraph a product quantity uses.
+
+### Generation and weights
+
+```rust
+pub trait Sample: Debug + Send + Sync + 'static {
+    fn name(&self) -> &'static str;
+    fn params(&self) -> Vec<Param>;
+    /// One draw per row, from the values of the sampler's inputs and one key per row.
+    fn draw(&self, inputs: &[Value], keys: &[Key], target: &Target) -> Value;
+}
+
+pub struct Sampler {
+    pub sample: Arc<dyn Sample>,
+    pub inputs: Vec<QDyn>,
+    /// `None` for an exact sampler; otherwise log q_t, a `Real` node reading s_t and C_t.
+    pub log_density: Option<Q<Real>>,
+}
+
+pub struct Proposal { pub sample: Arc<dyn Sample>, pub inputs: Vec<QDyn>, pub log_density: Q<Real> }
+
+pub struct Generated { pub values: Values, pub log_weight: Points }
+
+impl Snapshot {
+    pub fn generate(&self, given: &Observations, key: &Key, rows: usize, target: &Target)
+        -> Result<Generated, Error>;
+}
+```
+
+A sampler's inputs must be reached from no quantity outside the quantities its term is conditioned
+on, and a proposal's from none made after its parameter. `generate` takes every quantity of the
+snapshot that `given` does not observe as free. It refuses, with `CannotGenerate` naming the
+quantity and its address, when a free quantity has neither a term with a sampler nor a proposal.
+Otherwise it compiles one forward program in which each free quantity is a *draw step*, placed in
+increasing identifier, which is an ancestral order: the step evaluates the sampler's inputs from
+the values before it and calls `draw` with the keys `key.split(rows)[i].at(address)`. A draw step
+has no derivative maps, and no derivative pass is ever compiled with one. `Key::uniforms` and
+`Points::from_host` are how a sampler turns its keys into variates at the target's precision.
+
+The weight is [](eq:archive/core/math/weight), summed so that what cancels is never computed: the
+log-density of every term that scores an observed quantity or scores nothing; for a term that
+scores a free quantity, nothing when its sampler is exact, and its log-density less the sampler's
+otherwise; and, for each free parameter, minus its proposal's log-density.
+
+### Retirement
+
+Retirement is the three steps of [Retirement](math.svx#retirement), with the caller's step
+between two of the core's:
+
+```rust
+pub struct Retirement<'w> { /* the writer, borrowed, and the plan */ }
+
+pub struct Plan {
+    pub retired: Vec<QDyn>,                   // E
+    pub observed: Observations,               // the values of E_O
+    pub integrated: Vec<QDyn>,                // E_F
+    pub terms: Vec<Arc<Term>>,                // T_E
+    pub blanket: Vec<(QDyn, Space, Address)>, // B
+}
+
+pub struct Replacement {
+    pub log_density: Q<Real>,
+    pub proposals: Vec<(QDyn, Proposal)>,
+}
+
+impl Retirement<'_> {
+    pub fn plan(&self) -> &Plan;
+    /// The model as it is, to evaluate the terms of the plan on.
+    pub fn snapshot(&self) -> &Snapshot;
+    /// Builds the replacement in a scope, checks it, and applies the change.
+    pub fn replace(self, body: impl FnOnce(&Plan) -> Replacement) -> Result<(), Failure>;
+}
+```
+
+`Writer::retire` reads $E$ as the quantities whose address has the namespace as a proper prefix,
+refuses an observed quantity outside $E$ (`NotInNamespace`), and reads $\mathcal T_E$ from `joined`
+and $B$ by [](eq:archive/core/math/blanket). It changes nothing. `replace` opens a building scope,
+in which the caller builds $\logterm_B$ from the blanket's quantities and constants, by exact
+integration or by an approximation computed beforehand on `snapshot()`. Then, on the draft:
+
+1. the quantities among the roots `log_density` is reached from must all be in $B$
+   (`ReplacementOutsideBlanket`, naming the quantity), and each proposal must be for a blanket
+   quantity whose scoring term is in $\mathcal T_E$ (`ProposalNotNeeded`);
+2. the quantities of $E$, the terms of $\mathcal T_E$ with their samplers and bindings, and every
+   mapped node reached from $E$ through `consumers`, are removed;
+3. `log_density` is added as a likelihood factor, and the proposals are attached.
+
+A failure at any point drops the draft, so the model is as it was; success publishes one snapshot.
+A handle to a removed node stays valid on older snapshots and fails, as `UnknownNode`, in a scope
+on the new one.
+
+### Errors
+
+One enumeration for the core, `#[non_exhaustive]`, implementing `std::error::Error`, each variant
+carrying what a caller needs to name the fault:
+
+| raised when | variants |
+| --- | --- |
+| building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration` |
+| adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
+| compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `FreeDiscrete`, `FrameShape` |
+| generating | `CannotGenerate` |
+| retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded` |
+| naming | `DuplicateName`, `UnknownOperation` |
+
+`TensorError`, in `skoro-tensor`, has `UnsupportedDevice`, `AutodiffDevice`,
+`UnsupportedPrecision`, `ForeignTensor` and `IntegerOutOfRange`.
+
+### Kept from the archive, and not
+
+The archive, at commit `019e888`, is where most of this was first worked out.
+
+**Kept: the two gates.** The archive learned the distinction the mathematics now states, and
+recorded it where the bug had been:
+
+```rust
+// crates/skoro-operation/src/diff/base.rs, archive at 019e888
+/// Gating the `VjpState` on `tangents[j].is_some()` is therefore a bug: it silently drops the
+/// order-1 cotangent of any differentiable input that happened not to be seeded.
+Hvp {
+    diffs: Vec<bool>,
+    tangents: Vec<Option<TangentVector<B>>>,
+},
+```
+
+Here they are the two arguments of `SecondOrder::record`. What changes is the velocity: the
+archive's was one direction per pass (`TangentVector`, `[batch, dimension]`), and is now a frame.
+
+**Kept: values that pin a batch.** The archive's `QuantityValue::Unbatched` and `Batched`
+(`crates/skoro-core/src/any_tensor.rs`), with the rule that a batched value of one row is an error
+in a larger batch and not a broadcast, are `HostValue`'s `rows`. So is the compiled sequence's
+`last_use` (`crates/skoro-graph/src/compiler.rs`), which frees a slot after its last reader.
+
+**Not kept: a manifold that returns its retraction.**
+
+```rust
+// crates/skoro-riemann/src/base.rs, archive at 019e888
+pub trait Manifold<B: Backend> {
+    fn dimension(&self) -> usize;
+    fn retraction(&self) -> impl DiffOperation<B>;
+    fn inverse_retraction(&self) -> impl DiffOperation<B>;
+}
+```
+
+A returned operation of an unnameable type could not survive erasure, which is why the archive's
+`DynQuantityType` carried the remark "the inverse retraction operation of a `DynManifold` cannot be
+obtained" and why it had no products. A space now builds its retraction as a composite.
+
+**Not kept: declared neighbours and flags on terms.**
+
+```rust
+// crates/skoro-graph/src/node.rs, archive at 019e888
+pub struct LogLikelihoodNode<B: Backend> {
+    pub id: Id,
+    pub op: Arc<dyn DynGraphOperation<B>>,
+    pub stochastic_id: Option<Id>,
+    pub in_log_density: bool,
+    pub parent_ids: Vec<Id>,
+    // ...
+}
+```
+
+A term is no longer a kind of node. Its neighbours are read off the compilation graph, and
+`in_log_density`, with the proposal-only terms it marked, is replaced by samplers and proposals
+that carry their own densities. The node kinds `Stochastic`, `Observed` and `Parameter` are gone
+with it: a quantity is one kind of node, observed by a query and a parameter when nothing scores
+it.
+
+**Not kept: one precision per process.** The archive chose a precision by locking a device's
+default before anything ran (`policy::use_f64`, `crates/skoro-backend/src/policy.rs`), which
+allowed one precision per test binary. Every tensor now names its precision, and one binary tests
+both.
+
+**Not kept: a graph behind a lock, with a collector.** The archive's `Graph<B>` invalidated its
+compiled programs by an epoch bumped on every mutation, sat behind a lock in `ModelServer`, and
+reclaimed nodes by drop guards on handles and a mark-and-sweep pass. Snapshots replace all three: a
+program belongs to the snapshot it was compiled from, readers hold snapshots, and memory goes with
+the last one. The archive's per-operation state types (`VjpState`, `HvpState`) become the boxed
+pull-backs, and its operators returning `SkoroResult` become operators returning handles that may
+be failed.
+
+### REVISIT.md
+
+The build's last task writes `REVISIT.md` at the root of the repository, listing what the archive
+had that the core does not bring back, each to return as an entry of its own: the normal
+distribution, with its joint form, its Fisher information roots and its structure readers; SO(3)
+and SE(3), with their fused exponential and logarithm kernels for cubecl; the linear algebra
+(triangular matrices, their inverses and vector products, the cross product, norms); pointwise
+absolute value and the general division and reciprocal of Euclidean values; least-squares readers,
+Jacobian assembly, linearization and the coverage check; dense and block-sparse elimination with
+marginalization for sliding windows; and literal-operand operations as primitives. It also lists
+what the charter names and no entry yet builds: the operation bridging burn's automatic
+differentiation, a serialization format, and Python bindings.
+
+## Tests
+
+Tests run at both precisions in one binary, through a macro that instantiates a test body for
+`Precision::Single` and `Precision::Double` on the Flex device; the names below get the suffixes
+`_f32` and `_f64`. Tests gated on the `wgpu` feature repeat the tensor-layer and primitive checks
+at single precision on a wgpu device. Tolerances live in `testing::Tolerance`, per precision: a
+central difference with step $10^{-6}$ held to a relative $10^{-7}$ in double precision, and step
+$10^{-2}$ held to $5 \times 10^{-3}$ in single; and every single-precision result is also held to
+the double-precision one, to a relative $10^{-4}$.
+
+`testing::check_operation(operation, inputs, target)` is the check of
+[the primitives](math.svx#the-primitives), applied to one operation: its tangent map is the
+derivative of its forward map, by finite differences of
+[](eq:math/derivatives-in-charts/derivative) with inputs moved by their spaces' retractions; its
+cotangent map is the transpose, by $\langle \alpha, J \tangent \rangle = \langle J\transpose \alpha, \tangent \rangle$
+on random frames; its second-order map is the derivative of the cotangent map along the
+velocities with $\alpha$ fixed; an input marked not differentiable receives `None`; and a missing
+velocity gives what a zero velocity gives. `testing::check_agreement(a, b, inputs, target)` holds
+every pass over one program to every pass over another.
+
+**The tensor layer** (`crates/skoro-tensor/tests/`). These pin the behaviours of burn the design
+rests on, so an upgrade that changes one fails here first.
+
+- `two_precisions_share_a_device`: tensors of both precisions are created and computed with on one
+  Flex device in one process.
+- `arithmetic_keeps_its_precision`: each burn operation the kernels use returns its input's data
+  type.
+- `integers_to_points_takes_the_target_precision` and `comparison_takes_the_target_integers`: the
+  two conversions that follow the device default in burn follow the target here.
+- `from_burn_refuses_a_foreign_tensor`: a tensor of the other precision is refused.
+- `target_refuses_an_autodiff_device`, and under `wgpu`, `target_refuses_an_unsupported_precision`.
+- `host_round_trip_is_exact_in_double`: `from_host` then `to_host` returns the same bits.
+- `shared_value_expands_to_the_batch` and `per_row_value_pins_the_batch`, the second including one
+  row in a batch of several.
+
+**Keys and addresses** (`skoro-core`, in `key` and `address`).
+
+- `name_and_integer_segments_differ`: `Name("3")` and `Index(3)` fold to different keys.
+- `segments_fold_one_at_a_time`: `ab/c` and `a/bc` give different keys.
+- `fold_matches_the_reference_vectors`: frozen outputs, so the derivation cannot change silently.
+- `split_keys_are_distinct`, `uniforms_lie_in_the_open_interval`, and
+  `uniforms_have_uniform_moments` over $10^5$ variates of a fixed key.
+- `address_parses_digits_as_indices` and `quoted_names_display_distinctly`.
+
+**Spaces** (`space`, `q`).
+
+- `storage_and_dimension_of_each_space`, including a product with an embedded factor, whose
+  storage and tangent ranges differ.
+- `product_refuses_a_discrete_factor`.
+- `widening_is_free_and_narrowing_checks_the_space`.
+- `retraction_round_trips`: $(\point \oplus \tangent) \ominus \point = \tangent$ for every core
+  space, exactly for the flat ones and for `Positive`, where
+  `positive_mirror_identity_is_exact` also checks $\point \ominus (\point \oplus \tangent) = -\tangent$.
+
+**Primitives** (`crates/skoro-core/tests/primitives.rs`). One test per row of the tables, each a
+call of `testing::check_operation` at random inputs: `add`, `sub`, `neg`, `mul`, `scale`,
+`matmul_matrix`, `matmul_vector`, `sum`, `exp`, `log`, `slice`, `concatenate`, `reshape`,
+`transpose`, `select`, `positive_as_real`, `positive_exp`, `positive_log`, `positive_mul`,
+`positive_recip`. Beside them:
+
+- `select_routes_the_cotangent_to_the_chosen_value`, row by row, and nothing to the index.
+- `integer_arithmetic_is_exact`, `comparisons_yield_booleans`.
+- `embedding_and_discretization_have_order_zero`: `to_real` and `is_nonnegative` give no
+  first-order maps, and a pass through them is admitted with nothing pulled back.
+- `positive_chart_hessian_equals_the_pullback_hessian`: on a scalar function of a positive value,
+  away from a stationary point, the two agree, as the mathematics derives.
+
+**Programs and passes** (`crates/skoro-core/tests/passes.rs`), on a composite with fan-out and
+several roots.
+
+- `tangent_pass_matches_finite_differences` and `cotangent_pass_is_its_transpose`.
+- `hessian_pass_matches_finite_differences_of_the_gradient`, with several velocity columns, and
+  `hessian_is_symmetric_on_flat_spaces`.
+- `unseeded_root_still_receives_its_cotangents`: a Hessian pass seeded at one of two roots returns
+  $\alpha$ at both. This is the two gates.
+- `fan_out_accumulates_cotangents`.
+- `rows_do_not_interact`: a pass at $N$ rows equals $N$ passes at one row.
+- `values_are_freed_after_their_last_reader`.
+
+**Order** (`crates/skoro-core/tests/order.rs`), with test operations of order zero and one that
+count their kernels' calls.
+
+- `first_order_step_off_the_pass_admits_a_hessian`: fed only by an observed quantity, or reaching
+  no target.
+- `first_order_step_without_velocity_admits_a_hessian`, and returns the same $\beta$ as the
+  second-order operation it stands in for.
+- `first_order_step_with_velocity_refuses_a_hessian`, naming the operation.
+- `zero_order_step_on_the_pass_refuses_a_gradient`.
+- `refusal_comes_before_any_kernel_runs`.
+- `order_is_read_off_the_kernel`: no test operation states an order.
+
+**Composites, fused operations and the registry** (`crates/skoro-core/tests/composite.rs`).
+
+- `expanding_a_composite_changes_no_pass`: a program through a composite call equals, bit for bit,
+  the program of the same operations written in place.
+- `composites_nest`.
+- `fused_operation_agrees_with_its_composite`: a test operation fusing $e^{-\log x}$, by
+  `testing::check_agreement`.
+- `fused_operation_falls_back_to_its_composite` on a target its kernel declines.
+- `every_core_operation_round_trips_through_its_name`, and
+  `unknown_operation_is_refused_by_name`.
+
+**Building** (`crates/skoro-core/tests/building.rs`).
+
+- `operation_outside_a_scope_fails`.
+- `failure_poisons_what_is_built_on_it`, and
+  `scope_reports_the_first_failure_and_where`, whose location is the line of the failing operator.
+- `shape_mismatch_fails_when_the_node_is_added`.
+- `failed_scope_publishes_nothing`: the snapshot after equals the snapshot before.
+- `panic_in_a_scope_discards_the_draft`, leaving the stack empty and the writer usable.
+- `readers_see_before_or_after`: a thread loading `Reader::latest` throughout a build sees only
+  the two models.
+- `scopes_nest_and_build_into_the_innermost`.
+- `namespaces_prefix_addresses`, `lookup_is_relative_to_the_open_namespaces`,
+  `address_cannot_be_taken_twice`.
+- `constants_fold_when_added`: the node holds its value on the host, in double precision, equal to
+  the unfolded computation.
+
+**Snapshots and branches** (`crates/skoro-core/tests/branches.rs`).
+
+- `handle_is_valid_on_every_branch_that_shares_it`, and `handle_from_another_model_fails`.
+- `branches_do_not_see_each_other`.
+- `fork_copies_nothing_it_does_not_change`: untouched nodes are the same allocation in both.
+- `dropping_the_last_snapshot_frees_retired_nodes`, by a weak reference.
+
+**The probabilistic graph** (`crates/skoro-core/tests/terms.rs`), on the mathematics' running
+example.
+
+- `term_neighbours_are_read_off_the_compilation_graph`: $t_6$ is conditioned on $\randomPoint_0$,
+  $\randomPoint_1$ and $\bfsigma$, and $t_3$ scores $\randomPoint_1$ and is conditioned on
+  $\randomPoint_0$ and $\bfzeta_1$; constants are in neither.
+- `quantity_is_scored_at_most_once`, `term_cannot_be_conditioned_on_a_later_quantity`,
+  `unscored_quantity_is_a_parameter`, `creation_order_is_ancestral`.
+- `blanket_of_the_first_tick`: $\{\randomPoint_1, \bfm, \bfzeta_1, \bfsigma\}$.
+- `binding_lookup_checks_multiplicity`, `binding_must_stay_within_its_term`.
+
+**Queries** (`crates/skoro-core/tests/queries.rs`).
+
+- `query_density_is_the_sum_of_terms`.
+- `roots_are_values_not_draws`: the gradient with respect to a quantity counts its appearances in
+  the terms, whatever its sampler.
+- `folded_and_unfolded_programs_agree`: a quantity observed, against the same quantity free and
+  given the same value, in values and in derivatives with respect to the others.
+- `observed_values_fold_once_per_program`, by counting kernel calls over two evaluations, and
+  `free_values_are_not_folded`.
+- `selection_by_an_observed_index_drops_the_other_branches`: their kernels never run and their
+  slots are absent; `selection_by_a_per_row_index_stays_a_step`.
+- `programs_are_cached_per_query_and_target`, and `one_snapshot_serves_two_precisions`: the same
+  query compiled at both precisions from one snapshot, evaluated on two threads, agrees to the
+  single-precision tolerance.
+- `free_discrete_quantities_are_reported`, and
+  `gradient_at_a_free_discrete_value_is_conditional`.
+- `layout_is_the_product_of_the_free_spaces` and `flat_step_is_the_product_retraction`.
+
+**The sphere and the acceptance test** (`crates/skoro/tests/sphere.rs` and `acceptance.rs`, with
+the sphere declared in `tests/common/sphere.rs` from `skoro`'s public interface alone, which an
+integration test of the umbrella crate enforces). The sphere is the embedded type of
+[the acceptance test](math.svx#the-acceptance-test), with the basis $B$, $P(w) = w / \lVert w \rVert$
+and $Q$ of [](eq:archive/core/math/sphere), each a composite. All points are in $U$.
+
+- `sphere_basis_is_orthonormal_and_tangent`.
+- `sphere_inclusion_matches_finite_differences` and
+  `sphere_projection_matches_finite_differences`: `testing::check_operation` on
+  `skoro.include` and `skoro.project`, which checks [](eq:archive/core/math/inclusion) and
+  [](eq:archive/core/math/projection) at both orders.
+- `sphere_inverse_inverts_the_retraction`.
+- `boundary_orders_follow_the_composites`: with a first-order operation inside $P$, `project`
+  has order one.
+- `product_retraction_agrees_with_its_factors`: on the product of two Euclidean factors, a real
+  line, a positive factor and the sphere, values, tangent frames, cotangent frames and Hessian
+  products of the product's retraction equal the factor-wise ones block by block, to four units in
+  the last place. This is the charter's condition, and
+  [%full](statement:archive/core/math/product-agreement).
+- `chart_derivatives_agree_with_blocks_and_finite_differences`: for a nonlinear $f$ reading the
+  positive factor and the sphere through their inclusions, the chart gradient and Hessian products
+  through the product's retraction equal the assembly of [](eq:math/product-manifold/blocks) and
+  finite differences of [](eq:math/derivatives-in-charts/gradient) and
+  [](eq:math/derivatives-in-charts/chart-hessian).
+- `chart_hessian_differs_from_the_pullback_hessian_on_the_sphere_alone`: away from a stationary
+  point, by the correction term on the sphere's block and by nothing elsewhere.
+
+**Generation** (`crates/skoro/tests/generation.rs`), with the private normal of
+[testing retirement](math.svx#retirement), written in `tests/common/normal.rs` as a composite
+log-density and a sampler by inversion.
+
+- `generation_refuses_a_quantity_it_cannot_draw`, naming it.
+- `exact_samplers_cancel_in_the_weight`: the weight equals the sum of the likelihood terms, bit for
+  bit.
+- `inexact_sampler_contributes_its_density`, and `parameter_is_drawn_from_its_proposal`.
+- `weights_estimate_the_evidence`: on a linear-Gaussian model with one observation, the mean
+  weight over $10^5$ rows of a fixed key is within four standard errors of the closed form, as
+  [%full](statement:archive/core/math/importance) says.
+- `draw_depends_on_key_and_address_alone`: the same quantity drawn in models built in another
+  order, after a retirement, and on another branch, is the same.
+- `rows_draw_independently`, and `draws_agree_across_precisions`, to the cast.
+
+**Retirement** (`crates/skoro/tests/retirement.rs`), the four checks of the mathematics on its
+scalar chain.
+
+- `retirement_reads_the_blanket_and_removes_what_it_names`.
+- `replacement_outside_the_blanket_is_refused_and_changes_nothing`: reached from
+  $\randomPoint_0$, and reached from a quantity outside the blanket.
+- `kalman_replacement_matches_quadrature`: with [](eq:archive/core/math/kalman), the new model's
+  log-density, gradient and Hessian in $\randomPoint_1$ equal the old model's with $\point_0$
+  integrated by Gauss–Hermite quadrature and $\bfz_0$ fixed, constants included.
+- `blanket_quantity_becomes_a_parameter_drawn_from_its_proposal`: generation is refused without
+  the proposal, and with it every row's weight is the evidence
+  $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$.
+- `retired_handle_fails_on_the_new_model_and_works_on_the_old`.
+
+## Open questions
+
+> [!TODO] Recording that handles lost their backend parameter
+> The charter is a finished entry and writes `Q<B, T>` and a sealed backend trait. Under burn
+> 0.22 this design has `Q<T>` and a device check in `Target::new`. Is the account in
+> [Constraints](#burn-0-22) record enough, or should a decision entry revise the charter?
+
+> [!TODO] Dependencies beyond burn
+> `blake3` for keys is already in the build through burn. `rpds` (MIT) is new, chosen over `imbl`
+> (MPL-2.0) for the licence and over maps written here for the work. Are both acceptable?
+
+> [!TODO] Which cubecl runtimes skoro supports
+> The design tests Flex at both precisions everywhere, and wgpu at single precision behind a
+> feature, on machines that have an adapter. CI has none. Is wgpu the one GPU runtime to claim for
+> now, and is a local run before pushing enough to claim it?
+
+> [!TODO] Names
+> `Space` for a quantity's type, `Vector<N>` beside `VectorDyn`, and `Target` for a device with a
+> precision are this document's choices. They are the names every later entry will write.
