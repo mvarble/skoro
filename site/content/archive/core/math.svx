@@ -790,9 +790,32 @@ holds, and count them twice. The integral defining $\logterm_B$ rarely has a clo
 for linear-Gaussian terms, where retiring the oldest state of a chain is the update-and-predict step
 of a Kalman filter; otherwise it is approximated, by a Laplace approximation at the current
 estimate in the archive's sliding windows. Either way, computing it needs the distributions and the
-linear algebra of later entries; what the core needs is the structure: $E$, $\mathcal T_E$, $B$,
-the removal, and a place for the replacement, a likelihood factor over $B$ whose type, when it is one
-density over the blanket's tangent coordinates jointly, is the product of the blanket's types.
+linear algebra of later entries, which the core does not have.
+
+**What the core does.** The core retires; it does not compute the replacement. A retirement is
+given a namespace and the values of $E_O$, and goes in three steps.
+
+1. The core reads $E$, the quantities under the namespace, and $E_F = E \setminus E_O$; it reads
+   $\mathcal T_E$ off the probabilistic graph, and $B$ by [](eq:blanket). It hands these to the
+   caller with the values of $E_O$: the terms with their log-densities in the compilation graph,
+   and the blanket's quantities with their types.
+2. The caller builds the replacement $\logterm_B$, a likelihood factor added to the compilation
+   graph as any term's log-density is, from the quantities of $B$ and constants: exactly the
+   integral of [%full](statement:retirement), or an approximation of it, as the caller chooses. When
+   it is one density over the blanket's tangent coordinates jointly, its natural type is the product
+   of the blanket's types. The caller may also give a proposal for each blanket quantity the
+   retirement leaves unscored (below).
+3. The core checks the replacement and applies the change. It refuses a replacement reached from a
+   quantity outside $B$, read off the compilation graph as every term's $V_t$ is: one reached from a
+   quantity of $E$ would be removed with it, and one reached from a quantity outside the blanket
+   would add a dependence the retired terms did not have. Otherwise it removes $E$, the terms
+   $\mathcal T_E$ and the mapped values reached from $E$, and adds $\logterm_B$, in one change: no
+   reader of the model sees it partly retired.
+
+The core cannot check that the replacement is the integral it stands for, or how good an
+approximation of it is; that is the caller's to answer for. When it is exact, every query of the new
+model has the density of the corresponding query of the old one, with $E_F$ integrated out and
+$E_O$ fixed, by [%full](statement:retirement).
 
 Two consequences for the rest of the model:
 
@@ -805,11 +828,61 @@ Two consequences for the rest of the model:
   $\randomPoint_0$, and goes with it, as does every value between it and $\logterm_6$. A mapped
   value reached from $E$ that a user holds as a target is removed with the rest, and is no longer
   available after the retirement.
-- **Generation after retirement.** A blanket quantity whose scoring term was in $\mathcal T_E$
-  ($\randomPoint_1$ in the example, whose transition $t_3$ was conditioned on $\randomPoint_0$) is scored by no
-  term afterwards, only joined to the replacement. Unless the replacement is written in a
-  generative form, as a term scoring that quantity with a sampler, generation from the new model is
-  refused for it, by structure.
+- **Blanket quantities may become parameters.** A blanket quantity whose scoring term was in
+  $\mathcal T_E$ ($\randomPoint_1$ in the example, whose motion model $t_3$ was conditioned on
+  $\randomPoint_0$) is scored by no term afterwards, and so, by the definition in
+  [The probabilistic graph](#the-probabilistic-graph), it is a parameter. That changes nothing a
+  query computes. [%full](statement:retirement) holds at every value of it; the replacement is
+  conditioned on it, as a score is conditioned on a parameter with an improper prior; and a query
+  leaves it free or observes it as before. Its uncertainty is a matter of the query's target, not
+  of the quantity's kind, and is what it was. In the measure theory of
+  [parameters and improper priors](../../math/generative-models/#parameters-and-improper-priors),
+  the new model is a family indexed by it, and $\exp \logterm_B$ is its score: for linear-Gaussian
+  terms, the Kalman filter's predicted density of $\randomPoint_1$ times a constant, a proper prior
+  written as a score. What changes is generation, as for every parameter: the quantity is drawn
+  from a proposal when it has one, which the caller may give with the replacement, and generation
+  is refused for it otherwise. With the Kalman prediction as its proposal, $\logterm_B$ and the
+  proposal's log-density cancel in the weight [](eq:weight) up to a constant, so the draw is as
+  good as an exact sampler's. The core never writes a replacement in generative form, as a term
+  scoring a blanket quantity with a sampler: a proposal gives generation all it needs.
+
+**Testing retirement.** The core's tests exercise retirement on a model whose replacement is known
+in closed form. A private normal distribution with constant variance, written in the tests as a
+composite like the sphere of [the acceptance test](#the-acceptance-test), builds a scalar chain
+
+$$
+	\randomPoint_0 \sim \mathcal N(a, s^2), \quad
+	\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2), \quad
+	\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2), \quad
+	\bfz_1 \mid \randomPoint_1 \sim \mathcal N(\randomPoint_1, r^2),
+$$
+
+with constants $a$, $s$, $r$ and $q$. Retiring $E = \{\randomPoint_0, \bfz_0\}$ with $\bfz_0$
+observed at $\hat z_0$ touches the terms of $\randomPoint_0$, $\bfz_0$ and $\randomPoint_1$, and its
+blanket is $\{\randomPoint_1\}$. Completing the square in $\point_0$ gives the update
+$\mathcal N(a, s^2)(\point_0)\, \mathcal N(\point_0, r^2)(\hat z_0) = \mathcal N(a, s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P)(\point_0)$,
+and integrating the motion against it gives the prediction, so that
+
+$$
+	\logterm_B(\point_1) = \log \mathcal N(a, s^2 + r^2)(\hat z_0) + \log \mathcal N(\mu, P + q^2)(\point_1),
+	\qquad
+	K = \frac{s^2}{s^2 + r^2}, \quad \mu = a + K(\hat z_0 - a), \quad P = (1 - K)\, s^2, @tag(kalman)
+$$
+
+with $\mathcal N(m, v)(\point)$ the normal density of mean $m$ and variance $v$ at $\point$. The
+tests check:
+
+1. that $E_F$, $\mathcal T_E$ and $B$ are as above, and that exactly the nodes the rule for mapped
+   values names are removed;
+2. that a replacement reached from $\randomPoint_0$, or from a quantity outside the blanket, is
+   refused, and leaves the model as it was;
+3. that with [](eq:kalman) as the replacement, the new model's log-density and the derivatives of a
+   query free in $\randomPoint_1$ agree, constants included, with the old model's with
+   $\point_0$ integrated out by quadrature and $\bfz_0$ fixed at $\hat z_0$, as
+   [%full](statement:retirement) says they must;
+4. that generation is refused for $\randomPoint_1$ without a proposal, and that with the proposal
+   $\mathcal N(\mu, P + q^2)$ every generated point has the same weight, the evidence
+   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$.
 
 ## In skoro's terms
 
@@ -838,8 +911,10 @@ Two consequences for the rest of the model:
   [](eq:weight).
 - **Random keys** are derived from addresses by [](eq:address-key).
 - **Retirement** removes a namespace's quantities $E$, conditioning on the given values of $E_O$ and
-  integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one term over the blanket
-  [](eq:blanket).
+  integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one likelihood factor over the
+  blanket [](eq:blanket). The core computes $E$, $\mathcal T_E$ and $B$, checks the replacement and
+  applies the change; the caller computes the replacement. A blanket quantity left unscored becomes a
+  parameter, generated from a proposal the caller may give.
 
 ## Appendix: the probability space of a model
 
@@ -881,16 +956,4 @@ measure on the rotations) when they arrive.
 
 ## Open questions
 
-> [!TODO] What retirement does in the core
-> Computing the replacement $\logterm_B$ needs distributions and linear algebra the core does not
-> have. I propose that the core's retirement take the replacement from its caller (given $E$,
-> $E_O$'s values, $\mathcal T_E$ and $B$, which the core computes), remove $E$, and attach it, all
-> in one atomic change; and that the core's tests exercise it with a private linear-Gaussian dummy
-> whose replacement is known in closed form. Computing the replacement (Gaussian, Laplace) is then a
-> later entry's. Should retirement instead wait for that entry altogether?
-
-> [!TODO] Re-scoring a blanket quantity
-> For generation to survive a retirement, the replacement must be able to score blanket quantities
-> that lost their scoring term, which makes retirement more than removal plus a likelihood factor. Is
-> that in scope for the core, or is a model that has retired quantities simply not generated from
-> until a later entry says how?
+None remain.
