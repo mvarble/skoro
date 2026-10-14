@@ -1,6 +1,6 @@
 ---
 title: Retractions and tangent charts
-summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations ⊕ and ⊖.
+summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations $\oplus$ and $\ominus$.
 ---
 
 <script>
