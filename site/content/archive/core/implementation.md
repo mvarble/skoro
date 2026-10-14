@@ -488,29 +488,106 @@ quantity is made from its `Space`, untyped. A feature crate's embedded type is a
 whose `space()` is its `Space::Embedded`. Two reserved identifiers mark a failed handle: one for an
 operation that failed inside a scope, and one for an operation attempted with no scope open.
 
-Every typed operator converts its handles to `QDyn` and calls the one untyped implementation, so
-nothing is implemented twice:
+**Operators.** What an operator means is decided by the markers of its operands, through traits
+the core defines and any crate may implement for a marker of its own. Each `std::ops` operator on
+`Q` is implemented once, generically, by delegating to the trait:
+
+```rust
+// skoro_core::q. One trait per operator, each with this shape.
+pub trait QAdd<Rhs: Typed = Self>: Typed {
+    type Output: Typed;
+    fn add(lhs: Q<Self>, rhs: Q<Rhs>) -> Q<Self::Output>;
+}
+// QSub, QMul and QDiv alike; QNeg with one operand.
+
+impl<T: QAdd<U>, U: Typed> std::ops::Add<Q<U>> for Q<T> {
+    type Output = Q<T::Output>;
+    fn add(self, rhs: Q<U>) -> Q<T::Output> { T::add(self, rhs) }
+}
+// and the same for Sub, Mul, Div and Neg.
+
+/// A literal on either side of `*` or `/`, and of `+` or `-`.
+pub trait QScale: Typed { fn scale(c: f64, q: Q<Self>) -> Q<Self>; }
+pub trait QShift: Typed { fn shift(c: f64, q: Q<Self>) -> Q<Self>; }
+
+impl<T: QScale> std::ops::Mul<f64> for Q<T> { /* T::scale(c, self) */ }
+impl<T: QScale> std::ops::Mul<Q<T>> for f64 { /* T::scale(self, q) */ }
+// Div<f64> by 1/c; Add and Sub with f64 on both sides through QShift.
+```
+
+The orphan rule is why the indirection is needed. `std::ops::Mul` is `std`'s and `Q` is the core's,
+so a feature crate can never write `impl Mul for Q<Complex>`, even for a `Complex` of its own: a
+foreign type applied to a local one is not local. It can write `impl QMul for Complex`, a core trait
+for a local type, and the generic `impl Mul for Q<T>` gives `*` that meaning at once. Without the
+hook, `*` could mean only what the core's own match on `Space` knows, and a complex value stored as
+`Vector(2n)` would get the elementwise product of reals, silently wrong.
+
+The core implements the traits for its own markers, each impl a node of one primitive or a short
+composite, so the typed and untyped paths build the same nodes:
+
+| written | markers | builds |
+| --- | --- | --- |
+| `a + b`, `a - b`, `-a` | one Euclidean marker on both sides | `add`, `sub`, `neg` |
+| `a * b`, `a / b` | one Euclidean marker on both sides, elementwise | `mul`; no `/`, for want of a reciprocal (below) |
+| `s * a`, `a * s` | `Real` and a Euclidean marker | `scale` |
+| `c * a`, `a * c`, `a / c`, `a + c`, `a - c` | an `f64` and a Euclidean marker | `scale`, or `add` of a constant |
+| `p * q`, `p / q`, `c * p` | `Positive` markers; an `f64` and a `Positive` marker | `positive.mul`, with `positive.recip`; a positive constant |
+| `i + j`, `i - j`, `i * j` | `Integer` | the discrete operations |
+
+Each impl is written for each concrete core marker (`Real`, `Vector<N>`, `VectorDyn`, `Matrix<M,
+N>`, `MatrixDyn`, `Positive<N>`, `PositiveDyn`, `Integer`), never as a blanket over a type
+parameter such as `impl<T: Euclidean> QMul for T`. That is the one rule the hook needs: the set of
+markers with a meaning for `*` is then exactly the set whose crates said so, a feature crate's
+impl can never collide with one of the core's, and adding a core marker later adds impls without
+touching anyone else's. A `Dyn` marker on both sides checks at run time that the spaces agree, and
+otherwise returns a failed handle (`SpaceMismatch`), as every operator does. No impl crosses a
+fixed-size and a `Dyn` marker; `widen()` first.
+
+`QDyn` keeps operators of its own, for composite bodies and other untyped code, which dispatch on
+the operands' `Space` over the core's spaces alone; on a feature crate's space they return a
+failed handle (`SpaceMismatch`). Code that works on a feature type is written with its marker.
+
+The operations that are not operators are methods and `scope` functions:
 
 | written | on | primitive |
 | --- | --- | --- |
-| `a + b`, `a - b`, `-a` | two values of one Euclidean space | `add`, `sub`, `neg` |
-| `a * b` | two values of one Euclidean space, elementwise | `mul` |
-| `s * a`, `c * a` | a `Real` handle or an `f64` literal, and a Euclidean value | `scale` |
 | `a.matmul(b)` | a matrix and a matrix or vector | `matmul` |
 | `a.sum()`, `a.exp()`, `a.log()`, `a.transpose()` | a Euclidean value | `sum`, `exp`, `log`, `transpose` |
 | `a.sin()`, `a.cos()`, `a.atan2(b)` | Euclidean values, elementwise | `sin`, `cos`, `atan2` |
 | `a.slice(range)`, `scope::concatenate(parts, space)`, `a.reshape(space)` | Euclidean values and products | `slice`, `concatenate` |
 | `scope::select(index, values)` | a categorical index and values of one space | `select` |
-| `p.as_real()`, `c.exp_positive()`, `p.log()`, `p * q`, `p.recip()`, `p / q` | positive values | the positive rows |
-| `i + j`, `i - j`, `i * j`, `i.eq(j)`, `i.lt(j)`, `i.le(j)` | integers | the discrete operations |
+| `p.as_real()`, `c.exp_positive()`, `p.log()`, `p.recip()` | positive values | the positive rows |
+| `i.eq(j)`, `i.lt(j)`, `i.le(j)` | integers | the discrete comparisons |
 | `i.to_real()`, `a.is_nonnegative()` | a discrete value; a `Real` | embedding, discretization |
 | `x.retract(t)`, `y.local(x)` | any continuous value | the space's composites |
 | `p.factor(i)`, `scope::product(parts)` | products | `slice`, `concatenate` |
 | `e.include()` | an embedded value | `include` |
 
 A literal is sugar for a constant node. The table of primitives has no reciprocal of a Euclidean
-value, so the core offers division only by a literal (a `scale`) and between positive values;
-$e^{-\log b}$ serves where $b$ is positive on the domain, as the acceptance test's sphere uses it.
+value, so the core implements `QDiv` only for positive markers and offers division of a Euclidean
+value only by a literal (a `scale`); $e^{-\log b}$ serves where $b$ is positive on the domain, as
+the acceptance test's sphere uses it.
+
+**Flat types of a crate's own.** A complex vector, a quaternion before normalization, or any
+other flat type that a feature crate wants to keep distinct from `Vector(n)` needs a `Space` that
+says so, or untyped code (`QDyn`, `narrow`, a query's checks) could not tell them apart. It is
+declared as an embedded type with $R(x, \tangent) = x + \tangent$ and
+$Q(x, \otherPoint) = \otherPoint - x$, which [%full](statement:archive/core/math/embedded)
+covers with $\manifold = \R^n$, $B = I$ and $L = I$:
+
+```rust
+impl Embedded {
+    /// A flat type: storage and dimension n, R and Q the core's addition and subtraction.
+    pub fn declare_flat(name: &'static str, params: Vec<Param>, n: usize) -> Result<Arc<Embedded>, Error>;
+}
+```
+
+The boundary kernels recognise a flat declaration and use what the statement gives for it
+directly, the identity for every first-order map and zero for every second-order one, rather than
+running inner passes to find it. A flat type's crate reads a value as storage with `include()` and
+makes one from storage as `retract(zero, w)`, a constant zero point plus $w$, which for a flat
+declaration is one addition. The alternative, a `Space::Flat` variant beside `Embedded`, would
+hold the same data under a second name, and every match on `Space` would grow an arm for it.
 
 ### Operations, kernels and order
 
@@ -1221,6 +1298,28 @@ archive's was one direction per pass (`TangentVector`, `[batch, dimension]`), an
 in a larger batch and not a broadcast, are `HostValue`'s `rows`. So is the compiled sequence's
 `last_use` (`crates/skoro-graph/src/compiler.rs`), which frees a slot after its last reader.
 
+**Kept: operators dispatched by marker traits.** The archive met the orphan rule the same way:
+
+```rust
+// crates/skoro-model/src/ops/base.rs, archive at 019e888
+impl<B, T0, T1> $std_trait<Q<B, T1>> for Q<B, T0>
+where
+    B: Backend,
+    T0: $trait<B, T1>,
+{
+    type Output = SkoroResult<Q<B, <T0 as $trait<B, T1>>::OutputType>>;
+    fn $method(self, rhs: Q<B, T1>) -> Self::Output {
+        <T0 as $trait<B, T1>>::register(&self, &rhs)
+    }
+}
+```
+
+and `skoro-linalg` gave its lower-triangular type a product of its own with `QMul` from outside
+`skoro-model`. Two things change. The backend parameter goes with `Q<B, T>`. And an operator returns
+a handle, failed or not, rather than a `SkoroResult`, so the second family of impls the archive
+needed, `Result op Q` to keep chains such as `a + b + c` free of `?`, and the overlap with its
+generic literal impl that it had to work around, are gone; literals are `f64` alone.
+
 **Not kept: a manifold that returns its retraction.**
 
 ```rust
@@ -1332,6 +1431,10 @@ rests on, so an upgrade that changes one fails here first.
   storage and tangent ranges differ.
 - `product_refuses_a_discrete_factor`.
 - `widening_is_free_and_narrowing_checks_the_space`.
+- `operators_build_the_nodes_of_their_markers`: each row of the operator table builds the
+  primitive it names, typed and through `QDyn` alike.
+- `dyn_operands_of_different_spaces_fail`: `VectorDyn(3) + VectorDyn(4)` returns a failed handle,
+  and the scope reports `SpaceMismatch` at that line.
 - `retraction_round_trips`: $(\point \oplus \tangent) \ominus \point = \tangent$ for every core
   space, exactly for the flat ones and for `Positive`, where
   `positive_mirror_identity_is_exact` also checks $\point \ominus (\point \oplus \tangent) = -\tangent$.
@@ -1479,6 +1582,18 @@ integration test of the umbrella crate enforces). The sphere is the embedded typ
   [](eq:math/derivatives-in-charts/chart-hessian).
 - `chart_hessian_differs_from_the_pullback_hessian_on_the_sphere_alone`: away from a stationary
   point, by the correction term on the sphere's block and by nothing elsewhere.
+
+**A crate's own marker** (`crates/skoro/tests/markers.rs`, with `Complex<const N: usize>`
+declared in `tests/common/complex.rs` from `skoro`'s public interface alone, as a flat embedded type
+of storage $2N$, real parts then imaginary parts).
+
+- `feature_marker_defines_its_product`: `Complex` implements `QMul` as a composite of `slice`,
+  `mul`, `sub`, `add` and `concatenate`, and `a * b` on two `Q<Complex<2>>` builds that composite
+  and computes the complex product; `testing::check_operation` passes on it at both orders.
+- `feature_marker_is_not_a_vector`: a `Q<Complex<2>>` does not narrow to `Vector<4>`, and `QDyn`
+  arithmetic between it and a `Vector(4)` value returns a failed handle.
+- `flat_declaration_skips_inner_passes`: the boundary kernels of a flat declaration compile no
+  inner programs, give the identity and zero maps, and pass `testing::check_embedded`.
 
 **Generation** (`crates/skoro/tests/generation.rs`), with the private normal of
 [testing retirement](math.svx#retirement), written in `tests/common/normal.rs` as a composite
