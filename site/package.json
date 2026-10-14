@@ -14,14 +14,6 @@
         "todos": "grep -rn '\\[!TODO\\]' content",
         "test": "vitest run"
     },
-    "engines": {
-        "pnpm": "^10.10.0"
-    },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "esbuild"
-        ]
-    },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@mvarble/mesearch-cms": "^0.2.1",
