@@ -576,26 +576,9 @@ value, so the core implements `QDiv` only for positive markers and offers divisi
 value only by a literal (a `scale`); $e^{-\log b}$ serves where $b$ is positive on the domain, as
 the acceptance test's sphere uses it.
 
-**Flat types of a crate's own.** A complex vector, a quaternion before normalization, or any
-other flat type that a feature crate wants to keep distinct from `Vector(n)` needs a `Space` that
-says so, or untyped code (`QDyn`, `narrow`, a query's checks) could not tell them apart. It is
-declared as an embedded type with $R(x, \tangent) = x + \tangent$ and
-$Q(x, \otherPoint) = \otherPoint - x$, which [%full](statement:archive/core/math/embedded)
-covers with $\manifold = \R^n$, $B = I$ and $L = I$:
-
-```rust
-impl Embedded {
-    /// A flat type: storage and dimension n, R and Q the core's addition and subtraction.
-    pub fn declare_flat(name: &'static str, params: Vec<Param>, n: usize) -> Result<Arc<Embedded>, Error>;
-}
-```
-
-The boundary kernels recognise a flat declaration and use what the statement gives for it
-directly, the identity for every first-order map and zero for every second-order one, rather than
-running inner passes to find it. A flat type's crate reads a value as storage with `include()` and
-makes one from storage as `retract(zero, w)`, a constant zero point plus $w$, which for a flat
-declaration is one addition. The alternative, a `Space::Flat` variant beside `Embedded`, would
-hold the same data under a second name, and every match on `Space` would grow an arm for it.
+A crate gives a marker of its own a space of its own, distinct from `Vector(n)` even when its
+values are vectors, by declaring an embedded type, as [Embedded types](#embedded-types) describes;
+a complex marker is the flat case there.
 
 ### Operations, kernels and order
 
@@ -766,6 +749,77 @@ registry lacks is refused as `UnknownOperation`, naming it.
 
 ### Embedded types
 
+The core's own spaces have retractions it writes itself. A later entry's curved type brings a
+retraction the core has never seen, and the design has to carry it from the crate that writes it
+to every pass that differentiates through it, without the core knowing the formula and without the
+crate writing a derivative. This section follows it the whole way, then gives the pieces.
+
+**What the crate writes.** Two composites over Euclidean values, its retraction
+$R : \R^n \times \R^\dimension \to \R^n$ and its inverse $Q : \R^n \times \R^n \to \R^\dimension$,
+each built with `Composite::define` from the core's operations, or around a fused operation of its
+own; a call to `Embedded::declare` with them, its storage size $n$ and its dimension $\dimension$;
+and a marker whose space is the declaration. For a sphere, say:
+
+```rust
+// In a feature crate. The bodies of R and Q are ordinary model code over Vector(3) and Vector(2).
+static SPHERE: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
+    let r = Composite::define("sphere.retract", vec![], &[Space::Vector(3), Space::Vector(2)], |io| {
+        /* (1 - s) x + B(x) t, over 1 + s */
+    });
+    let q = Composite::define("sphere.local", vec![], &[Space::Vector(3), Space::Vector(3)], |io| {
+        /* 2 B(x)^T y / (1 + x^T y) */
+    });
+    Embedded::declare("sphere", vec![], 3, 2, r.unwrap(), q.unwrap()).unwrap() // checked by its tests
+});
+
+#[derive(Clone, Copy)]
+pub struct Sphere;
+
+impl Typed for Sphere {
+    fn admits(space: &Space) -> bool { matches!(space, Space::Embedded(e) if **e == **SPHERE) }
+}
+impl Declares for Sphere {
+    fn space(&self) -> Space { Space::Embedded(SPHERE.clone()) }
+}
+```
+
+The crate registers the declaration's name with its own operations, so that a serialized model
+that mentions `sphere` finds it again.
+
+**What the core holds.** A quantity of the type is a node whose space is
+`Space::Embedded(Arc<Embedded>)`. Two such spaces are equal when their names and parameters are, so
+a declaration made twice, or read back from a serialized model, is the same space. The space's
+storage size is $n$ and its dimension $\dimension$, so in a product with an embedded factor the
+storage ranges and tangent ranges of `blocks()` differ, which is why slicing carries both.
+
+**Where $R$ runs.** `Space::retraction()` gives, for an embedded space, a composite of one node: the
+boundary operation `skoro.retract`, whose parameter is the declaration. So `x.retract(t)` on a
+`Q<Sphere>`, an estimator's step through `Space::retraction()` of the product of the free spaces, and
+the retraction of a product with a sphere among its factors (which slices out the factor and
+retracts it by its own space's retraction) all build that node. $R$ itself never appears in a
+model's compilation graph. When a query is compiled, the compiler lowers `skoro.retract` to a
+kernel that holds the programs of $R$ and $Q$ compiled for the query's target; the kernel's forward
+map runs $R$, and its derivative maps run passes over $R$ and $Q$, assembled as
+[%full](statement:archive/core/math/embedded) says. The inverse retraction needs no boundary
+operation, being the composite $Q(\iota(x), \iota(\otherPoint))$ of
+[](eq:archive/core/math/embedded), and the inclusion `skoro.include` is the other boundary operation,
+lowered the same way.
+
+**Why $R$ is not expanded into the model.** A composite's derivatives are its parts' by the chain
+rule, and $R$ is a composite, so expanding it in place looks simpler. But $R$ maps storage to
+storage, and the retraction of the type maps a point of the type to a point of the type: its
+derivatives in charts are $L(\otherPoint)\, \partial_j R$ and $\partial_1 R\, B(x)$, products with the
+derivatives of the charts at its two ends, which no pass over $R$'s parts produces. The expansion
+would still need an operation at each end to apply them, and those operations would need
+everything the boundary kernel does. One opaque node per retraction keeps that in one place.
+
+**Who checks it.** Nothing in the core can see whether a declaration meets the conditions of
+[%full](statement:archive/core/math/embedded), or computes its derivatives smoothly where they are
+taken. The crate runs `testing::check_embedded` in its own tests, as it runs `check_operation` on a
+fused operation.
+
+The pieces, then:
+
 ```rust
 pub struct Embedded { /* name, params, storage n, dimension d, the two composites */ }
 
@@ -841,6 +895,27 @@ checks that $R(x, 0) = x$, that $Q(x, R(x, \tangent)) = \tangent$ for random sma
 $B(x)$ has rank $\dimension$, that every inner pass at $(x, 0)$ and $(x, x)$ is finite at the
 declaration's order, and then `check_operation` on both boundary operations, at $\tangent = 0$ and
 away from it. A type with a small-angle branch also passes points on both sides of its cutoff.
+
+**Flat types.** A complex vector, a quaternion before normalization, or any
+other flat type that a feature crate wants to keep distinct from `Vector(n)` needs a `Space` that
+says so, or untyped code (`QDyn`, `narrow`, a query's checks) could not tell them apart. It is
+declared as an embedded type with $R(x, \tangent) = x + \tangent$ and
+$Q(x, \otherPoint) = \otherPoint - x$, which [%full](statement:archive/core/math/embedded)
+covers with $\manifold = \R^n$, $B = I$ and $L = I$:
+
+```rust
+impl Embedded {
+    /// A flat type: storage and dimension n, R and Q the core's addition and subtraction.
+    pub fn declare_flat(name: &'static str, params: Vec<Param>, n: usize) -> Result<Arc<Embedded>, Error>;
+}
+```
+
+The boundary kernels recognise a flat declaration and use what the statement gives for it
+directly, the identity for every first-order map and zero for every second-order one, rather than
+running inner passes to find it. A flat type's crate reads a value as storage with `include()` and
+makes one from storage as `retract(zero, w)`, a constant zero point plus $w$, which for a flat
+declaration is one addition. The alternative, a `Space::Flat` variant beside `Embedded`, would
+hold the same data under a second name, and every match on `Space` would grow an arm for it.
 
 ### The model
 
