@@ -207,6 +207,11 @@ The input of $\pi$ is flat, so $\hvp_\pi(\alpha)\, \dot w$ is the derivative of
 $\D P(w + t \dot w)\transpose L(P(w + t \dot w))\transpose \alpha$ at $t = 0$, which is
 [](eq:projection) by the product rule, since $P(w + t \dot w)$ has the velocity $\dot \otherPoint$.
 
+Finally, every value of $B$ and $L$ in these maps is taken at a point of $\manifold$, and every
+derivative of them along the velocity of a curve in $\manifold$: $\point_t$, $\otherPoint_t$ or
+$P(w + t \dot w)$. Two smooth maps that agree on $\manifold$ agree along each such curve, so their
+derivatives along it agree too, and $\hat B$ and $\hat L$ may stand in for $B$ and $L$.
+
 </Proof>
 
 Every factor in [](eq:inclusion), [](eq:retraction-maps), [](eq:retraction-second) and
@@ -232,6 +237,33 @@ first-order passes. Since $B$ is itself a derivative of $R$, a second-order map 
 the retraction needs the second derivatives of $R$: a type whose quantities are to have Hessians
 declares a retraction of order two.
 
+**Closed forms of $B$ and $L$.** The passes over $R$ at $(\point, 0)$ and over $Q$ at
+$(\otherPoint, \otherPoint)$ compute derivatives that a type can often write down directly: its
+tangent basis, and the derivative of its chart at a point. So a type may declare, beside $R$ and
+$Q$, operations $\hat B$ and $\hat L$ on Euclidean values that agree on $\manifold$ with
+$B = \partial_2 R(\cdot, 0)$ and $L = \partial_2 Q$ on the diagonal, and by the last part of
+[%full](statement:embedded) the core then uses them in their place, each a derivative order lower:
+
+| factor | with $\hat B$ and $\hat L$ |
+| --- | --- |
+| $B(\point)\, u$, $B(\point)\transpose g$ | the forward pass over $\hat B$ at $\point$, and a product with $u$ or $g$ |
+| $\bigl(\D B(\point)[\dot \point]\bigr)\transpose g$ | a tangent pass over $\hat B$ at $\point$ along $\dot \point$, and a product with $g$ |
+| $L(\otherPoint)\, \dot \otherPoint$, $L(\otherPoint)\transpose \alpha$ | the forward pass over $\hat L$ at $\otherPoint$, and a product with $\dot \otherPoint$ or $\alpha$ |
+| $\bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha$ | a tangent pass over $\hat L$ at $\otherPoint$ along $\dot \otherPoint$, and a product with $\alpha$ |
+
+They are accelerators, not alternatives: $R$ and $Q$ are still declared, since they are the type's
+retraction and its inverse, and they still compute every value. With $\hat B$, the inclusion has
+order two when $\hat B$ admits a tangent pass, and order one with its forward map alone; with
+$\hat L$, the projection has order two when $P$ admits a Hessian pass and $\hat L$ a tangent pass.
+The retraction's second-order maps keep the Hessian pass over $R$ at $(\point, \tangent)$, the third
+row of the first table, because the second derivatives of $R$ away from $\tangent = 0$ are part of
+[](eq:retraction-second) and no closed form of $B$ or $L$ supplies them; the accelerators lower the
+rest. A declared $\hat B$ or $\hat L$ is only as right as its agreement with $R$ and $Q$, which the
+type's own tests check on $\manifold$, with finite differences of $R$ and $Q$ and with the identity
+$L(\point)\, B(\point) = I$ that differentiating $Q(\point, R(\point, \tangent)) = \tangent$ at
+$\tangent = 0$ gives. Off $\manifold$ they may be anything smooth, and a type picks whichever
+formula is cheapest there.
+
 The inverse retraction needs no boundary operation of its own, since its output is a tangent
 vector. It is the composite
 
@@ -252,7 +284,8 @@ that input's chart, or a fused operation whose derivatives are written by hand.
 A type often writes its retraction with a tangent basis $B$ and a projection $P$, smooth near
 $\manifold$, onto it and the identity on it, as $R(\point, \tangent) = P(\point + B(\point)\, \tangent)$,
 which meets the conditions of [%full](statement:embedded) because $\D P(\point)$ is the identity on
-$T_\point \manifold$. The core does not impose that form. The retraction of
+$T_\point \manifold$, and whose $\partial_2 R(\point, 0)$ is then that same $B(\point)$, ready to
+declare as $\hat B$. The core does not impose that form. The retraction of
 [the acceptance test](#the-acceptance-test) is not of it, and a type whose geometry suggests another
 retraction declares that one, and its derivatives follow all the same. The conditions are asked only of $\manifold$, which may be the part of a
 manifold that the type's retraction covers smoothly: no basis is smooth on the whole sphere, for
@@ -612,7 +645,15 @@ reciprocals are exponentials of logarithms, $c = e^{-\log(1 + \point_3)}$,
 $1 / (1 + s) = e^{-\log(1 + s)}$,
 $1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$ and
 $1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$, each logarithm taken of a number positive
-on the domain; the rest is products, sums, slicing and concatenation. Unlike the
+on the domain; the rest is products, sums, slicing and concatenation.
+
+The sphere has closed forms of both derivatives. Its $\partial_2 R(\point, 0)$ is the basis
+$B(\point)$ above, and differentiating $Q(\point, \otherPoint)$ in $\otherPoint$ at
+$\otherPoint = \point$ gives
+$2 B(\point)\transpose / (1 + \point\transpose \point) - 2 B(\point)\transpose \point\, \point\transpose / (1 + \point\transpose \point)^2$,
+which is $B(\point)\transpose$ on the sphere, so $\hat B = B$ and $\hat L = B\transpose$. The test
+declares the sphere twice, with these closed forms and without them, so that both ways of computing
+the boundary operations' derivatives are exercised. Unlike the
 core's types, the sphere is curved: its tangent charts do not commute, the correction term of
 [%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
 points, and the second-order maps of its boundary operations are not zero, since its basis turns
@@ -634,8 +675,10 @@ factor and the sphere as real numbers, through their inclusions. It checks, at p
 
 The sphere's boundary operations are checked the same way first, [](eq:inclusion),
 [](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) against finite differences of
-[](eq:math/derivatives-in-charts/derivative), and its $Q$ against the retraction it must invert, so that a failure of the acceptance test points at
-the product rather than at the type.
+[](eq:math/derivatives-in-charts/derivative), in both of its declarations, and the two declarations
+against each other; its $Q$ is checked against the retraction it must invert, and its $\hat B$ and
+$\hat L$ against $R$ and $Q$, so that a failure of the acceptance test points at the product rather
+than at the type.
 
 ## Queries
 
@@ -981,10 +1024,11 @@ tests check:
   retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
   continuous quantities. Later entries add curved types as embedded types, each declared by its
   retraction and that retraction's inverse, written as operations on storage, in whatever form the
-  type's geometry suggests, and optionally by a projection onto it; the core provides their
-  boundary operations, the inclusion, the retraction and the projection, whose derivatives follow
-  by [%full](statement:embedded). Dimensions are fixed when a
-  quantity is created, and every derivative coordinate is indexed by tangent dimension.
+  type's geometry suggests, optionally by a projection onto it, and optionally by closed forms of
+  the derivatives $B$ and $L$ that the core would otherwise compute from passes. The core provides
+  their boundary operations, the inclusion, the retraction and the projection, whose derivatives
+  follow by [%full](statement:embedded). Dimensions are fixed when a quantity is created, and every
+  derivative coordinate is indexed by tangent dimension.
 - **The compilation graph** holds values and operations, and programs are compiled from it; **the
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
   term's scored quantity.
@@ -1064,4 +1108,7 @@ passes over $R$, $Q$ and $P$. The tangent basis is now the derivative of the ret
 longer be orthonormal, since the inverse retraction supplies the derivative of the chart at the
 output. The acceptance test's sphere now uses a retraction that is
 not a projection. The elementwise sine, cosine and two-argument inverse tangent were added to the
-primitives, so that retractions built from them can be composites.
+primitives, so that retractions built from them can be composites. A type may also declare closed
+forms $\hat B$ and $\hat L$ of its tangent basis and of its chart's derivative, which the boundary
+operations then use in place of the passes over $R$ and $Q$ that compute them, a derivative order
+lower; the acceptance test's sphere is declared with and without them.

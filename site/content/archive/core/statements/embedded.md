@@ -26,7 +26,7 @@ derivative maps
 
 $$
 	\D \iota(\point) = B(\point), \qquad
-	\hvp_\iota(\alpha)\, u = \bigl(\D B(\point)[\dot \point]\bigr)\transpose \alpha, @tag(inclusion)
+	\hvp_\iota(\alpha)\, u = \bigl(\D B(\point)[B(\point)\, u]\bigr)\transpose \alpha, @tag(inclusion)
 $$
 
 and the retraction, as a map $\manifold \times \R^\dimension \to \manifold$ with
@@ -64,3 +64,6 @@ $$
 $$
 
 where $\D^2 P(w)[\dot w]$ is the derivative of $\D P$ along $\dot w$.
+
+Each of these derivative maps holds with $B$ and $L$ replaced by any smooth maps $\hat B$ and
+$\hat L$, on open sets of $\R^n$ containing $\manifold$, that agree with them on $\manifold$.
