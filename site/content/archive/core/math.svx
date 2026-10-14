@@ -957,3 +957,11 @@ measure on the rotations) when they arrive.
 ## Open questions
 
 None remain.
+
+## Revisions
+
+**2026-10-14.** Reopened because an embedded type's retraction is fixed as
+$\point \oplus \tangent = P(\point + B(\point)\, \tangent)$ by [](eq:embedded), so a type cannot
+declare a retraction of another form, such as $R \operatorname{Exp}(\tangent)$ on the rotations,
+whose derivatives the core would then have to provide. What changes is filled in as the revision is
+made.
