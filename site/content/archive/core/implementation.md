@@ -262,7 +262,11 @@ members.
 | `writer`, `scope` | `Writer`, `Reader`, the building scope and namespaces |
 | `query`, `compile`, `program`, `layout` | `Observations`, `Query`, the compiler, `Program` and its passes, `Layout` |
 | `generate`, `retire` | generation with weights, retirement |
-| `testing` (feature `testing`) | the finite-difference and agreement checks, public so that feature crates check fused operations as the core checks primitives |
+| `testing` | the finite-difference and agreement checks, public so that feature crates check fused operations as the core checks primitives |
+
+`testing` is an ordinary public module, not a Cargo feature. It needs nothing the crate does not
+already depend on, and a feature would make `cargo test -p skoro-core` fail unless the feature
+were named, which is the trap the archive's `skoro-model/testing` feature set.
 
 Both library crates deny `clippy::unwrap_used`, `clippy::expect_used` and `clippy::panic` outside
 tests. A broken internal invariant is the one thing that may still stop the process, through
@@ -391,8 +395,8 @@ the host, cast when loaded, so one key gives the same draws at either precision 
 > A key must be a pseudorandom function of a path of arbitrary names, which a block cipher such as
 > ChaCha is not without a hash in front of it, and a 64-bit hash such as SipHash collides too
 > readily over the addresses of a long run. BLAKE3's keyed mode is that function, and its
-> extendable output is the stream of variates, in one dependency burn already brings into the
-> build.
+> extendable output is the stream of variates, in one dependency. burn brings `rand` and
+> `chacha20` into the build and no keyed hash, so `blake3` is a dependency skoro adds.
 
 ### Spaces and typed handles
 
@@ -437,6 +441,12 @@ pub struct Block { pub space: Space, pub storage: Range<usize>, pub tangent: Ran
 > plain data, so it is nameable, comparable and hashable for nothing, and the compiler and the
 > layout can match on it. What the charter's position asked of the trait is kept: a space *builds*
 > its retraction as a subgraph, which is what makes a product's retraction differentiable.
+>
+> The cost is that an embedded type chooses its retraction only by choosing $B$ and $P$: it always
+> retracts by [](eq:archive/core/math/embedded), a step in the basis followed by the projection.
+> A retraction of another form, such as the archive's $R \operatorname{Exp}(\tangent)$ on the
+> rotations, is not a declaration this enumeration can hold. The entry that needs one is where the
+> core grows, once, for every type of the kind.
 
 The retractions, each a composite cached per space in a process-wide map:
 
@@ -778,14 +788,15 @@ pub struct Term {
 
 `involves` is computed when the term is added: the quantities among the roots `log_density` is
 reached from, found by walking `inputs` backwards and stopping at nodes fixed in the model,
-together with `scores`. Nothing declares it. A term is added by one of two functions, each
-returning a builder that attaches the optional parts:
+together with `scores`. Nothing declares it. A term is added by one of two functions. Each adds
+the term at once and returns a handle to it, whose methods amend the term while the scope that
+added it is open:
 
 ```rust
-pub fn score<T: Typed>(scored: Q<T>, log_density: Q<Real>) -> TermBuilder;
-pub fn factor(log_density: Q<Real>) -> TermBuilder; // a likelihood factor
+pub fn score<T: Typed>(scored: Q<T>, log_density: Q<Real>) -> TermHandle;
+pub fn factor(log_density: Q<Real>) -> TermHandle; // a likelihood factor
 
-impl TermBuilder {
+impl TermHandle { // Copy
     pub fn sampler(self, sampler: Sampler) -> Self;
     pub fn bind<M: Multiplicity>(self, role: &Role<M>, node: QDyn) -> Self;
 }
@@ -935,7 +946,19 @@ made, and it goes in these steps.
    as nothing needs it.
 
 Programs are cached in the snapshot they were compiled from, under the query's targets, its
-observation set's identity, and the target's device and precision.
+observation set's identity, and the target's device and precision. Three things follow from that
+key, and the build must keep all three.
+
+- **An observation set is reused, not rebuilt.** A caller that evaluates one conditioning many
+  times builds its `Observations` once and passes it to every `compile`; a set built afresh each
+  time has a new identity and compiles again. `Observations` is a reference-counted handle, so
+  keeping one is free.
+- **The cache is bounded.** A snapshot keeps its 32 most recently used programs and drops the
+  least recently used beyond that. A program a caller holds stays alive by its own reference
+  count, so eviction costs a recompilation and never a failure.
+- **A new model starts with an empty cache.** A draft, and so every snapshot and fork made from
+  it, shares its maps with the model it came from and none of its programs: `Model`'s `Clone` is
+  written by hand to say so. A program compiled for one snapshot is never run against another.
 
 > [!DECISION] Why the cache key includes the observations
 > The charter caches a program by snapshot, targets, device and precision. The mathematics then
@@ -1056,7 +1079,10 @@ impl Snapshot {
 ```
 
 A sampler's inputs must be reached from no quantity outside the quantities its term is conditioned
-on, and a proposal's from none made after its parameter. `generate` takes every quantity of the
+on, and its `log_density` from none outside the term's `involves` (`SamplerOutsideTerm`). A
+sampler therefore reads nothing its term does not, and is removed exactly when its term is. A
+proposal's inputs must be reached from no quantity made after its parameter, and its
+`log_density` from none but those and the parameter. `generate` takes every quantity of the
 snapshot that `given` does not observe as free. It refuses, with `CannotGenerate` naming the
 quantity and its address, when a free quantity has neither a term with a sampler nor a proposal.
 Otherwise it compiles one forward program in which each free quantity is a *draw step*, placed in
@@ -1084,6 +1110,8 @@ pub struct Plan {
     pub integrated: Vec<QDyn>,                // E_F
     pub terms: Vec<Arc<Term>>,                // T_E
     pub blanket: Vec<(QDyn, Space, Address)>, // B
+    /// Parameters outside E whose proposal reads a quantity of E, and so loses it.
+    pub unproposed: Vec<QDyn>,
 }
 
 pub struct Replacement {
@@ -1107,15 +1135,27 @@ in which the caller builds $\logterm_B$ from the blanket's quantities and consta
 integration or by an approximation computed beforehand on `snapshot()`. Then, on the draft:
 
 1. the quantities among the roots `log_density` is reached from must all be in $B$
-   (`ReplacementOutsideBlanket`, naming the quantity), and each proposal must be for a blanket
-   quantity whose scoring term is in $\mathcal T_E$ (`ProposalNotNeeded`);
-2. the quantities of $E$, the terms of $\mathcal T_E$ with their samplers and bindings, and every
-   mapped node reached from $E$ through `consumers`, are removed;
+   (`ReplacementOutsideBlanket`, naming the quantity); each proposal must be for a blanket
+   quantity whose scoring term is in $\mathcal T_E$ or for a parameter of `unproposed`
+   (`ProposalNotNeeded`), and must be reached from no quantity of $E$ (`ProposalReadsRetired`);
+2. the quantities of $E$ with their proposals, the terms of $\mathcal T_E$ with their samplers and
+   bindings, the proposals of the parameters of `unproposed`, and every mapped node reached from
+   $E$ through `consumers`, are removed;
 3. `log_density` is added as a likelihood factor, and the proposals are attached.
 
 A failure at any point drops the draft, so the model is as it was; success publishes one snapshot.
 A handle to a removed node stays valid on older snapshots and fails, as `UnknownNode`, in a scope
 on the new one.
+
+After step 2 nothing that remains refers to a removed node. A surviving term involves no quantity
+of $E$, so neither its log-density, its bindings nor its sampler is reached from one, by the rules
+under which each was added. A proposal is the one thing a model holds that is not a term and may
+read a quantity of $E$ while belonging to a quantity outside it: a parameter's proposal may be
+conditioned on anything made before the parameter. The mathematics removes its log-density with
+the other mapped values reached from $E$, and says no more. Here the proposal goes with it, the
+plan names the parameter in `unproposed` before anything changes, and the caller may give it a new
+proposal with the replacement. Left without one, the parameter is still legal, and generation is
+refused for it, as for any parameter with no proposal.
 
 ### Errors
 
@@ -1127,8 +1167,8 @@ carrying what a caller needs to name the fault:
 | building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration` |
 | adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
 | compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `FreeDiscrete`, `FrameShape` |
-| generating | `CannotGenerate` |
-| retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded` |
+| generating | `SamplerOutsideTerm`, `CannotGenerate` |
+| retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
 | naming | `DuplicateName`, `UnknownOperation` |
 
 `TensorError`, in `skoro-tensor`, has `UnsupportedDevice`, `AutodiffDevice`,
@@ -1367,6 +1407,10 @@ example.
   `free_values_are_not_folded`.
 - `selection_by_an_observed_index_drops_the_other_branches`: their kernels never run and their
   slots are absent; `selection_by_a_per_row_index_stays_a_step`.
+- `same_observations_reuse_the_program`: two compilations of one query return the same program,
+  and an equal observation set built separately does not; `program_cache_is_bounded`: after more
+  distinct queries than the bound, the oldest is compiled again and a program still held still
+  runs; `new_snapshot_starts_with_an_empty_cache`.
 - `programs_are_cached_per_query_and_target`, and `one_snapshot_serves_two_precisions`: the same
   query compiled at both precisions from one snapshot, evaluated on two threads, agrees to the
   single-precision tolerance.
@@ -1409,6 +1453,8 @@ log-density and a sampler by inversion.
 - `exact_samplers_cancel_in_the_weight`: the weight equals the sum of the likelihood terms, bit for
   bit.
 - `inexact_sampler_contributes_its_density`, and `parameter_is_drawn_from_its_proposal`.
+- `sampler_must_stay_within_its_term`: a sampler whose inputs or whose density read a quantity the
+  term does not involve is refused.
 - `weights_estimate_the_evidence`: on a linear-Gaussian model with one observation, the mean
   weight over $10^5$ rows of a fixed key is within four standard errors of the closed form, as
   [%full](statement:archive/core/math/importance) says.
@@ -1429,6 +1475,12 @@ scalar chain.
   the proposal, and with it every row's weight is the evidence
   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$.
 - `retired_handle_fails_on_the_new_model_and_works_on_the_old`.
+- `proposal_reading_a_retired_quantity_is_removed_and_reported`: a parameter outside the
+  namespace, proposed conditionally on $\randomPoint_0$, is named in the plan's `unproposed`,
+  cannot be generated afterwards, and can once the replacement gives it a proposal; a replacement
+  proposal that reads $\randomPoint_0$ is refused.
+- `nothing_left_refers_to_a_removed_node`: after each retirement above, every input, binding,
+  sampler and proposal of the new model names a node the model holds.
 
 ## Open questions
 
@@ -1438,8 +1490,9 @@ scalar chain.
 > [Constraints](#burn-0-22) record enough, or should a decision entry revise the charter?
 
 > [!TODO] Dependencies beyond burn
-> `blake3` for keys is already in the build through burn. `rpds` (MIT) is new, chosen over `imbl`
-> (MPL-2.0) for the licence and over maps written here for the work. Are both acceptable?
+> Two crates are new to the build: `blake3` (CC0 or Apache-2.0) for keys, and `rpds` (MIT) for the
+> persistent maps, chosen over `imbl` (MPL-2.0) for the licence and over maps written here for the
+> work. Are both acceptable?
 
 > [!TODO] Which cubecl runtimes skoro supports
 > The design tests Flex at both precisions everywhere, and wgpu at single precision behind a
