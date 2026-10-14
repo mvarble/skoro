@@ -163,10 +163,12 @@ on Euclidean values, which the type writes as a composite, or as a fused operati
 primitives cannot compose it ([Operations in feature crates](#operations-in-feature-crates)). What
 the type cannot write so is the boundary between itself and its storage: the inclusion $\iota$,
 which reads a point as the vector that stores it, and the retraction as an operation whose output
-is a point of the type rather than a vector. Each changes type, so neither is an operation on
-Euclidean values, and the derivatives of both are read in the type's charts. The core therefore
-provides the two once, for every *embedded type*: a type declared by its storage size $n$, its
-dimension $\dimension$, its retraction $R$ and its inverse $Q$.
+is a point of the type rather than a vector, and, for a type that has one, the projection $\pi$,
+which maps a vector near the type onto it. Each changes type, so none is an operation on Euclidean
+values, and the derivatives of each are read in the type's charts. The core therefore provides them
+once, for every *embedded type*: a type declared by its storage size $n$, its dimension
+$\dimension$, its retraction $R$ and its inverse $Q$, and, optionally, a projection $P$, again an
+operation on Euclidean values.
 
 <Statement {...embedded} />
 
@@ -199,10 +201,17 @@ $\R^n$: $\dot \point = B(\point)\, u$ for $\point_t$, $v$ for $\tangent_t$, and
 $\dot \otherPoint$ for $\otherPoint_t$, by the chain rule. The product rule then gives
 [](eq:inclusion) and [](eq:retraction-second).
 
+For the projection, the chart at $\otherPoint = P(w)$ reads $P(w + t \dot w)$ as
+$Q(\otherPoint, P(w + t \dot w))$, whose derivative at $t = 0$ is $L(\otherPoint)\, \D P(w)\, \dot w$.
+The input of $\pi$ is flat, so $\hvp_\pi(\alpha)\, \dot w$ is the derivative of
+$\D P(w + t \dot w)\transpose L(P(w + t \dot w))\transpose \alpha$ at $t = 0$, which is
+[](eq:projection) by the product rule, since $P(w + t \dot w)$ has the velocity $\dot \otherPoint$.
+
 </Proof>
 
-Every factor in [](eq:inclusion), [](eq:retraction-maps) and [](eq:retraction-second) is a pass
-over $R$ or $Q$, at points the forward pass computes, with $g$ a cotangent at the output of $R$:
+Every factor in [](eq:inclusion), [](eq:retraction-maps), [](eq:retraction-second) and
+[](eq:projection) is a pass over $R$, $Q$ or $P$, at points the forward pass computes, with $g$ a
+cotangent at the output of $R$:
 
 | factor | pass |
 | --- | --- |
@@ -211,15 +220,17 @@ over $R$ or $Q$, at points the forward pass computes, with $g$ a cotangent at th
 | $\partial_j R$ and its transpose, $\bigl(\D \partial_j R\,[\dot \point, v]\bigr)\transpose L(\otherPoint)\transpose \alpha$ | tangent, cotangent and Hessian passes over $R$ at $(\point, \tangent)$, with velocities $(\dot \point, v)$ |
 | $L(\otherPoint)\, \dot \otherPoint$, $L(\otherPoint)\transpose \alpha$ | tangent and cotangent passes over $Q$ at $(\otherPoint, \otherPoint)$, at its second input |
 | $\bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha$ | a Hessian pass over $Q$ at $(\otherPoint, \otherPoint)$, with velocity $\dot \otherPoint$ at both inputs and cotangent $\alpha$, read at its second |
+| $\D P(w)\, \dot w$, $\D P(w)\transpose h$, $\bigl(\D^2 P(w)[\dot w]\bigr)\transpose h$ | tangent, cotangent and Hessian passes over $P$ at $w$, with velocity $\dot w$ and a cotangent $h$ at its output |
 
 The last row seeds both inputs because $L(w) = \partial_2 Q(w, w)$ moves with both arguments of
-$Q$. So the core's two boundary operations are generic over embedded types: they assemble their
+$Q$. So the core's boundary operations are generic over embedded types: they assemble their
 derivative maps from passes over the type's own operations, rather than from derivatives written by
 hand, and the order of each is the most those passes admit under [%full](statement:order). The
-inclusion has order two when $R$ admits a Hessian pass, and the retraction when $R$ and $Q$ both
-do; each has order one when they admit first-order passes. Since $B$ is itself a derivative of
-$R$, a second-order map of either boundary operation needs the second derivatives of $R$: a type
-whose quantities are to have Hessians declares a retraction of order two.
+inclusion has order two when $R$ admits a Hessian pass, the retraction when $R$ and $Q$ both do,
+and the projection when $P$ and $Q$ both do; each has order one when the same operations admit
+first-order passes. Since $B$ is itself a derivative of $R$, a second-order map of the inclusion or
+the retraction needs the second derivatives of $R$: a type whose quantities are to have Hessians
+declares a retraction of order two.
 
 The inverse retraction needs no boundary operation of its own, since its output is a tangent
 vector. It is the composite
@@ -229,10 +240,14 @@ $$
 $$
 
 and its derivatives are its parts'. A point of an embedded type that a model computes, rather than
-creates as a quantity or a constant, is a retraction from a point the model already has, or from
-a constant one: a point read from Euclidean values, such as the output of a regression, is a
-constant base point retracted by a tangent vector computed from them. So the two boundary
-operations are all a type needs from the core.
+creates as a quantity or a constant, comes from one of the two boundary operations whose output is
+a point. The retraction gives it from a base point the model has, or a constant one, and a tangent
+vector computed in Euclidean terms; it is defined where the base point's chart is. The projection
+gives it from storage computed in Euclidean terms, typically from the inclusions of other points of
+the type, as when two points are combined by an operation on their storage that lands back on the
+type; it is defined wherever $P$ is, which is why a type whose points combine so should declare
+one. Without a projection, such an operation is a retraction from one of its inputs, valid only in
+that input's chart, or a fused operation whose derivatives are written by hand.
 
 A type often writes its retraction with a tangent basis $B$ and a projection $P$, smooth near
 $\manifold$, onto it and the identity on it, as $R(\point, \tangent) = P(\point + B(\point)\, \tangent)$,
@@ -409,8 +424,9 @@ of the second and fourth rows, and its inverse $\log \otherPoint - \log \point$ 
 Euclidean subtraction, so every derivative of both, of either order, is an identity or zero.
 
 Beside the rows of both tables, every embedded type has the two boundary operations of
-[Embedded types](#quantities), its inclusion $\iota$ and its retraction $\oplus$, whose derivative
-maps [](eq:inclusion), [](eq:retraction-maps) and [](eq:retraction-second) are assembled from passes
+[Embedded types](#quantities), its inclusion $\iota$ and its retraction $\oplus$, and a third, its
+projection $\pi$, when it declares one. Their derivative maps [](eq:inclusion),
+[](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) are assembled from passes
 over the type's own operations rather than written in a table.
 
 Every row is checked the same way: the tangent map is the derivative of the forward map, the
@@ -564,15 +580,17 @@ identities give $\point\transpose \otherPoint = (1 - s)/(1 + s)$ and
 $B(\point)\transpose \otherPoint = \tangent / (1 + s)$, so $1 + \point\transpose \otherPoint = 2/(1 + s)$
 and $\tangent = 2\, B(\point)\transpose \otherPoint / (1 + \point\transpose \otherPoint)$. The
 retraction is defined for every $\tangent$ and reaches every point but $-\point$, where its inverse
-is undefined. It is not $P(\point + B(\point)\,\tangent)$ for the projection that normalizes,
-whose retraction goes in the direction of $\point + B(\point)\,\tangent$ rather than of
-$(1 - s)\, \point + B(\point)\,\tangent$, so the test exercises a retraction that the core knows
-only as an operation. Each of $R$ and $Q$ is a composite of the core's Euclidean primitives. The
+is undefined. The test's sphere also declares the projection that normalizes,
+$P(w) = w / \lVert w \rVert$, defined where $w \ne 0$ and $w$ is not a positive multiple of the
+south pole. Its retraction is not $P(\point + B(\point)\,\tangent)$, which goes in the direction
+of $\point + B(\point)\,\tangent$ rather than of $(1 - s)\, \point + B(\point)\,\tangent$, so the
+test exercises a retraction that the core knows only as an operation, and a projection that plays
+no part in it. Each of $R$, $Q$ and $P$ is a composite of the core's Euclidean primitives. The
 reciprocals are exponentials of logarithms, $c = e^{-\log(1 + \point_3)}$,
-$1 / (1 + s) = e^{-\log(1 + s)}$ and
-$1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$, each
-logarithm taken of a number positive on the domain; the rest is products, sums, slicing and
-concatenation. Unlike the
+$1 / (1 + s) = e^{-\log(1 + s)}$,
+$1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$ and
+$1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$, each logarithm taken of a number positive
+on the domain; the rest is products, sums, slicing and concatenation. Unlike the
 core's types, the sphere is curved: its tangent charts do not commute, the correction term of
 [%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
 points, and the second-order maps of its boundary operations are not zero, since its basis turns
@@ -593,7 +611,7 @@ factor and the sphere as real numbers, through their inclusions. It checks, at p
    Hessian of the pull-back by the correction term, and on every other block it does not.
 
 The sphere's boundary operations are checked the same way first, [](eq:inclusion),
-[](eq:retraction-maps) and [](eq:retraction-second) against finite differences of
+[](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) against finite differences of
 [](eq:math/derivatives-in-charts/derivative), and its $Q$ against the retraction it must invert, so that a failure of the acceptance test points at
 the product rather than at the type.
 
@@ -941,8 +959,9 @@ tests check:
   retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
   continuous quantities. Later entries add curved types as embedded types, each declared by its
   retraction and that retraction's inverse, written as operations on storage, in whatever form the
-  type's geometry suggests; the core provides their boundary operations, the inclusion and the
-  retraction, whose derivatives follow by [%full](statement:embedded). Dimensions are fixed when a
+  type's geometry suggests, and optionally by a projection onto it; the core provides their
+  boundary operations, the inclusion, the retraction and the projection, whose derivatives follow
+  by [%full](statement:embedded). Dimensions are fixed when a
   quantity is created, and every derivative coordinate is indexed by tangent dimension.
 - **The compilation graph** holds values and operations, and programs are compiled from it; **the
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
@@ -1024,10 +1043,10 @@ measure on the rotations) when they arrive.
 **2026-10-14.** Reopened because an embedded type's retraction was fixed as
 $P(\point + B(\point)\, \tangent)$, so a type could not declare a retraction of another form,
 whose derivatives the core would then have had to provide. An embedded type is now declared by its
-retraction $R$ and its inverse $Q$, written as operations on storage in any form, and the core's
-boundary operations are the inclusion and the retraction itself, whose derivative maps
-[%full](statement:embedded) assembles from passes over $R$ and $Q$. The projection is no longer a
-boundary operation, since a point computed from Euclidean values is a retraction from a base point,
-and the tangent basis need no longer be orthonormal, since the inverse retraction supplies the
-derivative of the chart at the output. The acceptance test's sphere now uses a retraction that is
+retraction $R$ and its inverse $Q$, written as operations on storage in any form, and optionally a
+projection $P$. The core's boundary operations are the inclusion, the retraction itself and, when
+$P$ is declared, the projection, whose derivative maps [%full](statement:embedded) assembles from
+passes over $R$, $Q$ and $P$. The tangent basis is now the derivative of the retraction, and need no
+longer be orthonormal, since the inverse retraction supplies the derivative of the chart at the
+output. The acceptance test's sphere now uses a retraction that is
 not a projection, and an open question asks whether trigonometric functions should be primitives.
