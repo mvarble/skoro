@@ -4,29 +4,50 @@ kind: proposition
 title: The boundary of an embedded type
 ---
 
-Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$, $U, W \subseteq \R^n$
-open sets, and
+Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$, and
+$R : U \to \R^n$ and $Q : V \to \R^\dimension$ smooth maps on open sets
+$U \subseteq \R^n \times \R^\dimension$ and $V \subseteq \R^n \times \R^n$, such that for every
+$\point \in \manifold$:
 
-- $B : U \to \R^{n \times \dimension}$ smooth, with orthonormal columns spanning the tangent space
-  $T_\point \manifold$ at every $\point \in \manifold \cap U$;
-- $P : W \to \manifold \cap U$ smooth, with $\manifold \cap U \subseteq W$ and $P(\point) = \point$
-  for every $\point \in \manifold \cap U$.
+- $(\point, 0) \in U$, $R(\point, 0) = \point$, $R(\point, \tangent) \in \manifold$ whenever
+  $(\point, \tangent) \in U$, and $B(\point) = \partial_2 R(\point, 0) \in \R^{n \times \dimension}$
+  has rank $\dimension$;
+- $Q(\point, R(\point, \tangent)) = \tangent$ for every $\tangent$ in a neighbourhood of $0$.
 
-Then $\point \oplus \tangent = P(\point + B(\point)\, \tangent)$, where it is defined, is a
-retraction on $\manifold \cap U$, whose tangent coordinates at $\point$ are the coordinates in the
-basis $B(\point)$. In its charts, the inclusion $\iota : \manifold \cap U \to \R^n$ and the
-projection $\pi : W \to \manifold$, $\pi(w) = P(w)$, have the derivative maps
+Then $\point \oplus \tangent = R(\point, \tangent)$ is a retraction on $\manifold$, where it is
+defined, with $T_\point \manifold$ identified with $\R^\dimension$ by the basis $B(\point)$, and
+$\otherPoint \ominus \point = Q(\point, \otherPoint)$ for $\otherPoint$ near $\point$. Write
+$L(\otherPoint) = \partial_2 Q(\otherPoint, \otherPoint)$, the derivative of $Q$ in its second
+argument on the diagonal. In these charts the inclusion $\iota : \manifold \to \R^n$ has the
+derivative maps
 
 $$
 	\D \iota(\point) = B(\point), \qquad
-	\hvp_\iota(\alpha)\, \tangent = \bigl(\D B(\point)[B(\point)\, \tangent]\bigr)\transpose \alpha, @tag(inclusion)
+	\hvp_\iota(\alpha)\, u = \bigl(\D B(\point)[\dot \point]\bigr)\transpose \alpha, @tag(inclusion)
 $$
 
+and the retraction, as a map $\manifold \times \R^\dimension \to \manifold$ with
+$\otherPoint = \point \oplus \tangent$, has the partial derivatives
+
 $$
-	\D \pi(w) = B(\otherPoint)\transpose\, \D P(w), \qquad
-	\hvp_\pi(\alpha)\, \dot w = \bigl(\D^2 P(w)[\dot w]\bigr)\transpose B(\otherPoint)\, \alpha
-	+ \D P(w)\transpose\, \D B(\otherPoint)\bigl[\D P(w)\, \dot w\bigr]\, \alpha, @tag(projection)
+	\partial_\point (\point \oplus \tangent) = L(\otherPoint)\, \partial_1 R(\point, \tangent)\, B(\point), \qquad
+	\partial_\tangent (\point \oplus \tangent) = L(\otherPoint)\, \partial_2 R(\point, \tangent) @tag(retraction-maps)
 $$
 
-where $\otherPoint = P(w)$, $\D B(\point)[u]$ is the derivative of $B$ along $u \in \R^n$, and
-$\D^2 P(w)[\dot w]$ that of $\D P$ along $\dot w$.
+and the second-order maps
+
+$$
+	\begin{aligned}
+		\hvp_\point(\alpha)\,(u, v) &= B(\point)\transpose \dot g_1 + \bigl(\D B(\point)[\dot \point]\bigr)\transpose g_1, \\
+		\hvp_\tangent(\alpha)\,(u, v) &= \dot g_2,
+	\end{aligned}
+	\qquad
+	\dot g_j = \partial_j R\transpose\, \bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha
+	+ \bigl(\D \partial_j R\, [\dot \point, v]\bigr)\transpose L(\otherPoint)\transpose \alpha, @tag(retraction-second)
+$$
+
+where $u$ and $v$ are the velocities of $\point$ and $\tangent$, $\dot \point = B(\point)\, u$ and
+$\dot \otherPoint = \partial_1 R\, \dot \point + \partial_2 R\, v$ are the velocities of $\point$ and
+$\otherPoint$ in $\R^n$, $g_j = \partial_j R\transpose L(\otherPoint)\transpose \alpha$, every
+$\partial_j R$ is taken at $(\point, \tangent)$, and $\D \partial_j R\,[\dot \point, v]$ is its
+derivative along $(\dot \point, v)$.

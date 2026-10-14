@@ -151,66 +151,104 @@ charts is $\operatorname{diag}(\point)$, which moves with the point.
 written as submanifolds $\manifold \subset \R^n$ of a coordinate space, each point stored as the
 vector of $\R^n$ it is. The charter has each such type added by a crate of its own, built only on
 the core's public interface (position 12), and a type that needs no kernel of its own is the one
-easiest to keep working as burn changes (position 11). Most of such a type composes from the core's primitives, since its retraction and its inverse
-are arithmetic in $\R^n$. What does not is the boundary between the type and its storage: the
-inclusion $\iota$, which reads a point as the vector that stores it, and a projection $\pi$, which
-maps a vector back onto the type. Each changes type, so neither is a composite of Euclidean
-primitives, and the derivatives of both depend on the type's charts. The core therefore provides the
-two once, for every *embedded type*: a type declared by its storage size $n$, its dimension
-$\dimension$, and three composites of Euclidean primitives, a tangent basis $B$, a projection $P$
-and an inverse retraction $Q$.
+easiest to keep working as burn changes (position 11).
+
+To every algorithm, a type is its retraction and its inverse. They make its tangent charts, and so
+its derivatives, its gradients and Hessians, and the steps an estimator takes. A later type must
+therefore choose them as its own geometry suggests, whatever form they take, and the core cannot
+fix one form for all types. Both are arithmetic on storage: the retraction maps a stored point and a
+tangent vector to a stored point, $R : \R^n \times \R^\dimension \to \R^n$, and its inverse maps two
+stored points to a tangent vector, $Q : \R^n \times \R^n \to \R^\dimension$. Each is an operation
+on Euclidean values, which the type writes as a composite, or as a fused operation where the
+primitives cannot compose it ([Operations in feature crates](#operations-in-feature-crates)). What
+the type cannot write so is the boundary between itself and its storage: the inclusion $\iota$,
+which reads a point as the vector that stores it, and the retraction as an operation whose output
+is a point of the type rather than a vector. Each changes type, so neither is an operation on
+Euclidean values, and the derivatives of both are read in the type's charts. The core therefore
+provides the two once, for every *embedded type*: a type declared by its storage size $n$, its
+dimension $\dimension$, its retraction $R$ and its inverse $Q$.
 
 <Statement {...embedded} />
 
 <Proof>
 
-Write $R_\point(\tangent) = P(\point + B(\point)\, \tangent)$. Since $P$ is the identity on
-$\manifold \cap U$, differentiating $P(\gamma(t)) = \gamma(t)$ along a curve $\gamma$ in it gives
-$\D P(\point)\, u = u$ for every $u \in T_\point \manifold$. So $R_\point(0) = \point$, and
-$\D R_\point(0)\, \tangent = \D P(\point)\, B(\point)\, \tangent = B(\point)\, \tangent$, the tangent
-vector whose coordinates in the basis $B(\point)$ are $\tangent$. In those coordinates the
-derivative is the identity, which makes $R$ a [retraction](../../math/retraction/), with a local
-inverse $\ominus$ by the inverse function theorem.
+Fix $\point \in \manifold$. The map $\tangent \mapsto R(\point, \tangent)$ takes a neighbourhood of
+$0$ into $\manifold$ and $0$ to $\point$, so its derivative $B(\point)$ at $0$ maps $\R^\dimension$
+into $T_\point \manifold$, and onto it, since its rank is $\dimension$. In the coordinates that the
+basis $B(\point)$ gives $T_\point \manifold$, which depend smoothly on $\point$ because $R$ is
+smooth, that derivative is the identity, so $R$ is a [retraction](../../math/retraction/). By the
+inverse function theorem, $R(\point, \cdot)$ is a diffeomorphism from a neighbourhood of $0$ onto a
+neighbourhood of $\point$ in $\manifold$, and $Q(\point, \cdot)$ is a left inverse of it there,
+hence its inverse: $\otherPoint \ominus \point = Q(\point, \otherPoint)$.
 
-For the inclusion, $\iota(\point \oplus t \tangent) - \iota(\point) = P(\point + t B(\point)\, \tangent) - \point$,
-whose derivative at $t = 0$ is $B(\point)\, \tangent$ by the above, so the cotangent map is
-$\alpha \mapsto B(\point)\transpose \alpha$. By the definition of the second-order map in
-[Operations](#operations), $\hvp_\iota(\alpha)\, \tangent$ is the derivative of
-$B(\point \oplus t \tangent)\transpose \alpha$ at $t = 0$, and the curve $\point \oplus t \tangent$
-has velocity $B(\point)\, \tangent$, which gives [](eq:inclusion).
+The derivatives follow from [](eq:math/derivatives-in-charts/derivative). For the inclusion,
+$\iota(\point \oplus t u) - \iota(\point) = R(\point, t u) - \point$ has the derivative
+$B(\point)\, u$ at $t = 0$. For the retraction, the chart at its output $\otherPoint$ reads a point
+$z$ as $Q(\otherPoint, z)$, so its partial derivatives are those of
+$t \mapsto Q(\otherPoint, R(R(\point, t u), \tangent))$ and
+$t \mapsto Q(\otherPoint, R(\point, \tangent + t v))$ at $t = 0$, which are [](eq:retraction-maps)
+by the chain rule. Both hold at every point of the domain, with $\otherPoint$ the output there.
 
-For the projection, differentiating $(\otherPoint \oplus u) \ominus \otherPoint = u$ at $u = 0$
-shows that the derivative $L$ of $z \mapsto z \ominus \otherPoint$ at $\otherPoint$, a linear map on
-$T_\otherPoint \manifold$, satisfies $L\, B(\otherPoint) = I$. The columns of $B(\otherPoint)$ are an
-orthonormal basis of $T_\otherPoint \manifold$, so $L = B(\otherPoint)\transpose$ there. The curve
-$P(w + t \dot w)$ lies in $\manifold$, with velocity $\D P(w)\, \dot w \in T_\otherPoint \manifold$,
-so $\D \pi(w)\, \dot w = B(\otherPoint)\transpose \D P(w)\, \dot w$. Its input is flat, so
-$\hvp_\pi(\alpha)\, \dot w$ is the derivative of
-$\D P(w + t \dot w)\transpose B(P(w + t \dot w))\, \alpha$ at $t = 0$, which is [](eq:projection)
-by the product rule.
+For the second order, [Operations](#operations) defines $\hvp_j(\alpha)$ as the derivative of
+$\partial_j\transpose \alpha$ along the curves $\point_t = \point \oplus t u$ and
+$\tangent_t = \tangent + t v$, the output following as $\otherPoint_t = \point_t \oplus \tangent_t$.
+The factors of $\partial_j$ are $B$, $\partial_j R$ and $L$, each smooth on an open set of a
+coordinate space ($B(w) = \partial_2 R(w, 0)$ and $L(w) = \partial_2 Q(w, w)$ are defined for $w$
+near $\manifold$), so the derivative of each along a curve depends only on the curve's velocity in
+$\R^n$: $\dot \point = B(\point)\, u$ for $\point_t$, $v$ for $\tangent_t$, and
+$\dot \otherPoint$ for $\otherPoint_t$, by the chain rule. The product rule then gives
+[](eq:inclusion) and [](eq:retraction-second).
 
 </Proof>
 
-Every map in [](eq:inclusion) and [](eq:projection) is one that the composites $B$ and $P$ already
-provide: the tangent map of $B$, along $B(\point)\, \tangent$ or along $\D P(w)\, \dot w$, and the
-tangent, cotangent and second-order maps of $P$. So the core's two boundary operations are generic
-over embedded types: they assemble their derivative maps from passes over the type's own
-composites, rather than from derivatives written by hand, and the order of each is the least that
-those passes need under [%full](statement:order). The type's retraction and its inverse are then
-composites themselves,
+Every factor in [](eq:inclusion), [](eq:retraction-maps) and [](eq:retraction-second) is a pass
+over $R$ or $Q$, at points the forward pass computes, with $g$ a cotangent at the output of $R$:
+
+| factor | pass |
+| --- | --- |
+| $B(\point)\, u$, $B(\point)\transpose g$ | tangent and cotangent passes over $R$ at $(\point, 0)$, at its second input |
+| $\bigl(\D B(\point)[\dot \point]\bigr)\transpose g$ | a Hessian pass over $R$ at $(\point, 0)$, with velocity $\dot \point$ at its first input and cotangent $g$, read at its second |
+| $\partial_j R$ and its transpose, $\bigl(\D \partial_j R\,[\dot \point, v]\bigr)\transpose L(\otherPoint)\transpose \alpha$ | tangent, cotangent and Hessian passes over $R$ at $(\point, \tangent)$, with velocities $(\dot \point, v)$ |
+| $L(\otherPoint)\, \dot \otherPoint$, $L(\otherPoint)\transpose \alpha$ | tangent and cotangent passes over $Q$ at $(\otherPoint, \otherPoint)$, at its second input |
+| $\bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha$ | a Hessian pass over $Q$ at $(\otherPoint, \otherPoint)$, with velocity $\dot \otherPoint$ at both inputs and cotangent $\alpha$, read at its second |
+
+The last row seeds both inputs because $L(w) = \partial_2 Q(w, w)$ moves with both arguments of
+$Q$. So the core's two boundary operations are generic over embedded types: they assemble their
+derivative maps from passes over the type's own operations, rather than from derivatives written by
+hand, and the order of each is the most those passes admit under [%full](statement:order). The
+inclusion has order two when $R$ admits a Hessian pass, and the retraction when $R$ and $Q$ both
+do; each has order one when they admit first-order passes. Since $B$ is itself a derivative of
+$R$, a second-order map of either boundary operation needs the second derivatives of $R$: a type
+whose quantities are to have Hessians declares a retraction of order two.
+
+The inverse retraction needs no boundary operation of its own, since its output is a tangent
+vector. It is the composite
 
 $$
-	\point \oplus \tangent = \pi\bigl(\iota(\point) + B(\iota(\point))\, \tangent\bigr), \qquad
 	\otherPoint \ominus \point = Q\bigl(\iota(\point), \iota(\otherPoint)\bigr), @tag(embedded)
 $$
 
-where $Q$ must invert the retraction, $Q(\point, \point \oplus \tangent) = \tangent$ near
-$\tangent = 0$, which the type's own tests check. A type declared this way is defined on
-$\manifold \cap U$ only, and a basis smooth on the whole of $\manifold$ need not exist: on the
-sphere of [the acceptance test](#the-acceptance-test) it does not. Where a type's points may stray
-outside $U$, and what then happens, is that type's entry's question, not the core's. The positive
-orthant is not an embedded type in this sense: it is an open subset of $\R^n$, of dimension $n$,
-and its inclusion has the derivative $\operatorname{diag}(\point)$ of its own chart.
+and its derivatives are its parts'. A point of an embedded type that a model computes, rather than
+creates as a quantity or a constant, is a retraction from a point the model already has, or from
+a constant one: a point read from Euclidean values, such as the output of a regression, is a
+constant base point retracted by a tangent vector computed from them. So the two boundary
+operations are all a type needs from the core.
+
+A type often writes its retraction with a tangent basis $B$ and a projection $P$, smooth near
+$\manifold$, onto it and the identity on it, as $R(\point, \tangent) = P(\point + B(\point)\, \tangent)$,
+which meets the conditions of [%full](statement:embedded) because $\D P(\point)$ is the identity on
+$T_\point \manifold$. The core does not impose that form. The retraction of
+[the acceptance test](#the-acceptance-test) is not of it, and a type whose geometry suggests another
+retraction declares that one, and its derivatives follow all the same. The conditions are asked only of $\manifold$, which may be the part of a
+manifold that the type's retraction covers smoothly: no basis is smooth on the whole sphere, for
+one, so the acceptance test's $\manifold$ is the sphere without a point. Where a type's points may
+stray outside it, and what then happens, is that type's entry's question, not the core's.
+
+The positive orthant meets the conditions too, as an open subset of $\R^n$ with
+$\dimension = n$, $R(\point, \tangent) = \point \odot e^{\tangent}$ and
+$Q(\point, \otherPoint) = \log \otherPoint - \log \point$, and its $B(\point)$ is
+$\operatorname{diag}(\point)$. The core keeps it as a type of its own all the same, with its
+operations written in its logarithmic chart, where they are linear.
 
 **Discrete quantities.** The core's discrete types are the finite sets
 $\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$, with $\mathrm{Boolean} = \mathrm{Categorical}(2)$,
@@ -371,8 +409,9 @@ of the second and fourth rows, and its inverse $\log \otherPoint - \log \point$ 
 Euclidean subtraction, so every derivative of both, of either order, is an identity or zero.
 
 Beside the rows of both tables, every embedded type has the two boundary operations of
-[Embedded types](#quantities), $\iota$ and $\pi$, whose derivative maps [](eq:inclusion) and
-[](eq:projection) are assembled from the type's composites rather than written in a table.
+[Embedded types](#quantities), its inclusion $\iota$ and its retraction $\oplus$, whose derivative
+maps [](eq:inclusion), [](eq:retraction-maps) and [](eq:retraction-second) are assembled from passes
+over the type's own operations rather than written in a table.
 
 Every row is checked the same way: the tangent map is the derivative of the forward map, the
 cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
@@ -427,8 +466,9 @@ tolerance of a few units in the last place.
 
 Every operation in a model is of one of three kinds, and the kind decides where it may be written.
 
-- **Primitives** are the core's alone: the operations of [The primitives](#the-primitives) and the
-  boundary operations of embedded types, with derivative maps and kernels written by hand.
+- **Primitives** are the core's alone: the operations of [The primitives](#the-primitives), with
+  derivative maps and kernels written by hand, and the boundary operations of embedded types, whose
+  derivative maps are assembled from passes over each type's retraction and its inverse.
 - **Composites** may be written anywhere, in a feature crate as in the core. They are built from
   other operations, their derivative maps are those of their parts by the chain rule, and they
   touch no tensor.
@@ -504,24 +544,35 @@ $$
 
 Its columns are orthogonal to $\point$ and orthonormal on the sphere, as expanding with
 $\point_1^2 + \point_2^2 = (1 - \point_3)(1 + \point_3)$ shows: the first column's product with
-$\point$, for one, is $\point_1 (1 - \point_3) - c\, \point_1 (1 - \point_3^2) = 0$. The projection
-normalizes, $P(w) = w / \lVert w \rVert$ on $\R^3 \setminus \{0\}$, so by [](eq:embedded) the
-retraction and its inverse are
+$\point$, for one, is $\point_1 (1 - \point_3) - c\, \point_1 (1 - \point_3^2) = 0$. The test's
+retraction is the inverse of the stereographic projection from $-\point$, in coordinates scaled so
+that its derivative at $0$ is $B(\point)$, and needs no projection: with
+$s = \lVert \tangent \rVert^2 / 4$,
 
 $$
-	\point \oplus \tangent = \frac{\point + B(\point)\,\tangent}{\lVert \point + B(\point)\,\tangent \rVert},
+	\point \oplus \tangent = \frac{(1 - s)\, \point + B(\point)\,\tangent}{1 + s},
 	\qquad
-	\otherPoint \ominus \point = Q(\point, \otherPoint) = \frac{B(\point)\transpose \otherPoint}{\point\transpose \otherPoint}
-	\quad (\point\transpose \otherPoint > 0) . @tag(sphere)
+	\otherPoint \ominus \point = Q(\point, \otherPoint) = \frac{2\, B(\point)\transpose \otherPoint}{1 + \point\transpose \otherPoint}
+	\quad (\point\transpose \otherPoint > -1) . @tag(sphere)
 $$
 
-The inverse follows from $\point\transpose B(\point) = 0$: the point $\otherPoint$ is
-$(\point + B(\point)\tangent)/n$ with $n$ the norm, so $\point\transpose \otherPoint = 1/n$ and
-$B(\point)\transpose \otherPoint = \tangent / n$. Each of $B$, $P$ and $Q$ is a composite of the
-core's Euclidean primitives. The reciprocals are exponentials of logarithms, $c = e^{-\log(1 + \point_3)}$,
-$1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$ and
-$1 / \point\transpose \otherPoint = e^{-\log \point\transpose \otherPoint}$, each logarithm taken of
-a number positive on the domain; the rest is products, sums, slicing and concatenation. Unlike the
+The retraction stays on the sphere because $\point\transpose B(\point) = 0$ and
+$B(\point)\transpose B(\point) = I$ give
+$\lVert (1 - s)\, \point + B(\point)\,\tangent \rVert^2 = (1 - s)^2 + 4 s = (1 + s)^2$, and its
+derivative in $\tangent$ at $0$ is $B(\point)$, since $s$ is quadratic. For the inverse, the same
+identities give $\point\transpose \otherPoint = (1 - s)/(1 + s)$ and
+$B(\point)\transpose \otherPoint = \tangent / (1 + s)$, so $1 + \point\transpose \otherPoint = 2/(1 + s)$
+and $\tangent = 2\, B(\point)\transpose \otherPoint / (1 + \point\transpose \otherPoint)$. The
+retraction is defined for every $\tangent$ and reaches every point but $-\point$, where its inverse
+is undefined. It is not $P(\point + B(\point)\,\tangent)$ for the projection that normalizes,
+whose retraction goes in the direction of $\point + B(\point)\,\tangent$ rather than of
+$(1 - s)\, \point + B(\point)\,\tangent$, so the test exercises a retraction that the core knows
+only as an operation. Each of $R$ and $Q$ is a composite of the core's Euclidean primitives. The
+reciprocals are exponentials of logarithms, $c = e^{-\log(1 + \point_3)}$,
+$1 / (1 + s) = e^{-\log(1 + s)}$ and
+$1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$, each
+logarithm taken of a number positive on the domain; the rest is products, sums, slicing and
+concatenation. Unlike the
 core's types, the sphere is curved: its tangent charts do not commute, the correction term of
 [%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
 points, and the second-order maps of its boundary operations are not zero, since its basis turns
@@ -541,9 +592,9 @@ factor and the sphere as real numbers, through their inclusions. It checks, at p
 3. that on the sphere's block, away from a stationary point, the chart Hessian differs from the
    Hessian of the pull-back by the correction term, and on every other block it does not.
 
-The sphere's boundary operations are checked the same way first, [](eq:inclusion) and
-[](eq:projection) against finite differences of [](eq:math/derivatives-in-charts/derivative), and
-its $Q$ against the retraction it must invert, so that a failure of the acceptance test points at
+The sphere's boundary operations are checked the same way first, [](eq:inclusion),
+[](eq:retraction-maps) and [](eq:retraction-second) against finite differences of
+[](eq:math/derivatives-in-charts/derivative), and its $Q$ against the retraction it must invert, so that a failure of the acceptance test points at
 the product rather than at the type.
 
 ## Queries
@@ -888,9 +939,11 @@ tests check:
 
 - **Quantities** are Euclidean (real, vector, matrix), positive ($\positive^n$, with the
   retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
-  continuous quantities. Later entries add curved types as embedded types, declared by the
-  composites of [%full](statement:embedded), whose boundary operations the core provides. Dimensions are fixed when a quantity is created, and every
-  derivative coordinate is indexed by tangent dimension.
+  continuous quantities. Later entries add curved types as embedded types, each declared by its
+  retraction and that retraction's inverse, written as operations on storage, in whatever form the
+  type's geometry suggests; the core provides their boundary operations, the inclusion and the
+  retraction, whose derivatives follow by [%full](statement:embedded). Dimensions are fixed when a
+  quantity is created, and every derivative coordinate is indexed by tangent dimension.
 - **The compilation graph** holds values and operations, and programs are compiled from it; **the
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
   term's scored quantity.
@@ -956,12 +1009,25 @@ measure on the rotations) when they arrive.
 
 ## Open questions
 
-None remain.
+> [!TODO] Should the primitives include trigonometric functions?
+> The retraction a type's geometry suggests is often built from sines and cosines, and its inverse
+> from an inverse tangent, which the primitives lack. Such a retraction can then be declared only as
+> a fused operation, whose derivative maps are written by hand and checked against finite
+> differences, and which has no composite to fall back on while an upgrade of burn breaks its
+> kernels. Elementwise $\sin$ and $\cos$ and a two-argument $\operatorname{atan2}$, each of order
+> two, would let those retractions be composites. They would be shared by every such type, which is
+> the test [Operations in feature crates](#operations-in-feature-crates) sets for a primitive,
+> though none of the core's own types needs them.
 
 ## Revisions
 
-**2026-10-14.** Reopened because an embedded type's retraction is fixed as
-$\point \oplus \tangent = P(\point + B(\point)\, \tangent)$ by [](eq:embedded), so a type cannot
-declare a retraction of another form, such as $R \operatorname{Exp}(\tangent)$ on the rotations,
-whose derivatives the core would then have to provide. What changes is filled in as the revision is
-made.
+**2026-10-14.** Reopened because an embedded type's retraction was fixed as
+$P(\point + B(\point)\, \tangent)$, so a type could not declare a retraction of another form,
+whose derivatives the core would then have had to provide. An embedded type is now declared by its
+retraction $R$ and its inverse $Q$, written as operations on storage in any form, and the core's
+boundary operations are the inclusion and the retraction itself, whose derivative maps
+[%full](statement:embedded) assembles from passes over $R$ and $Q$. The projection is no longer a
+boundary operation, since a point computed from Euclidean values is a retraction from a base point,
+and the tangent basis need no longer be orthonormal, since the inverse retraction supplies the
+derivative of the chart at the output. The acceptance test's sphere now uses a retraction that is
+not a projection, and an open question asks whether trigonometric functions should be primitives.
