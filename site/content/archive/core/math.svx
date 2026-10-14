@@ -150,8 +150,8 @@ charts is $\operatorname{diag}(\point)$, which moves with the point.
 **Embedded types.** The curved types that later entries add, a sphere for one, are most simply
 written as submanifolds $\manifold \subset \R^n$ of a coordinate space, each point stored as the
 vector of $\R^n$ it is. The charter has each such type added by a crate of its own, built only on
-the core's public interface, and has only the core's primitives touch tensors (positions 11 and
-12). Most of such a type composes from the core's primitives, since its retraction and its inverse
+the core's public interface (position 12), and a type that needs no kernel of its own is the one
+easiest to keep working as burn changes (position 11). Most of such a type composes from the core's primitives, since its retraction and its inverse
 are arithmetic in $\R^n$. What does not is the boundary between the type and its storage: the
 inclusion $\iota$, which reads a point as the vector that stores it, and a projection $\pi$, which
 maps a vector back onto the type. Each changes type, so neither is a composite of Euclidean
@@ -399,7 +399,8 @@ of its parts', so expanding a composite into its parts at compilation changes no
 pass computes, and its order is that of its parts under [%full](statement:order). A hand-written
 fused form of a composite, introduced for speed or for numerical care, is a different operation
 with the same mathematics, and it is correct only if every pass over it agrees with every pass over
-the composite, to within rounding.
+the composite, to within rounding. Feature crates write such operations too, as
+[Operations in feature crates](#operations-in-feature-crates) says.
 
 The product retraction is the composite the charter's acceptance test is about.
 
@@ -421,6 +422,53 @@ factors' passes, which is the derivative structure of [](eq:math/product-manifol
 
 The proof introduces no arithmetic beyond additions of zero, so a test may hold the agreement to a
 tolerance of a few units in the last place.
+
+### Operations in feature crates
+
+Every operation in a model is of one of three kinds, and the kind decides where it may be written.
+
+- **Primitives** are the core's alone: the operations of [The primitives](#the-primitives) and the
+  boundary operations of embedded types, with derivative maps and kernels written by hand.
+- **Composites** may be written anywhere, in a feature crate as in the core. They are built from
+  other operations, their derivative maps are those of their parts by the chain rule, and they
+  touch no tensor.
+- **Fused operations** may be written anywhere too. A fused operation provides its forward,
+  tangent, cotangent and second-order maps itself, as a primitive does, computed by kernels of its
+  own over the core's public tensor layer, and it states its order like any operation.
+
+A fused operation is what a feature crate writes when a composite is too slow, or loses precision
+where the feature needs it: a bespoke kernel for the exponential of $\operatorname{SO}(3)$, say, or
+for its logarithm near angle $\pi$. It owes three things.
+
+1. **A reference.** It names the composite it fuses, when one can be written, and every pass over
+   it agrees with every pass over that composite, to within rounding, at both precisions. When
+   none can, its derivative maps are checked against finite differences of
+   [](eq:math/derivatives-in-charts/derivative), at both precisions, as a primitive's are.
+2. **Every backend.** It runs on every backend skoro supports, or runs the composite it fuses on
+   the backends its kernels do not cover.
+3. **A name.** It is registered under a name, as every operation is, so that a serialized model
+   names it and a model read without the crate that defines it is refused, naming the operation,
+   rather than misread.
+
+This is what keeps the core stable as feature crates arrive. The core's primitives are the
+operations every feature shares (arithmetic, exponentials and logarithms, products of matrices,
+slicing and selection), and no feature's needs, however particular, add to them: what composes is
+a composite, and what must be faster or more careful than its composite is a fused operation in
+the feature's own crate. The core changes for a feature only when the feature needs something its
+public interface cannot express, such as the boundary operations of embedded types, and such a
+change is general: it is made once, for every later feature of the kind. The cost of a fused
+operation falls on its own crate, whose kernels are written against the tensor layer and may need
+changes when burn does. A composite bounds that cost. It is a correct operation with the same
+mathematics, so while a fused operation's kernels are broken by an upgrade, its feature can use the
+composite in its place, slower but right, and the upgrade does not wait on the feature. That is why
+a fused operation should have a composite whenever one can be written, and why numerical care is
+first sought in the composite itself, where it can often be had: a logarithm of
+$\operatorname{SO}(3)$ can switch formulas near angle $\pi$ by a discretization of the angle and
+[selection](#selection), whose derivatives are exact away from the switch.
+
+The mathematics here assumes the tensor layer is public: the tensor shapes skoro uses (batched
+points, tangent frames, integer values) and the operations on them that kernels need. What it
+exposes, and how, is the implementation's to settle.
 
 ### The acceptance test
 
@@ -774,8 +822,10 @@ Two consequences for the rest of the model:
   probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
   term's scored quantity.
 - **Operations** are maps [](eq:operation) with up to four derivative maps over frames, each with
-  an order. The core's primitives are those of [The primitives](#the-primitives), and every other
-  operation, the product's retraction included, is a composite of them.
+  an order. The core's primitives are those of [The primitives](#the-primitives) and the boundary
+  operations of embedded types; every other operation, the product's retraction included, is a
+  composite of them or a fused operation, which a feature crate may write over the core's tensor
+  layer, tested against the composite it fuses.
 - **Folding** replaces a value reached only from fixed inputs with a root: in the model when they
   are constants, in a compiled query when they include observed quantities.
 - **Passes** are the forward, tangent, cotangent and Hessian passes over a compiled program,
