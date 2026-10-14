@@ -948,6 +948,9 @@ enum NodeKind {
 The maps are `rpds`'s persistent tries and trees, so cloning a model is a handful of reference
 counts and a change copies only the path it touches. That is what makes a draft, a snapshot and a
 fork cheap, and what reclaims a retired node when the last snapshot holding it is dropped.
+`rpds` (MIT) was chosen over `imbl` (MPL-2.0) for its licence, and over persistent maps written
+here for the work they would be. With `blake3` (CC0 or Apache-2.0), it is one of the two crates the
+core adds to burn's.
 
 The **compilation graph** is `nodes` with each mapped node's `inputs`, and `consumers` is the same
 edges read forward. A node is *fixed in the model* when it is a constant or a mapped node with a
@@ -1716,11 +1719,6 @@ scalar chain.
   sampler and proposal of the new model names a node the model holds.
 
 ## Open questions
-
-> [!TODO] Dependencies beyond burn
-> Two crates are new to the build: `blake3` (CC0 or Apache-2.0) for keys, and `rpds` (MIT) for the
-> persistent maps, chosen over `imbl` (MPL-2.0) for the licence and over maps written here for the
-> work. Are both acceptable?
 
 > [!TODO] Which cubecl runtimes skoro supports
 > The design tests Flex at both precisions everywhere, and wgpu at single precision behind a
