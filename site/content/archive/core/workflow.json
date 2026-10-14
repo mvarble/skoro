@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "math",
+    "stage": "implementation",
     "started": "2026-10-11",
     "events": [
         {
@@ -20,14 +20,19 @@
             "stage": "math",
             "reason": "An embedded type's retraction is fixed as P(x + B(x)τ), so a type such as the rotations cannot declare its own retraction, R·Exp(τ).",
             "commit": "caabf79"
+        },
+        {
+            "date": "2026-10-14",
+            "action": "approve",
+            "stage": "math",
+            "commit": "6d8365d"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-10-14",
-            "commit": "a9ddb89",
-            "hash": "d635fd31390d0fba358404cd4bd0dd163c138e341b670cfa8e887762dde9f0d4",
-            "stale": true
+            "commit": "6d8365d",
+            "hash": "b9bfdfd4dbfb8019e81e0fa6eb7f49c61b60e0509936a4257e491eade4416344"
         }
     }
 }
