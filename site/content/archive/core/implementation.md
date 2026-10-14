@@ -119,6 +119,14 @@ and its devices are then constructible. The charter's remark that a building sco
 held type-erased, because a thread-local cannot be generic over the backend, no longer applies:
 the draft has no type parameter.
 
+> [!DECISION] Why the charter is not revised for this
+> The charter's positions stand: skoro supports only the backends it tests, refuses the rest, and
+> types a handle by its quantity's type. What burn 0.22 removed is the means its sketches used,
+> a backend type parameter on every handle and a sealed trait to bound it, not anything the
+> charter argued for. A decision entry revising the charter would restate the same positions with
+> different sketches, so this section is the record of the departure instead, read together with
+> the charter by anyone who builds on it.
+
 **Precision is per tensor, if every creation says so.** A tensor created without a data type takes
 its device's default, and a device's defaults lock at first use:
 
@@ -1633,11 +1641,6 @@ scalar chain.
   sampler and proposal of the new model names a node the model holds.
 
 ## Open questions
-
-> [!TODO] Recording that handles lost their backend parameter
-> The charter is a finished entry and writes `Q<B, T>` and a sealed backend trait. Under burn
-> 0.22 this design has `Q<T>` and a device check in `Target::new`. Is the account in
-> [Constraints](#burn-0-22) record enough, or should a decision entry revise the charter?
 
 > [!TODO] Dependencies beyond burn
 > Two crates are new to the build: `blake3` (CC0 or Apache-2.0) for keys, and `rpds` (MIT) for the
