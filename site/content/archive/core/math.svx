@@ -748,10 +748,15 @@ density over the blanket's tangent coordinates jointly, is the product of the bl
 
 Two consequences for the rest of the model:
 
-- **Mapped values.** In the compilation graph, a mapped value under the retired namespace that a
-  remaining node is reached from, and that is reached only from remaining roots, is not a function
-  of $E$ and must not be removed with it. One reached from $E$ can only reach terms in
-  $\mathcal T_E$, which are replaced, and other mapped values reached from $E$, which go with it.
+- **Mapped values.** Retirement removes the quantities $E$, the terms $\mathcal T_E$, and exactly
+  the mapped values reached from $E$ in the compilation graph; every other node stays, whatever its
+  address. The namespace selects $E$ and nothing else. Removal is safe because every node reached
+  from $E$ is a mapped value reached from $E$ or the log-density of a term in $\mathcal T_E$: a
+  term whose log-density is reached from a quantity of $E$ has that quantity among $V_t$. In the
+  example, the step $r = \point_1 - \point_0$ of the compilation graph above is reached from
+  $\randomPoint_0$, and goes with it, as does every value between it and $\logterm_6$. A mapped
+  value reached from $E$ that a user holds as a target is removed with the rest, and is no longer
+  available after the retirement.
 - **Generation after retirement.** A blanket quantity whose scoring term was in $\mathcal T_E$
   ($\randomPoint_1$ in the example, whose transition $t_3$ was conditioned on $\randomPoint_0$) is scored by no
   term afterwards, only joined to the replacement. Unless the replacement is written in a
