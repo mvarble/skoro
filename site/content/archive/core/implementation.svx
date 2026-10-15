@@ -291,10 +291,9 @@ user never holds a `Model`, only the `Snapshot` that shares it.
 mapped node's operation for the query's `Target`. The answer, `Lowered`, is a `Kernel`, the
 operation computed on that target with the derivative maps its type implements, or a `Composite`,
 which the compiler expands into its body and lowers again, part by part. Every primitive lowers to
-a kernel, and a composite's body is built before the composite exists, so no call in it can name
-the composite itself; whether an expansion can still fail to end is the first of the
-[open questions](#open-questions). A fused operation takes the first branch on the targets its own
-kernel covers and the second elsewhere. What remains is a `Program`, a list of steps over slots,
+a kernel, and the compiler keeps the chain of composites it is inside, refusing one that is already
+on it, so the expansion either ends in kernels or stops with an error naming the cycle. A fused
+operation takes the first branch on the targets its own kernel covers and the second elsewhere. What remains is a `Program`, a list of steps over slots,
 each step a kernel, cached in the snapshot under its query and target.
 
 **Run.** A program's passes (`forward`, `tangent`, `cotangent` and `hessian`) call its kernels'
@@ -667,8 +666,21 @@ pub enum Lowered {
 }
 ```
 
-`Lowering` carries the target and a cache of what has been lowered for it. A kernel is the
-operation on one target, built as the most it can differentiate:
+`Lowering` carries the target, a cache of what has been lowered for it, and the chain of
+composites the compiler is inside, which [Composites](#composites-fused-operations-and-the-registry)
+explains:
+
+```rust
+pub struct Lowering<'a> { /* the target, the cache, the chain */ }
+
+impl Lowering<'_> {
+    pub fn target(&self) -> &Target;
+    /// `composite` compiled for this target, from the cache or compiled under the chain.
+    pub fn compile(&mut self, composite: &Arc<Composite>) -> Result<Arc<Program>, Error>;
+}
+```
+
+A kernel is the operation on one target, built as the most it can differentiate:
 
 ```rust
 /// An operation on one target. The variant is its order.
@@ -812,6 +824,28 @@ node of the model, whose operation lowers to `Lowered::Composite`, and the compi
 recursively, into its parts. Its derivative maps are therefore those of its parts by construction,
 and its order is whatever [%full](statement:archive/core/math/order) finds of the parts.
 
+**The chain.** A composite cannot call itself, since its body is built before it exists, but a
+cycle can still close through a fused operation. If an operation `F` lowers, on some target, to
+`Lowered::Composite` of a composite whose body applies `F`, then `Composite::define` asks `F` for
+nothing but its output space and builds the composite without complaint, and expanding it would
+lower `F` again, without end. The same cycle can pass through an embedded type, when its $R$ applies
+an operation whose fallback retracts on that same type: lowering `skoro.retract` compiles $R$,
+which reaches `skoro.retract` again. So `Lowering` keeps the chain of composites the compiler is
+inside, outermost first. Expanding a composite pushes it for the length of the expansion, and so
+does compiling one through `Lowering::compile`, which is how a boundary kernel compiles its
+declaration's $R$ and $Q$. A composite already on the chain is refused, before anything of it is
+lowered, as `CompositeCycle`, which names the chain from the outermost composite to the one entered
+twice. The chain records the composites a step was expanded from, so `OrderTooLow` names it too.
+
+Composites on the chain are compared by name and parameters, the identity by which everything
+stored type-erased is named. Comparing the `Arc`s would miss a fused operation that defines its
+fallback afresh each time it is lowered, which is a cycle all the same. A composite reached twice
+on separate branches, such as one called by two nodes of a model, is never on the chain twice and
+is expanded at each. Nothing bounds the chain's depth: an operation whose fallback applies the same
+operation with a different parameter, without end, is not a cycle and is not caught, and a bound
+would refuse a deep nesting that ends at a number chosen for no reason. Such an operation is
+already wrong where it is written, and `testing::check_operation` on it would not return.
+
 A **fused operation** is an `Operation` a feature crate implements, whose `lower` returns a kernel
 of its own on the targets its kernels cover, and `Lowered::Composite` of the composite it fuses on
 the others. That one mechanism is the mathematics' three obligations: the composite is the
@@ -938,7 +972,7 @@ The declaration is plain data, nameable through the registry like an operation.
 
 The boundary operations `skoro.include` ($\iota$) and `skoro.retract` ($\oplus$) are the only
 primitives whose kernels are not written in tensor operations. When lowered, each compiles the
-declaration's composites for the target (`Composite::compile`, cached in `Lowering`), and its
+declaration's composites for the target (`Lowering::compile`, cached, and under the chain), and its
 derivative maps are passes over those programs, assembled as
 [](eq:archive/core/math/inclusion), [](eq:archive/core/math/retraction-maps) and
 [](eq:archive/core/math/retraction-second) say, with the passes of the table under
@@ -1215,7 +1249,8 @@ made, and it goes in these steps.
    not a quantity, is refused; one for a quantity the targets do not reach is ignored, so that one
    set serves many queries.
 2. **Lower.** Each mapped node met is lowered for the target, and a composite is expanded into its
-   parts, recursively. The result is a list of steps over slots, in topological order.
+   parts, recursively, under the chain, so a cycle is refused as `CompositeCycle`. The result is a
+   list of steps over slots, in topological order.
 3. **Classify.** A slot is *fixed* when it is a constant, a node fixed in the model, an observed
    quantity, or a step all of whose inputs are fixed. Every other slot is *live*.
 4. **Fold.** Fixed steps are run once, forward, on the target, and their outputs become constants
@@ -1447,10 +1482,13 @@ carrying what a caller needs to name the fault:
 | --- | --- |
 | building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration` |
 | adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
-| compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `FreeDiscrete`, `FrameShape` |
+| compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `CompositeCycle`, `FreeDiscrete`, `FrameShape` |
 | generating | `SamplerOutsideTerm`, `CannotGenerate` |
 | retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
 | naming | `DuplicateName`, `UnknownOperation` |
+
+A cycle met while a model folds a node, which lowers for `Target::host()`, is recorded as a
+building failure at the line that added the node, as any other is.
 
 `TensorError`, in `skoro-tensor`, has `UnsupportedDevice`, `AutodiffDevice`,
 `UnsupportedPrecision`, `ForeignTensor` and `IntegerOutOfRange`.
@@ -1683,6 +1721,19 @@ count their kernels' calls.
 - `fused_operation_falls_back_to_its_composite` on a target its kernel declines.
 - `every_core_operation_round_trips_through_its_name`, and
   `unknown_operation_is_refused_by_name`.
+- `cycle_through_a_fused_operation_is_refused`: a test operation `F` whose `lower` returns
+  `Lowered::Composite` of a composite applying `F`. The composite is defined without error;
+  `Snapshot::compile` of a model calling it, and `Composite::compile` of it alone, return
+  `CompositeCycle` naming the composite twice; a model in which the call's inputs are constants
+  fails to build, at the line of the call, with the same error.
+- `cycle_through_a_fused_fallback_defined_afresh_is_refused`: the same, with `F` defining its
+  composite anew in each call of `lower`, which comparing by name and parameters catches.
+- `cycle_through_a_boundary_kernel_is_refused`: an embedded declaration whose $R$ applies an
+  operation whose fallback retracts on that declaration. Compiling a model that retracts a
+  quantity of the type returns `CompositeCycle`, naming $R$, the fallback, and $R$ again.
+- `repeated_composite_off_the_chain_is_not_a_cycle`: one composite called twice in sequence, by
+  two nodes, and a composite whose body calls the same composite at other parameters, compile and
+  agree with the operations written in place.
 
 **Building** (`crates/skoro-core/tests/building.rs`).
 
@@ -1829,12 +1880,4 @@ scalar chain.
 
 ## Open questions
 
-> [!TODO] Can the expansion of composites fail to end?
-> A composite cannot call itself, but a fused operation can close a cycle the compiler would
-> follow without end: an operation `F` whose `lower` returns `Lowered::Composite` of a composite
-> whose body applies `F`. `Composite::define` asks `F` for its output space only, so the composite
-> is built without complaint, and the cycle shows itself only when a query is compiled. The
-> compiler could keep the chain of composites it is expanding and refuse to enter one already on
-> it, with an error naming the chain and a test that builds such an `F`; or the design could argue
-> that a fused operation's fallback must be built from operations other than itself and leave it
-> to `testing::check_operation`. Which, if either?
+None remain.
