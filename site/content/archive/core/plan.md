@@ -130,7 +130,7 @@ the test macro unless the companion says otherwise.
 
 ## Terms and queries
 
-- [ ] `Term`, `scope::score` and `scope::factor` with `TermHandle`, `involves` read off the
+- [x] `Term`, `scope::score` and `scope::factor` with `TermHandle`, `involves` read off the
       compilation graph, `scoring` and `joined`, `scope::propose`, roles and bindings with
       `Snapshot::bound`, and the reading surface, `blanket` among it. Tests:
       `term_neighbours_are_read_off_the_compilation_graph`, `quantity_is_scored_at_most_once`,

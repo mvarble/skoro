@@ -15,6 +15,7 @@ use std::sync::Arc;
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
 pub use crate::ops::{concatenate, product, select};
+pub use crate::term::{factor, propose, score};
 
 use crate::model::{Model, Node, NodeKind};
 use crate::{
@@ -89,6 +90,11 @@ impl Draft {
             failure: None,
             in_model: true,
         }
+    }
+
+    /// Whether the draft is a model, rather than a composite's body.
+    pub(crate) fn in_model(&self) -> bool {
+        self.in_model
     }
 
     pub(crate) fn definition(model: Model) -> Draft {

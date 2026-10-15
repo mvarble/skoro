@@ -55,6 +55,18 @@ pub enum Error {
     MissingValue { id: NodeId },
     /// A frame of the wrong shape for the node it is given at: its rows, dimension or columns.
     FrameShape { id: NodeId },
+    /// A log-density that is not a mapped `Real`, or one that is already a term's.
+    NotALogDensity { id: NodeId },
+    /// A quantity a term already scores.
+    AlreadyScored { quantity: NodeId },
+    /// A term, or a proposal, conditioned on a quantity made after the one it scores or draws.
+    ConditionedOnLater { quantity: NodeId, later: NodeId },
+    /// A role looked up with a number of nodes bound that its multiplicity does not allow.
+    Binding { role: &'static str, count: usize },
+    /// A node bound to a role but reached from a quantity outside the term.
+    BindingOutsideTerm { role: &'static str, node: NodeId },
+    /// A node that is not a term's log-density.
+    NotATerm { id: NodeId },
     /// A step of a pass whose kernel differentiates less than the pass needs of it: its
     /// operation, the composites it was expanded from, outermost first, and its node.
     OrderTooLow {
@@ -88,6 +100,25 @@ impl fmt::Display for Error {
             }
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
+            Error::NotALogDensity { id } => {
+                write!(
+                    f,
+                    "{id:?} is not a log-density: a mapped Real node, not yet a term's"
+                )
+            }
+            Error::AlreadyScored { quantity } => write!(f, "{quantity:?} is already scored"),
+            Error::ConditionedOnLater { quantity, later } => write!(
+                f,
+                "{quantity:?} would be conditioned on {later:?}, which was made after it"
+            ),
+            Error::Binding { role, count } => {
+                write!(f, "{count} nodes are bound to the role {role}")
+            }
+            Error::BindingOutsideTerm { role, node } => write!(
+                f,
+                "{node:?}, bound to the role {role}, is reached from a quantity outside its term"
+            ),
+            Error::NotATerm { id } => write!(f, "{id:?} is not a term's log-density"),
             Error::CompositeCycle { chain } => {
                 write!(f, "the composites call themselves: {}", chain.join(" → "))
             }

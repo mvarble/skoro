@@ -19,6 +19,7 @@ mod registry;
 mod retraction;
 pub mod scope;
 mod space;
+mod term;
 pub mod testing;
 mod writer;
 
@@ -42,4 +43,8 @@ pub use q::{
 pub use query::{Observations, Query};
 pub use registry::{MakeOperation, Registry};
 pub use space::{Block, Space};
+pub use term::{
+    AnyNumber, AtMostOne, ExactlyOne, Multiplicity, Proposal, Role, Sample, Sampler, Term,
+    TermHandle,
+};
 pub use writer::{Reader, Writer};

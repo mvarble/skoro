@@ -85,6 +85,18 @@ impl<T: Typed> Q<T> {
     }
 }
 
+impl<T> From<Q<T>> for NodeId {
+    fn from(q: Q<T>) -> NodeId {
+        q.id
+    }
+}
+
+impl From<QDyn> for NodeId {
+    fn from(q: QDyn) -> NodeId {
+        q.id
+    }
+}
+
 impl<T: Typed> From<Q<T>> for QDyn {
     fn from(q: Q<T>) -> QDyn {
         q.untyped()

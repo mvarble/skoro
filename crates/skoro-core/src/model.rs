@@ -3,7 +3,8 @@ use std::sync::Arc;
 use rpds::{HashTrieMapSync, HashTrieSetSync, RedBlackTreeMapSync};
 use skoro_tensor::HostValue;
 
-use crate::{Address, NodeId, Operation, Space};
+use crate::term::{Multiplicity, Proposal, Role, Term};
+use crate::{Address, Error, NodeId, Operation, Space};
 
 /// An immutable model, sharing structure with the snapshots before it.
 #[derive(Clone)]
@@ -17,6 +18,12 @@ pub(crate) struct Model {
     /// The compilation graph's edges read forward: each node's consumers.
     pub(crate) consumers: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>,
     pub(crate) addresses: RedBlackTreeMapSync<Address, NodeId>,
+    /// The probabilistic graph: terms by their log-density nodes, each quantity's scoring term,
+    /// and the terms each quantity is joined to.
+    pub(crate) terms: RedBlackTreeMapSync<NodeId, Arc<Term>>,
+    pub(crate) scoring: HashTrieMapSync<NodeId, NodeId>,
+    pub(crate) joined: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>,
+    pub(crate) proposals: HashTrieMapSync<NodeId, Arc<Proposal>>,
 }
 
 /// A node of the compilation graph.
@@ -106,7 +113,28 @@ impl Model {
             nodes: HashTrieMapSync::new_sync(),
             consumers: HashTrieMapSync::new_sync(),
             addresses: RedBlackTreeMapSync::new_sync(),
+            terms: RedBlackTreeMapSync::new_sync(),
+            scoring: HashTrieMapSync::new_sync(),
+            joined: HashTrieMapSync::new_sync(),
+            proposals: HashTrieMapSync::new_sync(),
         }
+    }
+
+    pub(crate) fn insert_term(&mut self, term: Term) {
+        let id = term.log_density;
+        if let Some(scored) = term.scores {
+            self.scoring.insert_mut(scored, id);
+        }
+        for q in term.involves.iter() {
+            let mut terms = self
+                .joined
+                .get(q)
+                .cloned()
+                .unwrap_or_else(HashTrieSetSync::new_sync);
+            terms.insert_mut(id);
+            self.joined.insert_mut(*q, terms);
+        }
+        self.terms.insert_mut(id, Arc::new(term));
     }
 
     pub(crate) fn insert(&mut self, node: Node) {
@@ -137,21 +165,109 @@ impl Snapshot {
         crate::Writer::from_snapshot(self.clone())
     }
 
-    pub fn node(&self, id: NodeId) -> Option<&Node> {
-        self.0.nodes.get(&id).map(Arc::as_ref)
+    pub fn node(&self, id: impl Into<NodeId>) -> Option<&Node> {
+        self.0.nodes.get(&id.into()).map(Arc::as_ref)
     }
 
-    pub fn space(&self, id: NodeId) -> Option<&Space> {
+    pub fn space(&self, id: impl Into<NodeId>) -> Option<&Space> {
         self.node(id).map(Node::space)
     }
 
-    pub fn address(&self, id: NodeId) -> Option<&Address> {
+    pub fn address(&self, id: impl Into<NodeId>) -> Option<&Address> {
         self.node(id).and_then(Node::address)
     }
 
     /// The quantity at `address`.
     pub fn lookup(&self, address: &Address) -> Option<NodeId> {
         self.0.addresses.get(address).copied()
+    }
+
+    /// The quantities, in ancestral order: the order they were made in.
+    pub fn quantities(&self) -> Vec<NodeId> {
+        let mut quantities: Vec<NodeId> = self.0.addresses.values().copied().collect();
+        quantities.sort_unstable();
+        quantities
+    }
+
+    /// The quantities whose addresses lie under `namespace`, in ancestral order.
+    pub fn under(&self, namespace: &Address) -> Vec<NodeId> {
+        let mut quantities: Vec<NodeId> = self
+            .0
+            .addresses
+            .range(namespace.clone()..)
+            .take_while(|(address, _)| address.starts_with(namespace))
+            .map(|(_, id)| *id)
+            .collect();
+        quantities.sort_unstable();
+        quantities
+    }
+
+    /// The terms, in the order they were added.
+    pub fn terms(&self) -> Vec<&Term> {
+        self.0.terms.values().map(Arc::as_ref).collect()
+    }
+
+    /// The term whose log-density is `id`.
+    pub fn term(&self, id: impl Into<NodeId>) -> Option<&Term> {
+        self.0.terms.get(&id.into()).map(Arc::as_ref)
+    }
+
+    /// The term that scores `q`, if one does.
+    pub fn scored_by(&self, q: impl Into<NodeId>) -> Option<&Term> {
+        let id = self.0.scoring.get(&q.into())?;
+        self.term(*id)
+    }
+
+    /// The terms `q` is joined to, in the order they were added.
+    pub fn terms_of(&self, q: impl Into<NodeId>) -> Vec<&Term> {
+        let mut ids: Vec<NodeId> = self
+            .0
+            .joined
+            .get(&q.into())
+            .map(|terms| terms.iter().copied().collect())
+            .unwrap_or_default();
+        ids.sort_unstable();
+        ids.into_iter().filter_map(|id| self.term(id)).collect()
+    }
+
+    /// Whether `q` is a quantity no term scores.
+    pub fn is_parameter(&self, q: impl Into<NodeId>) -> bool {
+        let id = q.into();
+        self.node(id).is_some_and(Node::is_quantity) && !self.0.scoring.contains_key(&id)
+    }
+
+    /// The proposal attached to the parameter `q`.
+    pub fn proposal(&self, q: impl Into<NodeId>) -> Option<&Proposal> {
+        self.0.proposals.get(&q.into()).map(Arc::as_ref)
+    }
+
+    /// The Markov blanket of `quantities`: the other quantities joined to the terms they are
+    /// joined to, in ancestral order.
+    pub fn blanket<Q: Into<NodeId>>(&self, quantities: impl IntoIterator<Item = Q>) -> Vec<NodeId> {
+        let inside: std::collections::HashSet<NodeId> =
+            quantities.into_iter().map(Into::into).collect();
+        let mut blanket: Vec<NodeId> = inside
+            .iter()
+            .flat_map(|q| self.terms_of(*q))
+            .flat_map(|term| term.involves.iter().copied())
+            .filter(|q| !inside.contains(q))
+            .collect();
+        blanket.sort_unstable();
+        blanket.dedup();
+        blanket
+    }
+
+    /// The nodes the term `term` binds to `role`, by the role's multiplicity (`NotATerm`,
+    /// `Binding`).
+    pub fn bound<M: Multiplicity>(
+        &self,
+        term: impl Into<NodeId>,
+        role: &Role<M>,
+    ) -> Result<M::Handles, Error> {
+        let term = term.into();
+        self.term(term)
+            .ok_or(Error::NotATerm { id: term })?
+            .bound(role)
     }
 
     /// The number of nodes in the compilation graph.
