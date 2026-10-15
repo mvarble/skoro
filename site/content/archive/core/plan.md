@@ -50,7 +50,7 @@ the test macro unless the companion says otherwise.
 - [x] `Space` without its embedded variant, with `storage`, `dimension`, `cardinality` and
       `blocks`; `Block`; the markers, `Typed` and `Declares`; `Q<T>` and `QDyn` with the two
       reserved failed identifiers, and `widen`. Tests: `product_refuses_a_discrete_factor`.
-- [ ] `Operation`, `Lowered`, `Lowering` (the target and its cache), `Param`, and the kernel
+- [x] `Operation`, `Lowered`, `Lowering` (the target and its cache), `Param`, and the kernel
       traits `Forward`, `FirstOrder`, `SecondOrder`, `Pullback`, `SecondPullback`, with `Kernel` as
       the enumeration of orders and its accessors by upcasting.
 - [ ] `testing::Tolerance`, the test macro over both precisions, and `testing::check_operation`

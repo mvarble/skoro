@@ -5,6 +5,7 @@ mod address;
 mod error;
 mod id;
 mod key;
+mod operation;
 mod q;
 mod space;
 
@@ -12,6 +13,10 @@ pub use address::{Address, Segment};
 pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use key::Key;
+pub use operation::{
+    FirstOrder, Forward, Kernel, Lowered, Lowering, Operation, Order, Param, Pullback, SecondOrder,
+    SecondPullback,
+};
 pub use q::{
     Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,
