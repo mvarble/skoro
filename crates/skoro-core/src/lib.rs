@@ -4,6 +4,7 @@
 mod address;
 mod compile;
 mod composite;
+mod embedded;
 mod error;
 mod id;
 mod into_host;
@@ -26,6 +27,7 @@ mod writer;
 
 pub use address::{Address, Segment};
 pub use composite::Composite;
+pub use embedded::Embedded;
 pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use into_host::{IntoHostValue, Rows};
@@ -43,7 +45,7 @@ pub use q::{
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,
 };
 pub use query::{Observations, Query};
-pub use registry::{MakeOperation, Registry};
+pub use registry::{MakeEmbedded, MakeOperation, Registry};
 pub use space::{Block, Space};
 pub use term::{
     AnyNumber, AtMostOne, ExactlyOne, Multiplicity, Proposal, Role, Sample, Sampler, Term,

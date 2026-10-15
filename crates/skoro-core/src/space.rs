@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::Error;
+use crate::{Embedded, Error};
 
 /// A quantity's type in the mathematics' sense: a closed enumeration, dimensioned at run time.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -13,6 +13,8 @@ pub enum Space {
     Positive(usize),
     /// Continuous factors only: made by [`Space::product`], which refuses a discrete one.
     Product(Arc<[Space]>),
+    /// A curved type, equal to another when their declarations' names and parameters are.
+    Embedded(Arc<Embedded>),
     Categorical(usize),
     Integer,
 }
@@ -52,6 +54,7 @@ impl Space {
             Space::Vector(n) | Space::Positive(n) => *n,
             Space::Matrix(m, n) => m * n,
             Space::Product(factors) => factors.iter().map(Space::storage).sum(),
+            Space::Embedded(declaration) => declaration.storage(),
         }
     }
 
@@ -60,6 +63,7 @@ impl Space {
         match self {
             Space::Categorical(_) | Space::Integer => None,
             Space::Product(factors) => factors.iter().map(Space::dimension).sum(),
+            Space::Embedded(declaration) => Some(declaration.dimension()),
             continuous => Some(continuous.storage()),
         }
     }

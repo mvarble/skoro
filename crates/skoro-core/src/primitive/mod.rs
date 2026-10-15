@@ -6,6 +6,7 @@ mod euclidean;
 mod positive;
 mod rule;
 
+pub use crate::embedded::{Include, Retract};
 pub use discrete::{
     IntegerAdd, IntegerEq, IntegerLe, IntegerLt, IntegerMul, IntegerSub, IsNonnegative, ToReal,
 };

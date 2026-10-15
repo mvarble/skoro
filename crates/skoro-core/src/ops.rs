@@ -12,9 +12,10 @@ use std::panic::Location;
 use std::sync::Arc;
 
 use crate::primitive::{
-    Add, Atan2, Concatenate, Cos, Exp, IntegerAdd, IntegerEq, IntegerLe, IntegerLt, IntegerMul,
-    IntegerSub, IsNonnegative, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp, PositiveLog,
-    PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, ToReal, Transpose,
+    Add, Atan2, Concatenate, Cos, Exp, Include, IntegerAdd, IntegerEq, IntegerLe, IntegerLt,
+    IntegerMul, IntegerSub, IsNonnegative, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp,
+    PositiveLog, PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, ToReal,
+    Transpose,
 };
 use crate::scope::{self, Draft, literal};
 use crate::{
@@ -564,6 +565,13 @@ impl<T: Typed> Q<T> {
     pub fn local(self, from: Q<T>) -> Q<VectorDyn> {
         Q::from_id(self.untyped().local(from.untyped()).id())
     }
+
+    /// An embedded value as the vector of its storage, `ι(self)` (`SpaceMismatch` on a value of
+    /// any other space).
+    #[track_caller]
+    pub fn include(self) -> Q<VectorDyn> {
+        Q::from_id(self.untyped().include().id())
+    }
 }
 
 impl Q<ProductDyn> {
@@ -604,6 +612,18 @@ impl QDyn {
         QDyn::from_id(with_spaces(&[self, from], |draft, spaces| {
             let inverse = spaces[0].inverse_retraction()?;
             draft.mapped(inverse.operation(), &[self, from])
+        }))
+    }
+
+    /// An embedded value as the vector of its storage, `ι(self)` (`SpaceMismatch` on a value of
+    /// any other space).
+    #[track_caller]
+    pub fn include(self) -> QDyn {
+        QDyn::from_id(with_spaces(&[self], |draft, spaces| {
+            let Space::Embedded(declaration) = &spaces[0] else {
+                return Err(mismatch("skoro.include", spaces));
+            };
+            draft.mapped(Arc::new(Include::new(declaration.clone())), &[self])
         }))
     }
 

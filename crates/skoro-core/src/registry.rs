@@ -7,16 +7,20 @@ use crate::primitive::{
     IntegerSub, IsNonnegative, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp, PositiveLog,
     PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, ToReal, Transpose,
 };
-use crate::{Error, Operation, Param};
+use crate::{Embedded, Error, Operation, Param};
 
 /// Makes an operation from its parameters.
 pub type MakeOperation = fn(&[Param]) -> Result<Arc<dyn Operation>, Error>;
+
+/// Makes an embedded declaration from its parameters.
+pub type MakeEmbedded = fn(&[Param]) -> Result<Arc<Embedded>, Error>;
 
 /// How a name finds its code again: constructors by name. A value, not global state; a feature
 /// crate exports a function that adds its names to one.
 #[derive(Clone, Debug, Default)]
 pub struct Registry {
     operations: HashMap<&'static str, MakeOperation>,
+    embedded: HashMap<&'static str, MakeEmbedded>,
 }
 
 /// An operation of no parameters, made by its default.
@@ -114,6 +118,7 @@ impl Registry {
         ];
         Registry {
             operations: operations.into_iter().collect(),
+            embedded: HashMap::new(),
         }
     }
 
@@ -137,6 +142,33 @@ impl Registry {
     pub fn operation(&self, name: &str, params: &[Param]) -> Result<Arc<dyn Operation>, Error> {
         let make = self
             .operations
+            .get(name)
+            .ok_or_else(|| Error::UnknownOperation {
+                name: name.to_string(),
+            })?;
+        make(params)
+    }
+
+    /// Adds the embedded declaration `name`, refusing one already registered (`DuplicateName`).
+    pub fn register_embedded(
+        &mut self,
+        name: &'static str,
+        make: MakeEmbedded,
+    ) -> Result<(), Error> {
+        if self.embedded.contains_key(name) {
+            return Err(Error::DuplicateName {
+                name: name.to_string(),
+            });
+        }
+        self.embedded.insert(name, make);
+        Ok(())
+    }
+
+    /// The embedded declaration registered as `name`, made from `params` (`UnknownOperation` for
+    /// a name the registry lacks).
+    pub fn embedded(&self, name: &str, params: &[Param]) -> Result<Arc<Embedded>, Error> {
+        let make = self
+            .embedded
             .get(name)
             .ok_or_else(|| Error::UnknownOperation {
                 name: name.to_string(),

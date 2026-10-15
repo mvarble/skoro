@@ -11,7 +11,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use crate::primitive::{Concatenate, PositiveExp, PositiveLog, PositiveMul, Slice};
+use crate::primitive::{
+    Concatenate, Include, PositiveExp, PositiveLog, PositiveMul, Retract, Slice,
+};
 use crate::scope::apply;
 use crate::{Composite, Error, Param, QDyn, Space};
 
@@ -119,6 +121,8 @@ fn retract(space: &Space, x: QDyn, t: QDyn) -> QDyn {
                 .collect();
             apply(Arc::new(Concatenate::new(space.clone())), &factors)
         }
+        // One node: the boundary operation, whose kernel runs the declaration's R.
+        Space::Embedded(declaration) => apply(Arc::new(Retract::new(declaration.clone())), &[x, t]),
         Space::Categorical(_) | Space::Integer => {
             unreachable!("a discrete space has no retraction, refused before it is defined")
         }
@@ -151,6 +155,11 @@ fn local(space: &Space, y: QDyn, x: QDyn) -> QDyn {
                 })
                 .collect();
             apply(Arc::new(Concatenate::new(tangent)), &factors)
+        }
+        // Q(ι(x), ι(y)).
+        Space::Embedded(declaration) => {
+            let include = |q| apply(Arc::new(Include::new(declaration.clone())), &[q]);
+            declaration.inverse().call(&[include(x), include(y)])
         }
         Space::Categorical(_) | Space::Integer => {
             unreachable!("a discrete space has no retraction, refused before it is defined")

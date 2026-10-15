@@ -3,9 +3,11 @@
 
 use skoro_tensor::{Device, Frame, HostData, HostValue, Precision, Target, Value};
 
+use std::sync::Arc;
+
 use crate::{
-    Error, Frames, Kernel, Key, Lowered, Lowering, Operation, Pass, Program, QDyn, Query, Space,
-    Values, Writer,
+    Composite, Embedded, Error, Frames, Kernel, Key, Lowered, Lowering, Operation, Pass, Program,
+    QDyn, Query, Space, Values, Writer,
 };
 
 #[doc(hidden)]
@@ -316,6 +318,259 @@ pub fn check_agreement(
         }
     }
     Ok(())
+}
+
+/// The check a crate runs on its own embedded declaration, at the points given, one per row, on
+/// the manifold:
+///
+/// - every inner pass is finite at the declaration's order, `R` at `(x, 0)` and `Q` on the
+///   diagonal `(x, x)`, where a textbook formula is often `0/0`;
+/// - `R(x, 0) = x`, and `Q(x, R(x, t)) = t` for small random `t`;
+/// - `B(x) = ∂₂R(x, 0)` has rank `d`;
+/// - `check_operation` holds on the inclusion, and on the retraction at `t = 0` and away from it.
+///
+/// A failure names the boundary operation and the pass.
+pub fn check_embedded(
+    declaration: &Arc<Embedded>,
+    points: &HostValue,
+    target: &Target,
+) -> Result<(), String> {
+    let (n, d) = (declaration.storage(), declaration.dimension());
+    let space = Space::Embedded(declaration.clone());
+    if points.storage() != n {
+        return Err(format!(
+            "{}: the points are not of storage {n}",
+            declaration.name()
+        ));
+    }
+    let rows = points.rows().unwrap_or(1);
+    let load = |value: &HostValue| -> Result<Value, String> {
+        value
+            .load(rows, target)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "the points do not fit their batch".to_string())
+    };
+    let x = load(points)?;
+    let zero = Value::Continuous(skoro_tensor::Points::zeros(rows, d, target));
+    let r = declaration.retraction().compile(target).map_err(describe)?;
+    let q = declaration.inverse().compile(target).map_err(describe)?;
+    let relative = Tolerance::of(target.precision()).relative;
+
+    // Every inner pass, finite.
+    finite_passes(
+        &r,
+        [&x, &zero],
+        [n, d],
+        target,
+        "skoro.include and skoro.retract run R at (x, 0)",
+    )?;
+    finite_passes(
+        &q,
+        [&x, &x],
+        [n, n],
+        target,
+        "skoro.retract runs Q on the diagonal (x, x)",
+    )?;
+
+    // R(x, 0) = x.
+    let at = |program: &Program, a: &Value, b: &Value| {
+        let free = program.free();
+        Values::new()
+            .with(free[0].node, a.clone())
+            .with(free[1].node, b.clone())
+    };
+    let output = |program: &Program, values: &Values| -> Result<Value, String> {
+        let out = program.forward(values).map_err(describe)?;
+        out.get(program.targets()[0])
+            .cloned()
+            .ok_or_else(|| "a program computes its output".to_string())
+    };
+    let host = continuous_or_discrete;
+    let fixed = output(&r, &at(&r, &x, &zero))?;
+    close(&host(&fixed), &host(&x), relative)
+        .map_err(|e| format!("{}: R(x, 0) is not x: {e}", declaration.name()))?;
+
+    // Q(x, R(x, t)) = t for small t.
+    let small: Vec<f64> = signed(900, rows * d).iter().map(|t| 0.1 * t).collect();
+    let t = load(
+        &HostValue::new(Some(rows), d, HostData::Continuous(small.clone())).ok_or("a tangent")?,
+    )?;
+    let y = output(&r, &at(&r, &x, &t))?;
+    let back = output(&q, &at(&q, &x, &y))?;
+    close(&host(&back), &small, relative)
+        .map_err(|e| format!("{}: Q(x, R(x, t)) is not t: {e}", declaration.name()))?;
+
+    // B(x) has rank d: its Gram matrix is positive definite.
+    let identity: Vec<f64> = (0..rows)
+        .flat_map(|_| (0..d).flat_map(move |i| (0..d).map(move |c| if c == i { 1.0 } else { 0.0 })))
+        .collect();
+    let frames = Frames::new().with(
+        r.free()[1].node,
+        Frame::from_host(&identity, rows, d, d, target),
+    );
+    let (_, b) = r.tangent(&at(&r, &x, &zero), &frames).map_err(describe)?;
+    let b = b
+        .get(r.targets()[0])
+        .map(Frame::to_host)
+        .unwrap_or_default();
+    for row in 0..rows {
+        let column = |c: usize| (0..n).map(move |i| (row * n + i) * d + c);
+        let gram: Vec<f64> = (0..d * d)
+            .map(|ij| {
+                column(ij / d)
+                    .zip(column(ij % d))
+                    .map(|(a, c)| b[a] * b[c])
+                    .sum()
+            })
+            .collect();
+        if !positive_definite(&gram, d) {
+            return Err(format!(
+                "{}: B(x) does not have rank {d} at row {row}",
+                declaration.name()
+            ));
+        }
+    }
+
+    // The boundary operations, by check_operation.
+    let include = crate::primitive::Include::new(declaration.clone());
+    check_operation(&include, &[(space.clone(), points.clone())], target)?;
+    let retract = crate::primitive::Retract::new(declaration.clone());
+    let zeros = HostValue::new(Some(rows), d, HostData::Continuous(vec![0.0; rows * d]))
+        .ok_or("a tangent")?;
+    check_operation(
+        &retract,
+        &[(space.clone(), points.clone()), (Space::Vector(d), zeros)],
+        target,
+    )
+    .map_err(|e| format!("at t = 0: {e}"))?;
+    let away: Vec<f64> = signed(901, rows * d).iter().map(|t| 0.5 * t).collect();
+    let away = HostValue::new(Some(rows), d, HostData::Continuous(away)).ok_or("a tangent")?;
+    check_operation(
+        &retract,
+        &[(space, points.clone()), (Space::Vector(d), away)],
+        target,
+    )
+    .map_err(|e| format!("away from t = 0: {e}"))
+}
+
+/// Every pass `program` admits, at `inputs` of dimensions `dims`, at random frames: each output
+/// finite.
+fn finite_passes(
+    program: &Program,
+    inputs: [&Value; 2],
+    dims: [usize; 2],
+    target: &Target,
+    what: &str,
+) -> Result<(), String> {
+    let free = program.free();
+    let roots = [free[0].node, free[1].node];
+    let rows = match inputs[0] {
+        Value::Continuous(points) => points.rows(),
+        Value::Discrete(integers) => integers.rows(),
+    };
+    let at = Values::new()
+        .with(roots[0], inputs[0].clone())
+        .with(roots[1], inputs[1].clone());
+    let output = program.targets()[0];
+    let out_dimension = match program.forward(&at).map_err(describe)?.get(output) {
+        Some(Value::Continuous(points)) => {
+            if points.to_host().iter().any(|v| !v.is_finite()) {
+                return Err(format!("{what}: its forward pass is not finite"));
+            }
+            points.storage()
+        }
+        _ => return Err(format!("{what}: its output is not continuous")),
+    };
+    let frames = |seed: u64, columns: usize| {
+        roots
+            .iter()
+            .zip(dims)
+            .enumerate()
+            .fold(Frames::new(), |frames, (i, (root, dim))| {
+                let data = signed(seed + i as u64, rows * dim * columns);
+                frames.with(*root, Frame::from_host(&data, rows, dim, columns, target))
+            })
+    };
+    let finite = |frames: &Frames, ids: &[crate::NodeId], pass: &str| -> Result<(), String> {
+        for id in ids {
+            if let Some(frame) = frames.get(*id)
+                && frame.to_host().iter().any(|v| !v.is_finite())
+            {
+                return Err(format!("{what}: its {pass} is not finite"));
+            }
+        }
+        Ok(())
+    };
+    let targets = [output];
+    if program.admits(&Pass::Tangent { seeded: &roots }).is_ok() {
+        let (_, tangent) = program
+            .tangent(&at, &frames(950, COLUMNS))
+            .map_err(describe)?;
+        finite(&tangent, &targets, "tangent pass")?;
+    }
+    let seed = Frame::from_host(
+        &signed(960, rows * out_dimension * COLUMNS),
+        rows,
+        out_dimension,
+        COLUMNS,
+        target,
+    );
+    if program
+        .admits(&Pass::Cotangent { targets: &targets })
+        .is_ok()
+    {
+        let (_, cotangent) = program
+            .cotangent(&at, &Frames::new().with(output, seed))
+            .map_err(describe)?;
+        finite(&cotangent, &roots, "cotangent pass")?;
+    }
+    let pass = Pass::Hessian {
+        seeded: &roots,
+        targets: &targets,
+    };
+    if program.admits(&pass).is_ok() {
+        let seed = Frame::from_host(
+            &signed(970, rows * out_dimension),
+            rows,
+            out_dimension,
+            1,
+            target,
+        );
+        let second = program
+            .hessian(
+                &at,
+                &frames(980, COLUMNS),
+                &Frames::new().with(output, seed),
+            )
+            .map_err(describe)?;
+        finite(&second.alpha, &roots, "Hessian pass's α")?;
+        finite(&second.beta, &roots, "Hessian pass's β")?;
+    }
+    Ok(())
+}
+
+/// Whether the symmetric `d × d` matrix `a` is positive definite, by Cholesky.
+fn positive_definite(a: &[f64], d: usize) -> bool {
+    let scale = (0..d)
+        .map(|i| a[i * d + i].abs())
+        .fold(0.0f64, f64::max)
+        .max(f64::MIN_POSITIVE);
+    let mut l = vec![0.0; d * d];
+    for i in 0..d {
+        for j in 0..=i {
+            let s: f64 = (0..j).map(|k| l[i * d + k] * l[j * d + k]).sum();
+            if i == j {
+                let pivot = a[i * d + i] - s;
+                if pivot.is_nan() || pivot <= 1e-8 * scale {
+                    return false;
+                }
+                l[i * d + i] = pivot.sqrt();
+            } else {
+                l[i * d + j] = (a[i * d + j] - s) / l[j * d + j];
+            }
+        }
+    }
+    true
 }
 
 /// The columns of the tangent, cotangent and velocity frames a check draws.
@@ -924,8 +1179,31 @@ fn retract(space: &Space, x: &[f64], t: &[f64]) -> Result<Vec<f64>, String> {
             }
             Ok(out)
         }
+        Space::Embedded(declaration) => run(declaration.retraction(), &[x, t]),
         Space::Categorical(_) | Space::Integer => Err(format!("{space:?} has no retraction")),
     }
+}
+
+/// One row of a composite, run on the host: its inputs' storage in, its output's out.
+fn run(composite: &Composite, inputs: &[&[f64]]) -> Result<Vec<f64>, String> {
+    let target = Target::host();
+    let program = composite.compile(&target).map_err(describe)?;
+    let mut at = Values::new();
+    for (free, data) in program.free().iter().zip(inputs) {
+        let value = HostValue::new(Some(1), data.len(), HostData::Continuous(data.to_vec()))
+            .ok_or("a composite's input of no storage")?;
+        let value = value
+            .load(1, &target)
+            .map_err(|e| e.to_string())?
+            .ok_or("a composite's input does not fit one row")?;
+        at.insert(free.node, value);
+    }
+    let outputs = program.forward(&at).map_err(describe)?;
+    let output = program.targets()[0];
+    outputs
+        .get(output)
+        .map(continuous_or_discrete)
+        .ok_or_else(|| "a composite's program computes its output".to_string())
 }
 
 /// `y ⊖ x` for values of a core space.
@@ -946,6 +1224,7 @@ fn local(space: &Space, y: &[f64], x: &[f64]) -> Result<Vec<f64>, String> {
             }
             Ok(out)
         }
+        Space::Embedded(declaration) => run(declaration.inverse(), &[x, y]),
         Space::Categorical(_) | Space::Integer => Err(format!("{space:?} has no retraction")),
     }
 }

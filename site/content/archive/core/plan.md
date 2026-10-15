@@ -154,7 +154,7 @@ the test macro unless the companion says otherwise.
 
 ## Embedded types
 
-- [ ] `Embedded::declare` with a retraction and its inverse, `Space::Embedded` with its blocks,
+- [x] `Embedded::declare` with a retraction and its inverse, `Space::Embedded` with its blocks,
       the boundary kernels `skoro.include` and `skoro.retract` over the compiled programs of $R$
       and $Q$ under the chain, their orders, the embedded retraction and inverse retraction,
       `include` on handles, the registry's embedded declarations, `testing::check_operation` moving

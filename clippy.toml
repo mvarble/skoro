@@ -1,3 +1,6 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
+# An embedded declaration holds composites, whose models keep a cache behind a lock, but it is
+# hashed and compared by its name and parameters alone, which never change.
+ignore-interior-mutability = ["skoro_core::embedded::Embedded"]
