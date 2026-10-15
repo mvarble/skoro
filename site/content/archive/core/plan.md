@@ -203,7 +203,7 @@ the test macro unless the companion says otherwise.
 
 ## Finishing
 
-- [ ] Write `REVISIT.md` at the root of the repository, listing what the companion names: what
+- [x] Write `REVISIT.md` at the root of the repository, listing what the companion names: what
       the archive had and the core does not bring back, compiling between cuts among it, and what
       the charter names that no entry builds yet.
 
