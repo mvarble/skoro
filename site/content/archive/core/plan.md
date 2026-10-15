@@ -210,3 +210,9 @@ the test macro unless the companion says otherwise.
 - Every test named in the companion's [Tests](implementation.svx#tests) exists under its name and
   passes at both precisions.
 - The site builds (`pnpm build`, and the fixture), and `bin/wf check` passes.
+
+## Revisions
+
+**2026-10-15.** Reopened at the sixth task. `narrow` checks a node's space inside the open scope,
+which the building task adds, so neither it nor `widening_is_free_and_narrowing_checks_the_space`
+can be built with the spaces. The change is recorded here as it is made.
