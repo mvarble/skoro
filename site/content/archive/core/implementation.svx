@@ -1272,6 +1272,8 @@ impl Query {
     pub fn of(targets: impl IntoIterator<Item = QDyn>) -> Query;
     /// The sum of every term's log-density.
     pub fn log_density() -> Query;
+    /// The sum of the log-densities of these terms, named by their log-density nodes.
+    pub fn log_density_of(terms: impl IntoIterator<Item = NodeId>) -> Query;
     pub fn given(self, observations: Observations) -> Query;
 }
 
@@ -1287,7 +1289,10 @@ made, and it goes in these steps.
 1. **Reach.** Walk the compilation graph backwards from the targets, stopping at quantities,
    constants and nodes fixed in the model. For `Query::log_density()` the targets are the terms'
    log-density nodes, and the program's one target is their sum, added by `skoro.add` steps that
-   take the fixed terms first, so that their sum folds. The quantities met are the query's; those with an observed value are
+   take the fixed terms first, so that their sum folds. `Query::log_density_of(terms)` is the same
+   over the terms named, which are kept as a set, so that the order they are named in changes
+   neither the program nor its cache key; a node that is not a term's log-density is refused
+   (`NotATerm`). The quantities met are the query's; those with an observed value are
    *observed*, the rest *free*. An observed value of the wrong storage size, or for a node that is
    not a quantity, is refused; one for a quantity the targets do not reach is ignored, so that one
    set serves many queries.
@@ -1326,6 +1331,16 @@ key, and the build must keep all three.
 > evaluation would keep the charter's key and lose that folding, recomputing the inverse of an
 > observed covariance factor on every evaluation. The key uses the observation set's identity
 > rather than its contents, so that looking a program up never hashes the data.
+
+**A part of the density.** `log_density_of` is how an algorithm that updates a few quantities at a
+time compiles only what those updates read. With `terms_of(x)` from the reading surface, the terms
+that involve $x$, it gives the log-density of $x$'s full conditional up to an additive constant,
+since every other term is constant in $x$ (the factorization behind
+[%full](statement:archive/core/math/retirement), read without the integral); a blocked update over
+several quantities takes the union of their terms. The program reaches only the blanket of what is
+updated, so a Gibbs or Metropolis-within-Gibbs sweep over a long chain compiles one small program
+per block rather than evaluating the whole model at each step. The sum is added by the compiler, so
+the model gains no node for it.
 
 ```rust
 pub struct Program { /* target, slots, steps, free quantities, targets, pinned batch */ }
@@ -1525,7 +1540,7 @@ carrying what a caller needs to name the fault:
 | --- | --- |
 | building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration`, `NoProjection` |
 | adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
-| compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `CompositeCycle`, `FreeDiscrete`, `FrameShape` |
+| compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `NotATerm`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `CompositeCycle`, `FreeDiscrete`, `FrameShape` |
 | generating | `SamplerOutsideTerm`, `CannotGenerate` |
 | retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
 | naming | `DuplicateName`, `UnknownOperation` |
@@ -1582,6 +1597,25 @@ and `skoro-linalg` gave its lower-triangular type a product of its own with `QMu
 a handle, failed or not, rather than a `SkoroResult`, so the second family of impls the archive
 needed, `Result op Q` to keep chains such as `a + b + c` free of `?`, and the overlap with its
 generic literal impl that it had to work around, are gone; literals are `f64` alone.
+
+**Not kept, for now: compiling between cuts.** The archive could stop a program's backward walk at
+named interior nodes:
+
+```rust
+// crates/skoro-graph/src/graph.rs, archive at 019e888
+/// Compile a sub-program that stops at `cuts` instead of walking back to every ancestor.
+pub fn compile_between(&self, cuts: &[Id], targets: &[Id]) -> SkoroResult<Arc<CompiledSequence<B>>>;
+```
+
+Each cut became a differentiable leaf whose value the caller gave, so that a Jacobian could be taken
+at an interior node, $\partial h / \partial \point_1$ for a mapped $\point_1 = f(\point_0)$, which
+passes that collect only at quantities cannot give. The core's mathematics has a program's roots be
+the quantities and constants its targets reach, so a cut is a change to it, and no algorithm the
+core serves needs one yet. It is left to the first entry that does, likely a linearization or
+Gauss–Newton entry, as a method on `Query` that changes no existing query. That entry should keep
+the archive's lesson: a cut must not be folded through, since a value below it that looks fixed
+moves with the cut, and folding it would return correct values with the derivatives silently
+missing.
 
 **Not kept: a manifold that returns its retraction.**
 
@@ -1815,6 +1849,14 @@ example.
 **Queries** (`crates/skoro-core/tests/queries.rs`).
 
 - `query_density_is_the_sum_of_terms`.
+- `log_density_of_sums_the_named_terms`, and `log_density_of_ignores_their_order`: the same
+  program, from the cache, for the terms named in either order.
+- `blanket_density_is_the_conditional_up_to_a_constant`: on the example of the mathematics,
+  `log_density_of(terms_of(x1))` differs from `log_density()` by the same constant at every value
+  of $\randomPoint_1$, with the other quantities fixed, and their gradients and Hessians in
+  $\randomPoint_1$ agree; its program has no step that reads $\bfz_0$.
+- `log_density_of_refuses_a_non_term`: a quantity's node, and a mapped value that is no term's
+  log-density, are refused as `NotATerm`.
 - `roots_are_values_not_draws`: the gradient with respect to a quantity counts its appearances in
   the terms, whatever its sampler.
 - `folded_and_unfolded_programs_agree`: a quantity observed, against the same quantity free and
