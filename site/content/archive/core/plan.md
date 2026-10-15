@@ -49,13 +49,13 @@ the test macro unless the companion says otherwise.
 
 - [ ] `Space` without its embedded variant, with `storage`, `dimension`, `cardinality` and
       `blocks`; `Block`; the markers, `Typed` and `Declares`; `Q<T>` and `QDyn` with the two
-      reserved failed identifiers, `widen` and `narrow`. Tests:
-      `product_refuses_a_discrete_factor`, `widening_is_free_and_narrowing_checks_the_space`.
+      reserved failed identifiers, and `widen`. Tests: `product_refuses_a_discrete_factor`.
 - [ ] `Operation`, `Lowered`, `Lowering` (the target and its cache), `Param`, and the kernel
       traits `Forward`, `FirstOrder`, `SecondOrder`, `Pullback`, `SecondPullback`, with `Kernel` as
       the enumeration of orders and its accessors by upcasting.
 - [ ] `testing::Tolerance`, the test macro over both precisions, and `testing::check_operation`
-      on a lowered kernel. The Euclidean primitives (`add`, `sub`, `neg`, `mul`, `scale`,
+      on a lowered kernel, moving inputs of the core's spaces by their retractions as the table of
+      retractions gives them, on the host values. The Euclidean primitives (`add`, `sub`, `neg`, `mul`, `scale`,
       `matmul`, `sum`, `exp`, `log`, `slice`, `concatenate` with its reshape, `transpose`) with
       kernels of order two. Tests: `add`, `sub`, `neg`, `mul`, `scale`, `matmul_matrix`,
       `matmul_vector`, `sum`, `exp`, `log`, `slice`, `concatenate`, `reshape`, `transpose`.
@@ -73,8 +73,9 @@ the test macro unless the companion says otherwise.
 - [ ] The `Model` with its persistent maps and nodes, `Snapshot`, `Writer` with `build`,
       `snapshot` and `reader`, the thread-local stack of frames and its guard, the four steps of
       every building function with `#[track_caller]`, and `scope::quantity`, `quantity_in`,
-      `constant`, `namespace`, `lookup` and `apply`, with `IntoHostValue`. Constants and nodes fixed
-      in the model fold when added, lowered for `Target::host()`. Tests:
+      `constant`, `namespace`, `lookup` and `apply`, with `IntoHostValue`, and `narrow`, which
+      checks the node's space in the open scope. Constants and nodes fixed in the model fold when
+      added, lowered for `Target::host()`. Tests: `widening_is_free_and_narrowing_checks_the_space`,
       `operation_outside_a_scope_fails`, `failure_poisons_what_is_built_on_it`,
       `scope_reports_the_first_failure_and_where`, `shape_mismatch_fails_when_the_node_is_added`,
       `failed_scope_publishes_nothing`, `panic_in_a_scope_discards_the_draft`,
@@ -88,7 +89,8 @@ the test macro unless the companion says otherwise.
 - [ ] The operator traits `QAdd`, `QSub`, `QMul`, `QDiv`, `QNeg`, `QScale` and `QShift`, the
       generic `std::ops` impls on `Q`, the core markers' impls (concrete markers only), the
       operators of `QDyn` over the core's spaces, and the methods and `scope` functions of the
-      operations table. Tests: `operators_build_the_nodes_of_their_markers`,
+      operations table but `retract`, `local`, `include` and `project`, which come with the
+      retractions and embedded types. Tests: `operators_build_the_nodes_of_their_markers`,
       `dyn_operands_of_different_spaces_fail`.
 - [ ] `Composite::define` with its definition frame, `Composite::call`, and the `Registry` with
       the core's operations, `register_operation` and `operation` by name. Tests:
@@ -100,7 +102,9 @@ the test macro unless the companion says otherwise.
       composites expanded under the chain of `Lowering` (with `Lowering::compile` and
       `Composite::compile`), classify, fold, prune and finish, into a `Program` of steps over
       slots. `Program`'s `forward`, `tangent`, `cotangent`, `hessian`, `gradient` and
-      `hessian_products`, with `Values`, `Frames` and `Second`, and `CompositeCycle`. Tests:
+      `hessian_products`, with `Values`, `Frames` and `Second`, and `CompositeCycle`. The model's
+      folding of a node whose operation lowers to a composite, compiled for `Target::host()`.
+      Tests:
       `tangent_pass_matches_finite_differences`, `cotangent_pass_is_its_transpose`,
       `hessian_pass_matches_finite_differences_of_the_gradient`,
       `hessian_is_symmetric_on_flat_spaces`, `unseeded_root_still_receives_its_cotangents`,
@@ -152,8 +156,10 @@ the test macro unless the companion says otherwise.
 
 - [ ] `Embedded::declare` with a retraction and its inverse, `Space::Embedded` with its blocks,
       the boundary kernels `skoro.include` and `skoro.retract` over the compiled programs of $R$
-      and $Q$ under the chain, their orders, the embedded retraction and inverse retraction, the
-      registry's embedded declarations, and `testing::check_embedded` without a projection. The
+      and $Q$ under the chain, their orders, the embedded retraction and inverse retraction,
+      `include` on handles, the registry's embedded declarations, `testing::check_operation` moving
+      inputs of an embedded type by its retraction, and `testing::check_embedded` without a
+      projection. The
       test sphere in `crates/skoro/tests/common/sphere.rs`, and the integration test that keeps
       `skoro`'s tests on its public interface. Tests: `storage_and_dimension_of_each_space`,
       `cycle_through_a_boundary_kernel_is_refused`,
@@ -215,4 +221,19 @@ the test macro unless the companion says otherwise.
 
 **2026-10-15.** Reopened at the sixth task. `narrow` checks a node's space inside the open scope,
 which the building task adds, so neither it nor `widening_is_free_and_narrowing_checks_the_space`
-can be built with the spaces. The change is recorded here as it is made.
+can be built with the spaces. It moves to the building task, with its test. Reading the plan
+again for the same fault found three more, each a task reaching for what a later one adds, and
+each moved to where it can be built:
+
+- The operator task built every method of the operations table, but `retract` and `local` need
+  the retractions of the core's spaces, and `include` and `project` the embedded types. They come
+  with those tasks; `project` already did.
+- The model folds a node whose inputs are all fixed when it is added, and a composite call is run
+  by compiling it, which the compiling task adds after `Composite::call`. Folding such a node
+  moves to the compiling task.
+- `check_operation` moves its inputs by their spaces' retractions, which the companion builds as
+  composites, run only once there is a compiler. For the core's spaces each retraction is a
+  formula of the table of retractions, and the check computes it on the host values, which lets
+  the primitives be checked as they are written; inputs of an embedded type are moved by its
+  retraction once the embedded types exist. A retraction computed apart from its composite also
+  makes the check independent of the composites it will later be used to check.
