@@ -311,7 +311,11 @@ impl scope::Draft {
         self.spaces(&[QDyn::from_id(id)]).map(|_| ())
     }
 
-    fn add_term(&mut self, scores: Option<QDyn>, log_density: QDyn) -> Result<NodeId, Error> {
+    pub(crate) fn add_term(
+        &mut self,
+        scores: Option<QDyn>,
+        log_density: QDyn,
+    ) -> Result<NodeId, Error> {
         if !self.in_model() {
             return Err(Error::NotInAModel);
         }
@@ -366,7 +370,11 @@ impl scope::Draft {
         Ok(id)
     }
 
-    fn add_proposal(&mut self, parameter: QDyn, proposal: Proposal) -> Result<NodeId, Error> {
+    pub(crate) fn add_proposal(
+        &mut self,
+        parameter: QDyn,
+        proposal: Proposal,
+    ) -> Result<NodeId, Error> {
         if !self.in_model() {
             return Err(Error::NotInAModel);
         }

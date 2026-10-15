@@ -74,6 +74,17 @@ pub enum Error {
     SamplerOutsideTerm { term: NodeId, quantity: NodeId },
     /// A free quantity scored by no term with a sampler, or a parameter with no proposal.
     CannotGenerate { quantity: NodeId, address: Address },
+    /// An observed quantity given to a retirement that is not under its namespace.
+    NotInNamespace {
+        quantity: NodeId,
+        namespace: Address,
+    },
+    /// A replacement reached from a quantity outside the blanket.
+    ReplacementOutsideBlanket { quantity: NodeId },
+    /// A proposal given with a replacement for a quantity the retirement leaves as it was.
+    ProposalNotNeeded { quantity: NodeId },
+    /// A proposal given with a replacement that reads a retired quantity.
+    ProposalReadsRetired { quantity: NodeId, retired: NodeId },
     /// A program with free discrete quantities, refused by an algorithm that cannot condition on
     /// them.
     FreeDiscrete { quantities: Vec<NodeId> },
@@ -115,6 +126,21 @@ impl fmt::Display for Error {
             Error::CannotGenerate { quantity, address } => write!(
                 f,
                 "{address} ({quantity:?}) has neither a term with a sampler nor a proposal"
+            ),
+            Error::NotInNamespace {
+                quantity,
+                namespace,
+            } => write!(f, "{quantity:?} is observed but not under {namespace}"),
+            Error::ReplacementOutsideBlanket { quantity } => {
+                write!(f, "the replacement reads {quantity:?}, outside the blanket")
+            }
+            Error::ProposalNotNeeded { quantity } => write!(
+                f,
+                "{quantity:?} keeps what draws it, and needs no proposal from the replacement"
+            ),
+            Error::ProposalReadsRetired { quantity, retired } => write!(
+                f,
+                "the proposal for {quantity:?} reads {retired:?}, which is retired"
             ),
             Error::NoProjection { space } => write!(f, "{space:?} declares no projection"),
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),

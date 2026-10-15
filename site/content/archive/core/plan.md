@@ -191,7 +191,7 @@ the test macro unless the companion says otherwise.
       `sampler_must_stay_within_its_term`, `weights_estimate_the_evidence`,
       `draw_depends_on_key_and_address_alone`, `rows_draw_independently`,
       `draws_agree_across_precisions`.
-- [ ] `Writer::retire`, `Retirement`, `Plan` with `unproposed`, `Replacement`, and `replace` with
+- [x] `Writer::retire`, `Retirement`, `Plan` with `unproposed`, `Replacement`, and `replace` with
       its checks, its removal and its one published snapshot. Tests:
       `retirement_reads_the_blanket_and_removes_what_it_names`,
       `replacement_outside_the_blanket_is_refused_and_changes_nothing`,

@@ -9,8 +9,8 @@ use skoro::scope::{constant, factor, propose, quantity, score};
 use skoro::tensor::Value;
 use skoro::testing::flex;
 use skoro::{
-    Address, Error, Generated, Key, NodeId, Observations, Precision, Q, Query, Real, Sampler,
-    Snapshot, Target, Values, Writer,
+    Address, Error, Generated, Key, NodeId, Observations, Precision, Q, Query, Real, Replacement,
+    Sampler, Snapshot, Target, Values, Writer,
 };
 
 fn host(values: &Values, q: impl Into<NodeId>) -> Vec<f64> {
@@ -322,6 +322,33 @@ fn draw_depends_on_key_and_address_alone() {
         })
         .unwrap();
     assert_eq!(draw(&branch.snapshot(), x), reference);
+    // After a retirement of quantities made before it.
+    let mut retiring = Writer::new();
+    retiring
+        .build(|| {
+            let mean = constant(Real, 0.0);
+            let u = quantity("old/u", Real);
+            score(u, log_density(u, mean, 1.0)).sampler(exact(mean, 1.0));
+        })
+        .unwrap();
+    let x_after = retiring
+        .build(|| {
+            let mean = constant(Real, 0.25);
+            let x = quantity("a/x", Real);
+            score(x, log_density(x, mean, 1.0)).sampler(exact(mean, 1.0));
+            x
+        })
+        .unwrap();
+    retiring
+        .retire("old", Observations::new())
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),
+            proposals: Vec::new(),
+        })
+        .unwrap();
+    assert_ne!(NodeId::from(x), NodeId::from(x_after));
+    assert_eq!(draw(&retiring.snapshot(), x_after), reference);
 }
 
 #[test]

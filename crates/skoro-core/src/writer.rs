@@ -42,11 +42,16 @@ impl Writer {
         if let Some(failure) = draft.failure {
             return Err(failure);
         }
-        self.latest = Snapshot::new(draft.model);
-        // The lock is held for one assignment, so a reader loads the model before the scope or
+        self.publish(draft.model);
+        Ok(result)
+    }
+
+    /// Publishes `model` as the branch's newest snapshot.
+    pub(crate) fn publish(&mut self, model: Model) {
+        self.latest = Snapshot::new(model);
+        // The lock is held for one assignment, so a reader loads the model before the change or
         // after it.
         *self.cell.lock().unwrap_or_else(PoisonError::into_inner) = self.latest.clone();
-        Ok(result)
     }
 
     pub fn snapshot(&self) -> Snapshot {

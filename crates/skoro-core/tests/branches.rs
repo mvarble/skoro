@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use skoro_core::primitive::Add;
-use skoro_core::scope::{apply, quantity};
-use skoro_core::{Error, Operation, QDyn, Real, Writer};
+use skoro_core::scope::{apply, constant, quantity};
+use skoro_core::{Error, Observations, Operation, QDyn, Real, Replacement, Writer};
 
 #[track_caller]
 fn add(a: impl Into<QDyn>, b: impl Into<QDyn>) -> QDyn {
@@ -97,4 +97,33 @@ fn dropping_the_last_snapshot_frees_retired_nodes() {
         "no snapshot holds the node, and it is freed"
     );
     assert!(main.snapshot().node(x.id()).is_some());
+
+    // A retired node, likewise: the snapshot before the retirement holds it, and nothing after.
+    let mut writer = Writer::new();
+    let operation: Arc<dyn Operation> = Arc::new(Add);
+    let weak = Arc::downgrade(&operation);
+    writer
+        .build(move || {
+            let x = quantity("old/x", Real);
+            apply(operation, &[x.into(), x.into()]);
+        })
+        .unwrap();
+    let held = writer.snapshot();
+    writer
+        .retire("old", Observations::new())
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: (constant(Real, 0.0).untyped() * 2.0).narrow::<Real>(),
+            proposals: Vec::new(),
+        })
+        .unwrap();
+    assert!(
+        weak.upgrade().is_some(),
+        "the old snapshot still holds the node"
+    );
+    drop(held);
+    assert!(
+        weak.upgrade().is_none(),
+        "no snapshot holds the retired node, and it is freed"
+    );
 }
