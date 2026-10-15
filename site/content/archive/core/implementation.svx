@@ -301,8 +301,9 @@ and target.
 **Run.** A program's passes (`forward`, `tangent`, `cotangent` and `hessian`) call its kernels'
 maps step by step, and each kernel's variant, `Zero`, `One` or `Two`, is its order, by which a pass
 is admitted or refused before anything runs. The one loop back is an embedded type's: its boundary
-operations `skoro.include` and `skoro.retract` lower to kernels that hold programs of $R$ and $Q$,
-compiled for the same target, and run passes over them as their derivative maps.
+operations `skoro.include`, `skoro.retract` and `skoro.project` lower to kernels that hold
+programs of $R$, $Q$ and $P$, compiled for the same target, and run passes over them as their
+derivative maps.
 
 In the range of [the overview](#overview), `y - x` adds a node whose operation is `skoro.sub`;
 compiled, it lowers to a `Kernel::Two` and becomes one step of the program, and so does every other
@@ -518,9 +519,7 @@ pub struct Block { pub space: Space, pub storage: Range<usize>, pub tangent: Ran
 >
 > An embedded type is declared by its retraction and that retraction's inverse, two composites of
 > any form, so a retraction such as the archive's $R \operatorname{Exp}(\tangent)$ on the rotations
-> is a declaration like any other. What the enumeration cannot hold is a projection from storage
-> onto a type, which the mathematics leaves out; the entry that first needs one adds a boundary
-> operation, and every type declared before it is unchanged.
+> is a declaration like any other, and so is a projection onto the type, when the type has one.
 
 The retractions, each a composite cached per space in a process-wide map:
 
@@ -634,7 +633,7 @@ The operations that are not operators are methods and `scope` functions:
 | `i.to_real()`, `a.is_nonnegative()` | a discrete value; a `Real` | embedding, discretization |
 | `x.retract(t)`, `y.local(x)` | any continuous value | the space's composites |
 | `p.factor(i)`, `scope::product(parts)` | products | `slice`, `concatenate` |
-| `e.include()` | an embedded value | `include` |
+| `e.include()`, `scope::project(marker, w)` | an embedded value; a vector, and the marker of the type to project it onto | `include`, `project` |
 
 A literal is sugar for a constant node. The table of primitives has no reciprocal of a Euclidean
 value, so the core implements `QDiv` only for positive markers and offers division of a Euclidean
@@ -787,7 +786,7 @@ code at both precisions.
 | `skoro.concatenate` | values whose storage sizes sum to the output's, to a Euclidean space or a product | parameter: the output space; with one input it is a reshape |
 | `skoro.select` | `Categorical(n)` and $n$ values of one continuous space, to that space | [](eq:archive/core/math/select) |
 | `skoro.positive.as_real`, `.exp`, `.log`, `.mul`, `.recip` | the rows of the second table | read in the charts [](eq:archive/core/math/positive) |
-| `skoro.include`, `skoro.retract` | an embedded value to `Vector(n)`; an embedded value and `Vector(d)` to that type | parameter: the declaration; [below](#embedded-types) |
+| `skoro.include`, `skoro.retract`, `skoro.project` | an embedded value to `Vector(n)`; an embedded value and `Vector(d)` to that type; `Vector(n)` to that type | parameter: the declaration; [below](#embedded-types) |
 | `skoro.integer.add`, `.sub`, `.mul`, `.eq`, `.lt`, `.le` | integers to `Integer` or `Categorical(2)` | order zero |
 | `skoro.to_real`, `skoro.is_nonnegative` | a discrete value to `Real`; `Real` to `Categorical(2)` | order zero: an embedding and a discretization |
 
@@ -832,10 +831,10 @@ cycle can still close through a fused operation. If an operation `F` lowers, on 
 nothing but its output space and builds the composite without complaint, and expanding it would
 lower `F` again, without end. The same cycle can pass through an embedded type, when its $R$ applies
 an operation whose fallback retracts on that same type: lowering `skoro.retract` compiles $R$,
-which reaches `skoro.retract` again. So `Lowering` keeps the chain of composites the compiler is
+which reaches `skoro.retract` again, and lowering `skoro.project` compiles $P$ the same way. So `Lowering` keeps the chain of composites the compiler is
 inside, outermost first. Expanding a composite pushes it for the length of the expansion, and so
 does compiling one through `Lowering::compile`, which is how a boundary kernel compiles its
-declaration's $R$ and $Q$. A composite already on the chain is refused, before anything of it is
+declaration's $R$, $Q$ and $P$. A composite already on the chain is refused, before anything of it is
 lowered, as `CompositeCycle`, which names the chain from the outermost composite to the one entered
 twice. The chain records the composites a step was expanded from, so `OrderTooLow` names it too.
 
@@ -887,9 +886,10 @@ crate writing a derivative. This section follows it the whole way, then gives th
 
 **What the crate writes.** Two composites over Euclidean values, its retraction
 $R : \R^n \times \R^\dimension \to \R^n$ and its inverse $Q : \R^n \times \R^n \to \R^\dimension$,
-each built with `Composite::define` from the core's operations, or around a fused operation of its
-own; a call to `Embedded::declare` with them, its storage size $n$ and its dimension $\dimension$;
-and a marker whose space is the declaration. For a sphere, say:
+and, if the type has one, a third, its projection $P : \R^n \to \R^n$, each built with
+`Composite::define` from the core's operations, or around a fused operation of its own; a call to
+`Embedded::declare` with them, its storage size $n$ and its dimension $\dimension$; and a marker
+whose space is the declaration. For a sphere, say:
 
 ```rust
 // In a feature crate. The bodies of R and Q are ordinary model code over Vector(3) and Vector(2).
@@ -900,7 +900,10 @@ static SPHERE: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
     let q = Composite::define("sphere.local", vec![], &[Space::Vector(3), Space::Vector(3)], |io| {
         /* 2 B(x)^T y / (1 + x^T y) */
     });
-    Embedded::declare("sphere", vec![], 3, 2, r.unwrap(), q.unwrap()).unwrap() // checked by its tests
+    let p = Composite::define("sphere.project", vec![], &[Space::Vector(3)], |io| {
+        /* w / |w| */
+    });
+    Embedded::declare("sphere", vec![], 3, 2, r.unwrap(), q.unwrap(), Some(p.unwrap())).unwrap() // checked by its tests
 });
 
 #[derive(Clone, Copy)]
@@ -936,13 +939,31 @@ operation, being the composite $Q(\iota(x), \iota(\otherPoint))$ of
 [](eq:archive/core/math/embedded), and the inclusion `skoro.include` is the other boundary operation,
 lowered the same way.
 
+**Where $P$ runs.** A map into the type is written in storage and projected, as
+[](eq:archive/core/math/map-into) says, and `scope::project(Sphere, w)` builds the node of
+`skoro.project` that does the projecting. The crate's maps into the sphere are then ordinary code:
+
+```rust
+// The normalized midpoint of two points of the sphere: computed in storage, projected back.
+pub fn midpoint(a: Q<Sphere>, b: Q<Sphere>) -> Q<Sphere> {
+    scope::project(Sphere, a.include() + b.include())
+}
+```
+
+and their derivatives in charts are their parts', by the chain rule, through the inclusions, the
+Euclidean sum, and the projection's kernel, which runs passes over $P$ and $Q$ as the retraction's
+runs them over $R$ and $Q$. A type that declares no projection has no `skoro.project`:
+`scope::project` returns a failed handle (`NoProjection`), and the type's maps into itself are
+retractions from a base point or fused operations.
+
 **Why $R$ is not expanded into the model.** A composite's derivatives are its parts' by the chain
-rule, and $R$ is a composite, so expanding it in place looks simpler. But $R$ maps storage to
+rule, and $R$ is a composite, so expanding it in place looks simpler. The same holds of $P$. But $R$ maps storage to
 storage, and the retraction of the type maps a point of the type to a point of the type: its
 derivatives in charts are $L(\otherPoint)\, \partial_j R$ and $\partial_1 R\, B(x)$, products with the
 derivatives of the charts at its two ends, which no pass over $R$'s parts produces. The expansion
 would still need an operation at each end to apply them, and those operations would need
-everything the boundary kernel does. One opaque node per retraction keeps that in one place.
+everything the boundary kernel does. One opaque node per retraction, and per projection, keeps that
+in one place.
 
 **Who checks it.** Nothing in the core can see whether a declaration meets the conditions of
 [%full](statement:archive/core/math/embedded), or computes its derivatives smoothly where they are
@@ -952,11 +973,12 @@ fused operation.
 The pieces, then:
 
 ```rust
-pub struct Embedded { /* name, params, storage n, dimension d, the two composites */ }
+pub struct Embedded { /* name, params, storage n, dimension d, the composites */ }
 
 impl Embedded {
     /// `retraction`: Vector(n) and Vector(d) to Vector(n), the R of the mathematics.
-    /// `inverse`: two of Vector(n) to Vector(d), its Q. Any other signature is refused.
+    /// `inverse`: two of Vector(n) to Vector(d), its Q. `projection`: Vector(n) to Vector(n), its P,
+    /// when the type has one. Any other signature is refused.
     pub fn declare(
         name: &'static str,
         params: Vec<Param>,
@@ -964,23 +986,27 @@ impl Embedded {
         dimension: usize,
         retraction: Arc<Composite>,
         inverse: Arc<Composite>,
+        projection: Option<Arc<Composite>>,
     ) -> Result<Arc<Embedded>, Error>;
+    pub fn has_projection(&self) -> bool;
 }
 ```
 
-A type whose $R$ or $Q$ is a fused operation declares the composite of one call to it, so that
+A type whose $R$, $Q$ or $P$ is a fused operation declares the composite of one call to it, so that
 `declare` takes composites alone and the boundary kernels compile every declaration the same way.
 The declaration is plain data, nameable through the registry like an operation.
 
-The boundary operations `skoro.include` ($\iota$) and `skoro.retract` ($\oplus$) are the only
-primitives whose kernels are not written in tensor operations. When lowered, each compiles the
+The boundary operations `skoro.include` ($\iota$), `skoro.retract` ($\oplus$) and
+`skoro.project` ($\pi$) are the only primitives whose kernels are not written in tensor
+operations. When lowered, each compiles the
 declaration's composites for the target (`Lowering::compile`, cached, and under the chain), and its
 derivative maps are passes over those programs, assembled as
-[](eq:archive/core/math/inclusion), [](eq:archive/core/math/retraction-maps) and
-[](eq:archive/core/math/retraction-second) say, with the passes of the table under
-[Embedded types](math.svx#quantities). Write $\mathcal R$ and $\mathcal Q$ for the programs of $R$
-and $Q$, each with two roots, and read a pass "at an input" as its frame at that root. Both roots of
-each are flat, so their tangent coordinates are their storage.
+[](eq:archive/core/math/inclusion), [](eq:archive/core/math/retraction-maps),
+[](eq:archive/core/math/retraction-second) and [](eq:archive/core/math/projection) say, with the
+passes of the table under [Embedded types](math.svx#quantities). Write $\mathcal R$ and
+$\mathcal Q$ for the programs of $R$ and $Q$, each with two roots, and $\mathcal P$ for the program
+of $P$, with one, and read a pass "at an input" as its frame at that root. Every root is flat, so
+its tangent coordinates are its storage.
 
 For $\iota$ at a point stored as $x$:
 
@@ -1000,11 +1026,23 @@ For $\oplus$ at $(x, \tangent)$, with $\otherPoint = \mathcal R.\mathtt{forward}
 | cotangent of $\alpha$ | $h = \mathcal Q.\mathtt{cotangent}((\otherPoint, \otherPoint);\, \alpha)$ at the second input; $(g_1, g_2) = \mathcal R.\mathtt{cotangent}((x, \tangent);\, h)$; then $B\transpose g_1$ into $x$ and $g_2$ into $\tangent$ |
 | second order | record $\dot x$ and $\dot \otherPoint$; then, with $h$, $g_1$, $g_2$ as above: $m$ the $\beta$ of $\mathcal Q.\mathtt{hessian}((\otherPoint, \otherPoint);\, (\dot \otherPoint, \dot \otherPoint);\, \alpha)$ at the second input; $(\dot g_1, \dot g_2)$ the cotangent of $\mathcal R$ at $(x, \tangent)$ of $m$, plus the $\beta$ of $\mathcal R.\mathtt{hessian}((x, \tangent);\, (\dot x, v);\, h)$; $\hvp_x(\alpha) = B\transpose \dot g_1$ plus the $\beta$ of $\mathcal R.\mathtt{hessian}((x, 0);\, (\dot x, 0);\, g_1)$ at the second input; $\hvp_\tangent(\alpha) = \dot g_2$ |
 
+For $\pi$ at $w$, with $\otherPoint = \mathcal P.\mathtt{forward}(w)$:
+
+| map | computed as |
+| --- | --- |
+| forward | $\otherPoint$ |
+| tangent of $\dot w$ | $\dot \otherPoint = \mathcal P.\mathtt{tangent}(w;\, \dot w)$, then $\mathcal Q.\mathtt{tangent}((\otherPoint, \otherPoint);\, (0, \dot \otherPoint))$ |
+| cotangent of $\alpha$ | $h = \mathcal Q.\mathtt{cotangent}((\otherPoint, \otherPoint);\, \alpha)$ at the second input; then $\mathcal P.\mathtt{cotangent}(w;\, h)$ |
+| second order | record $\dot \otherPoint$; then, with $h$ as above and $m$ the $\beta$ of $\mathcal Q.\mathtt{hessian}((\otherPoint, \otherPoint);\, (\dot \otherPoint, \dot \otherPoint);\, \alpha)$ at the second input: the $\beta$ of $\mathcal P.\mathtt{hessian}(w;\, \dot w;\, h)$, plus $\mathcal P.\mathtt{cotangent}(w;\, m)$ |
+
 Every row is a term of the mathematics' equations, in order: $m$ is
 $(\D L(\otherPoint)[\dot \otherPoint])\transpose \alpha$, the Hessian pass over $\mathcal Q$ seeds
 both inputs because $L$ moves with both arguments of $Q$, and the last Hessian pass over
-$\mathcal R$ at $(x, 0)$ is $(\D B(x)[\dot x])\transpose g_1$. A Hessian pass takes one cotangent
-column, which is why $\alpha$, $h$ and $g_1$ are single columns while the velocities have $K$. The
+$\mathcal R$ at $(x, 0)$ is $(\D B(x)[\dot x])\transpose g_1$; in the projection's last row, the
+Hessian pass over $\mathcal P$ is $(\D^2 P(w)[\dot w])\transpose L(\otherPoint)\transpose \alpha$
+and the cotangent of $m$ is the second term of [](eq:archive/core/math/projection). A Hessian pass
+takes one cotangent column, which is why $\alpha$, $h$, $g_1$ and $m$ are single columns while the
+velocities have $K$. The
 second-order map of $\oplus$ runs about ten inner passes over programs of a few steps each; that is
 the price of deriving a curved type's derivatives rather than writing them, and the first place to
 look if profiling a model with curved quantities points at the core.
@@ -1014,8 +1052,9 @@ admissibility function as any pass when the kernel is lowered, and the kernel is
 variant of `Kernel`: $\iota$ has order two when $\mathcal R$ admits a Hessian pass
 seeded at its first input, and order one when it admits first-order passes; $\oplus$ has order two
 when $\mathcal R$ and $\mathcal Q$ both admit Hessian passes, and order one when both admit
-first-order passes; each has order zero otherwise. No derivative of an embedded type is written by
-hand in the core, and none in the crate that declares it unless it fuses $R$ or $Q$.
+first-order passes; $\pi$ likewise with $\mathcal P$ and $\mathcal Q$; each has order zero
+otherwise. No derivative of an embedded type is written by hand in the core, and none in the crate
+that declares it unless it fuses $R$, $Q$ or $P$.
 
 **Smooth as computed.** Every inner pass at $(x, 0)$ or on the diagonal $(\otherPoint, \otherPoint)$
 evaluates $R$ and $Q$ where an exponential map's textbook formula is $0/0$
@@ -1024,20 +1063,21 @@ declaration, and a declaration that has one gives NaN in every derivative of its
 operations, silently. So `testing::check_embedded(declaration, points, target)` is the check a type's
 crate runs, as `check_operation` is for an operation: at each point $x$ given, on the manifold, it
 checks that $R(x, 0) = x$, that $Q(x, R(x, \tangent)) = \tangent$ for random small $\tangent$, that
-$B(x)$ has rank $\dimension$, that every inner pass at $(x, 0)$ and $(x, x)$ is finite at the
-declaration's order, and then `check_operation` on both boundary operations, at $\tangent = 0$ and
-away from it. A type with a small-angle branch also passes points on both sides of its cutoff.
+$B(x)$ has rank $\dimension$, that $P(x) = x$ when a projection is declared, that every inner pass
+at $(x, 0)$ and $(x, x)$ is finite at the declaration's order, and then `check_operation` on every
+boundary operation the type has, the retraction at $\tangent = 0$ and away from it, and the
+projection at points of the manifold and off it. A type with a small-angle branch also passes points on both sides of its cutoff.
 
 **Flat types.** A complex vector, a quaternion before normalization, or any
 other flat type that a feature crate wants to keep distinct from `Vector(n)` needs a `Space` that
 says so, or untyped code (`QDyn`, `narrow`, a query's checks) could not tell them apart. It is
-declared as an embedded type with $R(x, \tangent) = x + \tangent$ and
-$Q(x, \otherPoint) = \otherPoint - x$, which [%full](statement:archive/core/math/embedded)
-covers with $\manifold = \R^n$, $B = I$ and $L = I$:
+declared as an embedded type with $R(x, \tangent) = x + \tangent$,
+$Q(x, \otherPoint) = \otherPoint - x$ and $P(w) = w$, which
+[%full](statement:archive/core/math/embedded) covers with $\manifold = \R^n$, $B = I$ and $L = I$:
 
 ```rust
 impl Embedded {
-    /// A flat type: storage and dimension n, R and Q the core's addition and subtraction.
+    /// A flat type: storage and dimension n, R and Q the core's addition and subtraction, P the identity.
     pub fn declare_flat(name: &'static str, params: Vec<Param>, n: usize) -> Result<Arc<Embedded>, Error>;
 }
 ```
@@ -1045,8 +1085,9 @@ impl Embedded {
 The boundary kernels recognise a flat declaration and use what the statement gives for it
 directly, the identity for every first-order map and zero for every second-order one, rather than
 running inner passes to find it. A flat type's crate reads a value as storage with `include()` and
-makes one from storage as `retract(zero, w)`, a constant zero point plus $w$, which for a flat
-declaration is one addition. The alternative, a `Space::Flat` variant beside `Embedded`, would
+makes one from storage with `scope::project`, which for a flat declaration is the identity, so that
+its maps into itself, a complex product say, are written in storage and projected like any
+other. The alternative, a `Space::Flat` variant beside `Embedded`, would
 hold the same data under a second name, and every match on `Space` would grow an arm for it.
 
 ### The model
@@ -1482,7 +1523,7 @@ carrying what a caller needs to name the fault:
 
 | raised when | variants |
 | --- | --- |
-| building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration` |
+| building | `OutsideScope`, `FailedOperand`, `UnknownNode`, `SpaceMismatch`, `ShapeMismatch`, `NotContinuous`, `NotDiscrete`, `AddressTaken`, `UnknownAddress`, `NotInAModel`, `InvalidDeclaration`, `NoProjection` |
 | adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
 | compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `CompositeCycle`, `FreeDiscrete`, `FrameShape` |
 | generating | `SamplerOutsideTerm`, `CannotGenerate` |
@@ -1802,16 +1843,28 @@ integration test of the umbrella crate enforces). The sphere is the embedded typ
 - `sphere_passes_check_embedded`: `testing::check_embedded` at random points, which checks the
   conditions of [%full](statement:archive/core/math/embedded), that the inner passes are finite at
   $\tangent = 0$ and on the diagonal, and [](eq:archive/core/math/inclusion),
-  [](eq:archive/core/math/retraction-maps) and [](eq:archive/core/math/retraction-second) at both
-  orders, by `check_operation` on `skoro.include` and `skoro.retract`.
+  [](eq:archive/core/math/retraction-maps), [](eq:archive/core/math/retraction-second) and
+  [](eq:archive/core/math/projection) at both orders, by `check_operation` on `skoro.include`,
+  `skoro.retract` and `skoro.project`.
+- `sphere_projection_agrees_with_its_retraction`: `testing::check_agreement` holds
+  `x.retract(t)` to `scope::project(Sphere, R(x.include(), t))`, the retraction computed in storage
+  and projected, in value and in every pass, as [the acceptance test](math.svx#the-acceptance-test)
+  requires.
+- `projection_returns_drift_to_the_sphere`: a point of the sphere scaled by $1 + 10^{-6}$ in
+  storage projects to unit norm, and to the point it was scaled from.
+- `midpoint_is_a_map_into_the_sphere`: the `midpoint` of [Embedded types](#embedded-types) passes
+  `check_operation` at both orders.
+- `project_without_a_declared_projection_fails`: on a type declared with no projection,
+  `scope::project` returns a failed handle and the scope reports `NoProjection`.
 - `sphere_basis_is_the_derivative_of_its_retraction`: $\partial_2 R(x, 0)$, read off the tangent
   pass, is the $B(x)$ of [the acceptance test](math.svx#the-acceptance-test), with orthonormal
   columns orthogonal to $x$.
 - `sphere_retraction_reaches_the_far_side`: at $\lVert \tangent \rVert = 10$, $x \oplus \tangent$
   is on the sphere and $(x \oplus \tangent) \ominus x = \tangent$: the stereographic inverse is
   defined wherever $x\transpose y > -1$, near the antipode too.
-- `boundary_orders_follow_the_composites`: with a first-order operation inside $Q$, `retract` has
-  order one and `include` keeps order two.
+- `boundary_orders_follow_the_composites`: with a first-order operation inside $Q$, `retract` and
+  `project` have order one and `include` keeps order two; with one inside $P$, `project` alone has
+  order one.
 - `removable_singularity_is_reported`: a private sphere whose $R$ is the exponential map written
   as $\cos \lVert \tangent \rVert\, x + (\sin \lVert \tangent \rVert / \lVert \tangent \rVert)\,
   B(x)\, \tangent$ fails `check_embedded` at $\tangent = 0$, naming the boundary operation and
@@ -1840,8 +1893,9 @@ of storage $2N$, real parts then imaginary parts).
   and computes the complex product; `testing::check_operation` passes on it at both orders.
 - `feature_marker_is_not_a_vector`: a `Q<Complex<2>>` does not narrow to `Vector<4>`, and `QDyn`
   arithmetic between it and a `Vector(4)` value returns a failed handle.
-- `flat_declaration_skips_inner_passes`: the boundary kernels of a flat declaration compile no
-  inner programs, give the identity and zero maps, and pass `testing::check_embedded`.
+- `flat_declaration_skips_inner_passes`: the boundary kernels of a flat declaration, its
+  projection among them, compile no inner programs, give the identity and zero maps, and pass
+  `testing::check_embedded`.
 
 **Generation** (`crates/skoro/tests/generation.rs`), with the private normal of
 [testing retirement](math.svx#retirement), written in `tests/common/normal.rs` as a composite

@@ -5,7 +5,7 @@ import { defineGraph } from '$lib/graph/spec';
 // edge a field or a method of its source. The blue types are made by the compiler for one target;
 // the rest exist on no device. The cycle Operation → Lowered → Composite → Operation is the
 // expansion of composites, and the cycle Program ⇄ Kernel the boundary kernels of an embedded type,
-// which hold programs of its retraction and inverse.
+// which hold programs of its retraction, inverse and projection.
 
 export const pieces = defineGraph({
     title: 'How the pieces fit',
@@ -67,7 +67,7 @@ export const pieces = defineGraph({
     ],
     edges: [
         { from: 'space', to: 'embedded', kind: 'holds', label: 'Embedded(…)' },
-        { from: 'embedded', to: 'composite', kind: 'holds', label: 'R and Q' },
+        { from: 'embedded', to: 'composite', kind: 'holds', label: 'R, Q and P' },
         { from: 'space', to: 'composite', kind: 'returns', label: 'retraction()' },
         { from: 'composite', to: 'operation', kind: 'holds', label: 'its body' },
         { from: 'operation', to: 'space', kind: 'returns', label: 'output()' },
@@ -89,7 +89,7 @@ export const pieces = defineGraph({
             from: 'kernel',
             to: 'program',
             kind: 'holds',
-            label: 'R and Q, if boundary',
+            label: 'R, Q and P, if boundary',
             labelAt: 0.55,
             bend: 40,
         },
