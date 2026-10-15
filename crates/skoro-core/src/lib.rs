@@ -2,9 +2,11 @@
 //! compilation and probabilistic graphs, the writer, queries, generation and retirement.
 
 mod address;
+mod error;
 mod id;
 mod key;
 
 pub use address::{Address, Segment};
+pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use key::Key;

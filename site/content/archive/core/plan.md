@@ -42,7 +42,7 @@ the test macro unless the companion says otherwise.
       `fold_matches_the_reference_vectors`, `split_keys_are_distinct`,
       `uniforms_lie_in_the_open_interval`, `uniforms_have_uniform_moments`,
       `address_parses_digits_as_indices`, `quoted_names_display_distinctly`.
-- [ ] `Error` and `Failure`, with the variants of the tasks so far; later tasks add the variants
+- [x] `Error` and `Failure`, with the variants of the tasks so far; later tasks add the variants
       they raise.
 
 ## Spaces and operations
