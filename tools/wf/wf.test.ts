@@ -168,6 +168,21 @@ test('code waits for the build stage', () => {
     assert.equal(r.wf('check').code, 0, 'code is open once the plan is approved');
 });
 
+test('code written before a reopening waits, unchanged, for the build stage', () => {
+    const r = repo();
+    toPlan(r);
+    write(r.root, `${entry}/plan.md`, '- [ ] Add it.\n- [ ] Test it.\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, 'crates/skoro/src/lib.rs', '// code\n');
+    r.commit();
+    assert.equal(r.wf('reopen', 'implementation', '--reason', 'a test cannot be built').code, 0);
+    r.commit();
+    assert.equal(r.wf('check', '--base', 'main').code, 0, 'the code may stay');
+    write(r.root, 'crates/skoro/src/lib.rs', '// changed code\n');
+    assert.match(r.wf('check', '--base', 'main').stderr, /is code, which opens at the build stage/);
+});
+
 test('the plan is ticked during build, and build needs every box ticked', () => {
     const r = repo();
     toPlan(r);

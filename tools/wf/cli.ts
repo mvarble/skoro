@@ -540,6 +540,14 @@ function lockProblems(root: string, slug: string, workflow: Workflow): string[] 
     return problems;
 }
 
+// Whether `rel` was in the tree at `commit` and is unchanged since.
+function keptSince(root: string, commit: string, rel: string): boolean {
+    return (
+        tryGit(root, 'cat-file', '-e', `${commit}:${rel}`) != undefined &&
+        tryGit(root, 'diff', '--quiet', commit, '--', rel) != undefined
+    );
+}
+
 function check(root: string, args: Args, io: Output): Result {
     const problems: string[] = [];
     const active = activeSlug(root);
@@ -579,9 +587,14 @@ function check(root: string, args: Args, io: Output): Result {
         const slug = active ?? touched[0];
         const workflow = slug ? workflows.get(slug) : undefined;
         const subject = slug && workflow ? { slug, workflow } : undefined;
+        // Code, math notes and pages written before a reopening wait, unchanged, for the stage
+        // that opens them to come round again, as a draft does.
+        const reopened = subject?.workflow.events.findLast((event) => event.action == 'reopen')?.commit;
         for (const rel of changed) {
             const why = refusal(rel, subject, false);
-            if (why) problems.push(why);
+            if (!why) continue;
+            if (reopened && placeOf(rel).area != 'entry' && keptSince(root, reopened, rel)) continue;
+            problems.push(why);
         }
     }
     if (args.flags.merge && active) {
