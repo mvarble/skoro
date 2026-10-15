@@ -79,6 +79,11 @@ impl Composite {
         scope::apply(Arc::new(Call(self.clone())), inputs)
     }
 
+    /// The operation of a call of this composite: what `call` applies.
+    pub fn operation(self: &Arc<Self>) -> Arc<dyn Operation> {
+        Arc::new(Call(self.clone()))
+    }
+
     pub fn name(&self) -> &'static str {
         self.name
     }

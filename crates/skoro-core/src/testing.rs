@@ -3,7 +3,10 @@
 
 use skoro_tensor::{Device, Frame, HostData, HostValue, Precision, Target, Value};
 
-use crate::{Error, Kernel, Key, Lowered, Lowering, Operation, Space};
+use crate::{
+    Error, Frames, Kernel, Key, Lowered, Lowering, Operation, Pass, Program, QDyn, Query, Space,
+    Values, Writer,
+};
 
 #[doc(hidden)]
 pub use skoro_tensor as __tensor;
@@ -158,6 +161,159 @@ pub fn check_operation(
     check.run()?;
     if target.precision() == Precision::Single {
         check.agree()?;
+    }
+    Ok(())
+}
+
+/// Holds every pass over the program of `a` to the same pass over the program of `b`, both built
+/// from quantities of the inputs' spaces and evaluated at their values on `target`: the forward
+/// pass, and the tangent, cotangent and Hessian passes at random frames, each where both programs
+/// admit it. A pass that one admits and the other refuses is a disagreement.
+pub fn check_agreement(
+    a: impl Fn(&[QDyn]) -> QDyn,
+    b: impl Fn(&[QDyn]) -> QDyn,
+    inputs: &[(Space, HostValue)],
+    target: &Target,
+) -> Result<(), String> {
+    let mut writer = Writer::new();
+    let (roots, a, b) = writer
+        .build(|| {
+            let roots: Vec<QDyn> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, (space, _))| crate::scope::quantity_in(i, space.clone()))
+                .collect();
+            let (a, b) = (a(&roots), b(&roots));
+            (roots, a, b)
+        })
+        .map_err(|failure| failure.to_string())?;
+    let snapshot = writer.snapshot();
+    let compile = |q: QDyn| snapshot.compile(&Query::of([q]), target).map_err(describe);
+    let (pa, pb) = (compile(a)?, compile(b)?);
+    let rows = inputs
+        .iter()
+        .filter_map(|(_, v)| v.rows())
+        .max()
+        .unwrap_or(1);
+    let mut at = Values::new();
+    for ((space, value), q) in inputs.iter().zip(&roots) {
+        let data = rows_of(space, value, rows)?;
+        let value = HostValue::new(Some(rows), space.storage(), data)
+            .ok_or("an input's values do not fit its space")?;
+        let value = value
+            .load(rows, target)
+            .map_err(|e| e.to_string())?
+            .ok_or("an input does not fit the batch")?;
+        at.insert(*q, value);
+    }
+    let relative = Tolerance::of(target.precision()).relative;
+    let host = |frame: Option<&Frame>| frame.map(Frame::to_host).unwrap_or_default();
+    let agree = |x: Vec<f64>, y: Vec<f64>, what: &str| {
+        close(&x, &y, relative).map_err(|error| format!("{what}: {error}"))
+    };
+    let value = |program: &Program, out: QDyn| -> Result<Vec<f64>, String> {
+        let values = program.forward(&at).map_err(describe)?;
+        Ok(values
+            .get(out)
+            .map(continuous_or_discrete)
+            .unwrap_or_default())
+    };
+    agree(value(&pa, a)?, value(&pb, b)?, "the forward pass")?;
+
+    let continuous: Vec<(QDyn, usize)> = roots
+        .iter()
+        .zip(inputs)
+        .filter_map(|(q, (space, _))| space.dimension().map(|d| (*q, d)))
+        .collect();
+    let Some(d_out) = snapshot.space(a.id()).and_then(Space::dimension) else {
+        return Ok(());
+    };
+    let frames = |seed: u64, columns: usize| {
+        continuous
+            .iter()
+            .enumerate()
+            .fold(Frames::new(), |frames, (i, (q, d))| {
+                let data = signed(seed + i as u64, rows * d * columns);
+                frames.with(*q, Frame::from_host(&data, rows, *d, columns, target))
+            })
+    };
+    let seeded: Vec<_> = continuous.iter().map(|(q, _)| q.id()).collect();
+    let both =
+        |pass: &Pass<'_>, pass_b: &Pass<'_>, what: &str| match (pa.admits(pass), pb.admits(pass_b))
+        {
+            (Ok(()), Ok(())) => Ok(true),
+            (Err(_), Err(_)) => Ok(false),
+            (left, right) => Err(format!(
+                "{what}: one program admits it and the other does not: {left:?}, {right:?}"
+            )),
+        };
+
+    if both(
+        &Pass::Tangent { seeded: &seeded },
+        &Pass::Tangent { seeded: &seeded },
+        "the tangent pass",
+    )? {
+        let tangents = frames(500, COLUMNS);
+        let ta = pa.tangent(&at, &tangents).map_err(describe)?.1;
+        let tb = pb.tangent(&at, &tangents).map_err(describe)?.1;
+        agree(host(ta.get(a)), host(tb.get(b)), "the tangent pass")?;
+    }
+    let (ta_ids, tb_ids) = ([a.id()], [b.id()]);
+    if both(
+        &Pass::Cotangent { targets: &ta_ids },
+        &Pass::Cotangent { targets: &tb_ids },
+        "the cotangent pass",
+    )? {
+        let seed = Frame::from_host(
+            &signed(600, rows * d_out * COLUMNS),
+            rows,
+            d_out,
+            COLUMNS,
+            target,
+        );
+        let ca = pa
+            .cotangent(&at, &Frames::new().with(a, seed.clone()))
+            .map_err(describe)?
+            .1;
+        let cb = pb
+            .cotangent(&at, &Frames::new().with(b, seed))
+            .map_err(describe)?
+            .1;
+        for (q, _) in &continuous {
+            agree(host(ca.get(*q)), host(cb.get(*q)), "the cotangent pass")?;
+        }
+    }
+    let (pass_a, pass_b) = (
+        Pass::Hessian {
+            seeded: &seeded,
+            targets: &ta_ids,
+        },
+        Pass::Hessian {
+            seeded: &seeded,
+            targets: &tb_ids,
+        },
+    );
+    if both(&pass_a, &pass_b, "the Hessian pass")? {
+        let velocities = frames(700, COLUMNS);
+        let seed = Frame::from_host(&signed(800, rows * d_out), rows, d_out, 1, target);
+        let sa = pa
+            .hessian(&at, &velocities, &Frames::new().with(a, seed.clone()))
+            .map_err(describe)?;
+        let sb = pb
+            .hessian(&at, &velocities, &Frames::new().with(b, seed))
+            .map_err(describe)?;
+        for (q, _) in &continuous {
+            agree(
+                host(sa.alpha.get(*q)),
+                host(sb.alpha.get(*q)),
+                "α of the Hessian pass",
+            )?;
+            agree(
+                host(sa.beta.get(*q)),
+                host(sb.beta.get(*q)),
+                "β of the Hessian pass",
+            )?;
+        }
     }
     Ok(())
 }

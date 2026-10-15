@@ -440,3 +440,207 @@ mod programs {
         cycle_is_refused(true);
     }
 }
+
+mod fused {
+    use std::sync::Arc;
+
+    use skoro_core::scope::apply;
+    use skoro_core::testing::{check_agreement, random};
+    use skoro_core::{
+        Composite, Error, FirstOrder, Forward, Kernel, Lowered, Lowering, Operation, Param,
+        Pullback, QDyn, Query, SecondOrder, SecondPullback, Space, Writer,
+    };
+    use skoro_tensor::burn::Tensor;
+    use skoro_tensor::{Device, Frame, Points, Precision, Target, Value};
+
+    /// `e^{-log x}`, fused into `1 / x` on double-precision targets; on any other, its composite.
+    #[derive(Debug)]
+    struct Recip;
+
+    fn fallback(n: usize) -> Arc<Composite> {
+        Composite::define(
+            "test.recip.fallback",
+            vec![Param::Integer(n as i64)],
+            &[Space::Vector(n)],
+            |q| (-q[0].log()).exp(),
+        )
+        .unwrap()
+    }
+
+    struct RecipKernel {
+        target: Target,
+    }
+
+    struct RecipPullback {
+        target: Target,
+        x: Tensor<2>,
+        velocity: Option<Tensor<3>>,
+    }
+
+    fn columns(x: &Tensor<2>, k: usize) -> Tensor<3> {
+        let [n, d] = x.dims();
+        x.clone().unsqueeze_dim::<3>(2).expand([n, d, k])
+    }
+
+    fn input(inputs: &[Value]) -> Tensor<2> {
+        let Value::Continuous(x) = &inputs[0] else {
+            panic!("a continuous input")
+        };
+        x.clone().into_burn()
+    }
+
+    impl RecipKernel {
+        fn value(&self, x: &Tensor<2>) -> Value {
+            Value::Continuous(Points::from_burn(x.clone().recip(), &self.target).unwrap())
+        }
+
+        fn push(&self, x: &Tensor<2>, t: &Frame) -> Frame {
+            let k = t.columns();
+            let square = x.clone() * x.clone();
+            Frame::from_burn(-(t.clone().into_burn() / columns(&square, k)), &self.target).unwrap()
+        }
+    }
+
+    impl Forward for RecipKernel {
+        fn forward(&self, inputs: &[Value]) -> Value {
+            self.value(&input(inputs))
+        }
+    }
+
+    impl FirstOrder for RecipKernel {
+        fn tangent(&self, inputs: &[Value], tangents: &[Option<Frame>]) -> (Value, Option<Frame>) {
+            let x = input(inputs);
+            (
+                self.value(&x),
+                tangents[0].as_ref().map(|t| self.push(&x, t)),
+            )
+        }
+
+        fn record(&self, inputs: &[Value], _: &[bool]) -> (Value, Box<dyn Pullback>) {
+            let x = input(inputs);
+            let target = self.target.clone();
+            (
+                self.value(&x),
+                Box::new(RecipPullback {
+                    target,
+                    x,
+                    velocity: None,
+                }),
+            )
+        }
+    }
+
+    impl SecondOrder for RecipKernel {
+        fn record_second(
+            &self,
+            inputs: &[Value],
+            _: &[bool],
+            velocities: &[Option<Frame>],
+        ) -> (Value, Option<Frame>, Box<dyn SecondPullback>) {
+            let x = input(inputs);
+            let velocity = velocities[0].as_ref().map(|v| self.push(&x, v));
+            let pullback = RecipPullback {
+                target: self.target.clone(),
+                x: x.clone(),
+                velocity: velocities[0].clone().map(Frame::into_burn),
+            };
+            (self.value(&x), velocity, Box::new(pullback))
+        }
+    }
+
+    impl Pullback for RecipPullback {
+        fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>> {
+            let k = alpha.columns();
+            let square = self.x.clone() * self.x.clone();
+            let pulled = -(alpha.clone().into_burn() / columns(&square, k));
+            vec![Some(Frame::from_burn(pulled, &self.target).unwrap())]
+        }
+    }
+
+    impl SecondPullback for RecipPullback {
+        /// `d/dt (-α / x²) = 2 v α / x³`.
+        fn second(&self, alpha: &Frame) -> Vec<Option<Frame>> {
+            let second = self.velocity.as_ref().map(|v| {
+                let [n, d, k] = v.dims();
+                let cube = self.x.clone() * self.x.clone() * self.x.clone();
+                let alpha = alpha.clone().into_burn().expand([n, d, k]);
+                let hvp = (v.clone() * alpha).mul_scalar(2.0) / columns(&cube, k);
+                Frame::from_burn(hvp, &self.target).unwrap()
+            });
+            vec![second]
+        }
+    }
+
+    impl Operation for Recip {
+        fn name(&self) -> &'static str {
+            "test.recip"
+        }
+
+        fn params(&self) -> Vec<Param> {
+            Vec::new()
+        }
+
+        fn output(&self, inputs: &[Space]) -> Result<Space, Error> {
+            match inputs {
+                [space @ Space::Vector(_)] => Ok(space.clone()),
+                _ => Err(Error::SpaceMismatch {
+                    operation: "test.recip",
+                    inputs: inputs.to_vec(),
+                }),
+            }
+        }
+
+        fn lower(&self, inputs: &[Space], lowering: &mut Lowering<'_>) -> Result<Lowered, Error> {
+            let target = lowering.target().clone();
+            if target.precision() == Precision::Double {
+                return Ok(Lowered::Kernel(Kernel::Two(Arc::new(RecipKernel {
+                    target,
+                }))));
+            }
+            Ok(Lowered::Composite(fallback(inputs[0].storage())))
+        }
+    }
+
+    fn inputs() -> [(Space, skoro_tensor::HostValue); 1] {
+        let space = Space::Vector(3);
+        [(space.clone(), random(&space, 3, 90, 0.5, 2.0))]
+    }
+
+    fn fused(q: &[QDyn]) -> QDyn {
+        apply(Arc::new(Recip), q)
+    }
+
+    #[test]
+    fn fused_operation_agrees_with_its_composite() {
+        let target = Target::new(Device::flex(), Precision::Double).unwrap();
+        let composite = fallback(3);
+        check_agreement(fused, |q| composite.call(q), &inputs(), &target).unwrap();
+        // And a composite it does not fuse is told apart.
+        let wrong = Composite::define("test.wrong", Vec::new(), &[Space::Vector(3)], |q| {
+            q[0].log().exp()
+        })
+        .unwrap();
+        assert!(check_agreement(fused, |q| wrong.call(q), &inputs(), &target).is_err());
+    }
+
+    #[test]
+    fn fused_operation_falls_back_to_its_composite() {
+        let mut writer = Writer::new();
+        let f = writer
+            .build(|| fused(&[skoro_core::scope::quantity_in("x", Space::Vector(3))]))
+            .unwrap();
+        let compile = |precision| {
+            let target = Target::new(Device::flex(), precision).unwrap();
+            writer.snapshot().compile(&Query::of([f]), &target).unwrap()
+        };
+        assert_eq!(compile(Precision::Double).len(), 1, "its own kernel");
+        assert_eq!(
+            compile(Precision::Single).len(),
+            3,
+            "log, neg and exp, from its composite"
+        );
+        let single = Target::new(Device::flex(), Precision::Single).unwrap();
+        let composite = fallback(3);
+        check_agreement(fused, |q| composite.call(q), &inputs(), &single).unwrap();
+    }
+}

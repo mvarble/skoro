@@ -120,7 +120,7 @@ the test macro unless the companion says otherwise.
       `first_order_step_with_velocity_refuses_a_hessian`,
       `zero_order_step_on_the_pass_refuses_a_gradient`, `refusal_comes_before_any_kernel_runs`,
       `order_is_read_off_the_kernel`, `embedding_and_discretization_have_order_zero`.
-- [ ] Fused operations: lowering to their own kernel on the targets it covers and to their
+- [x] Fused operations: lowering to their own kernel on the targets it covers and to their
       composite elsewhere, and `testing::check_agreement`. Tests:
       `fused_operation_agrees_with_its_composite`, `fused_operation_falls_back_to_its_composite`.
 - [ ] The retractions of the core's spaces as composites cached per space, `Space::retraction`
