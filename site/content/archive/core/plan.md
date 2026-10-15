@@ -61,7 +61,7 @@ the test macro unless the companion says otherwise.
       `matmul_vector`, `sum`, `exp`, `log`, `slice`, `concatenate`, `reshape`, `transpose`.
 - [x] The trigonometric primitives `sin`, `cos` and `atan2`. Tests: `sin`, `cos`, `atan2`,
       `atan2_is_checked_off_its_branch_cut`.
-- [ ] `select`, and the positive primitives `positive.as_real`, `.exp`, `.log`, `.mul`, `.recip`.
+- [x] `select`, and the positive primitives `positive.as_real`, `.exp`, `.log`, `.mul`, `.recip`.
       Tests: `select`, `select_routes_the_cotangent_to_the_chosen_value`, `positive_as_real`,
       `positive_exp`, `positive_log`, `positive_mul`, `positive_recip`.
 - [ ] The discrete operations (integer arithmetic and comparisons), the embedding `to_real` and

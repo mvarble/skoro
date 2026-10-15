@@ -3,18 +3,24 @@
 //! inputs, at both precisions.
 
 use skoro_core::primitive::{
-    Add, Atan2, Concatenate, Cos, Exp, Log, MatMul, Mul, Neg, Scale, Sin, Slice, Sub, Sum,
-    Transpose,
+    Add, Atan2, Concatenate, Cos, Exp, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp,
+    PositiveLog, PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, Transpose,
 };
 use skoro_core::testing::{check_operation, lower, random};
 use skoro_core::{Operation, Space};
-use skoro_tensor::{HostData, HostValue, Target, Value};
+use skoro_tensor::{Frame, HostData, HostValue, Target, Value};
 
 const ROWS: usize = 3;
 
 /// A value of `space` per row, uniform in (-1, 1), drawn from `seed`.
 fn input(space: Space, seed: u64) -> (Space, HostValue) {
     let value = random(&space, ROWS, seed, -1.0, 1.0);
+    (space, value)
+}
+
+/// A positive value of `space` per row, in (0.5, 2), drawn from `seed`.
+fn positive(space: Space, seed: u64) -> (Space, HostValue) {
+    let value = random(&space, ROWS, seed, 0.5, 2.0);
     (space, value)
 }
 
@@ -146,6 +152,58 @@ skoro_core::precision_tests! {
         let jump = angle(1e-3) - angle(-1e-3);
         let expected = 2.0 * std::f64::consts::PI - 2.0 * (1e-3f64).atan2(1.0);
         assert!((jump - expected).abs() < 1e-5, "{jump} against {expected}");
+    }
+
+    fn select(target) {
+        let index = (Space::Categorical(3), random(&Space::Categorical(3), ROWS, 40, 0.0, 0.0));
+        let values = [40, 41, 42].map(|seed| input(Space::Vector(2), seed + 1));
+        let inputs: Vec<_> = std::iter::once(index.clone()).chain(values).collect();
+        check(&Select, &inputs, &target);
+
+        let product = Space::product([Space::Real, Space::Positive(1)]).unwrap();
+        let values = [44, 45, 46].map(|seed| positive(product.clone(), seed));
+        let inputs: Vec<_> = std::iter::once(index).chain(values).collect();
+        check(&Select, &inputs, &target);
+    }
+
+    fn select_routes_the_cotangent_to_the_chosen_value(target) {
+        let spaces = [Space::Categorical(2), Space::Vector(2), Space::Vector(2)];
+        let kernel = lower(&Select, &spaces, &target).unwrap();
+        let load = |value: HostValue| value.load(4, &target).unwrap().unwrap();
+        let index = HostValue::new(Some(4), 1, HostData::Discrete(vec![0, 1, 1, 0])).unwrap();
+        let x = |v: f64| HostValue::new(None, 2, HostData::Continuous(vec![v, v])).unwrap();
+        let inputs = [load(index), load(x(1.0)), load(x(2.0))];
+        let alpha: Vec<f64> = (1..=8).map(f64::from).collect();
+        let alpha = Frame::from_host(&alpha, 4, 2, 1, &target);
+        let first = kernel.first().unwrap();
+        let (_, pullback) = first.record(&inputs, &[false, true, true]);
+        let cotangents = pullback.cotangent(&alpha);
+        assert!(cotangents[0].is_none(), "the index receives nothing");
+        let rows = |frame: &Option<Frame>| frame.as_ref().unwrap().to_host();
+        assert_eq!(rows(&cotangents[1]), [1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 7.0, 8.0]);
+        assert_eq!(rows(&cotangents[2]), [0.0, 0.0, 3.0, 4.0, 5.0, 6.0, 0.0, 0.0]);
+    }
+
+    fn positive_as_real(target) {
+        check(&PositiveAsReal, &[positive(Space::Positive(3), 50)], &target);
+    }
+
+    fn positive_exp(target) {
+        check(&PositiveExp, &[input(Space::Vector(3), 51)], &target);
+        check(&PositiveExp, &[input(Space::Real, 52)], &target);
+    }
+
+    fn positive_log(target) {
+        check(&PositiveLog, &[positive(Space::Positive(3), 53)], &target);
+    }
+
+    fn positive_mul(target) {
+        let inputs = [positive(Space::Positive(2), 54), positive(Space::Positive(2), 55)];
+        check(&PositiveMul, &inputs, &target);
+    }
+
+    fn positive_recip(target) {
+        check(&PositiveRecip, &[positive(Space::Positive(2), 56)], &target);
     }
 
     fn transpose(target) {

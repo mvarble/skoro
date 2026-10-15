@@ -11,7 +11,9 @@ use skoro_tensor::{Frame, Points, Target, Value};
 
 use crate::{FirstOrder, Forward, Kernel, Pullback, SecondOrder, SecondPullback};
 
-/// A primitive's maps on tensors: values `[N, storage]`, frames `[N, dimension, K]`.
+/// A primitive's maps on tensors: values `[N, storage]`, frames `[N, dimension, K]`. A discrete
+/// input, such as a selection's index, comes as a float tensor at the target's precision; it is
+/// never differentiable, so `push`, `pull` and `second` are never asked of it.
 pub(crate) trait Rule: Send + Sync + 'static {
     fn value(&self, x: &[Tensor<2>]) -> Tensor<2>;
     /// `∂_j f t`: the tangent frame `t` of input `j`, pushed to the output.
@@ -49,6 +51,16 @@ impl<R: Rule> RuleKernel<R> {
         value(self.rule.value(x), &self.target)
     }
 
+    fn tensors(&self, inputs: &[Value]) -> Vec<Tensor<2>> {
+        inputs
+            .iter()
+            .map(|input| match input {
+                Value::Continuous(points) => points.clone().into_burn(),
+                Value::Discrete(integers) => integers.to_points(&self.target).into_burn(),
+            })
+            .collect()
+    }
+
     fn push_all(&self, x: &[Tensor<2>], tangents: &[Option<Frame>]) -> Option<Frame> {
         let pushed = tangents
             .iter()
@@ -71,18 +83,18 @@ impl<R: Rule> RuleKernel<R> {
 
 impl<R: Rule> Forward for RuleKernel<R> {
     fn forward(&self, inputs: &[Value]) -> Value {
-        self.value(&tensors(inputs))
+        self.value(&self.tensors(inputs))
     }
 }
 
 impl<R: Rule> FirstOrder for RuleKernel<R> {
     fn tangent(&self, inputs: &[Value], tangents: &[Option<Frame>]) -> (Value, Option<Frame>) {
-        let x = tensors(inputs);
+        let x = self.tensors(inputs);
         (self.value(&x), self.push_all(&x, tangents))
     }
 
     fn record(&self, inputs: &[Value], differentiable: &[bool]) -> (Value, Box<dyn Pullback>) {
-        let x = tensors(inputs);
+        let x = self.tensors(inputs);
         (self.value(&x), Box::new(self.pullback(x, differentiable)))
     }
 }
@@ -94,7 +106,7 @@ impl<R: Rule> SecondOrder for RuleKernel<R> {
         differentiable: &[bool],
         velocities: &[Option<Frame>],
     ) -> (Value, Option<Frame>, Box<dyn SecondPullback>) {
-        let x = tensors(inputs);
+        let x = self.tensors(inputs);
         let velocity = self.push_all(&x, velocities);
         let value = self.value(&x);
         let mut pullback = self.pullback(x, differentiable);
@@ -138,20 +150,6 @@ impl<R: Rule> SecondPullback for RulePullback<R> {
             })
             .collect()
     }
-}
-
-/// The tensors of continuous inputs; a discrete input, such as a selection's index, is read by
-/// the rule that takes one, as integers converted at the target's precision.
-fn tensors(inputs: &[Value]) -> Vec<Tensor<2>> {
-    inputs
-        .iter()
-        .map(|input| match input {
-            Value::Continuous(points) => points.clone().into_burn(),
-            Value::Discrete(_) => {
-                unreachable!("the Euclidean primitives take continuous inputs alone")
-            }
-        })
-        .collect()
 }
 
 fn burn(frame: &Frame) -> Tensor<3> {
