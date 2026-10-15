@@ -550,6 +550,22 @@ to_real!(
     [] Boolean,
 );
 
+impl<T: Typed> Q<T> {
+    /// `self ⊕ t`, by the retraction of the space of `self`, with `t` in its tangent
+    /// coordinates, a `Vector` of its dimension.
+    #[track_caller]
+    pub fn retract(self, t: impl Into<QDyn>) -> Q<T> {
+        Q::from_id(self.untyped().retract(t.into()).id())
+    }
+
+    /// `self ⊖ from`, by the inverse retraction of the space of `self`: the tangent coordinates
+    /// at `from` that reach `self`.
+    #[track_caller]
+    pub fn local(self, from: Q<T>) -> Q<VectorDyn> {
+        Q::from_id(self.untyped().local(from.untyped()).id())
+    }
+}
+
 impl Q<ProductDyn> {
     /// The `i`-th factor of a product (`SpaceMismatch` when there is none).
     #[track_caller]
@@ -570,6 +586,24 @@ impl QDyn {
             let block = block.ok_or_else(|| mismatch("factor", spaces))?;
             let slice = Slice::new(block.space, block.storage, block.tangent);
             draft.mapped(Arc::new(slice), &[self])
+        }))
+    }
+
+    /// `self ⊕ t`, by the retraction of the space of `self`.
+    #[track_caller]
+    pub fn retract(self, t: QDyn) -> QDyn {
+        QDyn::from_id(with_spaces(&[self, t], |draft, spaces| {
+            let retraction = spaces[0].retraction()?;
+            draft.mapped(retraction.operation(), &[self, t])
+        }))
+    }
+
+    /// `self ⊖ from`, by the inverse retraction of the space of `self`.
+    #[track_caller]
+    pub fn local(self, from: QDyn) -> QDyn {
+        QDyn::from_id(with_spaces(&[self, from], |draft, spaces| {
+            let inverse = spaces[0].inverse_retraction()?;
+            draft.mapped(inverse.operation(), &[self, from])
         }))
     }
 

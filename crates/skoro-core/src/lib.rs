@@ -16,6 +16,7 @@ mod program;
 mod q;
 mod query;
 mod registry;
+mod retraction;
 pub mod scope;
 mod space;
 pub mod testing;

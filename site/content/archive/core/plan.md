@@ -123,7 +123,7 @@ the test macro unless the companion says otherwise.
 - [x] Fused operations: lowering to their own kernel on the targets it covers and to their
       composite elsewhere, and `testing::check_agreement`. Tests:
       `fused_operation_agrees_with_its_composite`, `fused_operation_falls_back_to_its_composite`.
-- [ ] The retractions of the core's spaces as composites cached per space, `Space::retraction`
+- [x] The retractions of the core's spaces as composites cached per space, `Space::retraction`
       and `inverse_retraction`, and `retract` and `local` on handles. Tests:
       `retraction_round_trips`, `positive_mirror_identity_is_exact`,
       `positive_chart_hessian_equals_the_pullback_hessian`.
