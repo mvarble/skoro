@@ -471,7 +471,7 @@ impl Key {
     /// The i-th of n is keyed_hash(self, [0x03] ++ le(i)).
     pub fn split(&self, n: usize) -> Vec<Key>;
     /// n variates in the open interval (0, 1), from the extendable output keyed by self under tag 0x04:
-    /// each takes 8 bytes, as ((u >> 11) + 0.5) * 2^-53.
+    /// each takes 8 bytes u, little-endian, as ((u >> 12) + 0.5) * 2^-52.
     pub fn uniforms(&self, n: usize) -> Vec<f64>;
 }
 ```
@@ -480,6 +480,14 @@ The kind tags make a name and an integer differ, and folding one segment at a ti
 and `a/bc` differ, as the mathematics requires. A run over `N` rows splits its key into `N`, and
 row `i`'s key for the quantity at address `a` is `run.split(N)[i].at(a)`. Variates are doubles on
 the host, cast when loaded, so one key gives the same draws at either precision up to that cast.
+
+A variate keeps 52 of its 64 bits so that every step of computing it is exact in `f64`:
+$k = u \gg 12$ is below $2^{52}$, so $k + 0.5$ needs at most 53 significant bits, and the product
+with $2^{-52}$ only moves the exponent. The variates are then exactly the midpoints
+$(k + \tfrac12)\, 2^{-52}$, from $2^{-53}$ to $1 - 2^{-53}$, open at both ends. With 53 bits,
+$(k + \tfrac12)\, 2^{-53}$ is not representable once $k \ge 2^{52}$, and at $k = 2^{53} - 1$ it
+rounds to $1$, where a sampler's $\log(1 - u)$ or inverse distribution function is infinite; the
+bit given up costs nothing a sampler can see.
 
 > [!DECISION] Why BLAKE3
 > A key must be a pseudorandom function of a path of arbitrary names, which a block cipher such as
@@ -1748,8 +1756,9 @@ rests on, so an upgrade that changes one fails here first.
 - `name_and_integer_segments_differ`: `Name("3")` and `Index(3)` fold to different keys.
 - `segments_fold_one_at_a_time`: `ab/c` and `a/bc` give different keys.
 - `fold_matches_the_reference_vectors`: frozen outputs, so the derivation cannot change silently.
-- `split_keys_are_distinct`, `uniforms_lie_in_the_open_interval`, and
-  `uniforms_have_uniform_moments` over $10^5$ variates of a fixed key.
+- `split_keys_are_distinct`, `uniforms_have_uniform_moments` over $10^5$ variates of a fixed key,
+  and `uniforms_lie_in_the_open_interval`, over those variates and at the extremes of the map
+  itself, $u = 0$ and $u = 2^{64} - 1$, which give $2^{-53}$ and $1 - 2^{-53}$ exactly.
 - `address_parses_digits_as_indices` and `quoted_names_display_distinctly`.
 
 **Spaces** (`space`, `q`).
@@ -2013,5 +2022,7 @@ exercise. The tensor layer depends on `burn-dispatch` 0.22.0 directly, with no f
 $((u \gg 11) + 0.5) \cdot 2^{-53}$, which is in the open interval $(0, 1)$ in exact arithmetic
 but not in `f64`: once $u \gg 11 \ge 2^{52}$ the half is lost to rounding, and at
 $u \gg 11 = 2^{53} - 1$ the sum rounds to $2^{53}$ and the variate is exactly $1$, where a
-sampler's $\log(1 - u)$ or inverse distribution function is infinite. The revision to
-[Identities, addresses and keys](#identities-addresses-and-keys) is recorded here as it is made.
+sampler's $\log(1 - u)$ or inverse distribution function is infinite. A variate now keeps 52
+bits, $((u \gg 12) + 0.5) \cdot 2^{-52}$, which is exact in `f64` at every step;
+[Identities, addresses and keys](#identities-addresses-and-keys) says why, and
+`uniforms_lie_in_the_open_interval` checks the extremes of the map as well as a sample of it.
