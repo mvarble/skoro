@@ -69,6 +69,11 @@ pub enum Error {
     BindingOutsideTerm { role: &'static str, node: NodeId },
     /// A node that is not a term's log-density.
     NotATerm { id: NodeId },
+    /// A sampler whose inputs read a quantity its term is not conditioned on, or whose
+    /// log-density reads one the term does not involve.
+    SamplerOutsideTerm { term: NodeId, quantity: NodeId },
+    /// A free quantity scored by no term with a sampler, or a parameter with no proposal.
+    CannotGenerate { quantity: NodeId, address: Address },
     /// A program with free discrete quantities, refused by an algorithm that cannot condition on
     /// them.
     FreeDiscrete { quantities: Vec<NodeId> },
@@ -103,6 +108,14 @@ impl fmt::Display for Error {
             Error::InvalidDeclaration { name, reason } => {
                 write!(f, "{name} cannot be made: {reason}")
             }
+            Error::SamplerOutsideTerm { term, quantity } => write!(
+                f,
+                "the sampler of term {term:?} reads {quantity:?}, which the term does not allow it"
+            ),
+            Error::CannotGenerate { quantity, address } => write!(
+                f,
+                "{address} ({quantity:?}) has neither a term with a sampler nor a proposal"
+            ),
             Error::NoProjection { space } => write!(f, "{space:?} declares no projection"),
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),

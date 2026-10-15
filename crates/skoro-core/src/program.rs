@@ -30,6 +30,8 @@ pub(crate) struct Step {
     pub(crate) composites: Vec<&'static str>,
     /// The node of the model the step came from: the composite call it was expanded from, if any.
     pub(crate) node: NodeId,
+    /// Whether the step runs once when its inputs are fixed: every step but a draw.
+    pub(crate) folds: bool,
 }
 
 /// A free quantity of a program.

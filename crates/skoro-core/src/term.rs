@@ -96,7 +96,9 @@ impl TermHandle {
         QDyn::from_id(self.id).is_failed()
     }
 
-    /// Draws the quantity the term scores with `sampler`.
+    /// Draws the quantity the term scores with `sampler`, whose inputs read none but the
+    /// quantities the term is conditioned on, and whose log-density none but those the term
+    /// involves (`SamplerOutsideTerm`).
     #[track_caller]
     pub fn sampler(self, sampler: Sampler) -> TermHandle {
         let location = Location::caller();
@@ -104,7 +106,22 @@ impl TermHandle {
         TermHandle {
             id: scope::build(location, |draft, _| {
                 draft.term_handle(id)?;
+                let density: Vec<QDyn> = sampler.log_density.iter().map(|q| q.untyped()).collect();
+                draft.spaces(&sampler.inputs)?;
+                draft.spaces(&density)?;
                 let mut term = term_of(&draft.model, id)?;
+                let conditioned: HashSet<NodeId> = term.conditioned_on().collect();
+                let outside = |nodes: &[QDyn], allowed: &dyn Fn(NodeId) -> bool| {
+                    nodes
+                        .iter()
+                        .flat_map(|node| roots(&draft.model, node.id()))
+                        .find(|&q| !allowed(q))
+                };
+                let reads = outside(&sampler.inputs, &|q| conditioned.contains(&q))
+                    .or_else(|| outside(&density, &|q| term.involves.contains(&q)));
+                if let Some(quantity) = reads {
+                    return Err(Error::SamplerOutsideTerm { term: id, quantity });
+                }
                 term.sampler = Some(sampler);
                 draft.model.terms.insert_mut(id, Arc::new(term));
                 Ok(id)

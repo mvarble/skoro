@@ -182,7 +182,7 @@ the test macro unless the companion says otherwise.
 
 ## Generation and retirement
 
-- [ ] `Sample`, `Sampler` and `Proposal` with the rules on what each may read
+- [x] `Sample`, `Sampler` and `Proposal` with the rules on what each may read
       (`SamplerOutsideTerm`), `Snapshot::generate` with draw steps in increasing identifier, keys
       by address, `CannotGenerate`, and the weight summed as the companion says; the private normal
       in `crates/skoro/tests/common/normal.rs`. Tests:

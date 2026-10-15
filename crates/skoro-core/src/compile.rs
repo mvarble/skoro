@@ -22,8 +22,8 @@ use crate::program::{Free, Root, Slot, Step, expand};
 use crate::query::Targets;
 use crate::scope::fits;
 use crate::{
-    Composite, Error, Layout, Lowered, Lowering, NodeId, Observations, Operation, Program, Query,
-    Snapshot, Space,
+    Composite, Error, Kernel, Layout, Lowered, Lowering, NodeId, Observations, Operation, Program,
+    Query, Snapshot, Space,
 };
 
 /// The key a program is cached under in its snapshot.
@@ -175,7 +175,7 @@ fn compile_body(composite: &Composite, lowering: &mut Lowering<'_>) -> Result<Pr
 }
 
 /// The slots and steps of a program as it is emitted.
-struct Builder<'l, 'a> {
+pub(crate) struct Builder<'l, 'a> {
     lowering: &'l mut Lowering<'a>,
     spaces: Vec<Space>,
     roots: Vec<(Slot, Root)>,
@@ -185,7 +185,7 @@ struct Builder<'l, 'a> {
 }
 
 impl<'l, 'a> Builder<'l, 'a> {
-    fn new(lowering: &'l mut Lowering<'a>) -> Builder<'l, 'a> {
+    pub(crate) fn new(lowering: &'l mut Lowering<'a>) -> Builder<'l, 'a> {
         Builder {
             lowering,
             spaces: Vec::new(),
@@ -237,7 +237,7 @@ impl<'l, 'a> Builder<'l, 'a> {
     /// Emits the slots and steps that compute `outputs` from `model`, with the nodes in `env`
     /// already bound to slots, and gives the outputs' slots. Steps are attributed to `origin`, the
     /// composite call they were expanded from, or to their own nodes.
-    fn emit(
+    pub(crate) fn emit(
         &mut self,
         model: &Model,
         outputs: &[NodeId],
@@ -286,6 +286,7 @@ impl<'l, 'a> Builder<'l, 'a> {
                                 operation: operation.name(),
                                 composites: self.lowering.names(),
                                 node: origin.unwrap_or(id),
+                                folds: true,
                             });
                             output
                         }
@@ -312,7 +313,7 @@ impl<'l, 'a> Builder<'l, 'a> {
     }
 
     /// The sum of `slots`, by `skoro.add` steps in their order; a zero for none.
-    fn sum(&mut self, slots: &[Slot]) -> Result<Slot, Error> {
+    pub(crate) fn sum(&mut self, slots: &[Slot]) -> Result<Slot, Error> {
         let Some((&first, rest)) = slots.split_first() else {
             let zero = HostValue::new(None, 1, skoro_tensor::HostData::Continuous(vec![0.0]));
             let Some(zero) = zero else {
@@ -322,26 +323,61 @@ impl<'l, 'a> Builder<'l, 'a> {
         };
         let mut sum = first;
         for &slot in rest {
-            let Lowered::Kernel(kernel) = Add.lower(&[Space::Real, Space::Real], self.lowering)?
-            else {
-                unreachable!("addition lowers to a kernel")
-            };
-            let output = self.slot(Space::Real);
-            self.steps.push(Step {
-                kernel,
-                inputs: vec![sum, slot],
-                output,
-                operation: Add.name(),
-                composites: Vec::new(),
-                node: NodeId::DENSITY,
-            });
-            sum = output;
+            sum = self.step(&Add, &[sum, slot], NodeId::DENSITY)?;
         }
         Ok(sum)
     }
 
+    /// A step of `operation`, a primitive, at `inputs`, attributed to `node`.
+    pub(crate) fn step(
+        &mut self,
+        operation: &dyn Operation,
+        inputs: &[Slot],
+        node: NodeId,
+    ) -> Result<Slot, Error> {
+        let spaces: Vec<Space> = inputs.iter().map(|&s| self.spaces[s].clone()).collect();
+        let space = operation.output(&spaces)?;
+        let Lowered::Kernel(kernel) = operation.lower(&spaces, self.lowering)? else {
+            unreachable!("a primitive lowers to a kernel")
+        };
+        let output = self.slot(space);
+        self.steps.push(Step {
+            kernel,
+            inputs: inputs.to_vec(),
+            output,
+            operation: operation.name(),
+            composites: Vec::new(),
+            node,
+            folds: true,
+        });
+        Ok(output)
+    }
+
+    /// A draw step: `kernel`, which never folds, at `inputs`, writing a value of `space` for the
+    /// quantity `node`.
+    pub(crate) fn draw(
+        &mut self,
+        kernel: Kernel,
+        name: &'static str,
+        inputs: Vec<Slot>,
+        space: Space,
+        node: NodeId,
+    ) -> Slot {
+        let output = self.slot(space);
+        self.steps.push(Step {
+            kernel,
+            inputs,
+            output,
+            operation: name,
+            composites: Vec::new(),
+            node,
+            folds: false,
+        });
+        output
+    }
+
     /// Classifies, folds, prunes and finishes the program computing `targets`.
-    fn finish(mut self, targets: Vec<(NodeId, Slot)>) -> Result<Program, Error> {
+    pub(crate) fn finish(mut self, targets: Vec<(NodeId, Slot)>) -> Result<Program, Error> {
         let target = self.lowering.target().clone();
         let slots = self.spaces.len();
 
@@ -371,7 +407,7 @@ impl<'l, 'a> Builder<'l, 'a> {
             }
             let fixed: Option<Vec<&(Value, Option<usize>)>> =
                 step.inputs.iter().map(|slot| constants.get(slot)).collect();
-            let Some(fixed) = fixed else {
+            let Some(fixed) = fixed.filter(|_| step.folds) else {
                 live.push(step);
                 continue;
             };
