@@ -8,6 +8,7 @@ mod error;
 mod id;
 mod into_host;
 mod key;
+mod layout;
 mod model;
 mod operation;
 mod ops;
@@ -29,6 +30,7 @@ pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use into_host::{IntoHostValue, Rows};
 pub use key::Key;
+pub use layout::Layout;
 pub use model::{Node, Snapshot};
 pub use operation::{
     FirstOrder, Forward, Kernel, Lowered, Lowering, Operation, Order, Param, Pullback, SecondOrder,

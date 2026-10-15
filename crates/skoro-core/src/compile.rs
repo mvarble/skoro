@@ -22,8 +22,8 @@ use crate::program::{Free, Root, Slot, Step, expand};
 use crate::query::Targets;
 use crate::scope::fits;
 use crate::{
-    Composite, Error, Lowered, Lowering, NodeId, Observations, Operation, Program, Query, Snapshot,
-    Space,
+    Composite, Error, Layout, Lowered, Lowering, NodeId, Observations, Operation, Program, Query,
+    Snapshot, Space,
 };
 
 /// The key a program is cached under in its snapshot.
@@ -431,7 +431,19 @@ impl<'l, 'a> Builder<'l, 'a> {
                 last_reader[slot] = Some(k);
             }
         }
+        let continuous: Vec<&Free> = self
+            .free
+            .iter()
+            .filter(|f| f.space.is_continuous())
+            .collect();
+        let product = Space::product(continuous.iter().map(|f| f.space.clone()))?;
+        let layout = Layout::of(
+            continuous.iter().map(|f| f.node).collect(),
+            product,
+            target.clone(),
+        );
         Ok(Program {
+            layout,
             target,
             spaces: self.spaces,
             roots,

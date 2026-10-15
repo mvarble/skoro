@@ -149,7 +149,7 @@ the test macro unless the companion says otherwise.
       `program_cache_is_bounded`, `new_snapshot_starts_with_an_empty_cache`,
       `programs_are_cached_per_query_and_target`, `one_snapshot_serves_two_precisions`,
       `free_discrete_quantities_are_reported`, `gradient_at_a_free_discrete_value_is_conditional`.
-- [ ] `Layout` with `product`, `dimension`, `blocks`, `retract` and `flatten`. Tests:
+- [x] `Layout` with `product`, `dimension`, `blocks`, `retract` and `flatten`. Tests:
       `layout_is_the_product_of_the_free_spaces`, `flat_step_is_the_product_retraction`.
 
 ## Embedded types

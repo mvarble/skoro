@@ -595,3 +595,119 @@ fn gradient_at_a_free_discrete_value_is_conditional() {
     // Row by row, the gradient of the branch chosen: 2x, then 3.
     assert_eq!(gradient.get(x).unwrap().to_host(), [4.0, 3.0]);
 }
+
+mod layouts {
+    use skoro_core::scope::quantity;
+    use skoro_core::{
+        Error, Frames, Integer, Layout, Matrix, Positive, Query, Space, Values, Vector, Writer,
+    };
+    use skoro_tensor::{HostData, HostValue, Points, Target, Value};
+
+    fn value(data: &[f64], target: &Target) -> Value {
+        HostValue::new(Some(1), data.len(), HostData::Continuous(data.to_vec()))
+            .unwrap()
+            .load(1, target)
+            .unwrap()
+            .unwrap()
+    }
+
+    fn host(values: &Values, q: impl Into<skoro_core::NodeId>) -> Vec<f64> {
+        match values.get(q).unwrap() {
+            Value::Continuous(points) => points.to_host(),
+            Value::Discrete(_) => panic!("a continuous value"),
+        }
+    }
+
+    #[test]
+    fn layout_is_the_product_of_the_free_spaces() {
+        let mut writer = Writer::new();
+        let (x, p, y, k, f) = writer
+            .build(|| {
+                let x = quantity("x", Vector::<2>);
+                let p = quantity("p", Positive::<1>);
+                let y = quantity("y", Matrix::<2, 1>);
+                let k = quantity("k", Integer);
+                let f = (x.sum() + p.log().sum() + y.sum()) * k.to_real();
+                (x, p, y, k, f)
+            })
+            .unwrap();
+        let snapshot = writer.snapshot();
+        let program = snapshot
+            .compile(&Query::of([f.untyped()]), &Target::host())
+            .unwrap();
+        let layout = program.layout();
+        let product =
+            Space::product([Space::Vector(2), Space::Positive(1), Space::Matrix(2, 1)]).unwrap();
+        assert_eq!(layout.product(), &product);
+        assert_eq!(
+            layout.quantities(),
+            [x.id(), p.id(), y.id()],
+            "the discrete k is not in it"
+        );
+        assert_eq!(layout.dimension(), 5);
+        let tangent: Vec<_> = layout.blocks().into_iter().map(|b| b.tangent).collect();
+        assert_eq!(tangent, [0..2, 2..3, 3..5]);
+        assert_eq!(
+            Layout::new(&snapshot, &[x.id(), p.id(), y.id()])
+                .unwrap()
+                .product(),
+            &product
+        );
+        assert_eq!(
+            Layout::new(&snapshot, &[k.id()]).unwrap_err(),
+            Error::NotContinuous {
+                space: Space::Integer
+            }
+        );
+    }
+
+    #[test]
+    fn flat_step_is_the_product_retraction() {
+        let mut writer = Writer::new();
+        let (x, p, y, f) = writer
+            .build(|| {
+                let x = quantity("x", Vector::<2>);
+                let p = quantity("p", Positive::<1>);
+                let y = quantity("y", Matrix::<2, 1>);
+                let real = p.as_real().sum();
+                (x, p, y, (x * x).sum() * real + (y * y).sum() * real * real)
+            })
+            .unwrap();
+        let target = Target::host();
+        let program = writer
+            .snapshot()
+            .compile(&Query::of([f.untyped()]), &target)
+            .unwrap();
+        let layout = program.layout();
+        let at = Values::new()
+            .with(x, value(&[0.5, -1.0], &target))
+            .with(p, value(&[2.0], &target))
+            .with(y, value(&[0.25, 3.0], &target));
+        let t = [0.1, 0.2, -0.3, 1.0, -2.0];
+        let step = layout
+            .retract(&at, &Points::from_host(&t, 1, 5, &target), &target)
+            .unwrap();
+        // The product's retraction, factor by factor.
+        assert_eq!(host(&step, x), [0.6, -0.8]);
+        assert_eq!(host(&step, p), [2.0 * (-0.3f64).exp()]);
+        assert_eq!(host(&step, y), [1.25, 1.0]);
+
+        // The identity frame gives the whole chart Hessian, laid out by the blocks.
+        let second = program
+            .hessian_products(&at, &Frames::identity(layout))
+            .unwrap();
+        let hessian = layout.flatten(&second.beta).unwrap();
+        assert_eq!(
+            (hessian.rows(), hessian.dimension(), hessian.columns()),
+            (1, 5, 5)
+        );
+        let h = hessian.to_host();
+        for i in 0..5 {
+            for j in 0..i {
+                assert!((h[i * 5 + j] - h[j * 5 + i]).abs() < 1e-10, "H[{i}][{j}]");
+            }
+        }
+        let gradient = layout.flatten(&second.alpha).unwrap();
+        assert_eq!((gradient.dimension(), gradient.columns()), (5, 1));
+    }
+}

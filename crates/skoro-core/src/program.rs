@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use skoro_tensor::{Frame, Integers, Points, Target, Value};
 
-use crate::{Error, Kernel, NodeId, Order, Pullback, QDyn, SecondPullback, Space};
+use crate::{Error, Kernel, Layout, NodeId, Order, Pullback, QDyn, SecondPullback, Space};
 
 /// A slot of a program: the value one node of the compilation graph takes.
 pub(crate) type Slot = usize;
@@ -52,6 +52,8 @@ pub struct Program {
     pub(crate) batch: Option<usize>,
     /// The last step that reads each slot.
     pub(crate) last_reader: Vec<Option<usize>>,
+    /// The layout of the free continuous quantities.
+    pub(crate) layout: Layout,
 }
 
 impl std::fmt::Debug for Program {
@@ -217,6 +219,11 @@ impl Program {
     /// The free quantities, in ancestral order.
     pub fn free(&self) -> &[Free] {
         &self.free
+    }
+
+    /// The layout of the free continuous quantities, in ancestral order.
+    pub fn layout(&self) -> &Layout {
+        &self.layout
     }
 
     /// The free discrete quantities.
@@ -405,7 +412,7 @@ impl Program {
             let Some(frame) = frames.get_id(id) else {
                 unreachable!("the identifier was read off the frames")
             };
-            let fits = frame.rows() == rows
+            let fits = (frame.rows() == rows || frame.rows() == 1)
                 && frame.dimension() == dimension
                 && columns.is_none_or(|k| k == frame.columns());
             if !fits {
@@ -483,7 +490,7 @@ impl Program {
                         unreachable!("rows() checked every free quantity has a value")
                     };
                     if let Some(frame) = seeded.and_then(|frames| frames.get_id(node)) {
-                        velocities[*slot] = Some(frame.clone());
+                        velocities[*slot] = Some(rows_of(frame, rows, &self.target)?);
                     }
                     value.clone()
                 }
@@ -578,7 +585,8 @@ impl Program {
         let mut beta: Vec<Option<Frame>> = vec![None; slots];
         for (node, slot) in &self.targets {
             if let Some(seed) = seeds.get_id(*node) {
-                alpha[*slot] = Some(add(alpha[*slot].take(), seed.clone(), &self.target));
+                let seed = rows_of(seed, rows, &self.target)?;
+                alpha[*slot] = Some(add(alpha[*slot].take(), seed, &self.target));
             }
         }
         let hessian = matches!(mode, Mode::Hessian { .. });
@@ -772,6 +780,18 @@ pub(crate) fn expand(value: &Value, rows: usize, target: &Target) -> Result<Valu
             Value::Discrete(Integers::from_burn(tensor, target)?)
         }
     })
+}
+
+/// A frame of one row, shared by every row, expanded to `rows`; any other as it is.
+fn rows_of(frame: &Frame, rows: usize, target: &Target) -> Result<Frame, Error> {
+    if frame.rows() == rows {
+        return Ok(frame.clone());
+    }
+    let (d, k) = (frame.dimension(), frame.columns());
+    Ok(Frame::from_burn(
+        frame.clone().into_burn().expand([rows, d, k]),
+        target,
+    )?)
 }
 
 fn add(sum: Option<Frame>, frame: Frame, target: &Target) -> Frame {
