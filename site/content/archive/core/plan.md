@@ -26,7 +26,7 @@ the test macro unless the companion says otherwise.
       checks in `AGENTS.md`. Tests: `target_refuses_an_autodiff_device`,
       `target_refuses_an_unsupported_precision`, `target_refuses_an_unsupported_backend`,
       `wgpu_tests_fail_without_an_adapter`.
-- [ ] `Points`, `Frame`, `Integers` and `Value`, created only through a target; `into_burn` and
+- [x] `Points`, `Frame`, `Integers` and `Value`, created only through a target; `into_burn` and
       `from_burn`; `to_host`; `HostValue` and `HostData`, with shared and per-row loading; the
       re-export of burn's tensor module. Tests: `two_precisions_share_a_device`,
       `arithmetic_keeps_its_precision`, `integers_to_points_takes_the_target_precision`,
