@@ -1979,3 +1979,12 @@ scalar chain.
 ## Open questions
 
 None remain.
+
+## Revisions
+
+**2026-10-15.** Reopened at the build's second task. The test that a target refuses a cubecl runtime
+skoro does not claim was to enable burn's `cpu` feature, but every cubecl runtime other than wgpu
+brings an LLVM toolchain into the build (`llvm-sys` for `cpu`, a downloaded LLVM bundle for
+`cuda`), which neither CI nor most machines have. And the device check matches burn's
+`DispatchDevice`, which lives in `burn-dispatch` and is not re-exported by `burn`. The test and the
+tensor layer's dependencies are being revised.

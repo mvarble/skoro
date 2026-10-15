@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "build",
+    "stage": "implementation",
     "started": "2026-10-11",
     "events": [
         {
@@ -51,6 +51,13 @@
             "action": "approve",
             "stage": "plan",
             "commit": "b50d064"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The test that refuses an unclaimed cubecl runtime needs an LLVM toolchain to build any such runtime, and the device check needs burn-dispatch, which burn does not re-export.",
+            "commit": "292e919"
         }
     ],
     "approvals": {
@@ -62,12 +69,14 @@
         "implementation": {
             "date": "2026-10-15",
             "commit": "cf93fe1",
-            "hash": "cf48895a97cf662a971e980a8301c5653a641fc7506737c8b65e3e09a7bc0690"
+            "hash": "cf48895a97cf662a971e980a8301c5653a641fc7506737c8b65e3e09a7bc0690",
+            "stale": true
         },
         "plan": {
             "date": "2026-10-15",
             "commit": "b50d064",
-            "hash": "66f18d3dff7a6f5f6b2a06fdd9be2130e5dd01d4ab09d0d7ed79209eab6b3663"
+            "hash": "66f18d3dff7a6f5f6b2a06fdd9be2130e5dd01d4ab09d0d7ed79209eab6b3663",
+            "stale": true
         }
     }
 }
