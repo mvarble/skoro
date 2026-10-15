@@ -82,7 +82,7 @@ the test macro unless the companion says otherwise.
       `readers_see_before_or_after`, `scopes_nest_and_build_into_the_innermost`,
       `namespaces_prefix_addresses`, `lookup_is_relative_to_the_open_namespaces`,
       `address_cannot_be_taken_twice`, `constants_fold_when_added`.
-- [ ] `Snapshot::fork`, branches with cells of their own, and handles valid on every branch that
+- [x] `Snapshot::fork`, branches with cells of their own, and handles valid on every branch that
       shares them. Tests: `handle_is_valid_on_every_branch_that_shares_it`,
       `handle_from_another_model_fails`, `branches_do_not_see_each_other`,
       `fork_copies_nothing_it_does_not_change`, `dropping_the_last_snapshot_frees_retired_nodes`.

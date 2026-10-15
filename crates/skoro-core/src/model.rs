@@ -130,6 +130,11 @@ impl Snapshot {
         Snapshot(Arc::new(model))
     }
 
+    /// A writer for a new branch, sharing everything with this snapshot, with a cell of its own.
+    pub fn fork(&self) -> crate::Writer {
+        crate::Writer::from_snapshot(self.clone())
+    }
+
     pub fn node(&self, id: NodeId) -> Option<&Node> {
         self.0.nodes.get(&id).map(Arc::as_ref)
     }
