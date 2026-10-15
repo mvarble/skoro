@@ -1,11 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "handles are made by the scope, which the building tasks add"
-    )
-)]
-
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -71,16 +63,6 @@ impl<T: Typed> Q<T> {
         }
     }
 
-    /// A handle whose operation failed inside a scope.
-    pub(crate) fn failed() -> Q<T> {
-        Q::from_id(NodeId::FAILED)
-    }
-
-    /// A handle whose operation was attempted with no scope open.
-    pub(crate) fn outside_scope() -> Q<T> {
-        Q::from_id(NodeId::OUTSIDE_SCOPE)
-    }
-
     pub fn id(&self) -> NodeId {
         self.id
     }
@@ -93,6 +75,13 @@ impl<T: Typed> Q<T> {
     /// The same node, with no static type.
     pub fn untyped(self) -> QDyn {
         QDyn { id: self.id }
+    }
+
+    /// The same node handled as `U`, checked against its space in the open scope
+    /// (`SpaceMismatch`).
+    #[track_caller]
+    pub fn narrow<U: Typed>(self) -> Q<U> {
+        Q::from_id(crate::scope::narrow::<U>(self.id))
     }
 }
 
@@ -107,20 +96,19 @@ impl QDyn {
         QDyn { id }
     }
 
-    pub(crate) fn failed() -> QDyn {
-        QDyn::from_id(NodeId::FAILED)
-    }
-
-    pub(crate) fn outside_scope() -> QDyn {
-        QDyn::from_id(NodeId::OUTSIDE_SCOPE)
-    }
-
     pub fn id(&self) -> NodeId {
         self.id
     }
 
     pub fn is_failed(&self) -> bool {
         self.id == NodeId::FAILED || self.id == NodeId::OUTSIDE_SCOPE
+    }
+
+    /// The same node handled as `U`, checked against its space in the open scope
+    /// (`SpaceMismatch`).
+    #[track_caller]
+    pub fn narrow<U: Typed>(self) -> Q<U> {
+        Q::from_id(crate::scope::narrow::<U>(self.id))
     }
 }
 
@@ -285,10 +273,11 @@ mod tests {
 
     #[test]
     fn failed_handles_are_marked() {
-        assert!(Q::<Real>::failed().is_failed());
-        assert!(Q::<Real>::outside_scope().is_failed());
-        assert!(QDyn::failed().is_failed() && QDyn::outside_scope().is_failed());
-        assert_ne!(Q::<Real>::failed(), Q::<Real>::outside_scope());
+        let failed = Q::<Real>::from_id(NodeId::FAILED);
+        let outside = Q::<Real>::from_id(NodeId::OUTSIDE_SCOPE);
+        assert!(failed.is_failed() && outside.is_failed());
+        assert!(QDyn::from_id(NodeId::FAILED).is_failed());
+        assert_ne!(failed, outside);
         let fresh = Q::<Vector<2>>::from_id(NodeId::fresh());
         assert!(!fresh.is_failed());
         assert_eq!(fresh.widen().id(), fresh.id());

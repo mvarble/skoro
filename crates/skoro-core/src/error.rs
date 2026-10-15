@@ -3,7 +3,7 @@ use std::panic::Location;
 
 use skoro_tensor::TensorError;
 
-use crate::Space;
+use crate::{Address, NodeId, Space};
 
 /// What the core refuses, with what a caller needs to name the fault.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,6 +23,21 @@ pub enum Error {
         operation: &'static str,
         inputs: Vec<Space>,
     },
+    /// An operation was attempted with no building scope open, and its handle was then used in
+    /// one.
+    OutsideScope,
+    /// A handle from a scope that failed was used in another.
+    FailedOperand,
+    /// A handle the model does not hold: from another model, or a retired quantity.
+    UnknownNode { id: NodeId },
+    /// A quantity already lives at this address.
+    AddressTaken { address: Address },
+    /// No quantity lives at this address.
+    UnknownAddress { address: Address },
+    /// A value that does not fit its space: its storage, its kind, or its range.
+    ValueShape { space: Space },
+    /// Values that pin different batches, or a batch other than the one a pass runs at.
+    BatchSize { expected: usize, found: usize },
 }
 
 impl fmt::Display for Error {
@@ -32,6 +47,17 @@ impl fmt::Display for Error {
             Error::NotContinuous { space } => write!(f, "{space:?} is not a continuous space"),
             Error::SpaceMismatch { operation, inputs } => {
                 write!(f, "{operation} does not take inputs of {inputs:?}")
+            }
+            Error::OutsideScope => f.write_str(
+                "an operation was attempted with no building scope open, and its handle used here",
+            ),
+            Error::FailedOperand => f.write_str("a handle from a scope that failed was used here"),
+            Error::UnknownNode { id } => write!(f, "the model does not hold node {id:?}"),
+            Error::AddressTaken { address } => write!(f, "a quantity already lives at {address}"),
+            Error::UnknownAddress { address } => write!(f, "no quantity lives at {address}"),
+            Error::ValueShape { space } => write!(f, "the value does not fit {space:?}"),
+            Error::BatchSize { expected, found } => {
+                write!(f, "a batch of {found} rows where {expected} were expected")
             }
             Error::ShapeMismatch { operation, inputs } => {
                 write!(

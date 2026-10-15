@@ -1,11 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "identifiers are made by the model, which the building tasks add"
-    )
-)]
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The identifier of a node of the compilation graph.

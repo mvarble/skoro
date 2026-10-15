@@ -70,7 +70,7 @@ the test macro unless the companion says otherwise.
 
 ## Building
 
-- [ ] The `Model` with its persistent maps and nodes, `Snapshot`, `Writer` with `build`,
+- [x] The `Model` with its persistent maps and nodes, `Snapshot`, `Writer` with `build`,
       `snapshot` and `reader`, the thread-local stack of frames and its guard, the four steps of
       every building function with `#[track_caller]`, and `scope::quantity`, `quantity_in`,
       `constant`, `namespace`, `lookup` and `apply`, with `IntoHostValue`, and `narrow`, which
