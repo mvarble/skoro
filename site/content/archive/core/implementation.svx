@@ -3,6 +3,11 @@ summary: Three crates (skoro-tensor, skoro-core and skoro) in which a model is b
 depends_on: [archive/core/math, archive/charter/writeup, automatic-differentiation, derivatives-in-charts, product-manifold]
 ---
 
+<script>
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import { pieces } from './pieces.graph';
+</script>
+
 ## Overview
 
 When this is built, skoro is three crates. `skoro-tensor` is the layer over burn: the tensor
@@ -251,6 +256,59 @@ configuration are outside the gated areas. The prior art is the `archive` branch
 `019e888`; what is kept from it and what is not is said in [Design](#kept-from-the-archive-and-not).
 
 ## Design
+
+### How the pieces fit
+
+Most of the types below meet in one chain: a computation is described once, on no device, and the
+compiler turns the description into code for one target. The figure is a map of that chain. Its
+nodes are types of the core, coloured by when each exists, and an arrow from one type to another is
+a field of the first that holds the second, or a method of the first that returns it. It is a map
+of types, not one of the graphs a model is read as; the sections after it give each type in full.
+
+<ModelGraph spec={pieces} />
+
+**Described once.** A `Space` is a quantity's type in the mathematics' sense, Euclidean, positive,
+a product, embedded, or discrete, held as plain data that can be compared, hashed and named. An
+`Operation` is a map between spaces with no device in sight: a registered name, its parameters, a
+check of its inputs' spaces that gives its output's (`output`), and a way to be lowered (`lower`).
+A `Param` is one of those parameters, an integer, a float, a text, a space or a list of them, and
+is what, with the name, lets a `Registry` make the operation again; a composite, an embedded
+declaration and a sampler carry them for the same reason. A `Param` is not an input. An
+operation's inputs are nodes, given when it is applied and checked by their spaces, while its
+parameters are fixed when it is made: the output space and the two ranges of a `skoro.slice`, say.
+A `Composite` is a named subgraph written as ordinary model code inside `Composite::define`, so its
+body is nodes of operations. A space's retraction is one (`Space::retraction`), and an embedded
+type is declared by two, its $R$ and its $Q$.
+
+**Built into a model.** User code runs inside a writer's scope, and each operator or method it
+calls adds a node to the draft `Model`: a quantity, a constant, or a mapped node holding an
+`Operation` and its inputs, each node with its `Space`. A composite's `call` adds one mapped node,
+whose operation stands for the whole composite. A mapped node whose inputs are all fixed in the
+model is lowered for `Target::host()` and run at once, which is the compiler's path taken early. A
+user never holds a `Model`, only the `Snapshot` that shares it.
+
+**Compiled for a target.** `Snapshot::compile` walks the nodes a query reaches and lowers each
+mapped node's operation for the query's `Target`. The answer, `Lowered`, is a `Kernel`, the
+operation computed on that target with the derivative maps its type implements, or a `Composite`,
+which the compiler expands into its body and lowers again, part by part. The recursion ends: a
+composite's body is built before the composite exists, so it cannot call itself, and every
+primitive lowers to a kernel. A fused operation takes the first branch on the targets its own
+kernel covers and the second elsewhere. What remains is a `Program`, a list of steps over slots,
+each step a kernel, cached in the snapshot under its query and target.
+
+**Run.** A program's passes (`forward`, `tangent`, `cotangent` and `hessian`) call its kernels'
+maps step by step, and each kernel's variant, `Zero`, `One` or `Two`, is its order, by which a pass
+is admitted or refused before anything runs. The one loop back is an embedded type's: its boundary
+operations `skoro.include` and `skoro.retract` lower to kernels that hold programs of $R$ and $Q$,
+compiled for the same target, and run passes over them as their derivative maps.
+
+In the range of [the overview](#overview), `y - x` adds a node whose operation is `skoro.sub`;
+compiled, it lowers to a `Kernel::Two` and becomes one step of the program, and so does every other
+primitive the range is written in. A positive quantity `p` stepped by `p.retract(t)` adds a call of
+its space's retraction, which the compiler expands into `skoro.positive.exp` and
+`skoro.positive.mul` before lowering each. A quantity of a sphere stepped the same way adds a call
+of a composite of one node, `skoro.retract`, which lowers to a kernel and never expands further: the
+sphere's $R$ and $Q$ run inside it, as programs of their own.
 
 ### Workspace and crates
 
