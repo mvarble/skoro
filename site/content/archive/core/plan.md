@@ -47,7 +47,7 @@ the test macro unless the companion says otherwise.
 
 ## Spaces and operations
 
-- [ ] `Space` without its embedded variant, with `storage`, `dimension`, `cardinality` and
+- [x] `Space` without its embedded variant, with `storage`, `dimension`, `cardinality` and
       `blocks`; `Block`; the markers, `Typed` and `Declares`; `Q<T>` and `QDyn` with the two
       reserved failed identifiers, and `widen`. Tests: `product_refuses_a_discrete_factor`.
 - [ ] `Operation`, `Lowered`, `Lowering` (the target and its cache), `Param`, and the kernel
