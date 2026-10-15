@@ -9,7 +9,7 @@ import { defineGraph } from '$lib/graph/spec';
 
 export const pieces = defineGraph({
     title: 'How the pieces fit',
-    caption: String.raw`Each node is a type of the core, and each arrow a field or a method of the type it leaves. The types in blue are made by the compiler for one target; every other is described once and computes on no device. Lowering an operation gives a kernel, or a composite that expands back into operations, until only kernels remain; a program is a list of steps, each a kernel, and the kernels of an embedded type's boundary operations hold programs of their own.`,
+    caption: String.raw`Each node is a type of the core, and each arrow a field or a method of the type it leaves. The types in blue are made by the compiler for one target; every other commits to no device. Lowering an operation gives a kernel, or a composite that expands back into operations, until only kernels remain; a program is a list of steps, each a kernel, and the kernels of an embedded type's boundary operations hold programs of their own.`,
     width: 880,
     height: 600,
     nodeRadius: 50,

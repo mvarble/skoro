@@ -272,8 +272,8 @@ a product, embedded, or discrete, held as plain data that can be compared, hashe
 `Operation` is a map between spaces with no device in sight: a registered name, its parameters, a
 check of its inputs' spaces that gives its output's (`output`), and a way to be lowered (`lower`).
 A `Param` is one of those parameters, an integer, a float, a text, a space or a list of them, and
-is what, with the name, lets a `Registry` make the operation again; a composite, an embedded
-declaration and a sampler carry them for the same reason. A `Param` is not an input. An
+is what, with the name, lets a `Registry` make the operation again; an embedded declaration and a
+sampler carry them for the same reason. A `Param` is not an input. An
 operation's inputs are nodes, given when it is applied and checked by their spaces, while its
 parameters are fixed when it is made: the output space and the two ranges of a `skoro.slice`, say.
 A `Composite` is a named subgraph written as ordinary model code inside `Composite::define`, so its
@@ -290,9 +290,10 @@ user never holds a `Model`, only the `Snapshot` that shares it.
 **Compiled for a target.** `Snapshot::compile` walks the nodes a query reaches and lowers each
 mapped node's operation for the query's `Target`. The answer, `Lowered`, is a `Kernel`, the
 operation computed on that target with the derivative maps its type implements, or a `Composite`,
-which the compiler expands into its body and lowers again, part by part. The recursion ends: a
-composite's body is built before the composite exists, so it cannot call itself, and every
-primitive lowers to a kernel. A fused operation takes the first branch on the targets its own
+which the compiler expands into its body and lowers again, part by part. Every primitive lowers to
+a kernel, and a composite's body is built before the composite exists, so no call in it can name
+the composite itself; whether an expansion can still fail to end is the first of the
+[open questions](#open-questions). A fused operation takes the first branch on the targets its own
 kernel covers and the second elsewhere. What remains is a `Program`, a list of steps over slots,
 each step a kernel, cached in the snapshot under its query and target.
 
@@ -1828,4 +1829,12 @@ scalar chain.
 
 ## Open questions
 
-None remain.
+> [!TODO] Can the expansion of composites fail to end?
+> A composite cannot call itself, but a fused operation can close a cycle the compiler would
+> follow without end: an operation `F` whose `lower` returns `Lowered::Composite` of a composite
+> whose body applies `F`. `Composite::define` asks `F` for its output space only, so the composite
+> is built without complaint, and the cycle shows itself only when a query is compiled. The
+> compiler could keep the chain of composites it is expanding and refuse to enter one already on
+> it, with an error naming the chain and a test that builds such an `F`; or the design could argue
+> that a fused operation's fallback must be built from operations other than itself and leave it
+> to `testing::check_operation`. Which, if either?
