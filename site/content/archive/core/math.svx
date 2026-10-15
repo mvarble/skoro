@@ -1102,3 +1102,9 @@ and the closed forms are derivatives written by hand, a second path to every bou
 only benefit is speed no measurement has yet asked for. What they would have avoided, the
 removable singularity of an exponential map's formula at $\tangent = 0$, is ruled out by a
 requirement instead: a type's $R$ and $Q$ must be smooth as computed there.
+
+**2026-10-15.** Reopened because a map into an embedded type, written by a feature crate, can reach
+the type only through the retraction from a base point it already has, valid in that point's chart
+alone, while the natural way to write most such maps is in storage. The projection from storage
+onto the type, left out at the previous reopening, is being restored as an optional declaration,
+with its boundary operation and the derivative maps the core assembles for it.

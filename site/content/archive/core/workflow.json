@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "implementation",
+    "stage": "math",
     "started": "2026-10-11",
     "events": [
         {
@@ -26,13 +26,21 @@
             "action": "approve",
             "stage": "math",
             "commit": "6d8365d"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "A map into an embedded type can only reach it through a retraction from a base point, so the core needs a boundary operation from storage onto the type.",
+            "commit": "6da9352"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-10-14",
             "commit": "6d8365d",
-            "hash": "b9bfdfd4dbfb8019e81e0fa6eb7f49c61b60e0509936a4257e491eade4416344"
+            "hash": "b9bfdfd4dbfb8019e81e0fa6eb7f49c61b60e0509936a4257e491eade4416344",
+            "stale": true
         }
     }
 }
