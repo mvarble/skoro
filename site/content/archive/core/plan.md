@@ -175,7 +175,7 @@ the test macro unless the companion says otherwise.
       passes; the `Complex` marker in `crates/skoro/tests/common/complex.rs`, with its product
       through `QMul`. Tests: `feature_marker_defines_its_product`, `feature_marker_is_not_a_vector`,
       `flat_declaration_skips_inner_passes`.
-- [ ] The acceptance test of the mathematics, on the product of two Euclidean factors, a real
+- [x] The acceptance test of the mathematics, on the product of two Euclidean factors, a real
       line, a positive factor and the sphere. Tests: `product_retraction_agrees_with_its_factors`,
       `chart_derivatives_agree_with_blocks_and_finite_differences`,
       `chart_hessian_differs_from_the_pullback_hessian_on_the_sphere_alone`.
