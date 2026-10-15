@@ -1770,6 +1770,4 @@ scalar chain.
 
 ## Open questions
 
-> [!TODO] Names
-> `Space` for a quantity's type, `Vector<N>` beside `VectorDyn`, and `Target` for a device with a
-> precision are this document's choices. They are the names every later entry will write.
+None remain.
