@@ -3,11 +3,12 @@
 //! inputs, at both precisions.
 
 use skoro_core::primitive::{
-    Add, Atan2, Concatenate, Cos, Exp, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp,
-    PositiveLog, PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, Transpose,
+    Add, Atan2, Concatenate, Cos, Exp, IntegerAdd, IntegerEq, IntegerLe, IntegerLt, IntegerMul,
+    IntegerSub, IsNonnegative, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp, PositiveLog,
+    PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, ToReal, Transpose,
 };
 use skoro_core::testing::{check_operation, lower, random};
-use skoro_core::{Operation, Space};
+use skoro_core::{Operation, Order, Space};
 use skoro_tensor::{Frame, HostData, HostValue, Target, Value};
 
 const ROWS: usize = 3;
@@ -35,6 +36,30 @@ fn off_the_cut(seed: u64) -> [(Space, HostValue); 2] {
     let a = a.iter().map(|a| a + 0.3 * a.signum()).collect();
     let a = HostValue::new(Some(ROWS), 4, HostData::Continuous(a)).unwrap();
     [(space.clone(), a), input(space, seed + 1)]
+}
+
+/// The values an order-zero `operation` gives at `inputs`, one row each, as integers.
+fn discrete(operation: &dyn Operation, inputs: &[(Space, HostValue)], target: &Target) -> Vec<i64> {
+    let spaces: Vec<Space> = inputs.iter().map(|(space, _)| space.clone()).collect();
+    let kernel = lower(operation, &spaces, target).unwrap();
+    assert_eq!(kernel.order(), Order::Zero, "{}", operation.name());
+    let rows = inputs[0].1.rows().unwrap();
+    let values: Vec<Value> = inputs
+        .iter()
+        .map(|(_, value)| value.load(rows, target).unwrap().unwrap())
+        .collect();
+    match kernel.forward().forward(&values) {
+        Value::Discrete(integers) => integers.to_host(),
+        Value::Continuous(points) => points.to_host().into_iter().map(|x| x as i64).collect(),
+    }
+}
+
+fn integers(values: &[i64]) -> (Space, HostValue) {
+    let data = HostData::Discrete(values.to_vec());
+    (
+        Space::Integer,
+        HostValue::new(Some(values.len()), 1, data).unwrap(),
+    )
 }
 
 fn check(operation: &dyn Operation, inputs: &[(Space, HostValue)], target: &Target) {
@@ -204,6 +229,46 @@ skoro_core::precision_tests! {
 
     fn positive_recip(target) {
         check(&PositiveRecip, &[positive(Space::Positive(2), 56)], &target);
+    }
+
+    fn integer_arithmetic_is_exact(target) {
+        // Near the square root of the largest integer the target holds, so that every product
+        // is exact and none is small.
+        let big: i64 = if target.int_dtype() == skoro_tensor::burn::DType::I64 {
+            3_037_000_499
+        } else {
+            46_340
+        };
+        let a = [big, -big, 7, 0, big - 1];
+        let b = [big - 1, big, -3, 5, -big];
+        let (i, j) = (integers(&a), integers(&b));
+        let pairs = || a.iter().zip(&b);
+        let inputs = [i, j];
+        assert_eq!(discrete(&IntegerAdd, &inputs, &target), pairs().map(|(a, b)| a + b).collect::<Vec<_>>());
+        assert_eq!(discrete(&IntegerSub, &inputs, &target), pairs().map(|(a, b)| a - b).collect::<Vec<_>>());
+        assert_eq!(discrete(&IntegerMul, &inputs, &target), pairs().map(|(a, b)| a * b).collect::<Vec<_>>());
+        assert_eq!(IntegerAdd.output(&[Space::Integer, Space::Integer]), Ok(Space::Integer));
+        assert!(IntegerAdd.output(&[Space::Integer, Space::Real]).is_err());
+
+        // An integer read as a real is exact wherever the target's precision holds it.
+        let small = [-3, 0, 12, 1 << 20];
+        let reals = discrete(&ToReal, &[integers(&small)], &target);
+        assert_eq!(reals, small);
+        assert_eq!(ToReal.output(&[Space::Categorical(3)]), Ok(Space::Real));
+    }
+
+    fn comparisons_yield_booleans(target) {
+        let inputs = [integers(&[1, 2, 3, -4]), integers(&[2, 2, 2, -5])];
+        assert_eq!(discrete(&IntegerEq, &inputs, &target), [0, 1, 0, 0]);
+        assert_eq!(discrete(&IntegerLt, &inputs, &target), [1, 0, 0, 0]);
+        assert_eq!(discrete(&IntegerLe, &inputs, &target), [1, 1, 0, 0]);
+        assert_eq!(IntegerLt.output(&[Space::Integer, Space::Integer]), Ok(Space::BOOLEAN));
+
+        let reals = HostValue::new(Some(4), 1, HostData::Continuous(vec![-1.5, 0.0, 2.0, -0.0])).unwrap();
+        let signs = discrete(&IsNonnegative, &[(Space::Real, reals)], &target);
+        assert_eq!(signs, [0, 1, 1, 1]);
+        assert_eq!(IsNonnegative.output(&[Space::Real]), Ok(Space::BOOLEAN));
+        assert!(IsNonnegative.output(&[Space::Vector(2)]).is_err());
     }
 
     fn transpose(target) {

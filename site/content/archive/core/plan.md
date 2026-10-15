@@ -64,7 +64,7 @@ the test macro unless the companion says otherwise.
 - [x] `select`, and the positive primitives `positive.as_real`, `.exp`, `.log`, `.mul`, `.recip`.
       Tests: `select`, `select_routes_the_cotangent_to_the_chosen_value`, `positive_as_real`,
       `positive_exp`, `positive_log`, `positive_mul`, `positive_recip`.
-- [ ] The discrete operations (integer arithmetic and comparisons), the embedding `to_real` and
+- [x] The discrete operations (integer arithmetic and comparisons), the embedding `to_real` and
       the discretization `is_nonnegative`, of order zero. Tests: `integer_arithmetic_is_exact`,
       `comparisons_yield_booleans`.
 
