@@ -12,6 +12,7 @@ homepage = "https://skoro.dev/"
 
 [workspace.dependencies]
 burn = { version = "0.22.0", default-features = false, features = ["std", "flex", "extension"] }
+burn-dispatch = { version = "0.22.0", default-features = false }
 blake3 = "1"
 rpds = "1"
 skoro-tensor = { path = "crates/skoro-tensor", version = "0.1.0" }

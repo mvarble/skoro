@@ -18,7 +18,7 @@ the test macro unless the companion says otherwise.
 
 ## The tensor layer (`skoro-tensor`)
 
-- [ ] `Precision`, `Target` (`new`, `host`), the device check on `burn-dispatch`'s
+- [x] `Precision`, `Target` (`new`, `host`), the device check on `burn-dispatch`'s
       `DispatchDevice` that accepts the Flex device and cubecl's wgpu devices alone, and
       `TensorError`; the dependency on `burn-dispatch`, and burn's `ndarray` feature for the tensor
       layer's tests; the `wgpu` feature and the test helper that finds an adapter; the local wgpu

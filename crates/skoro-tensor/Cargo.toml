@@ -13,6 +13,11 @@ wgpu = ["burn/wgpu"]
 
 [dependencies]
 burn.workspace = true
+burn-dispatch.workspace = true
+
+[dev-dependencies]
+# Backends skoro refuses, for the tests that check it does: both are plain Rust.
+burn = { workspace = true, features = ["ndarray", "autodiff"] }
 
 [lints]
 workspace = true

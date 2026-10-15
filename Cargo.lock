@@ -5349,6 +5349,7 @@ name = "skoro-tensor"
 version = "0.1.0"
 dependencies = [
  "burn",
+ "burn-dispatch",
 ]
 
 [[package]]

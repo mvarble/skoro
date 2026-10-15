@@ -82,3 +82,13 @@ SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a docume
 
 CI (`.github/workflows/ci.yml`) runs the same, and `bin/wf check --merge` on pull requests into
 `main`.
+
+wgpu is the one GPU runtime skoro claims, and CI has no adapter to run it on. A change to
+`skoro-tensor`, to a primitive's kernel or to a fused operation is pushed only after
+
+```sh
+cargo test --workspace --features wgpu
+```
+
+passes on a machine with an adapter, and its commit says so. Without an adapter the wgpu tests
+fail, naming it, rather than pass with nothing run.
