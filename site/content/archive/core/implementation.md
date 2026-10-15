@@ -597,42 +597,48 @@ pub trait Operation: Debug + Send + Sync + 'static {
 }
 
 pub enum Lowered {
-    Kernel(Arc<dyn Kernel>),
+    Kernel(Kernel),
     /// Expand this composite in place of the operation.
     Composite(Arc<Composite>),
 }
 ```
 
 `Lowering` carries the target and a cache of what has been lowered for it. A kernel is the
-operation on one target, and its order is read off what it implements, never stated:
+operation on one target, built as the most it can differentiate:
 
 ```rust
-pub trait Kernel: Send + Sync + 'static {
-    fn forward(&self, inputs: &[Value]) -> Value;
-    fn first(&self) -> Option<&dyn FirstOrder> { None }
+/// An operation on one target. The variant is its order.
+#[derive(Clone)]
+pub enum Kernel {
+    Zero(Arc<dyn Forward>),
+    One(Arc<dyn FirstOrder>),
+    Two(Arc<dyn SecondOrder>),
 }
 
-pub trait FirstOrder {
+pub trait Forward: Send + Sync + 'static {
+    fn forward(&self, inputs: &[Value]) -> Value;
+}
+
+pub trait FirstOrder: Forward {
     /// The value and the tangent frame of the output. A missing frame is zero.
     fn tangent(&self, inputs: &[Value], tangents: &[Option<Frame>]) -> (Value, Option<Frame>);
     /// The value and the pull-back at these inputs, into the inputs marked differentiable.
     fn record(&self, inputs: &[Value], differentiable: &[bool]) -> (Value, Box<dyn Pullback>);
-    fn second(&self) -> Option<&dyn SecondOrder> { None }
 }
 
-pub trait Pullback: Send {
-    /// One frame per input: `None` for an input that is not differentiable.
-    fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>>;
-}
-
-pub trait SecondOrder {
-    /// As `FirstOrder::record`, with the inputs' velocities, and returning the output's.
-    fn record(
+pub trait SecondOrder: FirstOrder {
+    /// As `record`, with the inputs' velocities, and returning the output's.
+    fn record_second(
         &self,
         inputs: &[Value],
         differentiable: &[bool],
         velocities: &[Option<Frame>],
     ) -> (Value, Option<Frame>, Box<dyn SecondPullback>);
+}
+
+pub trait Pullback: Send {
+    /// One frame per input: `None` for an input that is not differentiable.
+    fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>>;
 }
 
 pub trait SecondPullback: Pullback {
@@ -642,19 +648,44 @@ pub trait SecondPullback: Pullback {
 }
 
 pub enum Order { Zero, One, Two }
+
+impl Kernel {
+    pub fn order(&self) -> Order;
+    /// Every kernel, by upcasting a `One` or a `Two`.
+    pub fn forward(&self) -> &dyn Forward;
+    /// `One` and `Two`, the latter by upcasting.
+    pub fn first(&self) -> Option<&dyn FirstOrder>;
+    pub fn second(&self) -> Option<&dyn SecondOrder>;
+}
 ```
 
-A kernel's order is `Zero` when `first()` is `None`, `One` when `first()` is given and its
-`second()` is `None`, and `Two` otherwise. The four maps of the mathematics' table are `forward`,
-`tangent`, `Pullback::cotangent` and `SecondPullback::second`. Kernel methods do not return errors:
-every space was checked when the node was added, and every pass is admitted before it runs.
+The four maps of the mathematics' table are `forward`, `tangent`, `Pullback::cotangent` and
+`SecondPullback::second`. The supertraits say what the mathematics says of orders: a kernel of
+order two has the first-order maps too, and every kernel has a forward map. The variant is the
+order, and a kernel can be built as `Two` only if it implements `SecondOrder`, so the order a
+kernel claims is the order its type implements, and nothing else states it. A pass that needs only
+the first-order maps of a `Two` kernel, such as a Hessian pass at a step no velocity reaches, takes
+them by upcasting `&dyn SecondOrder` to `&dyn FirstOrder`, stable since Rust 1.86 and within the
+workspace's `rust-version`. Kernel methods do not return errors: every space was checked when the
+node was added, and every pass is admitted before it runs.
+
+> [!DECISION] Why the order is a variant rather than a question asked of the kernel
+> A pass holds a kernel as a trait object, and a trait object cannot be asked whether it also
+> implements another trait: Rust casts up a supertrait chain, never across or down it. So
+> something must say how far a kernel differentiates. An earlier draft asked the kernel, through
+> `first()` and `second()` methods that returned `None` by default. That had two faults. A kernel
+> that implemented the second-order trait but did not override `second()` was silently of order
+> one, and a Hessian pass refused it with `OrderTooLow` at the first model that needed it, far
+> from the mistake. And nothing tied the second-order trait to the first-order one, so it could be
+> implemented alone and never reached. With the variant, the order is chosen once, where the
+> kernel is built, and the type system refuses a `Two` that lacks a map.
 
 **Shapes.** A continuous value of storage size $s$ is `[N, s]`; a tangent or cotangent frame at a
 value of dimension $\dimension$ is `[N, d, K]`, with $K$ columns. In a Hessian pass the velocities
 are `[N, d, K]`, one Hessian direction per column, $\alpha$ is `[N, d, 1]`, and $\beta$ is
 `[N, d, K]`.
 
-**The two gates** of the mathematics are the two arguments of `SecondOrder::record`.
+**The two gates** of the mathematics are the two arguments of `SecondOrder::record_second`.
 `differentiable[j]` says the pull-back into input $j$ is wanted; `velocities[j]` is `None` when no
 seeded velocity reaches input $j$, and counts as zero. They are separate because the second
 implies the first and not conversely. A discrete input is never differentiable.
@@ -879,7 +910,8 @@ the price of deriving a curved type's derivatives rather than writing them, and 
 look if profiling a model with curved quantities points at the core.
 
 The order of each boundary kernel is the most its inner passes admit, found with the same
-admissibility function as any pass: $\iota$ has order two when $\mathcal R$ admits a Hessian pass
+admissibility function as any pass when the kernel is lowered, and the kernel is built as that
+variant of `Kernel`: $\iota$ has order two when $\mathcal R$ admits a Hessian pass
 seeded at its first input, and order one when it admits first-order passes; $\oplus$ has order two
 when $\mathcal R$ and $\mathcal Q$ both admit Hessian passes, and order one when both admit
 first-order passes; each has order zero otherwise. No derivative of an embedded type is written by
@@ -1376,7 +1408,7 @@ Hvp {
 },
 ```
 
-Here they are the two arguments of `SecondOrder::record`. What changes is the velocity: the
+Here they are the two arguments of `SecondOrder::record_second`. What changes is the velocity: the
 archive's was one direction per pass (`TangentVector`, `[batch, dimension]`), and is now a frame.
 
 **Kept: values that pin a batch.** The archive's `QuantityValue::Unbatched` and `Batched`
