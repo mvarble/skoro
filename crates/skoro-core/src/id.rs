@@ -18,6 +18,12 @@ pub struct NodeId(u64);
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 impl NodeId {
+    /// The identifier of a handle whose operation failed inside a scope. The counter never reaches
+    /// it, nor the next.
+    pub(crate) const FAILED: NodeId = NodeId(u64::MAX);
+    /// The identifier of a handle whose operation was attempted with no scope open.
+    pub(crate) const OUTSIDE_SCOPE: NodeId = NodeId(u64::MAX - 1);
+
     /// A new identifier, greater than every one made before it.
     pub(crate) fn fresh() -> NodeId {
         NodeId(NEXT.fetch_add(1, Ordering::Relaxed))

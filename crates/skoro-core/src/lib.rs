@@ -5,8 +5,15 @@ mod address;
 mod error;
 mod id;
 mod key;
+mod q;
+mod space;
 
 pub use address::{Address, Segment};
 pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use key::Key;
+pub use q::{
+    Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
+    PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,
+};
+pub use space::{Block, Space};

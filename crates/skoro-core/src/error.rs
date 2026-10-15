@@ -3,18 +3,23 @@ use std::panic::Location;
 
 use skoro_tensor::TensorError;
 
+use crate::Space;
+
 /// What the core refuses, with what a caller needs to name the fault.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
     /// The tensor layer refused a device, a precision, a tensor or a value.
     Tensor(TensorError),
+    /// A continuous space was needed: a product's factors, for one.
+    NotContinuous { space: Space },
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Tensor(error) => write!(f, "{error}"),
+            Error::NotContinuous { space } => write!(f, "{space:?} is not a continuous space"),
         }
     }
 }
@@ -23,6 +28,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Tensor(error) => Some(error),
+            _ => None,
         }
     }
 }
