@@ -19,7 +19,7 @@ pub use crate::ops::{concatenate, product, select};
 use crate::model::{Model, Node, NodeKind};
 use crate::{
     Address, Declares, Error, Failure, IntoHostValue, Lowered, Lowering, NodeId, Operation, Q,
-    QDyn, Space, Typed,
+    QDyn, Space, Typed, Values,
 };
 
 /// A frame of the thread's stack.
@@ -30,6 +30,8 @@ pub(crate) enum Frame {
     Definition(Draft),
     /// A namespace, prefixing the addresses of the quantities made in it.
     Namespace(Address),
+    /// A scope or definition whose draft a building step has taken out for its length.
+    Busy,
 }
 
 /// The model a scope builds, and the first failure it recorded.
@@ -167,11 +169,6 @@ impl Draft {
             return Err(Error::BatchSize { expected, found });
         }
         let target = Target::host();
-        let kernel = match operation.lower(spaces, &mut Lowering::new(&target))? {
-            Lowered::Kernel(kernel) => kernel,
-            // A composite call folds once the compiler can expand it.
-            Lowered::Composite(_) => return Ok(None),
-        };
         let rows = batch.unwrap_or(1);
         let loaded = values
             .iter()
@@ -182,7 +179,25 @@ impl Draft {
                 })
             })
             .collect::<Result<Vec<Value>, Error>>()?;
-        let output = kernel.forward().forward(&loaded);
+        let mut lowering = Lowering::new(&target);
+        let output = match operation.lower(spaces, &mut lowering)? {
+            Lowered::Kernel(kernel) => kernel.forward().forward(&loaded),
+            Lowered::Composite(composite) => {
+                let program = lowering.compile(&composite)?;
+                let at = program
+                    .free()
+                    .iter()
+                    .zip(loaded)
+                    .fold(Values::new(), |at, (free, value)| {
+                        at.with(QDyn::from_id(free.node), value)
+                    });
+                let mut outputs = program.forward(&at)?;
+                match outputs.remove(QDyn::from_id(composite.body().output)) {
+                    Some(value) => value,
+                    None => unreachable!("a composite's program computes its output"),
+                }
+            }
+        };
         Ok(Some(host_value(&output, batch)))
     }
 
@@ -252,32 +267,49 @@ pub(crate) fn build(
     location: &'static Location<'static>,
     step: impl FnOnce(&mut Draft, &Address) -> Result<NodeId, Error>,
 ) -> NodeId {
-    STACK.with(|stack| {
+    // The draft leaves the stack for the length of the step, so that the step, which may lower
+    // an operation that defines a composite, runs with nothing borrowed.
+    let taken = STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
-        let Some(at) = stack
-            .iter()
-            .rposition(|frame| matches!(frame, Frame::Scope(_) | Frame::Definition(_)))
-        else {
-            return NodeId::OUTSIDE_SCOPE;
-        };
-        let (scope, namespaces) = stack.split_at_mut(at + 1);
-        let prefix = namespaces
+        let at = stack.iter().rposition(|frame| {
+            matches!(frame, Frame::Scope(_) | Frame::Definition(_) | Frame::Busy)
+        })?;
+        let prefix = stack[at + 1..]
             .iter()
             .fold(Address::root(), |prefix, frame| match frame {
                 Frame::Namespace(namespace) => prefix.join(namespace),
-                Frame::Scope(_) | Frame::Definition(_) => prefix,
+                _ => prefix,
             });
-        let Some(Frame::Scope(draft) | Frame::Definition(draft)) = scope.last_mut() else {
-            unreachable!("the frame found is a scope or a definition")
-        };
-        match step(draft, &prefix) {
-            Ok(id) => id,
-            Err(error) => {
-                draft.record(error, location);
-                NodeId::FAILED
-            }
+        let frame = std::mem::replace(&mut stack[at], Frame::Busy);
+        Some((at, frame, prefix))
+    });
+    let Some((at, frame, prefix)) = taken else {
+        return NodeId::OUTSIDE_SCOPE;
+    };
+    let (mut draft, definition) = match frame {
+        Frame::Scope(draft) => (draft, false),
+        Frame::Definition(draft) => (draft, true),
+        // A building function called from inside another's step, such as from an operation's
+        // `lower`: the draft is out, and the step that has it will finish first.
+        Frame::Busy | Frame::Namespace(_) => {
+            STACK.with(|stack| stack.borrow_mut()[at] = frame);
+            return NodeId::FAILED;
         }
-    })
+    };
+    let id = match step(&mut draft, &prefix) {
+        Ok(id) => id,
+        Err(error) => {
+            draft.record(error, location);
+            NodeId::FAILED
+        }
+    };
+    let frame = if definition {
+        Frame::Definition(draft)
+    } else {
+        Frame::Scope(draft)
+    };
+    STACK.with(|stack| stack.borrow_mut()[at] = frame);
+    id
 }
 
 /// A quantity of `marker`'s space at `address`, under the open namespaces (`AddressTaken`).

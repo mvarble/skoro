@@ -46,6 +46,22 @@ pub enum Error {
     DuplicateName { name: String },
     /// A name the registry lacks.
     UnknownOperation { name: String },
+    /// A composite entered while it is being expanded or compiled: the chain of composites from
+    /// the outermost to the one entered twice.
+    CompositeCycle { chain: Vec<String> },
+    /// An observed value for a node that is not a quantity.
+    NotAQuantity { id: NodeId },
+    /// A free quantity a pass was given no value for.
+    MissingValue { id: NodeId },
+    /// A frame of the wrong shape for the node it is given at: its rows, dimension or columns.
+    FrameShape { id: NodeId },
+    /// A step of a pass whose kernel differentiates less than the pass needs of it: its
+    /// operation, the composites it was expanded from, outermost first, and its node.
+    OrderTooLow {
+        operation: &'static str,
+        composites: Vec<&'static str>,
+        node: NodeId,
+    },
 }
 
 impl fmt::Display for Error {
@@ -72,6 +88,26 @@ impl fmt::Display for Error {
             }
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
+            Error::CompositeCycle { chain } => {
+                write!(f, "the composites call themselves: {}", chain.join(" → "))
+            }
+            Error::NotAQuantity { id } => write!(f, "node {id:?} is not a quantity"),
+            Error::MissingValue { id } => write!(f, "no value was given for {id:?}"),
+            Error::FrameShape { id } => write!(f, "the frame at {id:?} has the wrong shape"),
+            Error::OrderTooLow {
+                operation,
+                composites,
+                node,
+            } => {
+                write!(
+                    f,
+                    "{operation} at {node:?} does not differentiate as far as the pass needs"
+                )?;
+                if !composites.is_empty() {
+                    write!(f, ", expanded from {}", composites.join(" → "))?;
+                }
+                Ok(())
+            }
             Error::BatchSize { expected, found } => {
                 write!(f, "a batch of {found} rows where {expected} were expected")
             }

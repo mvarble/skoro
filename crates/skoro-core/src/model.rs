@@ -24,7 +24,7 @@ pub(crate) struct Model {
 pub struct Node {
     id: NodeId,
     space: Space,
-    kind: NodeKind,
+    pub(crate) kind: NodeKind,
 }
 
 #[derive(Debug)]
@@ -33,13 +33,7 @@ pub(crate) enum NodeKind {
         address: Address,
     },
     /// An input of a composite's body.
-    Input {
-        #[expect(
-            dead_code,
-            reason = "the compiler binds a body's inputs, in the next task"
-        )]
-        index: usize,
-    },
+    Input,
     Constant {
         value: HostValue,
     },
@@ -92,7 +86,7 @@ impl Node {
         match &self.kind {
             NodeKind::Constant { value } => Some(value),
             NodeKind::Mapped { folded, .. } => folded.as_ref(),
-            NodeKind::Quantity { .. } | NodeKind::Input { .. } => None,
+            NodeKind::Quantity { .. } | NodeKind::Input => None,
         }
     }
 

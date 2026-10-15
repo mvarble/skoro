@@ -98,7 +98,7 @@ the test macro unless the companion says otherwise.
 
 ## Compiling and passes
 
-- [ ] `Observations`, `Query::of` and `given`, and `Snapshot::compile`: reach, lower with
+- [x] `Observations`, `Query::of` and `given`, and `Snapshot::compile`: reach, lower with
       composites expanded under the chain of `Lowering` (with `Lowering::compile` and
       `Composite::compile`), classify, fold, prune and finish, into a `Program` of steps over
       slots. `Program`'s `forward`, `tangent`, `cotangent`, `hessian`, `gradient` and

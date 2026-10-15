@@ -2,6 +2,7 @@
 //! compilation and probabilistic graphs, the writer, queries, generation and retirement.
 
 mod address;
+mod compile;
 mod composite;
 mod error;
 mod id;
@@ -11,7 +12,9 @@ mod model;
 mod operation;
 mod ops;
 pub mod primitive;
+mod program;
 mod q;
+mod query;
 mod registry;
 pub mod scope;
 mod space;
@@ -30,10 +33,12 @@ pub use operation::{
     SecondPullback,
 };
 pub use ops::{QAdd, QDiv, QMatMul, QMul, QNeg, QScale, QShift, QSub};
+pub use program::{Frames, Free, Program, Second, Values};
 pub use q::{
     Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,
 };
+pub use query::{Observations, Query};
 pub use registry::{MakeOperation, Registry};
 pub use space::{Block, Space};
 pub use writer::{Reader, Writer};

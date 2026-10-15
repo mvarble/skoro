@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use skoro_tensor::{Frame, Target, Value};
 
-use crate::{Composite, Error, Space};
+use crate::{Composite, Error, Program, Space};
 
 /// A map between spaces, described once and on no device, and lowered to a kernel when a query
 /// is compiled.
@@ -68,18 +69,64 @@ pub enum Lowered {
     Composite(Arc<Composite>),
 }
 
-/// What an operation is lowered with: the target.
+/// What an operation is lowered with: the target, a cache of the composites compiled for it, and
+/// the chain of composites the compiler is inside, outermost first.
 pub struct Lowering<'a> {
     target: &'a Target,
+    pub(crate) chain: Vec<Link>,
+    pub(crate) cache: HashMap<Link, Arc<Program>>,
+}
+
+/// A composite on the chain, by the identity everything stored type-erased is named by: its name
+/// and its parameters.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct Link {
+    pub(crate) name: &'static str,
+    pub(crate) params: Vec<Param>,
+}
+
+impl Link {
+    pub(crate) fn of(composite: &Composite) -> Link {
+        Link {
+            name: composite.name(),
+            params: composite.params().to_vec(),
+        }
+    }
 }
 
 impl<'a> Lowering<'a> {
     pub(crate) fn new(target: &'a Target) -> Lowering<'a> {
-        Lowering { target }
+        Lowering {
+            target,
+            chain: Vec::new(),
+            cache: HashMap::new(),
+        }
     }
 
     pub fn target(&self) -> &Target {
         self.target
+    }
+
+    /// Enters `composite`, refusing one already on the chain (`CompositeCycle`, naming the chain
+    /// from the outermost composite to the one entered twice).
+    pub(crate) fn enter(&mut self, composite: &Composite) -> Result<(), Error> {
+        let link = Link::of(composite);
+        if self.chain.contains(&link) {
+            let mut chain: Vec<String> = self.chain.iter().map(|l| l.name.to_string()).collect();
+            chain.push(link.name.to_string());
+            return Err(Error::CompositeCycle { chain });
+        }
+        self.chain.push(link);
+        Ok(())
+    }
+
+    pub(crate) fn leave(&mut self) {
+        self.chain.pop();
+    }
+
+    /// The names of the composites on the chain, outermost first.
+    pub(crate) fn names(&self) -> Vec<&'static str> {
+        self.chain.iter().map(|link| link.name).collect()
     }
 }
 

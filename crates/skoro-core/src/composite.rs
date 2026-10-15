@@ -16,10 +16,6 @@ pub struct Composite {
 }
 
 /// A composite's nodes, the nodes standing for its inputs, and its output node.
-#[expect(
-    dead_code,
-    reason = "the compiler expands a composite's body, in the next task"
-)]
 pub(crate) struct Body {
     pub(crate) model: Model,
     pub(crate) inputs: Vec<NodeId>,
@@ -41,10 +37,9 @@ impl Composite {
         let mut draft = Draft::definition(Model::new());
         let handles: Vec<QDyn> = inputs
             .iter()
-            .enumerate()
-            .map(|(index, space)| {
+            .map(|space| {
                 let id = NodeId::fresh();
-                let node = Node::new(id, space.clone(), NodeKind::Input { index });
+                let node = Node::new(id, space.clone(), NodeKind::Input);
                 draft.model.insert(node);
                 QDyn::from_id(id)
             })
