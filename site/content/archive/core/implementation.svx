@@ -293,8 +293,10 @@ operation computed on that target with the derivative maps its type implements, 
 which the compiler expands into its body and lowers again, part by part. Every primitive lowers to
 a kernel, and the compiler keeps the chain of composites it is inside, refusing one that is already
 on it, so the expansion either ends in kernels or stops with an error naming the cycle. A fused
-operation takes the first branch on the targets its own kernel covers and the second elsewhere. What remains is a `Program`, a list of steps over slots,
-each step a kernel, cached in the snapshot under its query and target.
+operation lowers to its own `Kernel` on the targets its kernels cover, and to the `Composite` it
+fuses on every other target, which the compiler expands like any other. What remains is a
+`Program`, a list of steps over slots, each step a kernel, cached in the snapshot under its query
+and target.
 
 **Run.** A program's passes (`forward`, `tangent`, `cotangent` and `hessian`) call its kernels'
 maps step by step, and each kernel's variant, `Zero`, `One` or `Two`, is its order, by which a pass
