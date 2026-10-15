@@ -194,11 +194,9 @@ impl Draft {
                     .free()
                     .iter()
                     .zip(loaded)
-                    .fold(Values::new(), |at, (free, value)| {
-                        at.with(QDyn::from_id(free.node), value)
-                    });
+                    .fold(Values::new(), |at, (free, value)| at.with(free.node, value));
                 let mut outputs = program.forward(&at)?;
-                match outputs.remove(QDyn::from_id(composite.body().output)) {
+                match outputs.remove(composite.body().output) {
                     Some(value) => value,
                     None => unreachable!("a composite's program computes its output"),
                 }

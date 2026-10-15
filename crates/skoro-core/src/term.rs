@@ -74,7 +74,19 @@ impl From<TermHandle> for NodeId {
     }
 }
 
+/// The handle of the term's log-density.
+impl From<TermHandle> for QDyn {
+    fn from(term: TermHandle) -> QDyn {
+        QDyn::from_id(term.id)
+    }
+}
+
 impl TermHandle {
+    /// The term's log-density.
+    pub fn log_density(&self) -> Q<Real> {
+        Q::from_id(self.id)
+    }
+
     /// The term's identifier: its log-density node.
     pub fn id(&self) -> NodeId {
         self.id

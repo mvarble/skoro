@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rpds::{HashTrieMapSync, HashTrieSetSync, RedBlackTreeMapSync};
 use skoro_tensor::HostValue;
 
+use crate::compile::ProgramKey;
 use crate::term::{Multiplicity, Proposal, Role, Term};
-use crate::{Address, Error, NodeId, Operation, Space};
+use crate::{Address, Error, NodeId, Operation, Program, Space};
 
 /// An immutable model, sharing structure with the snapshots before it.
 #[derive(Clone)]
@@ -12,7 +13,6 @@ pub struct Snapshot(pub(crate) Arc<Model>);
 
 /// The compilation graph and the addresses of its quantities, in persistent maps, so that a clone
 /// is a handful of reference counts and a change copies only the path it touches.
-#[derive(Clone)]
 pub(crate) struct Model {
     pub(crate) nodes: HashTrieMapSync<NodeId, Arc<Node>>,
     /// The compilation graph's edges read forward: each node's consumers.
@@ -24,6 +24,25 @@ pub(crate) struct Model {
     pub(crate) scoring: HashTrieMapSync<NodeId, NodeId>,
     pub(crate) joined: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>,
     pub(crate) proposals: HashTrieMapSync<NodeId, Arc<Proposal>>,
+    /// The programs compiled from this model, most recently used last.
+    pub(crate) programs: Mutex<Vec<(ProgramKey, Arc<Program>)>>,
+}
+
+/// A clone shares every map with the model it came from and none of its programs: a program
+/// compiled for one snapshot is never run against another.
+impl Clone for Model {
+    fn clone(&self) -> Model {
+        Model {
+            nodes: self.nodes.clone(),
+            consumers: self.consumers.clone(),
+            addresses: self.addresses.clone(),
+            terms: self.terms.clone(),
+            scoring: self.scoring.clone(),
+            joined: self.joined.clone(),
+            proposals: self.proposals.clone(),
+            programs: Mutex::new(Vec::new()),
+        }
+    }
 }
 
 /// A node of the compilation graph.
@@ -117,6 +136,7 @@ impl Model {
             scoring: HashTrieMapSync::new_sync(),
             joined: HashTrieMapSync::new_sync(),
             proposals: HashTrieMapSync::new_sync(),
+            programs: Mutex::new(Vec::new()),
         }
     }
 

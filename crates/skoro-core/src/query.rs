@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -15,16 +16,18 @@ pub struct Observations {
     values: Arc<HashTrieMapSync<NodeId, Option<HostValue>>>,
 }
 
-static IDENTITIES: AtomicU64 = AtomicU64::new(0);
+/// Identities of extended sets; the empty set is one set, of identity zero.
+static IDENTITIES: AtomicU64 = AtomicU64::new(1);
 
 fn fresh() -> u64 {
     IDENTITIES.fetch_add(1, Ordering::Relaxed)
 }
 
 impl Observations {
+    /// The empty set: one set, whose identity every empty set shares.
     pub fn new() -> Observations {
         Observations {
-            identity: fresh(),
+            identity: 0,
             values: Arc::new(HashTrieMapSync::new_sync()),
         }
     }
@@ -71,15 +74,40 @@ impl Default for Observations {
 /// What a program computes: its targets, and the observations it is given.
 #[derive(Clone, Debug)]
 pub struct Query {
-    pub(crate) targets: Vec<NodeId>,
+    pub(crate) targets: Targets,
     pub(crate) observations: Observations,
+}
+
+/// A query's targets: nodes, or the sum of every term's log-density, or of some terms', kept as a
+/// set so that the order they are named in changes neither the program nor its cache key.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum Targets {
+    Nodes(Vec<NodeId>),
+    Density,
+    DensityOf(BTreeSet<NodeId>),
 }
 
 impl Query {
     /// The values of `targets`, with nothing observed.
     pub fn of(targets: impl IntoIterator<Item = QDyn>) -> Query {
         Query {
-            targets: targets.into_iter().map(|q| q.id()).collect(),
+            targets: Targets::Nodes(targets.into_iter().map(|q| q.id()).collect()),
+            observations: Observations::new(),
+        }
+    }
+
+    /// The sum of every term's log-density: the program's one target, `NodeId::DENSITY`.
+    pub fn log_density() -> Query {
+        Query {
+            targets: Targets::Density,
+            observations: Observations::new(),
+        }
+    }
+
+    /// The sum of the log-densities of these terms, named by their log-density nodes.
+    pub fn log_density_of<T: Into<NodeId>>(terms: impl IntoIterator<Item = T>) -> Query {
+        Query {
+            targets: Targets::DensityOf(terms.into_iter().map(Into::into).collect()),
             observations: Observations::new(),
         }
     }

@@ -11,21 +11,78 @@
 //! 6. **Finish.** Each slot records the last step that reads it.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use skoro_tensor::{HostValue, Target, Value};
 
 use crate::model::{Model, NodeKind};
 use crate::operation::Link;
+use crate::primitive::{Add, Select};
 use crate::program::{Free, Root, Slot, Step, expand};
+use crate::query::Targets;
 use crate::scope::fits;
 use crate::{
-    Composite, Error, Lowered, Lowering, NodeId, Observations, Program, Query, Snapshot, Space,
+    Composite, Error, Lowered, Lowering, NodeId, Observations, Operation, Program, Query, Snapshot,
+    Space,
 };
 
+/// The key a program is cached under in its snapshot.
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) struct ProgramKey {
+    targets: Targets,
+    observations: u64,
+    target: Target,
+}
+
+/// How many programs a snapshot keeps, the most recently used.
+const CACHED: usize = 32;
+
 impl Snapshot {
-    /// The program of `query` on `target`.
+    /// The program of `query` on `target`: from the snapshot's cache, under the query's targets,
+    /// its observation set's identity and the target, or compiled and cached.
     pub fn compile(&self, query: &Query, target: &Target) -> Result<Arc<Program>, Error> {
+        let key = ProgramKey {
+            targets: query.targets.clone(),
+            observations: query.observations.identity(),
+            target: target.clone(),
+        };
+        {
+            let mut programs = self
+                .0
+                .programs
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if let Some(at) = programs.iter().position(|(k, _)| *k == key) {
+                let entry = programs.remove(at);
+                let program = entry.1.clone();
+                programs.push(entry);
+                return Ok(program);
+            }
+        }
+        let program = Arc::new(self.compile_uncached(query, target)?);
+        let mut programs = self
+            .0
+            .programs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        programs.push((key, program.clone()));
+        if programs.len() > CACHED {
+            programs.remove(0);
+        }
+        Ok(program)
+    }
+
+    /// The number of programs the snapshot keeps.
+    #[doc(hidden)]
+    pub fn cached_programs(&self) -> usize {
+        self.0
+            .programs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
+    }
+
+    fn compile_uncached(&self, query: &Query, target: &Target) -> Result<Program, Error> {
         let observations = &query.observations;
         for id in observations.ids() {
             if self
@@ -37,12 +94,41 @@ impl Snapshot {
                 return Err(Error::NotAQuantity { id });
             }
         }
+        let terms: Option<Vec<NodeId>> = match &query.targets {
+            Targets::Nodes(_) => None,
+            Targets::Density => Some(self.0.terms.keys().copied().collect()),
+            Targets::DensityOf(terms) => {
+                for &id in terms {
+                    if !self.0.terms.contains_key(&id) {
+                        return Err(Error::NotATerm { id });
+                    }
+                }
+                Some(terms.iter().copied().collect())
+            }
+        };
         let mut lowering = Lowering::new(target);
         let mut builder = Builder::new(&mut lowering);
         let mut env = HashMap::new();
-        let outputs = builder.emit(&self.0, &query.targets, &mut env, None, Some(observations))?;
-        let targets = query.targets.iter().copied().zip(outputs).collect();
-        builder.finish(targets).map(Arc::new)
+        let targets = match (&query.targets, terms) {
+            (Targets::Nodes(nodes), _) => {
+                let outputs = builder.emit(&self.0, nodes, &mut env, None, Some(observations))?;
+                nodes.iter().copied().zip(outputs).collect()
+            }
+            (_, Some(mut terms)) => {
+                // The fixed terms first, those whose every quantity is observed, so that their
+                // sum folds.
+                let observed = |id: &NodeId| {
+                    self.0.terms.get(id).is_some_and(|term| {
+                        term.involves.iter().all(|q| observations.get(*q).is_some())
+                    })
+                };
+                terms.sort_by_key(|id| (!observed(id), *id));
+                let slots = builder.emit(&self.0, &terms, &mut env, None, Some(observations))?;
+                vec![(NodeId::DENSITY, builder.sum(&slots)?)]
+            }
+            (_, None) => unreachable!("a density query names its terms"),
+        };
+        builder.finish(targets)
     }
 }
 
@@ -225,6 +311,35 @@ impl<'l, 'a> Builder<'l, 'a> {
             .collect()
     }
 
+    /// The sum of `slots`, by `skoro.add` steps in their order; a zero for none.
+    fn sum(&mut self, slots: &[Slot]) -> Result<Slot, Error> {
+        let Some((&first, rest)) = slots.split_first() else {
+            let zero = HostValue::new(None, 1, skoro_tensor::HostData::Continuous(vec![0.0]));
+            let Some(zero) = zero else {
+                unreachable!("one value of storage one")
+            };
+            return self.constant(Space::Real, &zero);
+        };
+        let mut sum = first;
+        for &slot in rest {
+            let Lowered::Kernel(kernel) = Add.lower(&[Space::Real, Space::Real], self.lowering)?
+            else {
+                unreachable!("addition lowers to a kernel")
+            };
+            let output = self.slot(Space::Real);
+            self.steps.push(Step {
+                kernel,
+                inputs: vec![sum, slot],
+                output,
+                operation: Add.name(),
+                composites: Vec::new(),
+                node: NodeId::DENSITY,
+            });
+            sum = output;
+        }
+        Ok(sum)
+    }
+
     /// Classifies, folds, prunes and finishes the program computing `targets`.
     fn finish(mut self, targets: Vec<(NodeId, Slot)>) -> Result<Program, Error> {
         let target = self.lowering.target().clone();
@@ -237,8 +352,23 @@ impl<'l, 'a> Builder<'l, 'a> {
                 constants.insert(*slot, ((**value).clone(), *rows));
             }
         }
+        // A selection whose index is fixed and shared by every row is the value it chooses.
+        let mut alias: HashMap<Slot, Slot> = HashMap::new();
         let mut live = Vec::with_capacity(self.steps.len());
-        for step in std::mem::take(&mut self.steps) {
+        for mut step in std::mem::take(&mut self.steps) {
+            for input in &mut step.inputs {
+                if let Some(&chosen) = alias.get(input) {
+                    *input = chosen;
+                }
+            }
+            if step.operation == Select.name()
+                && let Some((Value::Discrete(index), None)) = constants.get(&step.inputs[0])
+                && let Some(&k) = index.to_host().first()
+                && let Some(&chosen) = usize::try_from(k).ok().and_then(|k| step.inputs.get(k + 1))
+            {
+                alias.insert(step.output, chosen);
+                continue;
+            }
             let fixed: Option<Vec<&(Value, Option<usize>)>> =
                 step.inputs.iter().map(|slot| constants.get(slot)).collect();
             let Some(fixed) = fixed else {
@@ -263,6 +393,11 @@ impl<'l, 'a> Builder<'l, 'a> {
                 },
             ));
         }
+
+        let targets: Vec<(NodeId, Slot)> = targets
+            .into_iter()
+            .map(|(node, slot)| (node, alias.get(&slot).copied().unwrap_or(slot)))
+            .collect();
 
         // Prune: keep what a target needs.
         let mut needed = vec![false; slots];

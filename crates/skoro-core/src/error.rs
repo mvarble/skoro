@@ -67,6 +67,9 @@ pub enum Error {
     BindingOutsideTerm { role: &'static str, node: NodeId },
     /// A node that is not a term's log-density.
     NotATerm { id: NodeId },
+    /// A program with free discrete quantities, refused by an algorithm that cannot condition on
+    /// them.
+    FreeDiscrete { quantities: Vec<NodeId> },
     /// A step of a pass whose kernel differentiates less than the pass needs of it: its
     /// operation, the composites it was expanded from, outermost first, and its node.
     OrderTooLow {
@@ -119,6 +122,12 @@ impl fmt::Display for Error {
                 "{node:?}, bound to the role {role}, is reached from a quantity outside its term"
             ),
             Error::NotATerm { id } => write!(f, "{id:?} is not a term's log-density"),
+            Error::FreeDiscrete { quantities } => {
+                write!(
+                    f,
+                    "the program has free discrete quantities: {quantities:?}"
+                )
+            }
             Error::CompositeCycle { chain } => {
                 write!(f, "the composites call themselves: {}", chain.join(" → "))
             }

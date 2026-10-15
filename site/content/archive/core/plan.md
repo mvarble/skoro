@@ -137,7 +137,7 @@ the test macro unless the companion says otherwise.
       `term_cannot_be_conditioned_on_a_later_quantity`, `unscored_quantity_is_a_parameter`,
       `creation_order_is_ancestral`, `blanket_of_the_first_tick`,
       `binding_lookup_checks_multiplicity`, `binding_must_stay_within_its_term`.
-- [ ] `Query::log_density` and `log_density_of`, observed quantities folded per program, selection
+- [x] `Query::log_density` and `log_density_of`, observed quantities folded per program, selection
       by a fixed index, pruning, the program cache keyed by targets, observation set and target,
       bounded and empty in every new model, and `Program::free_discrete` with `FreeDiscrete`.
       Tests: `query_density_is_the_sum_of_terms`, `log_density_of_sums_the_named_terms`,

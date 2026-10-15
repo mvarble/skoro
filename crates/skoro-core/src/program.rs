@@ -91,21 +91,21 @@ impl Values {
         Values::default()
     }
 
-    pub fn with(mut self, q: impl Into<QDyn>, value: Value) -> Values {
+    pub fn with(mut self, q: impl Into<NodeId>, value: Value) -> Values {
         self.insert(q, value);
         self
     }
 
-    pub fn insert(&mut self, q: impl Into<QDyn>, value: Value) {
-        self.values.insert(q.into().id(), value);
+    pub fn insert(&mut self, q: impl Into<NodeId>, value: Value) {
+        self.values.insert(q.into(), value);
     }
 
-    pub fn get(&self, q: impl Into<QDyn>) -> Option<&Value> {
-        self.values.get(&q.into().id())
+    pub fn get(&self, q: impl Into<NodeId>) -> Option<&Value> {
+        self.values.get(&q.into())
     }
 
-    pub fn remove(&mut self, q: impl Into<QDyn>) -> Option<Value> {
-        self.values.remove(&q.into().id())
+    pub fn remove(&mut self, q: impl Into<NodeId>) -> Option<Value> {
+        self.values.remove(&q.into())
     }
 
     pub fn len(&self) -> usize {
@@ -122,17 +122,17 @@ impl Frames {
         Frames::default()
     }
 
-    pub fn with(mut self, q: impl Into<QDyn>, frame: Frame) -> Frames {
+    pub fn with(mut self, q: impl Into<NodeId>, frame: Frame) -> Frames {
         self.insert(q, frame);
         self
     }
 
-    pub fn insert(&mut self, q: impl Into<QDyn>, frame: Frame) {
-        self.frames.insert(q.into().id(), frame);
+    pub fn insert(&mut self, q: impl Into<NodeId>, frame: Frame) {
+        self.frames.insert(q.into(), frame);
     }
 
-    pub fn get(&self, q: impl Into<QDyn>) -> Option<&Frame> {
-        self.frames.get(&q.into().id())
+    pub fn get(&self, q: impl Into<NodeId>) -> Option<&Frame> {
+        self.frames.get(&q.into())
     }
 
     pub fn len(&self) -> usize {
@@ -226,6 +226,17 @@ impl Program {
             .filter(|free| !free.space.is_continuous())
             .map(|free| free.node)
             .collect()
+    }
+
+    /// Refuses a program with a free discrete quantity (`FreeDiscrete`), for an algorithm that
+    /// differentiates and cannot condition on discrete values.
+    pub fn refuse_free_discrete(&self) -> Result<(), Error> {
+        let quantities = self.free_discrete();
+        if quantities.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::FreeDiscrete { quantities })
+        }
     }
 
     /// The program's targets, in the order the query named them.

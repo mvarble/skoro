@@ -15,6 +15,8 @@ impl NodeId {
     pub(crate) const FAILED: NodeId = NodeId(u64::MAX);
     /// The identifier of a handle whose operation was attempted with no scope open.
     pub(crate) const OUTSIDE_SCOPE: NodeId = NodeId(u64::MAX - 1);
+    /// The target of a log-density query: the sum of its terms, which is no node of the model.
+    pub const DENSITY: NodeId = NodeId(u64::MAX - 2);
 
     /// A new identifier, greater than every one made before it.
     pub(crate) fn fresh() -> NodeId {
