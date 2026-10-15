@@ -6,8 +6,10 @@ mod error;
 mod id;
 mod key;
 mod operation;
+pub mod primitive;
 mod q;
 mod space;
+pub mod testing;
 
 pub use address::{Address, Segment};
 pub use error::{Error, Failure};

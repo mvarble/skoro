@@ -13,6 +13,16 @@ pub enum Error {
     Tensor(TensorError),
     /// A continuous space was needed: a product's factors, for one.
     NotContinuous { space: Space },
+    /// An operation does not take inputs of these spaces, or of this many.
+    SpaceMismatch {
+        operation: &'static str,
+        inputs: Vec<Space>,
+    },
+    /// An operation takes inputs of these kinds of space, but not of these sizes.
+    ShapeMismatch {
+        operation: &'static str,
+        inputs: Vec<Space>,
+    },
 }
 
 impl fmt::Display for Error {
@@ -20,6 +30,15 @@ impl fmt::Display for Error {
         match self {
             Error::Tensor(error) => write!(f, "{error}"),
             Error::NotContinuous { space } => write!(f, "{space:?} is not a continuous space"),
+            Error::SpaceMismatch { operation, inputs } => {
+                write!(f, "{operation} does not take inputs of {inputs:?}")
+            }
+            Error::ShapeMismatch { operation, inputs } => {
+                write!(
+                    f,
+                    "{operation} takes inputs of these kinds, but not of the sizes {inputs:?}"
+                )
+            }
         }
     }
 }

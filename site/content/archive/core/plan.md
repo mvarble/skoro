@@ -53,7 +53,7 @@ the test macro unless the companion says otherwise.
 - [x] `Operation`, `Lowered`, `Lowering` (the target and its cache), `Param`, and the kernel
       traits `Forward`, `FirstOrder`, `SecondOrder`, `Pullback`, `SecondPullback`, with `Kernel` as
       the enumeration of orders and its accessors by upcasting.
-- [ ] `testing::Tolerance`, the test macro over both precisions, and `testing::check_operation`
+- [x] `testing::Tolerance`, the test macro over both precisions, and `testing::check_operation`
       on a lowered kernel, moving inputs of the core's spaces by their retractions as the table of
       retractions gives them, on the host values. The Euclidean primitives (`add`, `sub`, `neg`, `mul`, `scale`,
       `matmul`, `sum`, `exp`, `log`, `slice`, `concatenate` with its reshape, `transpose`) with

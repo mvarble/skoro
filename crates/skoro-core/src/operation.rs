@@ -72,13 +72,6 @@ pub struct Lowering<'a> {
 }
 
 impl<'a> Lowering<'a> {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the testing checks and the compiler lower, in later tasks"
-        )
-    )]
     pub(crate) fn new(target: &'a Target) -> Lowering<'a> {
         Lowering { target }
     }
