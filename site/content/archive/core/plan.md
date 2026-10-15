@@ -10,7 +10,7 @@ the test macro unless the companion says otherwise.
 
 ## The workspace
 
-- [ ] Create the workspace at the root (edition 2024, `rust-version = "1.95"`) with the three
+- [x] Create the workspace at the root (edition 2024, `rust-version = "1.95"`) with the three
       crates `skoro-tensor`, `skoro-core` and `skoro`, their dependencies, and the lints that deny
       `unwrap_used`, `expect_used` and `panic` outside tests. `skoro` re-exports the other two, and
       grows its re-exports as each task adds public items. Add the cargo commands to the checks in

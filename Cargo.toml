@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/skoro-tensor", "crates/skoro-core", "crates/skoro"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+repository = "https://github.com/mvarble/skoro"
+homepage = "https://skoro.dev/"
+
+[workspace.dependencies]
+burn = { version = "0.22.0", default-features = false, features = ["std", "flex", "extension"] }
+blake3 = "1"
+rpds = "1"
+skoro-tensor = { path = "crates/skoro-tensor", version = "0.1.0" }
+skoro-core = { path = "crates/skoro-core", version = "0.1.0" }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

@@ -1,0 +1,19 @@
+[package]
+name = "skoro"
+description = "Probabilistic modeling on manifolds, with derivatives of first and second order."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+wgpu = ["skoro-core/wgpu"]
+
+[dependencies]
+skoro-tensor.workspace = true
+skoro-core.workspace = true
+
+[lints]
+workspace = true

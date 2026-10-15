@@ -1,0 +1,18 @@
+[package]
+name = "skoro-tensor"
+description = "The tensor layer of skoro: burn, at an explicit precision on a device skoro supports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+wgpu = ["burn/wgpu"]
+
+[dependencies]
+burn.workspace = true
+
+[lints]
+workspace = true
