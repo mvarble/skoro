@@ -2008,3 +2008,10 @@ brings an LLVM toolchain into the build (`llvm-sys` for `cpu`, a downloaded LLVM
 plain-Rust `ndarray` feature turned on for the tensor layer's tests; the other cubecl runtimes are
 refused by the check matching wgpu alone, which [Constraints](#burn-0-22) now says no test can
 exercise. The tensor layer depends on `burn-dispatch` 0.22.0 directly, with no features of its own.
+
+**2026-10-15.** Reopened at the build's fourth task. A key's variates were
+$((u \gg 11) + 0.5) \cdot 2^{-53}$, which is in the open interval $(0, 1)$ in exact arithmetic
+but not in `f64`: once $u \gg 11 \ge 2^{52}$ the half is lost to rounding, and at
+$u \gg 11 = 2^{53} - 1$ the sum rounds to $2^{53}$ and the variate is exactly $1$, where a
+sampler's $\log(1 - u)$ or inverse distribution function is infinite. The revision to
+[Identities, addresses and keys](#identities-addresses-and-keys) is recorded here as it is made.

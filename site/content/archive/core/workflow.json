@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "build",
+    "stage": "implementation",
     "started": "2026-10-11",
     "events": [
         {
@@ -70,6 +70,13 @@
             "action": "approve",
             "stage": "plan",
             "commit": "6242e20"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The variate formula ((u >> 11) + 0.5) * 2^-53 rounds to exactly 1.0 in f64 when u >> 11 is 2^53 - 1, so the open interval it promises does not hold.",
+            "commit": "0f50a95"
         }
     ],
     "approvals": {
@@ -81,12 +88,14 @@
         "implementation": {
             "date": "2026-10-15",
             "commit": "e60da34",
-            "hash": "47368d183ef781ac10b49f3718447dfabad42621702587c307fd096a4e60dfa4"
+            "hash": "47368d183ef781ac10b49f3718447dfabad42621702587c307fd096a4e60dfa4",
+            "stale": true
         },
         "plan": {
             "date": "2026-10-15",
             "commit": "6242e20",
-            "hash": "200b0353ff5995d4ccf804d469ae55d549c47af59938ab206401bff792968eb1"
+            "hash": "200b0353ff5995d4ccf804d469ae55d549c47af59938ab206401bff792968eb1",
+            "stale": true
         }
     }
 }
