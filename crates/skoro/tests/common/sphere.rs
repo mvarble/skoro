@@ -63,8 +63,18 @@ pub fn inverse() -> Arc<Composite> {
     .unwrap()
 }
 
+/// `P(w) = w / |w|`.
+pub fn projection() -> Arc<Composite> {
+    Composite::define("sphere.project", Vec::new(), &[Space::Vector(3)], |q| {
+        let w = q[0];
+        (-((w * w).sum().log() * 0.5)).exp() * w
+    })
+    .unwrap()
+}
+
 pub static SPHERE: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
-    Embedded::declare("sphere", Vec::new(), 3, 2, retraction(), inverse()).unwrap()
+    let (r, q, p) = (retraction(), inverse(), projection());
+    Embedded::declare("sphere", Vec::new(), 3, 2, r, q, Some(p)).unwrap()
 });
 
 /// The sphere's marker.

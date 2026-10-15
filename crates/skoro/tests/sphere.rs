@@ -7,11 +7,12 @@ use std::sync::Arc;
 
 use common::sphere::{SPHERE, Sphere, basis, basis_times, basis_transpose, points, reciprocal};
 use skoro::primitive::Select;
-use skoro::scope::{apply, constant, quantity};
+use skoro::scope::{apply, constant, project, quantity};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
-use skoro::testing::check_embedded;
+use skoro::testing::{check_agreement, check_embedded, check_operation};
 use skoro::{
-    Composite, Embedded, Frames, QDyn, Query, Real, Space, Target, Values, VectorDyn, Writer,
+    Composite, Embedded, Frames, Q, QDyn, Query, Real, Space, Target, Values, Vector, VectorDyn,
+    Writer,
 };
 
 fn value(data: &[f64], rows: usize, target: &Target) -> Value {
@@ -183,7 +184,7 @@ fn exponential_sphere(near: Near) -> Arc<Embedded> {
         Near::Selected => "sphere.exp.selected",
         Near::Guarded => "sphere.exp.guarded",
     };
-    Embedded::declare(name, Vec::new(), 3, 2, exponential(near), logarithm()).unwrap()
+    Embedded::declare(name, Vec::new(), 3, 2, exponential(near), logarithm(), None).unwrap()
 }
 
 #[test]
@@ -208,5 +209,100 @@ fn removable_singularity_is_reported() {
 
     if let Err(error) = check_embedded(&exponential_sphere(Near::Guarded), &points, &target) {
         panic!("{error}");
+    }
+}
+
+/// The points of `points(rows)`, as a host value of one row each.
+fn sphere_points(rows: usize) -> HostValue {
+    let data: Vec<f64> = points(rows).into_iter().flatten().collect();
+    HostValue::new(Some(rows), 3, HostData::Continuous(data)).unwrap()
+}
+
+/// Tangent coordinates of moderate size, one row each.
+fn tangents(rows: usize) -> HostValue {
+    let data: Vec<f64> = (0..2 * rows)
+        .map(|i| 0.6 * (1.7 * i as f64).sin())
+        .collect();
+    HostValue::new(Some(rows), 2, HostData::Continuous(data)).unwrap()
+}
+
+/// The normalized midpoint of two points of the sphere: computed in storage, projected back.
+fn midpoint(a: Q<Sphere>, b: Q<Sphere>) -> Q<Sphere> {
+    project(Sphere, a.include() + b.include())
+}
+
+skoro::precision_tests! {
+    fn sphere_passes_check_embedded(target) {
+        if let Err(error) = check_embedded(&SPHERE, &sphere_points(4), &target) {
+            panic!("{error}");
+        }
+    }
+
+    fn sphere_projection_agrees_with_its_retraction(target) {
+        let inputs = [
+            (Space::Embedded(SPHERE.clone()), sphere_points(3)),
+            (Space::Vector(2), tangents(3)),
+        ];
+        let checked = check_agreement(
+            |q| q[0].retract(q[1]),
+            |q| {
+                let stored = SPHERE.retraction().call(&[q[0].include(), q[1]]);
+                project(Sphere, stored).untyped()
+            },
+            &inputs,
+            &target,
+        );
+        if let Err(error) = checked {
+            panic!("{error}");
+        }
+    }
+
+    fn midpoint_is_a_map_into_the_sphere(target) {
+        let sphere = Space::Embedded(SPHERE.clone());
+        let composite = Composite::define(
+            "test.sphere.midpoint",
+            Vec::new(),
+            &[sphere.clone(), sphere.clone()],
+            |q| midpoint(q[0].narrow::<Sphere>(), q[1].narrow::<Sphere>()).untyped(),
+        )
+        .unwrap();
+        let mut others = points(3);
+        others.rotate_left(1);
+        let others: Vec<f64> = others.into_iter().flatten().collect();
+        let others = HostValue::new(Some(3), 3, HostData::Continuous(others)).unwrap();
+        let inputs = [(sphere.clone(), sphere_points(3)), (sphere, others)];
+        if let Err(error) = check_operation(&*composite.operation(), &inputs, &target) {
+            panic!("{error}");
+        }
+    }
+}
+
+#[test]
+fn projection_returns_drift_to_the_sphere() {
+    let target = Target::host();
+    let mut writer = Writer::new();
+    let (w, y) = writer
+        .build(|| {
+            let w = quantity("w", Vector::<3>);
+            (w, project(Sphere, w))
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([QDyn::from(y)]), &target)
+        .unwrap();
+    let xs = points(4);
+    let drifted: Vec<f64> = xs.iter().flatten().map(|x| x * (1.0 + 1e-6)).collect();
+    let values = program
+        .forward(&Values::new().with(w, value(&drifted, 4, &target)))
+        .unwrap();
+    let projected = host(&values, y);
+    for (row, x) in xs.iter().enumerate() {
+        let p = &projected[row * 3..row * 3 + 3];
+        let norm: f64 = p.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-14, "|P(w)| = {norm}");
+        for (p, x) in p.iter().zip(x) {
+            assert!((p - x).abs() < 1e-14, "P(w) = {p:?}, from {x:?}");
+        }
     }
 }

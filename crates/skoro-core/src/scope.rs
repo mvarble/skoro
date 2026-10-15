@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
-pub use crate::ops::{concatenate, product, select};
+pub use crate::ops::{concatenate, product, project, select};
 pub use crate::term::{factor, propose, score};
 
 use crate::model::{Model, Node, NodeKind};

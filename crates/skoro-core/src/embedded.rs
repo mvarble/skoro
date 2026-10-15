@@ -1,12 +1,13 @@
-//! Embedded types: declared by a retraction `R` and its inverse `Q`, written as composites, and
-//! reached through the boundary operations, whose derivative maps are passes over those
-//! composites' programs.
+//! Embedded types: declared by a retraction `R`, its inverse `Q` and, optionally, a projection
+//! `P`, written as composites, and reached through the boundary operations, whose derivative maps
+//! are passes over those composites' programs.
 //!
-//! Write `𝓡` and `𝓠` for the programs of `R` and `Q`, each with two roots. For the inclusion `ι`
-//! at a point stored as `x`, `B u` is `𝓡.tangent((x, 0); (0, u))`, `Bᵀ α` is the cotangent of `𝓡`
-//! at `(x, 0)` at its second input, and the second-order map is the `β` of
-//! `𝓡.hessian((x, 0); (B u, 0); α)` at its second input. The retraction `⊕` runs `𝓡`, and its maps
-//! compose those of `𝓡` with `L(y)`, read off `𝓠` on the diagonal `(y, y)`, as the implementation
+//! Write `𝓡` and `𝓠` for the programs of `R` and `Q`, each with two roots, and `𝓟` for that of
+//! `P`, with one. For the inclusion `ι` at a point stored as `x`, `B u` is
+//! `𝓡.tangent((x, 0); (0, u))`, `Bᵀ α` is the cotangent of `𝓡` at `(x, 0)` at its second input,
+//! and the second-order map is the `β` of `𝓡.hessian((x, 0); (B u, 0); α)` at its second input.
+//! The retraction `⊕` runs `𝓡` and the projection `π` runs `𝓟`, and their maps compose those of
+//! `𝓡` or `𝓟` with `L(y)`, read off `𝓠` on the diagonal `(y, y)`, as the implementation
 //! companion's tables say, line by line.
 
 use std::fmt;
@@ -28,12 +29,14 @@ pub struct Embedded {
     dimension: usize,
     retraction: Arc<Composite>,
     inverse: Arc<Composite>,
+    projection: Option<Arc<Composite>>,
     flat: bool,
 }
 
 impl Embedded {
     /// `retraction`, `Vector(n)` and `Vector(d)` to `Vector(n)`, is the `R` of the mathematics;
-    /// `inverse`, two of `Vector(n)` to `Vector(d)`, its `Q`. Any other signature is refused
+    /// `inverse`, two of `Vector(n)` to `Vector(d)`, its `Q`; `projection`, `Vector(n)` to
+    /// `Vector(n)`, its `P`, when the type has one. Any other signature is refused
     /// (`InvalidDeclaration`).
     pub fn declare(
         name: &'static str,
@@ -42,6 +45,7 @@ impl Embedded {
         dimension: usize,
         retraction: Arc<Composite>,
         inverse: Arc<Composite>,
+        projection: Option<Arc<Composite>>,
     ) -> Result<Arc<Embedded>, Error> {
         let (n, d) = (Space::Vector(storage), Space::Vector(dimension));
         let invalid = |reason: &str| Error::InvalidDeclaration {
@@ -56,9 +60,16 @@ impl Embedded {
                 "its retraction does not take Vector(n) and Vector(d) to Vector(n)",
             ));
         }
-        if inverse.inputs() != [n.clone(), n] || *inverse.output() != d {
+        if inverse.inputs() != [n.clone(), n.clone()] || *inverse.output() != d {
             return Err(invalid(
                 "its inverse does not take two of Vector(n) to Vector(d)",
+            ));
+        }
+        if let Some(p) = &projection
+            && (p.inputs() != [n.clone()] || *p.output() != n)
+        {
+            return Err(invalid(
+                "its projection does not take Vector(n) to Vector(n)",
             ));
         }
         Ok(Arc::new(Embedded {
@@ -68,6 +79,7 @@ impl Embedded {
             dimension,
             retraction,
             inverse,
+            projection,
             flat: false,
         }))
     }
@@ -96,6 +108,16 @@ impl Embedded {
     /// `Q`.
     pub fn inverse(&self) -> &Arc<Composite> {
         &self.inverse
+    }
+
+    /// `P`, when the type declares one.
+    pub fn projection(&self) -> Option<&Arc<Composite>> {
+        self.projection.as_ref()
+    }
+
+    /// Whether `skoro.project` maps onto the type.
+    pub fn has_projection(&self) -> bool {
+        self.flat || self.projection.is_some()
     }
 }
 
@@ -130,6 +152,7 @@ impl fmt::Debug for Embedded {
 enum Boundary {
     Include,
     Retract,
+    Project,
 }
 
 /// The inclusion `ι`: a value of the type, read as the `Vector(n)` it is stored as.
@@ -140,6 +163,10 @@ pub struct Include(Arc<Embedded>);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Retract(Arc<Embedded>);
 
+/// The projection `π`: a `Vector(n)`, to the type (`NoProjection` when it declares none).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Project(Arc<Embedded>);
+
 impl Include {
     pub fn new(declaration: Arc<Embedded>) -> Include {
         Include(declaration)
@@ -149,6 +176,12 @@ impl Include {
 impl Retract {
     pub fn new(declaration: Arc<Embedded>) -> Retract {
         Retract(declaration)
+    }
+}
+
+impl Project {
+    pub fn new(declaration: Arc<Embedded>) -> Project {
+        Project(declaration)
     }
 }
 
@@ -206,28 +239,68 @@ impl Operation for Retract {
     }
 }
 
-/// The kernel of a boundary operation on one target, of the most its inner passes admit.
+impl Operation for Project {
+    fn name(&self) -> &'static str {
+        "skoro.project"
+    }
+
+    fn params(&self) -> Vec<Param> {
+        vec![Param::Space(Space::Embedded(self.0.clone()))]
+    }
+
+    fn output(&self, inputs: &[Space]) -> Result<Space, Error> {
+        let space = Space::Embedded(self.0.clone());
+        if !self.0.has_projection() {
+            return Err(Error::NoProjection { space });
+        }
+        match inputs {
+            [Space::Vector(n)] if *n == self.0.storage => Ok(space),
+            _ => Err(Error::SpaceMismatch {
+                operation: self.name(),
+                inputs: inputs.to_vec(),
+            }),
+        }
+    }
+
+    fn lower(&self, inputs: &[Space], lowering: &mut Lowering<'_>) -> Result<Lowered, Error> {
+        self.output(inputs)?;
+        lower(Boundary::Project, &self.0, lowering)
+    }
+}
+
+/// The kernel of a boundary operation on one target, of the most its inner passes admit. It
+/// compiles the composites its maps run: `R` for `ι`, `R` and `Q` for `⊕`, `P` and `Q` for `π`.
 fn lower(
     boundary: Boundary,
     declaration: &Arc<Embedded>,
     lowering: &mut Lowering<'_>,
 ) -> Result<Lowered, Error> {
-    let target = lowering.target().clone();
-    let (r, q) = if declaration.flat {
-        (None, None)
-    } else {
-        let r = Inner::new(lowering.compile(&declaration.retraction)?);
-        let q = Inner::new(lowering.compile(&declaration.inverse)?);
-        (Some(r), Some(q))
-    };
-    let kernel = Arc::new(BoundaryKernel {
+    let mut kernel = BoundaryKernel {
         boundary,
-        n: declaration.storage,
         d: declaration.dimension,
-        target,
-        r,
-        q,
-    });
+        target: lowering.target().clone(),
+        flat: declaration.flat,
+        r: None,
+        q: None,
+        p: None,
+    };
+    if !declaration.flat {
+        if boundary != Boundary::Project {
+            kernel.r = Some(Inner::new(lowering.compile(&declaration.retraction)?));
+        }
+        if boundary != Boundary::Include {
+            kernel.q = Some(Inner::new(lowering.compile(&declaration.inverse)?));
+        }
+        if boundary == Boundary::Project {
+            let Some(projection) = &declaration.projection else {
+                return Err(Error::NoProjection {
+                    space: Space::Embedded(declaration.clone()),
+                });
+            };
+            kernel.p = Some(Inner::new(lowering.compile(projection)?));
+        }
+    }
+    let kernel = Arc::new(kernel);
     Ok(Lowered::Kernel(match kernel.order() {
         2 => Kernel::Two(kernel),
         1 => Kernel::One(kernel),
@@ -235,15 +308,16 @@ fn lower(
     }))
 }
 
-/// A compiled inner program of two roots and one target, and its passes.
-struct Inner {
+/// A compiled inner program of `K` roots and one target, and its passes.
+#[derive(Clone)]
+struct Inner<const K: usize> {
     program: Arc<Program>,
-    roots: [NodeId; 2],
+    roots: [NodeId; K],
     output: NodeId,
 }
 
 /// What an inner pass gives at each root, `None` read as zero by the caller.
-type AtRoots = [Option<Frame>; 2];
+type AtRoots<const K: usize> = [Option<Frame>; K];
 
 fn admitted<T>(result: Result<T, Error>) -> T {
     match result {
@@ -252,13 +326,13 @@ fn admitted<T>(result: Result<T, Error>) -> T {
     }
 }
 
-impl Inner {
-    fn new(program: Arc<Program>) -> Inner {
+impl<const K: usize> Inner<K> {
+    fn new(program: Arc<Program>) -> Inner<K> {
         let free = program.free();
-        let (Some(a), Some(b)) = (free.first(), free.get(1)) else {
-            unreachable!("a declaration's composites take two inputs")
-        };
-        let roots = [a.node, b.node];
+        if free.len() != K {
+            unreachable!("a declaration's composite takes {K} inputs, checked when declared")
+        }
+        let roots = std::array::from_fn(|i| free[i].node);
         let output = program.targets()[0];
         Inner {
             program,
@@ -273,14 +347,15 @@ impl Inner {
 
     /// Whether the program admits its first-order passes, and its Hessian passes.
     fn order(&self) -> usize {
-        let (all, out) = (self.roots, [self.output]);
+        let out = [self.output];
         if self.admits(Pass::Hessian {
-            seeded: &all,
+            seeded: &self.roots,
             targets: &out,
         }) {
             2
-        } else if self.admits(Pass::Tangent { seeded: &all })
-            && self.admits(Pass::Cotangent { targets: &out })
+        } else if self.admits(Pass::Tangent {
+            seeded: &self.roots,
+        }) && self.admits(Pass::Cotangent { targets: &out })
         {
             1
         } else {
@@ -288,13 +363,15 @@ impl Inner {
         }
     }
 
-    fn values(&self, a: &Value, b: &Value) -> Values {
-        Values::new()
-            .with(self.roots[0], a.clone())
-            .with(self.roots[1], b.clone())
+    fn values(&self, at: [&Value; K]) -> Values {
+        let mut values = Values::new();
+        for (root, value) in self.roots.iter().zip(at) {
+            values = values.with(*root, value.clone());
+        }
+        values
     }
 
-    fn frames(&self, frames: [Option<&Frame>; 2]) -> Frames {
+    fn frames(&self, frames: [Option<&Frame>; K]) -> Frames {
         let mut out = Frames::new();
         for (root, frame) in self.roots.iter().zip(frames) {
             if let Some(frame) = frame {
@@ -304,18 +381,18 @@ impl Inner {
         out
     }
 
-    fn forward(&self, a: &Value, b: &Value) -> Value {
-        let mut values = admitted(self.program.forward(&self.values(a, b)));
+    fn forward(&self, at: [&Value; K]) -> Value {
+        let mut values = admitted(self.program.forward(&self.values(at)));
         match values.remove(self.output) {
             Some(value) => value,
             None => unreachable!("a program computes its target"),
         }
     }
 
-    fn tangent(&self, a: &Value, b: &Value, tangents: [Option<&Frame>; 2]) -> Frame {
+    fn tangent(&self, at: [&Value; K], tangents: [Option<&Frame>; K]) -> Frame {
         let (_, frames) = admitted(
             self.program
-                .tangent(&self.values(a, b), &self.frames(tangents)),
+                .tangent(&self.values(at), &self.frames(tangents)),
         );
         match frames.get(self.output) {
             Some(frame) => frame.clone(),
@@ -323,23 +400,22 @@ impl Inner {
         }
     }
 
-    fn cotangent(&self, a: &Value, b: &Value, seed: &Frame) -> AtRoots {
+    fn cotangent(&self, at: [&Value; K], seed: &Frame) -> AtRoots<K> {
         let seeds = Frames::new().with(self.output, seed.clone());
-        let (_, frames) = admitted(self.program.cotangent(&self.values(a, b), &seeds));
+        let (_, frames) = admitted(self.program.cotangent(&self.values(at), &seeds));
         self.roots.map(|root| frames.get(root).cloned())
     }
 
     /// `(α, β)` at each root.
     fn hessian(
         &self,
-        a: &Value,
-        b: &Value,
-        velocities: [Option<&Frame>; 2],
+        at: [&Value; K],
+        velocities: [Option<&Frame>; K],
         seed: &Frame,
-    ) -> (AtRoots, AtRoots) {
+    ) -> (AtRoots<K>, AtRoots<K>) {
         let seeds = Frames::new().with(self.output, seed.clone());
         let second = admitted(self.program.hessian(
-            &self.values(a, b),
+            &self.values(at),
             &self.frames(velocities),
             &seeds,
         ));
@@ -350,14 +426,17 @@ impl Inner {
     }
 }
 
+#[derive(Clone)]
 struct BoundaryKernel {
     boundary: Boundary,
-    n: usize,
     d: usize,
     target: Target,
-    /// The programs of `R` and `Q`; `None` for a flat declaration, whose maps are the identity.
-    r: Option<Inner>,
-    q: Option<Inner>,
+    /// A flat declaration's maps are the identity, and its kernels compile no programs.
+    flat: bool,
+    /// The programs of `R`, `Q` and `P` that the boundary operation runs.
+    r: Option<Inner<2>>,
+    q: Option<Inner<2>>,
+    p: Option<Inner<1>>,
 }
 
 fn sum(a: Option<Frame>, b: Option<Frame>, target: &Target) -> Option<Frame> {
@@ -379,11 +458,33 @@ fn continuous(value: &Value) -> &Points {
     }
 }
 
+fn compiled<const K: usize>(inner: &Option<Inner<K>>) -> &Inner<K> {
+    match inner {
+        Some(inner) => inner,
+        None => unreachable!("a boundary kernel compiles the programs its maps run"),
+    }
+}
+
 impl BoundaryKernel {
+    fn r(&self) -> &Inner<2> {
+        compiled(&self.r)
+    }
+
+    fn q(&self) -> &Inner<2> {
+        compiled(&self.q)
+    }
+
+    fn p(&self) -> &Inner<1> {
+        compiled(&self.p)
+    }
+
     fn order(&self) -> usize {
-        match (&self.r, &self.q, self.boundary) {
-            (None, _, _) => 2,
-            (Some(r), _, Boundary::Include) => {
+        if self.flat {
+            return 2;
+        }
+        match self.boundary {
+            Boundary::Include => {
+                let r = self.r();
                 let (x, out) = ([r.roots[0]], [r.output]);
                 if r.admits(Pass::Hessian {
                     seeded: &x,
@@ -394,15 +495,8 @@ impl BoundaryKernel {
                     r.order().min(1)
                 }
             }
-            (Some(r), Some(q), Boundary::Retract) => r.order().min(q.order()),
-            (Some(_), None, _) => 0,
-        }
-    }
-
-    fn inner(&self) -> (&Inner, &Inner) {
-        match (&self.r, &self.q) {
-            (Some(r), Some(q)) => (r, q),
-            _ => unreachable!("a curved declaration has its programs"),
+            Boundary::Retract => self.r().order().min(self.q().order()),
+            Boundary::Project => self.p().order().min(self.q().order()),
         }
     }
 
@@ -412,16 +506,14 @@ impl BoundaryKernel {
 
     /// `B u`, at `x`.
     fn basis(&self, x: &Value, u: &Frame) -> Frame {
-        let (r, _) = self.inner();
         let zero = self.zero_tangent(u.rows());
-        r.tangent(x, &zero, [None, Some(u)])
+        self.r().tangent([x, &zero], [None, Some(u)])
     }
 
     /// `Bᵀ g`, at `x`.
     fn basis_transpose(&self, x: &Value, g: &Frame) -> Frame {
-        let (r, _) = self.inner();
         let zero = self.zero_tangent(g.rows());
-        match r.cotangent(x, &zero, g) {
+        match self.r().cotangent([x, &zero], g) {
             [_, Some(frame)] => frame,
             _ => unreachable!("the cotangent pass reaches the tangent input"),
         }
@@ -429,23 +521,23 @@ impl BoundaryKernel {
 
     /// `L(y) ẏ`: the tangent of `𝓠` on the diagonal `(y, y)`, along its second input.
     fn chart(&self, y: &Value, dy: &Frame) -> Frame {
-        let (_, q) = self.inner();
-        q.tangent(y, y, [None, Some(dy)])
+        self.q().tangent([y, y], [None, Some(dy)])
     }
 
     /// `L(y)ᵀ α`: the cotangent of `𝓠` on the diagonal at its second input.
     fn chart_transpose(&self, y: &Value, alpha: &Frame) -> Frame {
-        let (_, q) = self.inner();
-        match q.cotangent(y, y, alpha) {
+        match self.q().cotangent([y, y], alpha) {
             [_, Some(frame)] => frame,
             _ => unreachable!("the cotangent pass reaches the second input"),
         }
     }
 
     fn value(&self, inputs: &[Value]) -> Value {
-        match (self.boundary, &self.r) {
-            (Boundary::Include, _) => inputs[0].clone(),
-            (Boundary::Retract, None) => {
+        match self.boundary {
+            Boundary::Include => inputs[0].clone(),
+            Boundary::Project if self.flat => inputs[0].clone(),
+            Boundary::Project => self.p().forward([&inputs[0]]),
+            Boundary::Retract if self.flat => {
                 let (x, t) = (continuous(&inputs[0]), continuous(&inputs[1]));
                 let y = x.clone().into_burn() + t.clone().into_burn();
                 match Points::from_burn(y, &self.target) {
@@ -453,25 +545,74 @@ impl BoundaryKernel {
                     Err(error) => unreachable!("a flat retraction keeps its target: {error}"),
                 }
             }
-            (Boundary::Retract, Some(r)) => r.forward(&inputs[0], &inputs[1]),
+            Boundary::Retract => self.r().forward([&inputs[0], &inputs[1]]),
+        }
+    }
+
+    /// The velocity in storage of the first input, `ẋ = B u` for `ι` and `⊕` and `ẇ` for `π`,
+    /// and that of the output in storage, `ẏ`, for `⊕` and `π`.
+    fn storage_velocities(
+        &self,
+        inputs: &[Value],
+        velocities: &[Option<Frame>],
+    ) -> (Option<Frame>, Option<Frame>) {
+        let velocity = |j: usize| velocities.get(j).cloned().flatten();
+        if self.flat {
+            return (None, None);
+        }
+        match self.boundary {
+            Boundary::Include => (velocity(0).map(|u| self.basis(&inputs[0], &u)), None),
+            Boundary::Retract => {
+                let dx = velocity(0).map(|u| self.basis(&inputs[0], &u));
+                let v = velocity(1);
+                let dy = (dx.is_some() || v.is_some()).then(|| {
+                    self.r()
+                        .tangent([&inputs[0], &inputs[1]], [dx.as_ref(), v.as_ref()])
+                });
+                (dx, dy)
+            }
+            Boundary::Project => {
+                let dw = velocity(0);
+                let dy = dw
+                    .as_ref()
+                    .map(|dw| self.p().tangent([&inputs[0]], [Some(dw)]));
+                (dw, dy)
+            }
         }
     }
 
     fn push(&self, inputs: &[Value], y: &Value, tangents: &[Option<Frame>]) -> Option<Frame> {
-        let target = &self.target;
-        match (self.boundary, &self.r) {
-            (Boundary::Include, None) => tangents[0].clone(),
-            (Boundary::Include, Some(_)) => tangents[0].as_ref().map(|u| self.basis(&inputs[0], u)),
-            (Boundary::Retract, None) => sum(tangents[0].clone(), tangents[1].clone(), target),
-            (Boundary::Retract, Some(r)) => {
-                let dx = tangents[0].as_ref().map(|u| self.basis(&inputs[0], u));
-                if dx.is_none() && tangents[1].is_none() {
-                    return None;
-                }
-                let dy = r.tangent(&inputs[0], &inputs[1], [dx.as_ref(), tangents[1].as_ref()]);
-                Some(self.chart(y, &dy))
-            }
+        if self.flat {
+            return match self.boundary {
+                Boundary::Include | Boundary::Project => tangents[0].clone(),
+                Boundary::Retract => sum(tangents[0].clone(), tangents[1].clone(), &self.target),
+            };
         }
+        let (dx, dy) = self.storage_velocities(inputs, tangents);
+        match self.boundary {
+            Boundary::Include => dx,
+            Boundary::Retract | Boundary::Project => dy.map(|dy| self.chart(y, &dy)),
+        }
+    }
+
+    fn recorded(
+        &self,
+        inputs: &[Value],
+        differentiable: &[bool],
+        velocities: &[Option<Frame>],
+    ) -> (Value, BoundaryPullback) {
+        let y = self.value(inputs);
+        let (dx, dy) = self.storage_velocities(inputs, velocities);
+        let pullback = BoundaryPullback {
+            kernel: Arc::new(self.clone()),
+            inputs: inputs.to_vec(),
+            y: y.clone(),
+            differentiable: differentiable.to_vec(),
+            v: velocities.get(1).cloned().flatten(),
+            dx,
+            dy,
+        };
+        (y, pullback)
     }
 }
 
@@ -507,58 +648,6 @@ impl SecondOrder for BoundaryKernel {
     }
 }
 
-impl BoundaryKernel {
-    fn recorded(
-        &self,
-        inputs: &[Value],
-        differentiable: &[bool],
-        velocities: &[Option<Frame>],
-    ) -> (Value, BoundaryPullback) {
-        let y = self.value(inputs);
-        let velocity = |j: usize| velocities.get(j).cloned().flatten();
-        let (dx, dy) = match (self.boundary, &self.r) {
-            (_, None) => (None, None),
-            (Boundary::Include, Some(_)) => (velocity(0).map(|u| self.basis(&inputs[0], &u)), None),
-            (Boundary::Retract, Some(r)) => {
-                let dx = velocity(0).map(|u| self.basis(&inputs[0], &u));
-                let v = velocity(1);
-                let dy = (dx.is_some() || v.is_some())
-                    .then(|| r.tangent(&inputs[0], &inputs[1], [dx.as_ref(), v.as_ref()]));
-                (dx, dy)
-            }
-        };
-        let pullback = BoundaryPullback {
-            kernel: self.clone_shallow(),
-            inputs: inputs.to_vec(),
-            y: y.clone(),
-            differentiable: differentiable.to_vec(),
-            v: velocity(1),
-            dx,
-            dy,
-        };
-        (y, pullback)
-    }
-
-    fn clone_shallow(&self) -> Arc<BoundaryKernel> {
-        Arc::new(BoundaryKernel {
-            boundary: self.boundary,
-            n: self.n,
-            d: self.d,
-            target: self.target.clone(),
-            r: self.r.as_ref().map(|r| Inner {
-                program: r.program.clone(),
-                roots: r.roots,
-                output: r.output,
-            }),
-            q: self.q.as_ref().map(|q| Inner {
-                program: q.program.clone(),
-                roots: q.roots,
-                output: q.output,
-            }),
-        })
-    }
-}
-
 /// What a boundary kernel recorded: its inputs, its output, and the velocities it moved along.
 struct BoundaryPullback {
     kernel: Arc<BoundaryKernel>,
@@ -567,34 +656,52 @@ struct BoundaryPullback {
     differentiable: Vec<bool>,
     /// The tangent input's velocity, for `⊕`.
     v: Option<Frame>,
-    /// `ẋ = B u`, and for `⊕`, `ẏ`.
+    /// The first input's velocity in storage, `ẋ = B u` or `ẇ`, and for `⊕` and `π`, `ẏ`.
     dx: Option<Frame>,
     dy: Option<Frame>,
+}
+
+impl BoundaryPullback {
+    fn gate(&self, j: usize, frame: Option<Frame>) -> Option<Frame> {
+        if self.differentiable.get(j).copied().unwrap_or(false) {
+            frame
+        } else {
+            None
+        }
+    }
+
+    /// `m = (D L(y)[ẏ])ᵀ α`: the `β` of `𝓠` on the diagonal, both inputs moving along `ẏ`.
+    fn chart_turn(&self, alpha: &Frame) -> Option<Frame> {
+        let (y, q) = (&self.y, self.kernel.q());
+        self.dy.as_ref().and_then(|dy| {
+            let (_, [_, m]) = q.hessian([y, y], [Some(dy), Some(dy)], alpha);
+            m
+        })
+    }
 }
 
 impl Pullback for BoundaryPullback {
     fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>> {
         let k = &self.kernel;
-        let gate = |j: usize, frame: Option<Frame>| -> Option<Frame> {
-            if self.differentiable.get(j).copied().unwrap_or(false) {
-                frame
-            } else {
-                None
+        if k.flat {
+            return (0..self.inputs.len())
+                .map(|j| self.gate(j, Some(alpha.clone())))
+                .collect();
+        }
+        match k.boundary {
+            Boundary::Include => {
+                vec![self.gate(0, Some(k.basis_transpose(&self.inputs[0], alpha)))]
             }
-        };
-        match (k.boundary, &k.r) {
-            (Boundary::Include, None) => vec![gate(0, Some(alpha.clone()))],
-            (Boundary::Include, Some(_)) => {
-                vec![gate(0, Some(k.basis_transpose(&self.inputs[0], alpha)))]
-            }
-            (Boundary::Retract, None) => {
-                vec![gate(0, Some(alpha.clone())), gate(1, Some(alpha.clone()))]
-            }
-            (Boundary::Retract, Some(r)) => {
+            Boundary::Retract => {
                 let h = k.chart_transpose(&self.y, alpha);
-                let [g1, g2] = r.cotangent(&self.inputs[0], &self.inputs[1], &h);
+                let [g1, g2] = k.r().cotangent([&self.inputs[0], &self.inputs[1]], &h);
                 let into_x = g1.map(|g1| k.basis_transpose(&self.inputs[0], &g1));
-                vec![gate(0, into_x), gate(1, g2)]
+                vec![self.gate(0, into_x), self.gate(1, g2)]
+            }
+            Boundary::Project => {
+                let h = k.chart_transpose(&self.y, alpha);
+                let [g] = k.p().cotangent([&self.inputs[0]], &h);
+                vec![self.gate(0, g)]
             }
         }
     }
@@ -604,54 +711,62 @@ impl SecondPullback for BoundaryPullback {
     fn second(&self, alpha: &Frame) -> Vec<Option<Frame>> {
         let k = &self.kernel;
         let target = &k.target;
-        let gate = |j: usize, frame: Option<Frame>| -> Option<Frame> {
-            if self.differentiable.get(j).copied().unwrap_or(false) {
-                frame
-            } else {
-                None
-            }
-        };
-        let (x, zero) = (&self.inputs[0], k.zero_tangent(alpha.rows()));
-        match (k.boundary, &k.r, &k.q) {
-            // A flat declaration's second-order maps are zero.
-            (_, None, _) => vec![None; self.inputs.len()],
-            (Boundary::Include, Some(r), _) => {
+        // A flat declaration's second-order maps are zero.
+        if k.flat {
+            return vec![None; self.inputs.len()];
+        }
+        let x = &self.inputs[0];
+        match k.boundary {
+            Boundary::Include => {
+                let zero = k.zero_tangent(alpha.rows());
                 // (D B(x)[ẋ])ᵀ α: the β of 𝓡 at (x, 0), moving x along ẋ, at its second input.
                 let hvp = self.dx.as_ref().and_then(|dx| {
-                    let (_, [_, beta]) = r.hessian(x, &zero, [Some(dx), None], alpha);
+                    let (_, [_, beta]) = k.r().hessian([x, &zero], [Some(dx), None], alpha);
                     beta
                 });
-                vec![gate(0, hvp)]
+                vec![self.gate(0, hvp)]
             }
-            (Boundary::Retract, Some(r), Some(q)) => {
-                let t = &self.inputs[1];
+            Boundary::Retract => {
+                let (r, t, zero) = (k.r(), &self.inputs[1], k.zero_tangent(alpha.rows()));
                 let h = k.chart_transpose(&self.y, alpha);
-                let [g1, _] = r.cotangent(x, t, &h);
-                // m = (D L(y)[ẏ])ᵀ α: 𝓠 on the diagonal, both inputs moving along ẏ.
-                let m = self.dy.as_ref().and_then(|dy| {
-                    let (_, [_, m]) = q.hessian(&self.y, &self.y, [Some(dy), Some(dy)], alpha);
-                    m
-                });
+                let [g1, _] = r.cotangent([x, t], &h);
+                let m = self.chart_turn(alpha);
                 // (ġ1, ġ2): the cotangent of 𝓡 of m, and the β of 𝓡 along (ẋ, v) seeded with h.
                 let [m1, m2] = match &m {
-                    Some(m) => r.cotangent(x, t, m),
+                    Some(m) => r.cotangent([x, t], m),
                     None => [None, None],
                 };
                 let [b1, b2] = if self.dx.is_some() || self.v.is_some() {
-                    r.hessian(x, t, [self.dx.as_ref(), self.v.as_ref()], &h).1
+                    r.hessian([x, t], [self.dx.as_ref(), self.v.as_ref()], &h).1
                 } else {
                     [None, None]
                 };
                 let (dg1, dg2) = (sum(m1, b1, target), sum(m2, b2, target));
                 // hvp_x = Bᵀ ġ1 + (D B(x)[ẋ])ᵀ g1; hvp_t = ġ2.
                 let turn = match (&self.dx, &g1) {
-                    (Some(dx), Some(g1)) => r.hessian(x, &zero, [Some(dx), None], g1).1[1].clone(),
+                    (Some(dx), Some(g1)) => {
+                        let (_, [_, beta]) = r.hessian([x, &zero], [Some(dx), None], g1);
+                        beta
+                    }
                     _ => None,
                 };
                 let hvp_x = sum(dg1.map(|g| k.basis_transpose(x, &g)), turn, target);
-                vec![gate(0, hvp_x), gate(1, dg2)]
+                vec![self.gate(0, hvp_x), self.gate(1, dg2)]
             }
-            (_, Some(_), None) => vec![None; self.inputs.len()],
+            Boundary::Project => {
+                // (D² P(w)[ẇ])ᵀ L(y)ᵀ α, the β of 𝓟 along ẇ seeded with h, plus DP(w)ᵀ m.
+                let p = k.p();
+                let h = k.chart_transpose(&self.y, alpha);
+                let curvature = self.dx.as_ref().and_then(|dw| {
+                    let (_, [beta]) = p.hessian([x], [Some(dw)], &h);
+                    beta
+                });
+                let pulled = self.chart_turn(alpha).and_then(|m| {
+                    let [g] = p.cotangent([x], &m);
+                    g
+                });
+                vec![self.gate(0, sum(curvature, pulled, target))]
+            }
         }
     }
 }

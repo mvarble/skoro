@@ -152,8 +152,8 @@ pub fn random(space: &Space, rows: usize, seed: u64, low: f64, high: f64) -> Hos
 ///   what a zero one gives;
 /// - at single precision, every result is held to the double-precision one on the host.
 ///
-/// The retractions are those of the core's spaces, computed on the host values. An input of an
-/// embedded type is refused.
+/// The retractions are those of the core's spaces, computed on the host values; an embedded
+/// type's are its own `R` and `Q`, compiled for the host.
 pub fn check_operation(
     operation: &dyn Operation,
     inputs: &[(Space, HostValue)],
@@ -327,7 +327,9 @@ pub fn check_agreement(
 ///   diagonal `(x, x)`, where a textbook formula is often `0/0`;
 /// - `R(x, 0) = x`, and `Q(x, R(x, t)) = t` for small random `t`;
 /// - `B(x) = ∂₂R(x, 0)` has rank `d`;
-/// - `check_operation` holds on the inclusion, and on the retraction at `t = 0` and away from it.
+/// - when a projection is declared, its inner passes are finite at `x` and `P(x) = x`;
+/// - `check_operation` holds on the inclusion, on the retraction at `t = 0` and away from it,
+///   and on the projection at the points and off the manifold.
 ///
 /// A failure names the boundary operation and the pass.
 pub fn check_embedded(
@@ -450,27 +452,54 @@ pub fn check_embedded(
         &[(space, points.clone()), (Space::Vector(d), away)],
         target,
     )
-    .map_err(|e| format!("away from t = 0: {e}"))
+    .map_err(|e| format!("away from t = 0: {e}"))?;
+
+    // The projection: finite, fixing the manifold, and differentiated on it and off it.
+    let Some(projection) = declaration.projection() else {
+        return Ok(());
+    };
+    let p = projection.compile(target).map_err(describe)?;
+    finite_passes(&p, [&x], [n], target, "skoro.project runs P at x")?;
+    let fixed = output(&p, &Values::new().with(p.free()[0].node, x.clone()))?;
+    close(&host(&fixed), &host(&x), relative)
+        .map_err(|e| format!("{}: P(x) is not x: {e}", declaration.name()))?;
+    let project = crate::primitive::Project::new(declaration.clone());
+    let storage = |data: Vec<f64>| -> Result<HostValue, String> {
+        HostValue::new(Some(rows), n, HostData::Continuous(data)).ok_or_else(|| "a vector".into())
+    };
+    let on = storage(host(&x))?;
+    check_operation(&project, &[(Space::Vector(n), on)], target)
+        .map_err(|e| format!("on the manifold: {e}"))?;
+    let off: Vec<f64> = host(&x)
+        .iter()
+        .zip(signed(902, rows * n))
+        .map(|(x, e)| 1.25 * x + 0.05 * e)
+        .collect();
+    check_operation(&project, &[(Space::Vector(n), storage(off)?)], target)
+        .map_err(|e| format!("off the manifold: {e}"))
 }
 
 /// Every pass `program` admits, at `inputs` of dimensions `dims`, at random frames: each output
 /// finite.
-fn finite_passes(
+fn finite_passes<const K: usize>(
     program: &Program,
-    inputs: [&Value; 2],
-    dims: [usize; 2],
+    inputs: [&Value; K],
+    dims: [usize; K],
     target: &Target,
     what: &str,
 ) -> Result<(), String> {
     let free = program.free();
-    let roots = [free[0].node, free[1].node];
+    let roots: [crate::NodeId; K] = std::array::from_fn(|i| free[i].node);
     let rows = match inputs[0] {
         Value::Continuous(points) => points.rows(),
         Value::Discrete(integers) => integers.rows(),
     };
-    let at = Values::new()
-        .with(roots[0], inputs[0].clone())
-        .with(roots[1], inputs[1].clone());
+    let at = roots
+        .iter()
+        .zip(inputs)
+        .fold(Values::new(), |at, (root, value)| {
+            at.with(*root, value.clone())
+        });
     let output = program.targets()[0];
     let out_dimension = match program.forward(&at).map_err(describe)?.get(output) {
         Some(Value::Continuous(points)) => {
@@ -601,22 +630,193 @@ fn describe(error: Error) -> String {
     error.to_string()
 }
 
-/// The kernel `operation` lowers to on `target`, at inputs of `spaces`.
+/// The kernel `operation` lowers to on `target`, at inputs of `spaces`. An operation that lowers
+/// to a composite gives the composite's program, run as a kernel of the order its passes admit, so
+/// that a composite is checked as a primitive is.
 pub fn lower(
     operation: &dyn Operation,
     spaces: &[Space],
     target: &Target,
 ) -> Result<Kernel, String> {
-    match operation
-        .lower(spaces, &mut Lowering::new(target))
-        .map_err(describe)?
-    {
+    let mut lowering = Lowering::new(target);
+    match operation.lower(spaces, &mut lowering).map_err(describe)? {
         Lowered::Kernel(kernel) => Ok(kernel),
-        Lowered::Composite(composite) => Err(format!(
-            "{} lowers to the composite {}, which a compiled program checks",
-            operation.name(),
-            composite.name()
-        )),
+        Lowered::Composite(composite) => {
+            let program = lowering.compile(&composite).map_err(describe)?;
+            Ok(Compiled::new(program).kernel())
+        }
+    }
+}
+
+/// A composite's program, run as a kernel: each map a pass over it, with the inputs at its roots.
+#[derive(Clone)]
+struct Compiled {
+    program: Arc<Program>,
+    roots: Vec<crate::NodeId>,
+    output: crate::NodeId,
+}
+
+fn ran<T>(result: Result<T, Error>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(error) => unreachable!("a pass admitted when the kernel was made: {error}"),
+    }
+}
+
+impl Compiled {
+    fn new(program: Arc<Program>) -> Compiled {
+        let roots = program.free().iter().map(|free| free.node).collect();
+        let output = program.targets()[0];
+        Compiled {
+            program,
+            roots,
+            output,
+        }
+    }
+
+    fn kernel(self) -> Kernel {
+        let continuous: Vec<_> = self
+            .program
+            .free()
+            .iter()
+            .filter(|free| free.space.dimension().is_some())
+            .map(|free| free.node)
+            .collect();
+        let targets = [self.output];
+        let admits = |pass: Pass<'_>| self.program.admits(&pass).is_ok();
+        if admits(Pass::Hessian {
+            seeded: &continuous,
+            targets: &targets,
+        }) {
+            Kernel::Two(Arc::new(self))
+        } else if admits(Pass::Tangent {
+            seeded: &continuous,
+        }) && admits(Pass::Cotangent { targets: &targets })
+        {
+            Kernel::One(Arc::new(self))
+        } else {
+            Kernel::Zero(Arc::new(self))
+        }
+    }
+
+    fn values(&self, inputs: &[Value]) -> Values {
+        self.roots
+            .iter()
+            .zip(inputs)
+            .fold(Values::new(), |values, (root, value)| {
+                values.with(*root, value.clone())
+            })
+    }
+
+    fn frames(&self, frames: &[Option<Frame>]) -> Frames {
+        let mut out = Frames::new();
+        for (root, frame) in self.roots.iter().zip(frames) {
+            if let Some(frame) = frame {
+                out.insert(*root, frame.clone());
+            }
+        }
+        out
+    }
+
+    /// The frames at the roots, `None` at an input not marked differentiable.
+    fn at_roots(&self, frames: &Frames, differentiable: &[bool]) -> Vec<Option<Frame>> {
+        self.roots
+            .iter()
+            .zip(differentiable)
+            .map(|(root, &d)| if d { frames.get(*root).cloned() } else { None })
+            .collect()
+    }
+}
+
+impl crate::Forward for Compiled {
+    fn forward(&self, inputs: &[Value]) -> Value {
+        let mut values = ran(self.program.forward(&self.values(inputs)));
+        match values.remove(self.output) {
+            Some(value) => value,
+            None => unreachable!("a program computes its target"),
+        }
+    }
+}
+
+impl crate::FirstOrder for Compiled {
+    fn tangent(&self, inputs: &[Value], tangents: &[Option<Frame>]) -> (Value, Option<Frame>) {
+        let (mut values, frames) = ran(self
+            .program
+            .tangent(&self.values(inputs), &self.frames(tangents)));
+        let value = match values.remove(self.output) {
+            Some(value) => value,
+            None => unreachable!("a program computes its target"),
+        };
+        (value, frames.get(self.output).cloned())
+    }
+
+    fn record(
+        &self,
+        inputs: &[Value],
+        differentiable: &[bool],
+    ) -> (Value, Box<dyn crate::Pullback>) {
+        let (value, pullback) = self.recorded(inputs, differentiable, &[]);
+        (value, Box::new(pullback))
+    }
+}
+
+impl crate::SecondOrder for Compiled {
+    fn record_second(
+        &self,
+        inputs: &[Value],
+        differentiable: &[bool],
+        velocities: &[Option<Frame>],
+    ) -> (Value, Option<Frame>, Box<dyn crate::SecondPullback>) {
+        let (value, pullback) = self.recorded(inputs, differentiable, velocities);
+        let velocity = velocities
+            .iter()
+            .any(Option::is_some)
+            .then(|| crate::FirstOrder::tangent(self, inputs, velocities).1)
+            .flatten();
+        (value, velocity, Box::new(pullback))
+    }
+}
+
+impl Compiled {
+    fn recorded(
+        &self,
+        inputs: &[Value],
+        differentiable: &[bool],
+        velocities: &[Option<Frame>],
+    ) -> (Value, CompiledPullback) {
+        let value = crate::Forward::forward(self, inputs);
+        let pullback = CompiledPullback {
+            kernel: self.clone(),
+            values: self.values(inputs),
+            differentiable: differentiable.to_vec(),
+            velocities: self.frames(velocities),
+        };
+        (value, pullback)
+    }
+}
+
+struct CompiledPullback {
+    kernel: Compiled,
+    values: Values,
+    differentiable: Vec<bool>,
+    velocities: Frames,
+}
+
+impl crate::Pullback for CompiledPullback {
+    fn cotangent(&self, alpha: &Frame) -> Vec<Option<Frame>> {
+        let k = &self.kernel;
+        let seeds = Frames::new().with(k.output, alpha.clone());
+        let (_, frames) = ran(k.program.cotangent(&self.values, &seeds));
+        k.at_roots(&frames, &self.differentiable)
+    }
+}
+
+impl crate::SecondPullback for CompiledPullback {
+    fn second(&self, alpha: &Frame) -> Vec<Option<Frame>> {
+        let k = &self.kernel;
+        let seeds = Frames::new().with(k.output, alpha.clone());
+        let second = ran(k.program.hessian(&self.values, &self.velocities, &seeds));
+        k.at_roots(&second.beta, &self.differentiable)
     }
 }
 

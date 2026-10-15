@@ -165,7 +165,7 @@ the test macro unless the companion says otherwise.
       `cycle_through_a_boundary_kernel_is_refused`,
       `sphere_basis_is_the_derivative_of_its_retraction`, `sphere_retraction_reaches_the_far_side`,
       `removable_singularity_is_reported`.
-- [ ] The optional projection: `projection` in `Embedded::declare`, `has_projection`, the kernel
+- [x] The optional projection: `projection` in `Embedded::declare`, `has_projection`, the kernel
       `skoro.project` over the programs of $P$ and $Q$, `scope::project` with `NoProjection`, and
       `check_embedded` covering it. The sphere declares its normalizing projection. Tests:
       `sphere_passes_check_embedded`, `sphere_projection_agrees_with_its_retraction`,

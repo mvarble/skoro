@@ -42,6 +42,8 @@ pub enum Error {
     NotInAModel,
     /// A declaration, or an operation's parameters, that cannot be made, and why.
     InvalidDeclaration { name: String, reason: String },
+    /// A projection onto an embedded type that declares none.
+    NoProjection { space: Space },
     /// A name already registered.
     DuplicateName { name: String },
     /// A name the registry lacks.
@@ -101,6 +103,7 @@ impl fmt::Display for Error {
             Error::InvalidDeclaration { name, reason } => {
                 write!(f, "{name} cannot be made: {reason}")
             }
+            Error::NoProjection { space } => write!(f, "{space:?} declares no projection"),
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
             Error::NotALogDensity { id } => {

@@ -3,12 +3,12 @@
 
 use std::sync::{Arc, OnceLock};
 
-use skoro_core::primitive::{Include, Retract};
-use skoro_core::scope::{apply, constant, quantity};
-use skoro_core::testing::check_embedded;
+use skoro_core::primitive::{Include, Neg, Project, Retract};
+use skoro_core::scope::{apply, constant, project, quantity};
+use skoro_core::testing::{check_embedded, lower};
 use skoro_core::{
-    Composite, Declares, Embedded, Error, IntoHostValue, Lowered, Lowering, Operation, Param, QDyn,
-    Query, Space, Typed, Values, Vector, Writer,
+    Composite, Declares, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered, Lowering,
+    Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Writer,
 };
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
@@ -45,6 +45,21 @@ fn angle(scale: f64) -> Arc<Composite> {
     .unwrap()
 }
 
+/// `P(w) = w / |w|`.
+fn normalize() -> Arc<Composite> {
+    Composite::define(
+        "test.circle.normalize",
+        Vec::new(),
+        &[Space::Vector(2)],
+        |q| {
+            let w = q[0];
+            let norm = (w * w).sum();
+            (-(norm.log() * 0.5)).exp() * w
+        },
+    )
+    .unwrap()
+}
+
 fn circle() -> Arc<Embedded> {
     Embedded::declare(
         "test.circle",
@@ -53,6 +68,7 @@ fn circle() -> Arc<Embedded> {
         1,
         rotation("test.circle.rotation"),
         angle(1.0),
+        Some(normalize()),
     )
     .unwrap()
 }
@@ -87,7 +103,16 @@ fn tangent_circle() -> Arc<Embedded> {
         },
     )
     .unwrap();
-    Embedded::declare("test.circle.tangent", Vec::new(), 2, 1, r, q).unwrap()
+    Embedded::declare(
+        "test.circle.tangent",
+        Vec::new(),
+        2,
+        1,
+        r,
+        q,
+        Some(normalize()),
+    )
+    .unwrap()
 }
 
 /// The circle with a basis whose length varies along it, `B(x) = ρ(x) J x` for
@@ -125,7 +150,16 @@ fn scaled_circle() -> Arc<Embedded> {
         },
     )
     .unwrap();
-    Embedded::declare("test.circle.scaled", Vec::new(), 2, 1, r, q).unwrap()
+    Embedded::declare(
+        "test.circle.scaled",
+        Vec::new(),
+        2,
+        1,
+        r,
+        q,
+        Some(normalize()),
+    )
+    .unwrap()
 }
 
 /// Points of the circle, at angles spread round it.
@@ -158,6 +192,7 @@ fn a_wrong_inverse_fails_check_embedded() {
         1,
         rotation("test.circle.rotation"),
         angle(2.0),
+        None,
     )
     .unwrap();
     let error = check_embedded(&wrong, &points(3), &Target::host()).unwrap_err();
@@ -166,9 +201,27 @@ fn a_wrong_inverse_fails_check_embedded() {
 
 #[test]
 fn declarations_of_the_wrong_signature_are_refused() {
-    let refused = Embedded::declare("test.bad", Vec::new(), 2, 1, angle(1.0), angle(1.0));
+    let refused = Embedded::declare("test.bad", Vec::new(), 2, 1, angle(1.0), angle(1.0), None);
     assert!(matches!(refused, Err(Error::InvalidDeclaration { .. })));
-    let refused = Embedded::declare("test.bad", Vec::new(), 2, 3, rotation("r"), angle(1.0));
+    let refused = Embedded::declare(
+        "test.bad",
+        Vec::new(),
+        2,
+        3,
+        rotation("r"),
+        angle(1.0),
+        None,
+    );
+    assert!(matches!(refused, Err(Error::InvalidDeclaration { .. })));
+    let refused = Embedded::declare(
+        "test.bad",
+        Vec::new(),
+        2,
+        1,
+        rotation("r"),
+        angle(1.0),
+        Some(rotation("p")),
+    );
     assert!(matches!(refused, Err(Error::InvalidDeclaration { .. })));
 }
 
@@ -270,7 +323,8 @@ fn cycle_through_a_boundary_kernel_is_refused() {
         |q| apply(Arc::new(Turn), &[q[0], q[1]]),
     )
     .unwrap();
-    let declaration = Embedded::declare("test.cyclic", Vec::new(), 2, 1, r, angle(1.0)).unwrap();
+    let declaration =
+        Embedded::declare("test.cyclic", Vec::new(), 2, 1, r, angle(1.0), None).unwrap();
     CYCLIC.set(declaration).unwrap();
     let mut writer = Writer::new();
     let y = writer
@@ -347,4 +401,136 @@ fn include_reads_an_embedded_value_as_storage() {
         matches!(failure.error, Error::SpaceMismatch { .. }),
         "{failure:?}"
     );
+}
+
+/// The circle with no projection.
+#[derive(Clone, Copy, Debug)]
+struct Bare;
+
+static BARE: std::sync::LazyLock<Arc<Embedded>> = std::sync::LazyLock::new(|| {
+    let r = rotation("test.circle.bare.rotation");
+    Embedded::declare("test.circle.bare", Vec::new(), 2, 1, r, angle(1.0), None).unwrap()
+});
+
+impl Typed for Bare {
+    fn admits(space: &Space) -> bool {
+        *space == Space::Embedded(BARE.clone())
+    }
+}
+
+impl Declares for Bare {
+    fn space(&self) -> Space {
+        Space::Embedded(BARE.clone())
+    }
+}
+
+#[test]
+fn project_without_a_declared_projection_fails() {
+    assert!(!BARE.has_projection() && CIRCLE.has_projection());
+    let mut writer = Writer::new();
+    let failure = writer
+        .build(|| {
+            let w = quantity("w", Vector::<2>);
+            let projected = project(Bare, w);
+            assert!(projected.is_failed());
+        })
+        .unwrap_err();
+    assert!(
+        matches!(&failure.error, Error::NoProjection { space } if *space == Space::Embedded(BARE.clone())),
+        "{failure:?}"
+    );
+}
+
+/// A primitive, its kernel lowered as first-order only.
+#[derive(Debug)]
+struct FirstOnly(Neg);
+
+impl Operation for FirstOnly {
+    fn name(&self) -> &'static str {
+        "test.first_only"
+    }
+
+    fn params(&self) -> Vec<Param> {
+        Vec::new()
+    }
+
+    fn output(&self, inputs: &[Space]) -> Result<Space, Error> {
+        self.0.output(inputs)
+    }
+
+    fn lower(&self, inputs: &[Space], lowering: &mut Lowering<'_>) -> Result<Lowered, Error> {
+        Ok(match self.0.lower(inputs, lowering)? {
+            Lowered::Kernel(Kernel::Two(kernel)) => {
+                let kernel: Arc<dyn FirstOrder> = kernel;
+                Lowered::Kernel(Kernel::One(kernel))
+            }
+            lowered => lowered,
+        })
+    }
+}
+
+/// `-(-c)` with the negations first-order only.
+fn first_order_identity(c: QDyn) -> QDyn {
+    let neg = |q: QDyn| apply(Arc::new(FirstOnly(Neg)), &[q]);
+    neg(neg(c))
+}
+
+#[test]
+fn boundary_orders_follow_the_composites() {
+    let orders = |declaration: &Arc<Embedded>| {
+        let space = Space::Embedded(declaration.clone());
+        let order = |operation: &dyn Operation, inputs: &[Space]| {
+            lower(operation, inputs, &Target::host()).unwrap().order()
+        };
+        [
+            order(
+                &Include::new(declaration.clone()),
+                std::slice::from_ref(&space),
+            ),
+            order(
+                &Retract::new(declaration.clone()),
+                &[space, Space::Vector(1)],
+            ),
+            order(&Project::new(declaration.clone()), &[Space::Vector(2)]),
+        ]
+    };
+    assert_eq!(orders(&CIRCLE), [Order::Two; 3]);
+
+    let q = Composite::define(
+        "test.circle.first_order_angle",
+        Vec::new(),
+        &[Space::Vector(2), Space::Vector(2)],
+        |q| first_order_identity(angle(1.0).call(q)),
+    )
+    .unwrap();
+    let rough_q = Embedded::declare(
+        "test.circle.rough_q",
+        Vec::new(),
+        2,
+        1,
+        rotation("test.circle.rotation"),
+        q,
+        Some(normalize()),
+    )
+    .unwrap();
+    assert_eq!(orders(&rough_q), [Order::Two, Order::One, Order::One]);
+
+    let p = Composite::define(
+        "test.circle.first_order_normalize",
+        Vec::new(),
+        &[Space::Vector(2)],
+        |q| first_order_identity(normalize().call(q)),
+    )
+    .unwrap();
+    let rough_p = Embedded::declare(
+        "test.circle.rough_p",
+        Vec::new(),
+        2,
+        1,
+        rotation("test.circle.rotation"),
+        angle(1.0),
+        Some(p),
+    )
+    .unwrap();
+    assert_eq!(orders(&rough_p), [Order::Two, Order::Two, Order::One]);
 }

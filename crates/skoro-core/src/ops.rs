@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::primitive::{
     Add, Atan2, Concatenate, Cos, Exp, Include, IntegerAdd, IntegerEq, IntegerLe, IntegerLt,
     IntegerMul, IntegerSub, IsNonnegative, Log, MatMul, Mul, Neg, PositiveAsReal, PositiveExp,
-    PositiveLog, PositiveMul, PositiveRecip, Scale, Select, Sin, Slice, Sub, Sum, ToReal,
+    PositiveLog, PositiveMul, PositiveRecip, Project, Scale, Select, Sin, Slice, Sub, Sum, ToReal,
     Transpose,
 };
 use crate::scope::{self, Draft, literal};
@@ -865,6 +865,20 @@ impl std::ops::Sub<f64> for QDyn {
 #[track_caller]
 pub fn concatenate(parts: &[QDyn], space: Space) -> QDyn {
     QDyn::from_id(node(Concatenate::new(space), parts))
+}
+
+/// `π(w)`: a vector of storage projected onto the embedded type of `marker` (`NoProjection` when
+/// the type declares none, `SpaceMismatch` when `marker`'s space is not embedded or `w` is not a
+/// vector of its storage).
+#[track_caller]
+pub fn project<T: Declares>(marker: T, w: impl Into<QDyn>) -> Q<T> {
+    let (space, w) = (marker.space(), w.into());
+    Q::from_id(with_spaces(&[w], |draft, spaces| {
+        let Space::Embedded(declaration) = &space else {
+            return Err(mismatch("skoro.project", spaces));
+        };
+        draft.mapped(Arc::new(Project::new(declaration.clone())), &[w])
+    }))
 }
 
 /// The value of `values` that `index` chooses, row by row.
