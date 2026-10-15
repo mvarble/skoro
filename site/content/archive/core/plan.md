@@ -18,12 +18,14 @@ the test macro unless the companion says otherwise.
 
 ## The tensor layer (`skoro-tensor`)
 
-- [ ] `Precision`, `Target` (`new`, `host`), the device check that accepts the Flex device and
-      cubecl's wgpu devices alone, and `TensorError`; the `wgpu` feature and the test helper that
-      finds an adapter; the local wgpu run before pushing a change to the tensor layer, a kernel or
-      a fused operation, added to the checks in `AGENTS.md`. Tests:
-      `target_refuses_an_autodiff_device`, `target_refuses_an_unsupported_precision`,
-      `target_refuses_an_unclaimed_runtime`, `wgpu_tests_fail_without_an_adapter`.
+- [ ] `Precision`, `Target` (`new`, `host`), the device check on `burn-dispatch`'s
+      `DispatchDevice` that accepts the Flex device and cubecl's wgpu devices alone, and
+      `TensorError`; the dependency on `burn-dispatch`, and burn's `ndarray` feature for the tensor
+      layer's tests; the `wgpu` feature and the test helper that finds an adapter; the local wgpu
+      run before pushing a change to the tensor layer, a kernel or a fused operation, added to the
+      checks in `AGENTS.md`. Tests: `target_refuses_an_autodiff_device`,
+      `target_refuses_an_unsupported_precision`, `target_refuses_an_unsupported_backend`,
+      `wgpu_tests_fail_without_an_adapter`.
 - [ ] `Points`, `Frame`, `Integers` and `Value`, created only through a target; `into_burn` and
       `from_burn`; `to_host`; `HostValue` and `HostData`, with shared and per-row loading; the
       re-export of burn's tensor module. Tests: `two_precisions_share_a_device`,
