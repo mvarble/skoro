@@ -2,6 +2,7 @@
 //! compilation and probabilistic graphs, the writer, queries, generation and retirement.
 
 mod address;
+mod composite;
 mod error;
 mod id;
 mod into_host;
@@ -11,12 +12,14 @@ mod operation;
 mod ops;
 pub mod primitive;
 mod q;
+mod registry;
 pub mod scope;
 mod space;
 pub mod testing;
 mod writer;
 
 pub use address::{Address, Segment};
+pub use composite::Composite;
 pub use error::{Error, Failure};
 pub use id::NodeId;
 pub use into_host::{IntoHostValue, Rows};
@@ -31,5 +34,6 @@ pub use q::{
     Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,
 };
+pub use registry::{MakeOperation, Registry};
 pub use space::{Block, Space};
 pub use writer::{Reader, Writer};

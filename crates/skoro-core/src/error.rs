@@ -38,6 +38,14 @@ pub enum Error {
     ValueShape { space: Space },
     /// Values that pin different batches, or a batch other than the one a pass runs at.
     BatchSize { expected: usize, found: usize },
+    /// A quantity was made, or looked up, inside a composite's definition.
+    NotInAModel,
+    /// A declaration, or an operation's parameters, that cannot be made, and why.
+    InvalidDeclaration { name: String, reason: String },
+    /// A name already registered.
+    DuplicateName { name: String },
+    /// A name the registry lacks.
+    UnknownOperation { name: String },
 }
 
 impl fmt::Display for Error {
@@ -56,6 +64,14 @@ impl fmt::Display for Error {
             Error::AddressTaken { address } => write!(f, "a quantity already lives at {address}"),
             Error::UnknownAddress { address } => write!(f, "no quantity lives at {address}"),
             Error::ValueShape { space } => write!(f, "the value does not fit {space:?}"),
+            Error::NotInAModel => {
+                f.write_str("a quantity is made in a model, not in a composite's definition")
+            }
+            Error::InvalidDeclaration { name, reason } => {
+                write!(f, "{name} cannot be made: {reason}")
+            }
+            Error::DuplicateName { name } => write!(f, "{name} is already registered"),
+            Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
             Error::BatchSize { expected, found } => {
                 write!(f, "a batch of {found} rows where {expected} were expected")
             }

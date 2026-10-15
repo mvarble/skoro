@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use skoro_tensor::{Frame, Target, Value};
 
-use crate::{Error, Space};
+use crate::{Composite, Error, Space};
 
 /// A map between spaces, described once and on no device, and lowered to a kernel when a query
 /// is compiled.
@@ -64,6 +64,8 @@ impl Hash for Param {
 #[derive(Clone)]
 pub enum Lowered {
     Kernel(Kernel),
+    /// Expand this composite in place of the operation.
+    Composite(Arc<Composite>),
 }
 
 /// What an operation is lowered with: the target.

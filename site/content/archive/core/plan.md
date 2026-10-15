@@ -92,7 +92,7 @@ the test macro unless the companion says otherwise.
       operations table but `retract`, `local`, `include` and `project`, which come with the
       retractions and embedded types. Tests: `operators_build_the_nodes_of_their_markers`,
       `dyn_operands_of_different_spaces_fail`.
-- [ ] `Composite::define` with its definition frame, `Composite::call`, and the `Registry` with
+- [x] `Composite::define` with its definition frame, `Composite::call`, and the `Registry` with
       the core's operations, `register_operation` and `operation` by name. Tests:
       `every_core_operation_round_trips_through_its_name`, `unknown_operation_is_refused_by_name`.
 

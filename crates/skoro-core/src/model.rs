@@ -32,6 +32,14 @@ pub(crate) enum NodeKind {
     Quantity {
         address: Address,
     },
+    /// An input of a composite's body.
+    Input {
+        #[expect(
+            dead_code,
+            reason = "the compiler binds a body's inputs, in the next task"
+        )]
+        index: usize,
+    },
     Constant {
         value: HostValue,
     },
@@ -84,7 +92,7 @@ impl Node {
         match &self.kind {
             NodeKind::Constant { value } => Some(value),
             NodeKind::Mapped { folded, .. } => folded.as_ref(),
-            NodeKind::Quantity { .. } => None,
+            NodeKind::Quantity { .. } | NodeKind::Input { .. } => None,
         }
     }
 

@@ -201,6 +201,11 @@ pub fn lower(
         .map_err(describe)?
     {
         Lowered::Kernel(kernel) => Ok(kernel),
+        Lowered::Composite(composite) => Err(format!(
+            "{} lowers to the composite {}, which a compiled program checks",
+            operation.name(),
+            composite.name()
+        )),
     }
 }
 

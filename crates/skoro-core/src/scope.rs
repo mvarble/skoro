@@ -26,6 +26,8 @@ use crate::{
 pub(crate) enum Frame {
     /// A building scope, with its draft.
     Scope(Draft),
+    /// A composite's definition, with its body's draft.
+    Definition(Draft),
     /// A namespace, prefixing the addresses of the quantities made in it.
     Namespace(Address),
 }
@@ -34,6 +36,8 @@ pub(crate) enum Frame {
 pub(crate) struct Draft {
     pub(crate) model: Model,
     pub(crate) failure: Option<Failure>,
+    /// Whether the draft is a model, rather than a composite's body.
+    in_model: bool,
 }
 
 thread_local! {
@@ -81,6 +85,15 @@ impl Draft {
         Draft {
             model,
             failure: None,
+            in_model: true,
+        }
+    }
+
+    pub(crate) fn definition(model: Model) -> Draft {
+        Draft {
+            model,
+            failure: None,
+            in_model: false,
         }
     }
 
@@ -154,7 +167,11 @@ impl Draft {
             return Err(Error::BatchSize { expected, found });
         }
         let target = Target::host();
-        let Lowered::Kernel(kernel) = operation.lower(spaces, &mut Lowering::new(&target))?;
+        let kernel = match operation.lower(spaces, &mut Lowering::new(&target))? {
+            Lowered::Kernel(kernel) => kernel,
+            // A composite call folds once the compiler can expand it.
+            Lowered::Composite(_) => return Ok(None),
+        };
         let rows = batch.unwrap_or(1);
         let loaded = values
             .iter()
@@ -170,6 +187,9 @@ impl Draft {
     }
 
     fn quantity(&mut self, address: Address, space: Space) -> Result<NodeId, Error> {
+        if !self.in_model {
+            return Err(Error::NotInAModel);
+        }
         if self.model.addresses.contains_key(&address) {
             return Err(Error::AddressTaken { address });
         }
@@ -236,7 +256,7 @@ pub(crate) fn build(
         let mut stack = stack.borrow_mut();
         let Some(at) = stack
             .iter()
-            .rposition(|frame| matches!(frame, Frame::Scope(_)))
+            .rposition(|frame| matches!(frame, Frame::Scope(_) | Frame::Definition(_)))
         else {
             return NodeId::OUTSIDE_SCOPE;
         };
@@ -245,10 +265,10 @@ pub(crate) fn build(
             .iter()
             .fold(Address::root(), |prefix, frame| match frame {
                 Frame::Namespace(namespace) => prefix.join(namespace),
-                Frame::Scope(_) => prefix,
+                Frame::Scope(_) | Frame::Definition(_) => prefix,
             });
-        let Some(Frame::Scope(draft)) = scope.last_mut() else {
-            unreachable!("the frame found is a scope")
+        let Some(Frame::Scope(draft) | Frame::Definition(draft)) = scope.last_mut() else {
+            unreachable!("the frame found is a scope or a definition")
         };
         match step(draft, &prefix) {
             Ok(id) => id,
@@ -300,6 +320,9 @@ pub fn lookup<T: Typed>(address: impl Into<Address>) -> Q<T> {
     let address = address.into();
     let location = Location::caller();
     Q::from_id(build(location, |draft, prefix| {
+        if !draft.in_model {
+            return Err(Error::NotInAModel);
+        }
         let address = prefix.join(&address);
         let id = *draft
             .model
