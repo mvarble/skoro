@@ -18,7 +18,7 @@ use skoro_tensor::{Frame, Points, Target, Value};
 
 use crate::{
     Composite, Error, FirstOrder, Forward, Frames, Kernel, Lowered, Lowering, NodeId, Operation,
-    Param, Pass, Program, Pullback, SecondOrder, SecondPullback, Space, Values,
+    Param, Pass, Program, Pullback, QDyn, SecondOrder, SecondPullback, Space, Values,
 };
 
 /// A curved type of storage `n` and dimension `d`, declared by its retraction and its inverse.
@@ -84,6 +84,40 @@ impl Embedded {
         }))
     }
 
+    /// A flat type: storage and dimension `n`, `R` and `Q` the core's addition and subtraction,
+    /// `P` the identity. Its boundary kernels use the identity and zero maps the statement gives
+    /// for it, and compile none of the three.
+    pub fn declare_flat(
+        name: &'static str,
+        params: Vec<Param>,
+        n: usize,
+    ) -> Result<Arc<Embedded>, Error> {
+        if n == 0 {
+            return Err(Error::InvalidDeclaration {
+                name: name.to_string(),
+                reason: "its storage is empty".to_string(),
+            });
+        }
+        let (vector, size) = (Space::Vector(n), vec![Param::Integer(n as i64)]);
+        let pair = [vector.clone(), vector.clone()];
+        let define = |name, inputs: &[Space], body: fn(&[QDyn]) -> QDyn| {
+            Composite::define(name, size.clone(), inputs, body).map_err(|failure| failure.error)
+        };
+        let retraction = define("skoro.flat.retract", &pair, |q| q[0] + q[1])?;
+        let inverse = define("skoro.flat.local", &pair, |q| q[1] - q[0])?;
+        let projection = define("skoro.flat.project", &[vector], |q| q[0])?;
+        Ok(Arc::new(Embedded {
+            name,
+            params,
+            storage: n,
+            dimension: n,
+            retraction,
+            inverse,
+            projection: Some(projection),
+            flat: true,
+        }))
+    }
+
     pub fn name(&self) -> &'static str {
         self.name
     }
@@ -117,7 +151,7 @@ impl Embedded {
 
     /// Whether `skoro.project` maps onto the type.
     pub fn has_projection(&self) -> bool {
-        self.flat || self.projection.is_some()
+        self.projection.is_some()
     }
 }
 
@@ -768,5 +802,75 @@ impl SecondPullback for BoundaryPullback {
                 vec![self.gate(0, sum(curvature, pulled, target))]
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use skoro_tensor::{HostData, HostValue};
+
+    use super::*;
+    use crate::testing::check_embedded;
+
+    const ROWS: usize = 2;
+
+    fn host(data: &[f64], dimension: usize) -> HostValue {
+        HostValue::new(Some(ROWS), dimension, HostData::Continuous(data.to_vec())).unwrap()
+    }
+
+    fn frame(seed: usize, dimension: usize, columns: usize) -> Frame {
+        let data: Vec<f64> = (0..ROWS * dimension * columns)
+            .map(|i| ((seed * 31 + i) as f64 * 0.7).sin())
+            .collect();
+        Frame::from_host(&data, ROWS, dimension, columns, &Target::host())
+    }
+
+    #[test]
+    fn flat_declaration_skips_inner_passes() {
+        let (target, n) = (Target::host(), 4);
+        let flat = Embedded::declare_flat("test.flat", Vec::new(), n).unwrap();
+        assert!(flat.has_projection());
+        let space = Space::Embedded(flat.clone());
+        let operations: [(Arc<dyn Operation>, Vec<Space>); 3] = [
+            (Arc::new(Include::new(flat.clone())), vec![space.clone()]),
+            (
+                Arc::new(Retract::new(flat.clone())),
+                vec![space.clone(), Space::Vector(n)],
+            ),
+            (Arc::new(Project::new(flat.clone())), vec![Space::Vector(n)]),
+        ];
+        let points: Vec<f64> = (0..ROWS * n).map(|i| 0.25 * i as f64 - 1.0).collect();
+        let x = host(&points, n).load(ROWS, &target).unwrap().unwrap();
+        for (operation, spaces) in operations {
+            let mut lowering = Lowering::new(&target);
+            let Lowered::Kernel(Kernel::Two(kernel)) =
+                operation.lower(&spaces, &mut lowering).unwrap()
+            else {
+                panic!("{} lowers to a kernel of order two", operation.name())
+            };
+            assert!(
+                lowering.cache.is_empty(),
+                "{} compiled an inner program",
+                operation.name()
+            );
+            let inputs = vec![x.clone(); spaces.len()];
+            let tangents: Vec<Option<Frame>> =
+                (0..spaces.len()).map(|j| Some(frame(j, n, 3))).collect();
+            // The identity: the tangent is the sum of the inputs' tangents.
+            let expected: Vec<f64> = (0..ROWS * n * 3)
+                .map(|i| tangents.iter().flatten().map(|t| t.to_host()[i]).sum())
+                .collect();
+            let (_, pushed) = kernel.tangent(&inputs, &tangents);
+            assert_eq!(pushed.unwrap().to_host(), expected, "{}", operation.name());
+            let differentiable = vec![true; spaces.len()];
+            let (_, _, pullback) = kernel.record_second(&inputs, &differentiable, &tangents);
+            let alpha = frame(7, n, 1);
+            for cotangent in pullback.cotangent(&alpha) {
+                assert_eq!(cotangent.unwrap().to_host(), alpha.to_host());
+            }
+            // And zero second-order maps.
+            assert!(pullback.second(&alpha).iter().all(Option::is_none));
+        }
+        check_embedded(&flat, &host(&points, n), &target).unwrap();
     }
 }

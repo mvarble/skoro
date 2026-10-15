@@ -2,4 +2,5 @@
 //! later entry's crate would be.
 #![allow(dead_code)]
 
+pub mod complex;
 pub mod sphere;

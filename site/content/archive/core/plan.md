@@ -171,7 +171,7 @@ the test macro unless the companion says otherwise.
       `sphere_passes_check_embedded`, `sphere_projection_agrees_with_its_retraction`,
       `projection_returns_drift_to_the_sphere`, `midpoint_is_a_map_into_the_sphere`,
       `project_without_a_declared_projection_fails`, `boundary_orders_follow_the_composites`.
-- [ ] `Embedded::declare_flat`, recognised by the boundary kernels, which then run no inner
+- [x] `Embedded::declare_flat`, recognised by the boundary kernels, which then run no inner
       passes; the `Complex` marker in `crates/skoro/tests/common/complex.rs`, with its product
       through `QMul`. Tests: `feature_marker_defines_its_product`, `feature_marker_is_not_a_vector`,
       `flat_declaration_skips_inner_passes`.
