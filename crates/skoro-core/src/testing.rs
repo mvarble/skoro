@@ -190,7 +190,12 @@ fn describe(error: Error) -> String {
     error.to_string()
 }
 
-fn lower(operation: &dyn Operation, spaces: &[Space], target: &Target) -> Result<Kernel, String> {
+/// The kernel `operation` lowers to on `target`, at inputs of `spaces`.
+pub fn lower(
+    operation: &dyn Operation,
+    spaces: &[Space],
+    target: &Target,
+) -> Result<Kernel, String> {
     match operation
         .lower(spaces, &mut Lowering::new(target))
         .map_err(describe)?

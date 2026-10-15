@@ -5,5 +5,6 @@ mod euclidean;
 mod rule;
 
 pub use euclidean::{
-    Add, Concatenate, Exp, Log, MatMul, Mul, Neg, Scale, Slice, Sub, Sum, Transpose,
+    Add, Atan2, Concatenate, Cos, Exp, Log, MatMul, Mul, Neg, Scale, Sin, Slice, Sub, Sum,
+    Transpose,
 };

@@ -106,6 +106,20 @@ plain!(
     Log, "skoro.log", one_euclidean, Logarithm
 );
 
+plain!(
+    /// `sin a`, elementwise.
+    Sin, "skoro.sin", one_euclidean, Sine
+);
+plain!(
+    /// `cos a`, elementwise.
+    Cos, "skoro.cos", one_euclidean, Cosine
+);
+plain!(
+    /// `atan2(a, b)`, elementwise: the angle in `(-π, π]` of the point `(b, a)`, defined where
+    /// `a² + b²` is positive and smooth off the half-line `a = 0, b < 0`.
+    Atan2, "skoro.atan2", two_euclidean, Angle
+);
+
 /// `s a`, a `Real` times a Euclidean value.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Scale;
@@ -762,5 +776,135 @@ impl Rule for Concatenation {
     fn pull(&self, _: &[Tensor<2>], j: usize, alpha: Tensor<3>) -> Tensor<3> {
         let [n, _, k] = alpha.dims();
         alpha.slice([0..n, self.tangent[j].clone(), 0..k])
+    }
+}
+
+struct Sine;
+
+impl Rule for Sine {
+    fn value(&self, x: &[Tensor<2>]) -> Tensor<2> {
+        x[0].clone().sin()
+    }
+
+    fn push(&self, x: &[Tensor<2>], _: usize, t: Tensor<3>) -> Tensor<3> {
+        let k = t.dims()[2];
+        columns(&x[0].clone().cos(), k) * t
+    }
+
+    fn pull(&self, x: &[Tensor<2>], _: usize, alpha: Tensor<3>) -> Tensor<3> {
+        let k = alpha.dims()[2];
+        columns(&x[0].clone().cos(), k) * alpha
+    }
+
+    fn second(
+        &self,
+        x: &[Tensor<2>],
+        _: usize,
+        v: &[Option<Tensor<3>>],
+        alpha: Tensor<3>,
+    ) -> Option<Tensor<3>> {
+        let v = v[0].clone()?;
+        let k = v.dims()[2];
+        Some(-(columns(&self.value(x), k) * v * widen(alpha, k)))
+    }
+}
+
+struct Cosine;
+
+impl Rule for Cosine {
+    fn value(&self, x: &[Tensor<2>]) -> Tensor<2> {
+        x[0].clone().cos()
+    }
+
+    fn push(&self, x: &[Tensor<2>], _: usize, t: Tensor<3>) -> Tensor<3> {
+        let k = t.dims()[2];
+        -(columns(&x[0].clone().sin(), k) * t)
+    }
+
+    fn pull(&self, x: &[Tensor<2>], _: usize, alpha: Tensor<3>) -> Tensor<3> {
+        let k = alpha.dims()[2];
+        -(columns(&x[0].clone().sin(), k) * alpha)
+    }
+
+    fn second(
+        &self,
+        x: &[Tensor<2>],
+        _: usize,
+        v: &[Option<Tensor<3>>],
+        alpha: Tensor<3>,
+    ) -> Option<Tensor<3>> {
+        let v = v[0].clone()?;
+        let k = v.dims()[2];
+        Some(-(columns(&self.value(x), k) * v * widen(alpha, k)))
+    }
+}
+
+/// `atan2(a, b)`, with `r = a² + b²`: its partial derivatives are `b / r` and `-a / r`.
+struct Angle;
+
+impl Angle {
+    fn r(x: &[Tensor<2>]) -> Tensor<2> {
+        x[0].clone() * x[0].clone() + x[1].clone() * x[1].clone()
+    }
+
+    /// `∂_j atan2`: `b / r` for `a`, `-a / r` for `b`.
+    fn partial(x: &[Tensor<2>], j: usize) -> Tensor<2> {
+        match j {
+            0 => x[1].clone() / Angle::r(x),
+            _ => -(x[0].clone() / Angle::r(x)),
+        }
+    }
+}
+
+impl Rule for Angle {
+    fn value(&self, x: &[Tensor<2>]) -> Tensor<2> {
+        x[0].clone().atan2(x[1].clone())
+    }
+
+    fn push(&self, x: &[Tensor<2>], j: usize, t: Tensor<3>) -> Tensor<3> {
+        let k = t.dims()[2];
+        columns(&Angle::partial(x, j), k) * t
+    }
+
+    fn pull(&self, x: &[Tensor<2>], j: usize, alpha: Tensor<3>) -> Tensor<3> {
+        let k = alpha.dims()[2];
+        columns(&Angle::partial(x, j), k) * alpha
+    }
+
+    /// `hvp_a = ((a² - b²) v_b - 2ab v_a) / r² ⊙ α` and
+    /// `hvp_b = ((a² - b²) v_a + 2ab v_b) / r² ⊙ α`, a missing velocity being zero.
+    fn second(
+        &self,
+        x: &[Tensor<2>],
+        j: usize,
+        v: &[Option<Tensor<3>>],
+        alpha: Tensor<3>,
+    ) -> Option<Tensor<3>> {
+        let k = v.iter().flatten().next()?.dims()[2];
+        let (a, b) = (&x[0], &x[1]);
+        let r = Angle::r(x);
+        let r2 = r.clone() * r;
+        let difference = columns(
+            &((a.clone() * a.clone() - b.clone() * b.clone()) / r2.clone()),
+            k,
+        );
+        let twice = columns(&((a.clone() * b.clone()).mul_scalar(2.0) / r2), k);
+        // The velocity of the other input enters through the difference, its own through `2ab`.
+        let (own, other) = (v[j].clone(), v[1 - j].clone());
+        let mut hvp: Option<Tensor<3>> = None;
+        let mut add = |term: Tensor<3>| {
+            hvp = Some(match hvp.take() {
+                Some(sum) => sum + term,
+                None => term,
+            });
+        };
+        if let Some(other) = other {
+            add(difference * other);
+        }
+        if let Some(own) = own {
+            let signed = if j == 0 { -twice } else { twice };
+            add(signed * own);
+        }
+        Some(hvp? * widen(alpha, k))
     }
 }

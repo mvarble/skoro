@@ -59,7 +59,7 @@ the test macro unless the companion says otherwise.
       `matmul`, `sum`, `exp`, `log`, `slice`, `concatenate` with its reshape, `transpose`) with
       kernels of order two. Tests: `add`, `sub`, `neg`, `mul`, `scale`, `matmul_matrix`,
       `matmul_vector`, `sum`, `exp`, `log`, `slice`, `concatenate`, `reshape`, `transpose`.
-- [ ] The trigonometric primitives `sin`, `cos` and `atan2`. Tests: `sin`, `cos`, `atan2`,
+- [x] The trigonometric primitives `sin`, `cos` and `atan2`. Tests: `sin`, `cos`, `atan2`,
       `atan2_is_checked_off_its_branch_cut`.
 - [ ] `select`, and the positive primitives `positive.as_real`, `.exp`, `.log`, `.mul`, `.recip`.
       Tests: `select`, `select_routes_the_cotangent_to_the_chosen_value`, `positive_as_real`,

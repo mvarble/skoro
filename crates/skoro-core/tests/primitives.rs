@@ -3,11 +3,12 @@
 //! inputs, at both precisions.
 
 use skoro_core::primitive::{
-    Add, Concatenate, Exp, Log, MatMul, Mul, Neg, Scale, Slice, Sub, Sum, Transpose,
+    Add, Atan2, Concatenate, Cos, Exp, Log, MatMul, Mul, Neg, Scale, Sin, Slice, Sub, Sum,
+    Transpose,
 };
-use skoro_core::testing::{check_operation, random};
+use skoro_core::testing::{check_operation, lower, random};
 use skoro_core::{Operation, Space};
-use skoro_tensor::{HostValue, Target};
+use skoro_tensor::{HostData, HostValue, Target, Value};
 
 const ROWS: usize = 3;
 
@@ -15,6 +16,19 @@ const ROWS: usize = 3;
 fn input(space: Space, seed: u64) -> (Space, HostValue) {
     let value = random(&space, ROWS, seed, -1.0, 1.0);
     (space, value)
+}
+
+/// Points `(a, b)` off the branch cut of `atan2`: `|a| ≥ 0.3`, so that no central difference
+/// crosses the half-line `a = 0, b < 0`, and `b` of either sign.
+fn off_the_cut(seed: u64) -> [(Space, HostValue); 2] {
+    let space = Space::Vector(4);
+    let (_, a) = input(space.clone(), seed);
+    let HostData::Continuous(a) = a.data().clone() else {
+        unreachable!("a continuous value")
+    };
+    let a = a.iter().map(|a| a + 0.3 * a.signum()).collect();
+    let a = HostValue::new(Some(ROWS), 4, HostData::Continuous(a)).unwrap();
+    [(space.clone(), a), input(space, seed + 1)]
 }
 
 fn check(operation: &dyn Operation, inputs: &[(Space, HostValue)], target: &Target) {
@@ -101,6 +115,37 @@ skoro_core::precision_tests! {
     fn reshape(target) {
         let inputs = [input(Space::Vector(6), 24)];
         check(&Concatenate::new(Space::Matrix(2, 3)), &inputs, &target);
+    }
+
+    fn sin(target) {
+        check(&Sin, &[input(Space::Vector(3), 26)], &target);
+    }
+
+    fn cos(target) {
+        check(&Cos, &[input(Space::Matrix(2, 2), 27)], &target);
+    }
+
+    fn atan2(target) {
+        check(&Atan2, &off_the_cut(28), &target);
+    }
+
+    fn atan2_is_checked_off_its_branch_cut(target) {
+        check(&Atan2, &off_the_cut(30), &target);
+        // Across the cut, at b = -1 and a = ±1e-3, the angle jumps by 2π less the twice
+        // 1e-3 radians it turns on either side.
+        let space = Space::Real;
+        let value = |x: f64| HostValue::new(None, 1, HostData::Continuous(vec![x])).unwrap();
+        let kernel = lower(&Atan2, &[space.clone(), space], &target).unwrap();
+        let angle = |a: f64| {
+            let inputs = [value(a), value(-1.0)].map(|v| v.load(1, &target).unwrap().unwrap());
+            let Value::Continuous(y) = kernel.forward().forward(&inputs) else {
+                unreachable!("a continuous value")
+            };
+            y.to_host()[0]
+        };
+        let jump = angle(1e-3) - angle(-1e-3);
+        let expected = 2.0 * std::f64::consts::PI - 2.0 * (1e-3f64).atan2(1.0);
+        assert!((jump - expected).abs() < 1e-5, "{jump} against {expected}");
     }
 
     fn transpose(target) {
