@@ -66,12 +66,18 @@ const labels: Record<string, string> = {
     'f>s4': String.raw`$\partial_2 \map_3\transpose$`,
 };
 
+// The inputs are roots of the computation graph and leaves of the backpropagation graph.
+const backpropagationKinds: Record<string, NodeKindSpec> = {
+    ...nodeKinds,
+    root: { ...nodeKinds.root, name: 'Leaf (an input)' },
+};
+
 export const backpropagation = defineGraph({
     title: 'Its backpropagation graph',
     caption: String.raw`The same slots with every edge reversed and labelled by the pull-back it applies. Cotangents enter at the target $f$ and end at the leaves $\point_1$ and $\point_2$, the computation graph's roots; $s_3$ has two incoming edges, and its cotangent is their sum.`,
     width: 660,
     height: 270,
-    nodeKinds,
+    nodeKinds: backpropagationKinds,
     edgeKinds: { pullback: { name: 'pull-back', hue: 'purple' } },
     nodes,
     edges: forward.map(({ from, to }) => ({
