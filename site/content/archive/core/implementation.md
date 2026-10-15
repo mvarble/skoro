@@ -112,8 +112,13 @@ So nothing in skoro can be generic over a backend, and nothing needs to be. The 
 write `Q<B, T>` and `fn range<B: Backend>(..)`, and say the names are illustrative; here a handle
 is `Q<T>`. The charter's "backend trait sealed to burn's CPU backend and its cubecl GPU backends"
 (position 11) cannot be a trait any longer, and becomes a check made when a target is constructed:
-the device must be a `Flex` or `Cube` device, and must not be an autodiff device
-(`Device::is_autodiff`, burn-tensor 0.22.0, `src/device.rs`). The check is at run time because
+the device must be the `Flex` device or a wgpu device of the cubecl backend, and must not be an
+autodiff device (`Device::is_autodiff`, burn-tensor 0.22.0, `src/device.rs`). Every cubecl runtime
+is the one `Cube` variant, told apart by the variant of its `CubeDevice`: burn-dispatch 0.22.0
+(`src/device.rs`) builds `CubeDevice::Cuda`, `CubeDevice::Hip`, `CubeDevice::Cpu` and
+`CubeDevice::Wgpu`, the last for wgpu on any of its graphics APIs (Metal, Vulkan, WebGPU, or the
+default). So the check matches `Cube(CubeDevice::Wgpu(_))` and refuses the other runtimes, which
+skoro does not test. The check is at run time because
 Cargo unifies features: another crate in a build may enable a burn backend skoro does not test,
 and its devices are then constructible. The charter's remark that a building scope's draft must be
 held type-erased, because a thread-local cannot be generic over the backend, no longer applies:
@@ -254,7 +259,7 @@ members.
 
 | crate | depends on | holds |
 | --- | --- | --- |
-| `skoro-tensor` | `burn` 0.22 (features `std`, `flex`, `extension`; `wgpu`, `cuda` and the other cubecl runtimes behind features of the same names) | `Target`, `Precision`, `Points`, `Frame`, `Integers`, `Value`, `HostValue` |
+| `skoro-tensor` | `burn` 0.22 (features `std`, `flex`, `extension`; `wgpu` behind a feature of the same name) | `Target`, `Precision`, `Points`, `Frame`, `Integers`, `Value`, `HostValue` |
 | `skoro-core` | `skoro-tensor`, `blake3`, `rpds` | everything else, in the modules below |
 | `skoro` | both | re-exports, and the integration tests that may use only the public interface |
 
@@ -1504,7 +1509,16 @@ differentiation, a serialization format, and Python bindings.
 Tests run at both precisions in one binary, through a macro that instantiates a test body for
 `Precision::Single` and `Precision::Double` on the Flex device; the names below get the suffixes
 `_f32` and `_f64`. Tests gated on the `wgpu` feature repeat the tensor-layer and primitive checks
-at single precision on a wgpu device. Tolerances live in `testing::Tolerance`, per precision: a
+at single precision on a wgpu device.
+
+wgpu is the one GPU runtime skoro claims, and CI has no adapter to run it, so the claim rests on
+local runs. The build adds to the checks in `AGENTS.md` that a change to `skoro-tensor`, to a
+primitive's kernel or to a fused operation is pushed only after
+`cargo test --workspace --features wgpu` passes on a machine with an adapter, and says so in the
+commit. With the feature on and no adapter, the wgpu tests fail, naming the missing adapter, rather
+than pass with nothing run, so a local run that passes has run them.
+
+Tolerances live in `testing::Tolerance`, per precision: a
 central difference with step $10^{-6}$ held to a relative $10^{-7}$ in double precision, and step
 $10^{-2}$ held to $5 \times 10^{-3}$ in single; and every single-precision result is also held to
 the double-precision one, to a relative $10^{-4}$.
@@ -1530,6 +1544,10 @@ rests on, so an upgrade that changes one fails here first.
   two conversions that follow the device default in burn follow the target here.
 - `from_burn_refuses_a_foreign_tensor`: a tensor of the other precision is refused.
 - `target_refuses_an_autodiff_device`, and under `wgpu`, `target_refuses_an_unsupported_precision`.
+- `target_refuses_an_unclaimed_runtime`: with burn's `cpu` feature enabled for this test alone, a
+  `CubeDevice::Cpu` is refused as `UnsupportedDevice`.
+- `wgpu_tests_fail_without_an_adapter`: under `wgpu`, the helper that finds the test adapter fails,
+  naming it, when none is present.
 - `host_round_trip_is_exact_in_double`: `from_host` then `to_host` returns the same bits.
 - `shared_value_expands_to_the_batch` and `per_row_value_pins_the_batch`, the second including one
   row in a batch of several.
@@ -1751,11 +1769,6 @@ scalar chain.
   sampler and proposal of the new model names a node the model holds.
 
 ## Open questions
-
-> [!TODO] Which cubecl runtimes skoro supports
-> The design tests Flex at both precisions everywhere, and wgpu at single precision behind a
-> feature, on machines that have an adapter. CI has none. Is wgpu the one GPU runtime to claim for
-> now, and is a local run before pushing enough to claim it?
 
 > [!TODO] Names
 > `Space` for a quantity's type, `Vector<N>` beside `VectorDyn`, and `Target` for a device with a
