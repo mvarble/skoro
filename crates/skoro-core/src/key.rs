@@ -59,7 +59,7 @@ impl Key {
     }
 
     /// `n` variates in the open interval (0, 1), from the extendable output keyed by this key
-    /// under tag `0x04`: each takes 8 bytes `u`, little-endian, as `((u >> 11) + 0.5) * 2^-53`.
+    /// under tag `0x04`: each takes 8 bytes `u`, little-endian, as `((u >> 12) + 0.5) * 2^-52`.
     pub fn uniforms(&self, n: usize) -> Vec<f64> {
         let mut hasher = blake3::Hasher::new_keyed(&self.0);
         hasher.update(&[UNIFORMS]);
@@ -68,8 +68,7 @@ impl Key {
         (0..n)
             .map(|_| {
                 stream.fill(&mut bytes);
-                let u = u64::from_le_bytes(bytes);
-                ((u >> 11) as f64 + 0.5) * f64::EPSILON / 2.0
+                variate(u64::from_le_bytes(bytes))
             })
             .collect()
     }
@@ -77,6 +76,13 @@ impl Key {
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
+}
+
+/// The midpoint `((u >> 12) + 0.5) * 2^-52`, exact in `f64` at every step: `u >> 12` is below
+/// `2^52`, so adding a half needs at most 53 significant bits, and `f64::EPSILON` is `2^-52`.
+/// Keeping 53 bits instead would round the largest to 1.
+fn variate(u: u64) -> f64 {
+    ((u >> 12) as f64 + 0.5) * f64::EPSILON
 }
 
 #[cfg(test)]
@@ -123,7 +129,7 @@ mod tests {
             hex(&key.split(2)[1]),
             "ec2fb9bbac1fe9cc1cbdad50c74df4038f3a4d0356492ff4176efc5beeb36982"
         );
-        let expected: [f64; 3] = [0.3221308369554478, 0.6715094980977141, 0.7275466618005233];
+        let expected: [f64; 3] = [0.32213083695544775, 0.6715094980977142, 0.7275466618005234];
         let bits = |v: &[f64]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
         assert_eq!(bits(&at.uniforms(3)), bits(&expected));
     }
@@ -144,6 +150,10 @@ mod tests {
     fn uniforms_lie_in_the_open_interval() {
         let variates = Key::from_seed(2).uniforms(100_000);
         assert!(variates.iter().all(|&u| 0.0 < u && u < 1.0));
+        // The extremes of the map itself, exactly.
+        assert_eq!(variate(0), 2f64.powi(-53));
+        assert_eq!(variate(u64::MAX), 1.0 - 2f64.powi(-53));
+        assert!(variate(u64::MAX) < 1.0);
     }
 
     #[test]

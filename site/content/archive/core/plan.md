@@ -36,7 +36,7 @@ the test macro unless the companion says otherwise.
 
 ## Identities and keys (`skoro-core`)
 
-- [ ] `NodeId` from the process-wide counter; `Segment` and `Address`, their parsing, display and
+- [x] `NodeId` from the process-wide counter; `Segment` and `Address`, their parsing, display and
       order; `Key` with `from_seed`, `fold`, `at`, `split` and `uniforms` under their domain tags.
       Tests: `name_and_integer_segments_differ`, `segments_fold_one_at_a_time`,
       `fold_matches_the_reference_vectors`, `split_keys_are_distinct`,
