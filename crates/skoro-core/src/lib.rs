@@ -8,6 +8,7 @@ mod into_host;
 mod key;
 mod model;
 mod operation;
+mod ops;
 pub mod primitive;
 mod q;
 pub mod scope;
@@ -25,6 +26,7 @@ pub use operation::{
     FirstOrder, Forward, Kernel, Lowered, Lowering, Operation, Order, Param, Pullback, SecondOrder,
     SecondPullback,
 };
+pub use ops::{QAdd, QDiv, QMatMul, QMul, QNeg, QScale, QShift, QSub};
 pub use q::{
     Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,

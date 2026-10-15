@@ -279,10 +279,10 @@ skoro_core::precision_tests! {
 #[test]
 fn spaces_are_checked_when_the_node_is_added() {
     use skoro_core::Error;
-    let shape = Add.output(&[Space::Vector(2), Space::Vector(3)]);
+    let sizes = Add.output(&[Space::Vector(2), Space::Vector(3)]);
     assert!(
-        matches!(shape, Err(Error::ShapeMismatch { .. })),
-        "{shape:?}"
+        matches!(sizes, Err(Error::SpaceMismatch { .. })),
+        "{sizes:?}"
     );
     let space = Add.output(&[Space::Vector(2), Space::Real]);
     assert!(

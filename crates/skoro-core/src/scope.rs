@@ -14,6 +14,8 @@ use std::sync::Arc;
 
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
+pub use crate::ops::{concatenate, product, select};
+
 use crate::model::{Model, Node, NodeKind};
 use crate::{
     Address, Declares, Error, Failure, IntoHostValue, Lowered, Lowering, NodeId, Operation, Q,
@@ -89,7 +91,7 @@ impl Draft {
     }
 
     /// The spaces of `inputs`, refusing a failed handle and one the draft does not hold.
-    fn spaces(&self, inputs: &[QDyn]) -> Result<Vec<Space>, Error> {
+    pub(crate) fn spaces(&self, inputs: &[QDyn]) -> Result<Vec<Space>, Error> {
         if inputs.iter().any(|q| q.id() == NodeId::OUTSIDE_SCOPE) {
             return Err(Error::OutsideScope);
         }
@@ -108,7 +110,11 @@ impl Draft {
             .collect()
     }
 
-    fn mapped(&mut self, operation: Arc<dyn Operation>, inputs: &[QDyn]) -> Result<NodeId, Error> {
+    pub(crate) fn mapped(
+        &mut self,
+        operation: Arc<dyn Operation>,
+        inputs: &[QDyn],
+    ) -> Result<NodeId, Error> {
         let spaces = self.spaces(inputs)?;
         let space = operation.output(&spaces)?;
         let inputs: Box<[NodeId]> = inputs.iter().map(QDyn::id).collect();
@@ -173,7 +179,11 @@ impl Draft {
         Ok(id)
     }
 
-    fn constant(&mut self, space: Space, value: Option<HostValue>) -> Result<NodeId, Error> {
+    pub(crate) fn constant(
+        &mut self,
+        space: Space,
+        value: Option<HostValue>,
+    ) -> Result<NodeId, Error> {
         let value = value
             .filter(|value| fits(&space, value))
             .ok_or_else(|| Error::ValueShape {
@@ -324,4 +334,15 @@ fn admit<T: Typed>(draft: &Draft, id: NodeId, operation: &'static str) -> Result
             inputs: vec![space],
         })
     }
+}
+
+/// A literal: a constant of `space` whose every entry is `c` (`ValueShape` for a discrete space,
+/// or a positive one and `c` not positive).
+pub(crate) fn literal(draft: &mut Draft, space: Space, c: f64) -> Result<NodeId, Error> {
+    let storage = space.storage();
+    let value = space
+        .is_continuous()
+        .then(|| HostValue::new(None, storage, HostData::Continuous(vec![c; storage])))
+        .flatten();
+    draft.constant(space, value)
 }

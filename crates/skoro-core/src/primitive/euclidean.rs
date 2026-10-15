@@ -33,13 +33,11 @@ fn one_euclidean(operation: &'static str, inputs: &[Space]) -> Result<Space, Err
     }
 }
 
-/// Two inputs of one Euclidean space. Two of one kind and different sizes are a shape mismatch.
+/// Two inputs of one Euclidean space: two different spaces are a space mismatch, whatever their
+/// sizes.
 fn two_euclidean(operation: &'static str, inputs: &[Space]) -> Result<Space, Error> {
     match inputs {
         [a, b] if is_euclidean(a) && a == b => Ok(a.clone()),
-        [a, b] if is_euclidean(a) && std::mem::discriminant(a) == std::mem::discriminant(b) => {
-            Err(shape_mismatch(operation, inputs))
-        }
         _ => Err(space_mismatch(operation, inputs)),
     }
 }

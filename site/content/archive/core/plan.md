@@ -86,7 +86,7 @@ the test macro unless the companion says otherwise.
       shares them. Tests: `handle_is_valid_on_every_branch_that_shares_it`,
       `handle_from_another_model_fails`, `branches_do_not_see_each_other`,
       `fork_copies_nothing_it_does_not_change`, `dropping_the_last_snapshot_frees_retired_nodes`.
-- [ ] The operator traits `QAdd`, `QSub`, `QMul`, `QDiv`, `QNeg`, `QScale` and `QShift`, the
+- [x] The operator traits `QAdd`, `QSub`, `QMul`, `QDiv`, `QNeg`, `QScale` and `QShift`, the
       generic `std::ops` impls on `Q`, the core markers' impls (concrete markers only), the
       operators of `QDyn` over the core's spaces, and the methods and `scope` functions of the
       operations table but `retract`, `local`, `include` and `project`, which come with the

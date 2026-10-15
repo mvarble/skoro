@@ -4,10 +4,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use skoro_core::primitive::{Add, Exp, Mul};
+use skoro_core::primitive::{Add, Exp, MatMul, Mul};
 use skoro_core::scope::{self, apply, constant, lookup, namespace, quantity};
 use skoro_core::testing::lower;
-use skoro_core::{Address, Error, Operation, QDyn, Real, Rows, Space, Vector, VectorDyn, Writer};
+use skoro_core::{
+    Address, Error, MatrixDyn, Operation, QDyn, Real, Rows, Space, Vector, VectorDyn, Writer,
+};
 use skoro_tensor::{HostData, Target, Value};
 
 #[track_caller]
@@ -39,7 +41,7 @@ fn failure_poisons_what_is_built_on_it() {
             escaped = Some(worse);
         })
         .unwrap_err();
-    assert!(matches!(failure.error, Error::ShapeMismatch { .. }));
+    assert!(matches!(failure.error, Error::SpaceMismatch { .. }));
 
     // A failed handle that escaped its scope fails the next scope it is used in.
     let escaped = escaped.unwrap();
@@ -77,18 +79,18 @@ fn shape_mismatch_fails_when_the_node_is_added() {
     let mut writer = Writer::new();
     let failure = writer
         .build(|| {
-            let a = quantity("a", VectorDyn(2));
-            let b = quantity("b", VectorDyn(3));
-            let sum = add(a, b);
+            let a = quantity("a", MatrixDyn(2, 3));
+            let b = quantity("b", VectorDyn(2));
+            let product = apply(Arc::new(MatMul), &[a.into(), b.into()]);
             // The failure is known at once, before anything is compiled.
-            assert!(sum.is_failed());
+            assert!(product.is_failed());
         })
         .unwrap_err();
-    let expected = vec![Space::Vector(2), Space::Vector(3)];
+    let expected = vec![Space::Matrix(2, 3), Space::Vector(2)];
     assert_eq!(
         failure.error,
         Error::ShapeMismatch {
-            operation: "skoro.add",
+            operation: "skoro.matmul",
             inputs: expected
         }
     );
