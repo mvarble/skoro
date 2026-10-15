@@ -222,6 +222,21 @@ The core's primitives need none of this: each is expressible in burn's tensor op
 what a fused operation in a feature crate uses for a kernel of its own, so the tensor layer must
 let a burn tensor out and back in.
 
+**The device check reads burn-dispatch.** `Device::as_dispatch` returns the `DispatchDevice`
+quoted above, which lives in `burn-dispatch` and which `burn` does not re-export: its `devices`
+module re-exports the cubecl and Flex device types, but not the enumeration that holds them. So the
+tensor layer depends on `burn-dispatch` 0.22.0 directly, with no features of its own. Its features
+are those `burn` turns on, which Cargo unifies, so the dependency adds nothing to the build and
+names only what is already in it.
+
+**Only wgpu can be built everywhere.** Every cubecl runtime but wgpu brings an LLVM toolchain into
+the build: burn's `cpu` feature depends on `llvm-sys` 231, which needs LLVM 23 installed, and its
+`cuda` feature on `tracel-llvm-bundler`, whose build script downloads an LLVM bundle. Neither CI nor
+most machines can build them, so no test constructs a device of another cubecl runtime, and the
+check refuses them by matching `CubeDevice::Wgpu` alone, with no other arm for `Cube`. A backend
+outside cubecl and Flex is another matter: burn's `ndarray` feature is plain Rust, and the tensor
+layer's tests turn it on to construct a device skoro refuses.
+
 **Toolchain.** burn 0.22.0 declares `rust-version = "1.95"`, so the workspace does too.
 
 ### The charter and the mathematics
@@ -320,7 +335,7 @@ members.
 
 | crate | depends on | holds |
 | --- | --- | --- |
-| `skoro-tensor` | `burn` 0.22 (features `std`, `flex`, `extension`; `wgpu` behind a feature of the same name) | `Target`, `Precision`, `Points`, `Frame`, `Integers`, `Value`, `HostValue` |
+| `skoro-tensor` | `burn` 0.22 (features `std`, `flex`, `extension`; `wgpu` behind a feature of the same name), and `burn-dispatch` 0.22 with none; for its tests, `burn`'s `ndarray` | `Target`, `Precision`, `Points`, `Frame`, `Integers`, `Value`, `HostValue` |
 | `skoro-core` | `skoro-tensor`, `blake3`, `rpds` | everything else, in the modules below |
 | `skoro` | both | re-exports, and the integration tests that may use only the public interface |
 
@@ -363,7 +378,7 @@ pub enum Precision { Single, Double } // F32, F64
 pub struct Target { device: Device, precision: Precision, wide_integers: bool }
 
 impl Target {
-    /// Refuses a device that is not Flex or cubecl (`UnsupportedDevice`), an autodiff device
+    /// Refuses a device that is not Flex or wgpu (`UnsupportedDevice`), an autodiff device
     /// (`AutodiffDevice`), and a precision the device does not compute in (`UnsupportedPrecision`).
     pub fn new(device: Device, precision: Precision) -> Result<Target, TensorError>;
     /// The Flex device at double precision: where the model folds constants.
@@ -1718,8 +1733,10 @@ rests on, so an upgrade that changes one fails here first.
   two conversions that follow the device default in burn follow the target here.
 - `from_burn_refuses_a_foreign_tensor`: a tensor of the other precision is refused.
 - `target_refuses_an_autodiff_device`, and under `wgpu`, `target_refuses_an_unsupported_precision`.
-- `target_refuses_an_unclaimed_runtime`: with burn's `cpu` feature enabled for this test alone, a
-  `CubeDevice::Cpu` is refused as `UnsupportedDevice`.
+- `target_refuses_an_unsupported_backend`: with burn's `ndarray` feature on for the tensor
+  layer's tests, an NdArray device is refused as `UnsupportedDevice`. No test builds a cubecl
+  runtime other than wgpu, since each needs an LLVM toolchain; their refusal rests on the check
+  matching `CubeDevice::Wgpu` alone.
 - `wgpu_tests_fail_without_an_adapter`: under `wgpu`, the helper that finds the test adapter fails,
   naming it, when none is present.
 - `host_round_trip_is_exact_in_double`: `from_host` then `to_host` returns the same bits.
@@ -1986,5 +2003,8 @@ None remain.
 skoro does not claim was to enable burn's `cpu` feature, but every cubecl runtime other than wgpu
 brings an LLVM toolchain into the build (`llvm-sys` for `cpu`, a downloaded LLVM bundle for
 `cuda`), which neither CI nor most machines have. And the device check matches burn's
-`DispatchDevice`, which lives in `burn-dispatch` and is not re-exported by `burn`. The test and the
-tensor layer's dependencies are being revised.
+`DispatchDevice`, which lives in `burn-dispatch` and is not re-exported by `burn`. The test is now
+`target_refuses_an_unsupported_backend`, which refuses an NdArray device, built from burn's
+plain-Rust `ndarray` feature turned on for the tensor layer's tests; the other cubecl runtimes are
+refused by the check matching wgpu alone, which [Constraints](#burn-0-22) now says no test can
+exercise. The tensor layer depends on `burn-dispatch` 0.22.0 directly, with no features of its own.
