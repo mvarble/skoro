@@ -432,17 +432,34 @@ impl Program {
             return Err(Error::FrameShape { id });
         }
 
-        let needs = self.needs(&mode, seeded, seeds);
-        let from_free = self.reached(&self.free_slots_continuous());
-        for (step, need) in self.steps.iter().zip(&needs) {
-            if step.kernel.order() < need.order() {
-                return Err(Error::OrderTooLow {
-                    operation: step.operation,
-                    composites: step.composites.clone(),
-                    node: step.node,
-                });
+        let seeded_ids: Vec<NodeId> = seeded.map(|f| f.ids().collect()).unwrap_or_default();
+        let target_ids: Vec<NodeId> = seeds.map(|f| f.ids().collect()).unwrap_or_default();
+        let needs = match mode {
+            Mode::Forward => vec![Need::Forward; self.steps.len()],
+            Mode::Tangent { .. } => {
+                let pass = Pass::Tangent {
+                    seeded: &seeded_ids,
+                };
+                self.admits(&pass)?;
+                self.needs(&pass)
             }
-        }
+            Mode::Cotangent { .. } => {
+                let pass = Pass::Cotangent {
+                    targets: &target_ids,
+                };
+                self.admits(&pass)?;
+                self.needs(&pass)
+            }
+            Mode::Hessian { .. } => {
+                let pass = Pass::Hessian {
+                    seeded: &seeded_ids,
+                    targets: &target_ids,
+                };
+                self.admits(&pass)?;
+                self.needs(&pass)
+            }
+        };
+        let from_free = self.reached(&self.free_slots_continuous());
 
         let slots = self.spaces.len();
         let mut values: Vec<Option<Value>> = vec![None; slots];
@@ -645,26 +662,53 @@ impl Program {
     }
 
     /// What the pass asks of each step.
-    fn needs(&self, mode: &Mode<'_>, seeded: Option<&Frames>, seeds: Option<&Frames>) -> Vec<Need> {
-        let seeded_slots: Vec<Slot> = self
+    /// Whether `pass` can run: every step on it has a kernel of the order it requires
+    /// (`OrderTooLow`, naming the first that does not, the composites it was expanded from and its
+    /// node). Computed before anything runs.
+    pub fn admits(&self, pass: &Pass<'_>) -> Result<(), Error> {
+        for (step, need) in self.steps.iter().zip(self.needs(pass)) {
+            if step.kernel.order() < need.order() {
+                return Err(Error::OrderTooLow {
+                    operation: step.operation,
+                    composites: step.composites.clone(),
+                    node: step.node,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// The free continuous quantities' slots among `ids`.
+    fn slots_of(&self, ids: &[NodeId], at: &[(NodeId, Slot)]) -> Vec<Slot> {
+        at.iter()
+            .filter(|(node, _)| ids.contains(node))
+            .map(|(_, slot)| *slot)
+            .collect()
+    }
+
+    /// What `pass` asks of each step. A step is on the pass when its output is continuous and
+    /// reaches a target, and one of its continuous inputs is reached from a free continuous
+    /// quantity (from a seeded one, for a tangent pass); it then requires order two when the pass
+    /// is a Hessian pass and one of its inputs is reached from a seeded quantity, and order one
+    /// otherwise.
+    fn needs(&self, pass: &Pass<'_>) -> Vec<Need> {
+        let free_at: Vec<(NodeId, Slot)> = self
             .free
             .iter()
             .zip(&self.free_slots)
-            .filter(|(free, _)| seeded.is_some_and(|frames| frames.get_id(free.node).is_some()))
-            .map(|(_, slot)| *slot)
+            .filter(|(free, _)| free.space.is_continuous())
+            .map(|(free, slot)| (free.node, *slot))
             .collect();
-        let target_slots: Vec<Slot> = match (mode, seeds) {
-            (_, Some(seeds)) => self
-                .targets
-                .iter()
-                .filter(|(node, _)| seeds.get_id(*node).is_some())
-                .map(|(_, slot)| *slot)
-                .collect(),
-            _ => self.targets.iter().map(|(_, slot)| *slot).collect(),
+        let (seeded, targets): (&[NodeId], Vec<Slot>) = match pass {
+            Pass::Tangent { seeded } => {
+                (seeded, self.targets.iter().map(|(_, slot)| *slot).collect())
+            }
+            Pass::Cotangent { targets } => (&[], self.slots_of(targets, &self.targets)),
+            Pass::Hessian { seeded, targets } => (seeded, self.slots_of(targets, &self.targets)),
         };
         let from_free = self.reached(&self.free_slots_continuous());
-        let from_seeded = self.reached(&seeded_slots);
-        let reaches = self.reaching(&target_slots);
+        let from_seeded = self.reached(&self.slots_of(seeded, &free_at));
+        let reaches = self.reaching(&targets);
         self.steps
             .iter()
             .map(|step| {
@@ -675,17 +719,32 @@ impl Program {
                         .any(|&slot| reached[slot] && self.spaces[slot].is_continuous())
                 };
                 let on = |reached: &[bool]| continuous && reaches[step.output] && fed(reached);
-                match mode {
-                    Mode::Forward => Need::Forward,
-                    Mode::Tangent { .. } if on(&from_seeded) => Need::Tangent,
-                    Mode::Cotangent { .. } if on(&from_free) => Need::Record,
-                    Mode::Hessian { .. } if on(&from_free) && fed(&from_seeded) => Need::Second,
-                    Mode::Hessian { .. } if on(&from_free) => Need::Record,
+                match pass {
+                    Pass::Tangent { .. } if on(&from_seeded) => Need::Tangent,
+                    Pass::Cotangent { .. } if on(&from_free) => Need::Record,
+                    Pass::Hessian { .. } if on(&from_free) && fed(&from_seeded) => Need::Second,
+                    Pass::Hessian { .. } if on(&from_free) => Need::Record,
                     _ => Need::Forward,
                 }
             })
             .collect()
     }
+}
+
+/// A pass over a program, by the roots it seeds with tangents or velocities and the targets it
+/// seeds with cotangents.
+#[derive(Clone, Copy, Debug)]
+pub enum Pass<'a> {
+    Tangent {
+        seeded: &'a [NodeId],
+    },
+    Cotangent {
+        targets: &'a [NodeId],
+    },
+    Hessian {
+        seeded: &'a [NodeId],
+        targets: &'a [NodeId],
+    },
 }
 
 /// A value shared by every row, `[1, storage]`, expanded to `rows`.

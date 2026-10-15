@@ -33,7 +33,7 @@ pub use operation::{
     SecondPullback,
 };
 pub use ops::{QAdd, QDiv, QMatMul, QMul, QNeg, QScale, QShift, QSub};
-pub use program::{Frames, Free, Program, Second, Values};
+pub use program::{Frames, Free, Pass, Program, Second, Values};
 pub use q::{
     Boolean, Categorical, CategoricalDyn, Declares, Integer, Matrix, MatrixDyn, Positive,
     PositiveDyn, ProductDyn, Q, QDyn, Real, Typed, Vector, VectorDyn,

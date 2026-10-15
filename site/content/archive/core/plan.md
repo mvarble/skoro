@@ -113,7 +113,7 @@ the test macro unless the companion says otherwise.
       `composites_nest`, `repeated_composite_off_the_chain_is_not_a_cycle`,
       `cycle_through_a_fused_operation_is_refused`,
       `cycle_through_a_fused_fallback_defined_afresh_is_refused`.
-- [ ] Admissibility: `Pass`, `Program::admits`, the sweeps for "reached from" and "reaches", the
+- [x] Admissibility: `Pass`, `Program::admits`, the sweeps for "reached from" and "reaches", the
       order each step requires, and `OrderTooLow` naming the step, its composites and its node.
       Tests: `first_order_step_off_the_pass_admits_a_hessian`,
       `first_order_step_without_velocity_admits_a_hessian`,
