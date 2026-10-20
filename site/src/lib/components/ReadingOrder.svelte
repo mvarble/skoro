@@ -69,7 +69,7 @@
         <svg
             viewBox="0 0 {layout.width} {layout.height}"
             style:max-width="{layout.width}px"
-            role="img"
+            role="group"
             aria-labelledby="{id}-title"
             class:focusing={focused}
             class:show-implied={showImplied}

@@ -18,10 +18,12 @@ export const load: PageServerLoad = ({ params }) => {
     if (!fs.existsSync(path.join(src, 'lib.rs'))) error(404, `No crate at crates/${params.crate}.`);
 
     const order = readingOrder(readCrate(src), { last: DEFAULT_LAST });
+    const count = (n: number, noun: string) => `${n} ${noun}${n == 1 ? '' : 's'}`;
     const spec: ReadingOrderSpec = {
         title: `The order in which to read ${params.crate}`,
         caption:
-            `${order.forward.length} uses of a later module, naming ${order.cost} items: ` +
+            `${count(order.forward.length, 'use')} of a later module, naming ` +
+            `${count(order.cost, 'item')}: ` +
             (order.exact
                 ? 'as few as any order allows.'
                 : 'a cycle too large to order exactly was ordered greedily, so there may be fewer.'),
