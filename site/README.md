@@ -202,6 +202,42 @@ export const normal = defineGraph({
   figure's names for their kinds, so a language model reads the same figure.
 - The geometry is `src/lib/graph/geometry.ts`, tested by `pnpm test`.
 
+## Reading orders
+
+`<ReadingOrder spec={…} />` draws the order in which to read a crate's modules: the modules top to
+bottom, each use of an earlier module as an arc on the left, and each use of a later one as a dashed
+orange arc on the right, with the items it uses named beside the module. A band marks each cycle,
+and hovering, focusing or tapping a module shows all of its uses and what uses it. Uses that a
+longer chain of earlier uses already implies are hidden until the checkbox shows them.
+
+```ts
+import { defineReadingOrder } from '$lib/reading/spec';
+
+export const order = defineReadingOrder({
+    title: 'The order in which to read skoro-core',
+    caption: 'Optional: shown under the figure.',
+    modules: [{ id: 'address' }, { id: 'key' }, { id: 'testing', apart: true }],
+    uses: [
+        { from: 'key', to: 'address', items: ['Address', 'Segment'] },
+        { from: 'testing', to: 'key', items: ['Key'] },
+    ],
+});
+```
+
+- **The order is the spec's.** The component draws the modules in the order given; it does not
+  choose one. `bin/reading-order` (in `tools/reading-order/`) reads a crate's sources and computes
+  an order with as few items used ahead as can be.
+- **Items:** a name with a lower-case last segment (`narrow`, `Lowering.compile`) is a function or
+  method, and is shown with `()`.
+- A use of a module the spec does not list, a module listed twice, or a module set `apart` before
+  one that is not, fails with the figure's title in the message.
+- The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are
+  `src/styles/utils/reading.css`, from the graph palette's tokens.
+
+Under `pnpm dev`, `/reading-order/<crate>/` draws the reading order of `crates/<crate>`, read
+from its sources on every request. It is for reviewing a build before `/wf-publish`: nothing links
+to it, so the static build never renders it.
+
 ## For language models
 
 Every document is also served as Markdown at its URL with `.md` in place of the trailing slash
