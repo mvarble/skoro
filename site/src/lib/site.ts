@@ -66,6 +66,15 @@ export const MATH = {
         'archive’s writeups lean on these notes rather than repeating them.',
 };
 
+export const READING = {
+    id: 'reading',
+    title: 'Reading the crates',
+    short: 'Crates',
+    blurb:
+        'Each crate’s modules in an order that uses as little as possible before it is read, ' +
+        'computed from the sources when the site was built.',
+};
+
 export const ARCHIVE = {
     id: 'archive',
     title: 'Archive',

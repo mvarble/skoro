@@ -1,7 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
     import ReadingOrder from '$lib/components/ReadingOrder.svelte';
-    import { SITE } from '$lib/site';
+    import { READING, SITE } from '$lib/site';
 
     let { data } = $props();
     const reading = $derived(data.reading);
@@ -18,7 +18,7 @@
 <div class="doc-layout">
     <article class="doc prose">
         <header class="doc-header">
-            <p class="eyebrow"><a href={resolve('/reading-order')}>Reading the crates</a></p>
+            <p class="eyebrow"><a href={resolve('/reading-order')}>{READING.title}</a></p>
             <h1>Reading <code>{reading.crate}</code></h1>
             <p class="lede">
                 Its modules in an order that uses as little as possible before it is read, computed

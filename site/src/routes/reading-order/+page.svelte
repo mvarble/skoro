@@ -1,26 +1,20 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
-    import { SITE } from '$lib/site';
+    import { READING, SITE } from '$lib/site';
 
     let { data } = $props();
 </script>
 
 <svelte:head>
-    <title>Reading the crates · {SITE.name}</title>
-    <meta
-        name="description"
-        content="Each crate's modules in an order that uses as little as possible before it is read."
-    />
+    <title>{READING.title} · {SITE.name}</title>
+    <meta name="description" content={READING.blurb} />
 </svelte:head>
 
 <div class="doc-layout">
     <article class="doc prose">
         <header class="doc-header">
-            <h1>Reading the crates</h1>
-            <p class="lede">
-                Each crate's modules in an order that uses as little as possible before it is read,
-                computed from the sources when the site was built.
-            </p>
+            <h1>{READING.title}</h1>
+            <p class="lede">{READING.blurb}</p>
         </header>
         {#if data.readings.length}
             <table>
