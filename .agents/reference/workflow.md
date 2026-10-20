@@ -92,7 +92,7 @@ reopenings.
 
 ```sh
 bin/wf check                      # the rules above, against origin/main
-node --test 'tools/wf/*.test.ts' && site/node_modules/.bin/tsc -p tools   # when the tooling changed
+node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools   # when the tooling changed
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test   # once crates exist
 ```

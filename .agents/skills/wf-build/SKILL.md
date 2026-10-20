@@ -41,5 +41,13 @@ never edit an approved document.
 
 ## At the end
 
-When every box is ticked: run the plan's "Done when" checks and `bin/wf check`, and reply that
-`/wf-approve` moves to publishing. Never approve yourself.
+When every box is ticked: run the plan's "Done when" checks and `bin/wf check`.
+
+Then show the user what was built, to read before they approve it. For each crate under `crates/`
+that the entry's branch changed, run `bin/reading-order crates/<crate>`, which prints its modules
+in the order to read them and what each uses of a module that comes later. Put that list in the
+reply, and say that `pnpm dev` in `site/` draws it at `/reading-order/<crate>/`, read from the
+sources on every load. It describes the code as it is, not a promise of the plan: nothing in it is
+to be approved, and it changes no document.
+
+Reply that `/wf-approve` moves to publishing. Never approve yourself.

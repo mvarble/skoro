@@ -24,8 +24,8 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-            - name: Test bin/wf
-              run: node --test 'tools/wf/*.test.ts'
+            - name: Test the tooling
+              run: node --test 'tools/*/*.test.ts'
             - name: Check the rules against the base branch
               if: github.event_name == 'pull_request'
               run: |
@@ -63,7 +63,7 @@ jobs:
             - run: pnpm check
             - run: pnpm lint
             - run: pnpm test
-            - name: Type-check bin/wf
+            - name: Type-check the tooling
               run: node_modules/.bin/tsc -p ../tools
             - name: Build the fixture, which has a document of every kind
               run: pnpm build
