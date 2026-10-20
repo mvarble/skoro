@@ -46,21 +46,13 @@
     </div>
 </section>
 
-{#if data.crates || data.reading}
+{#if data.crates}
     <section class="landing-crates">
         <h2>The workspace</h2>
-        {#if data.crates}
-            <p>
-                Each crate depends only on the crates above it. The bottom-up track follows this
-                order.
-            </p>
-            <CrateMap />
-        {/if}
-        {#if data.reading}
-            <p>
-                <a href={resolve('/reading-order')}>Reading the crates</a>: each crate's modules in
-                an order that uses as little as possible before it is read.
-            </p>
-        {/if}
+        <p>
+            Each crate depends only on the crates above it, and leads to the order in which to read
+            its modules.
+        </p>
+        <CrateMap />
     </section>
 {/if}

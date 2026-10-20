@@ -1,13 +1,12 @@
 // The workspace's crates and their direct workspace dependencies, as reported by
 // `cargo metadata --no-deps --format-version 1` (normal dependencies only). Regenerate the
-// `deps` lists by hand when the workspace changes; the layers are derived from them.
+// `deps` lists by hand when the workspace changes; the layers are derived from them. Each crate links
+// to its reading order, which the site draws for every crate under `crates/`.
 
 export interface Crate {
     name: string;
     purpose: string;
     deps: string[];
-    /** The bottom-up page that introduces it, if any. */
-    page?: string;
 }
 
 export const CRATES: Crate[] = [
@@ -15,13 +14,11 @@ export const CRATES: Crate[] = [
         name: 'skoro-tensor',
         purpose: 'The layer over burn: tensors at an explicit precision on a supported device',
         deps: [],
-        page: 'concepts/queries',
     },
     {
         name: 'skoro-core',
         purpose: 'Quantities, operations and their derivatives, models, terms and queries',
         deps: ['skoro-tensor'],
-        page: 'concepts/spaces',
     },
     {
         name: 'skoro',

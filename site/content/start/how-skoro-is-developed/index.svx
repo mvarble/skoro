@@ -95,9 +95,9 @@ Each kind of work is visible as it happens: the documents of an entry are pages 
 [archive](../../archive/) from the moment they are written, and the archive shows each entry's
 stage and history.
 
-The code has a view of its own. For every crate in the workspace, the site draws
-[the order in which to read its modules](../../reading-order/), computed from the sources each time
-the site is built: an order in which as little as possible is used before it is read, with the few
+The code has a view of its own. For every crate in the workspace, the site draws the order in which
+to read its modules, linked from [the crates](../../reference/crates/) and computed from the sources
+each time the site is built: an order in which as little as possible is used before it is read, with the few
 uses of modules not yet read named beside the modules that make them. Those pages follow the code
 at every stage, and at the end of a build the agent prints the order of each crate the branch
 changed, so the person approving the build can read what was built. When the entry is published,

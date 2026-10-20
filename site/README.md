@@ -237,7 +237,8 @@ export const order = defineReadingOrder({
 
 `/reading-order/<crate>/` draws the reading order of `crates/<crate>`, one page for each crate in
 the workspace, computed from its sources when the site is built (and on every request under
-`pnpm dev`), and `/reading-order/` lists them. `$lib/server/reading.ts` reads the crates.
+`pnpm dev`). The crate map (`$lib/crates.ts`) links each crate to its page, so a crate it lists
+must be one under `crates/`. `$lib/server/reading.ts` reads the crates.
 
 ## For language models
 

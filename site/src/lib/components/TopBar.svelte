@@ -12,11 +12,8 @@
         showMenu = true,
     }: { menuOpen?: boolean; showMenu?: boolean } = $props();
 
-    // Every section but "Start here", which the home page leads to, and the crates' reading
-    // orders, which the sidebar and the home page do.
-    const sections = $derived(
-        (page.data.nav as NavSection[]).filter((s) => s.id != 'start' && s.id != 'reading'),
-    );
+    // Every section but "Start here", which the home page leads to.
+    const sections = $derived((page.data.nav as NavSection[]).filter((s) => s.id != 'start'));
     const current = $derived(page.url.pathname);
 </script>
 
