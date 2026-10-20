@@ -1,0 +1,28 @@
+---
+title: Crates
+summary: The workspace's crates, what each holds, and what each depends on.
+order: 1
+---
+
+<script>
+	import CrateMap from '$lib/components/CrateMap.svelte';
+</script>
+
+skoro is a workspace of three crates. Each depends only on the crates above it here, and a user
+depends on the last, `skoro`, which re-exports the other two.
+
+<CrateMap />
+
+| crate          | what it holds                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skoro-tensor` | The layer over burn: the tensor shapes skoro computes with (`Points`, `Frame`, `Integers`, `Value`), each made at an explicit precision on a supported device, the `Target` that names them, and host values. |
+| `skoro-core`   | Everything that makes a model a model: [spaces](../../concepts/spaces/) and typed handles, [operations](../../concepts/operations/) and their kernels, the writer and its [scopes](../../concepts/building/), [terms](../../concepts/terms/), [queries](../../concepts/queries/) and the compiler, embedded types, generation and retirement. |
+| `skoro`        | The crate a user depends on: it re-exports `skoro-core`, and `skoro-tensor` as `skoro::tensor`, with `Device`, `Precision` and `Target` at its root.     |
+
+Each crate's modules can be read in an order that uses as little as possible before it is read,
+computed from its sources: see [the reading orders](../../reading-order/).
+
+No distribution ships yet. What the core leaves for later entries (distributions, the curved types
+SO(3) and SE(3), linear algebra, least squares, elimination, serialization and bindings among them)
+is listed in the repository's
+[`REVISIT.md`](https://github.com/mvarble/skoro/blob/main/REVISIT.md).
