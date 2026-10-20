@@ -10,8 +10,25 @@ export interface Crate {
     page?: string;
 }
 
-// Empty until the crates come back: see the archive branch for the list as it last stood.
-export const CRATES: Crate[] = [];
+export const CRATES: Crate[] = [
+    {
+        name: 'skoro-tensor',
+        purpose: 'The layer over burn: tensors at an explicit precision on a supported device',
+        deps: [],
+        page: 'concepts/queries',
+    },
+    {
+        name: 'skoro-core',
+        purpose: 'Quantities, operations and their derivatives, models, terms and queries',
+        deps: ['skoro-tensor'],
+        page: 'concepts/spaces',
+    },
+    {
+        name: 'skoro',
+        purpose: 'The umbrella: re-exports the core and the tensor layer',
+        deps: ['skoro-core'],
+    },
+];
 
 // The `deps` above are trimmed to the edges that set a crate's layer (a dependency implied by
 // another is left out), which is all the diagram needs. A crate's layer is one more than the
