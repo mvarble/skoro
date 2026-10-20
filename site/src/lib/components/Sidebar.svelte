@@ -17,12 +17,13 @@
             {#if section.items.length}
                 <ol>
                     {#each section.items as item (item.key)}
-                        <li>
+                        <li class:nav-crate={item.crate}>
                             <a
                                 href={item.href}
                                 aria-current={here === item.href ? 'page' : undefined}
                                 onclick={() => (open = false)}
-                                >{item.title}{#if item.status && item.status != 'done'}
+                                >{#if item.crate}<code>{item.title}</code
+                                    >{:else}{item.title}{/if}{#if item.status && item.status != 'done'}
                                     <span
                                         class="status-dot status-{item.status}"
                                         title={item.status}
