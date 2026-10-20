@@ -1,0 +1,123 @@
+---
+title: How skoro is developed
+summary: Every change is an entry that moves through fixed stages, mathematics first and the pages last, each approved by a person before the next begins.
+order: 91
+---
+
+<script>
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import { workflow } from './workflow.graph';
+</script>
+
+Every change to skoro is an **entry** in the [archive](../../archive/), worked on in a branch of
+its own and moved through a fixed series of **stages**. Each stage produces something (a document,
+the code, or the pages), and ends only when a person approves it; nothing moves on by itself. This
+page describes the whole workflow: the kinds of entry, the stages each goes through, the commands
+that move an entry between them, and what each stage leaves behind.
+
+The work of a stage is usually done by a coding agent, such as Claude Code, which a person drives
+with the `/wf-…` commands below. Moving an entry (approving a stage, going back, setting the entry
+aside or taking it up again) is always the person's to ask for.
+
+## Three kinds of entry
+
+An entry is opened with `/wf-start <slug> <kind>`, and its kind fixes the stages it goes through.
+
+| kind         | for                                                         | stages                                              |
+| ------------ | ----------------------------------------------------------- | --------------------------------------------------- |
+| **feature**  | an algorithm, a distribution, an example                    | mathematics, implementation, plan, build, publish   |
+| **chore**    | a port or a refactor: no new mathematics, no new design      | plan, build, publish                                |
+| **decision** | a position the library takes, argued in prose               | writeup, publish                                    |
+
+The route is fixed by the kind. A feature always goes through all five of its stages, in order:
+`/wf-start` opens it at its mathematics, and each approval moves it exactly one stage on, so no
+stage can be skipped, and none can be approved empty. Work that needs no new mathematics and no
+new design is a chore, which starts at its plan; that is the only way to begin past the
+mathematics.
+
+## The flow
+
+<ModelGraph spec={workflow} />
+
+Every stage is worked on with its own command, and any number of times: a stage is a
+conversation, in which its document (or code, or pages) is revised and committed until it is
+right. When it is, `/wf-approve` accepts it and opens the next stage. `/wf-status` says at any
+time which entry the branch works on, the stage it is at, and the command that comes next.
+
+## The stages
+
+1. **Mathematics** (`/wf-math`). A writeup of the mathematics at play, revised until it is right.
+   Ideas that stand on their own become [math notes](../../math/), which later writeups build on.
+2. **Implementation** (`/wf-implementation`). A companion that turns the mathematics into a
+   design: the types and traits, sketched in code, where the neighbouring interfaces constrain
+   them, and the tests that will show the design works. It is meant to be complete enough that
+   someone who knows Rust, the mathematics and those interfaces could build it without designing
+   anything of their own. It cannot be approved without its section of tests.
+3. **Plan** (`/wf-plan`). The implementation's prose distilled into a checklist of tasks, each
+   small enough for one commit and each naming its tests, in an order that keeps the code
+   compiling and its tests passing after every task.
+4. **Build** (`/wf-build`). The code, built task by task, each task committed with its box ticked
+   in the plan, which is the only change the plan may receive once approved. It cannot be approved
+   with a box unticked or work uncommitted. At its end, the build reports the order in which to
+   read each crate it changed (see [What you can see along the way](#what-you-can-see-along-the-way)).
+5. **Publish** (`/wf-publish`). The pages of the guide, the concepts and the reference are brought
+   up to date, quoting the code that now exists, and the entry lists the pages and the crates it
+   changed. Approving it finishes the entry.
+
+A decision's **writeup** (`/wf-writeup`) takes the place of the first four: the argument for the
+position, revised until it is right, and then published.
+
+Each stage's document is frozen once approved, and the parts of the repository open for editing
+as the entry advances: the math notes from the mathematics (or the writeup), the library's code
+from the build, and the documentation pages at publishing. The entry's own folder is open
+throughout.
+
+## Going back, and setting aside
+
+A stage's work sometimes shows an earlier stage wrong: a test shows the mathematics mistaken, or a
+task cannot be built as designed. The work then stops, and `/wf-reopen <stage> <reason>` moves the
+entry back to the earlier stage. The reason is recorded in the entry's history, the reopened
+document gains a section of revisions saying what changed and why, and every stage from there on
+is approved again on the way forward, unchanged if nothing in it had to change. A design is
+allowed to change its story; it is not allowed to forget it.
+
+An entry can be set aside with `/wf-abandon <reason>`. Its documents stay, approved or not, and
+`/wf-resume <slug>` takes it up again at the stage where it stopped.
+
+Once its publishing is approved, an entry is done, and a done entry is never edited again: it can
+no longer be reopened. When skoro later changes what an entry built, a new entry says so, opened
+with the earlier entry named as the one it revises. The archive then marks the earlier entry as
+revised, and the pages it changed show both.
+
+## What you can see along the way
+
+Each kind of work is visible as it happens: the documents of an entry are pages of the
+[archive](../../archive/) from the moment they are written, and the archive shows each entry's
+stage and history.
+
+The code has a view of its own. For every crate in the workspace, the site draws
+[the order in which to read its modules](../../reading-order/), computed from the sources each time
+the site is built: an order in which as little as possible is used before it is read, with the few
+uses of modules not yet read named beside the modules that make them. Those pages follow the code
+at every stage, and at the end of a build the agent prints the order of each crate the branch
+changed, so the person approving the build can read what was built. When the entry is published,
+its page in the archive links to the reading order of each crate it changed.
+
+## What the stages guarantee
+
+The stages are kept by a small tool, `bin/wf`, which refuses an edit the current stage does not
+allow and checks the rules on every pull request:
+
+- A branch works on one entry at a time, and merges only once that entry is done or set aside.
+- An approved document is frozen until its stage is reopened, which is recorded, with its reason,
+  in the entry's history.
+- A document is never written before its stage, the code changes only once a plan is approved, and
+  the pages that say what skoro is change only at the end, when there is code to quote.
+- A stage is approved only when its work is committed and complete: no open questions left in a
+  document, a test section in an implementation, a checklist in a plan with every box ticked by the
+  end of the build, and, at publishing, every page and crate the branch changed listed by the
+  entry.
+
+The same procedure, written for the agents that carry it out, is in the repository's
+[`AGENTS.md`](https://github.com/mvarble/skoro/blob/main/AGENTS.md) and the workflow reference it
+points to.
