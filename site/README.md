@@ -234,9 +234,9 @@ export const order = defineReadingOrder({
 - The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are
   `src/styles/utils/reading.css`, from the graph palette's tokens.
 
-Under `pnpm dev`, `/reading-order/<crate>/` draws the reading order of `crates/<crate>`, read
-from its sources on every request. It is for reviewing a build before `/wf-publish`: nothing links
-to it, so the static build never renders it.
+`/reading-order/<crate>/` draws the reading order of `crates/<crate>`, one page for each crate in
+the workspace, computed from its sources when the site is built (and on every request under
+`pnpm dev`), and `/reading-order/` lists them. `$lib/server/reading.ts` reads the crates.
 
 ## For language models
 

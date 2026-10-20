@@ -47,9 +47,9 @@ Then show the user what was built, to read before they approve it. For each crat
 changed (the directories under `crates/` in `git diff --name-only origin/main...HEAD -- crates/`,
 the base `bin/wf check` compares against), run `bin/reading-order crates/<crate>`, which prints its
 modules in the order to read them and what each uses of a module that comes later. Put each list
-in the reply, leaving out a crate it reports as having nothing to order, and say that `pnpm dev`
-in `site/` draws it at `/reading-order/<crate>/`, read from the sources on every load. It
-describes the code as it is, not a promise of the plan: nothing in it is to be approved, and it
-changes no document.
+in the reply, leaving out a crate it reports as having nothing to order, and say that the site
+draws it at `/reading-order/<crate>/`, which `pnpm dev` in `site/` reads from the sources on every
+load. It describes the code as it is, not a promise of the plan: nothing in it is to be approved,
+and it changes no document.
 
 Reply that `/wf-approve` moves to publishing. Never approve yourself.
