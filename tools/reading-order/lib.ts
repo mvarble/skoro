@@ -1,6 +1,6 @@
 // The order in which to read a Rust crate's modules: what each module uses of the others, read
 // from its source, and an order of the modules in which as little as possible is used before it is
-// read. `main.ts` is the command line over it, and the site's `/reading-order/<crate>/` pages
+// read. `main.ts` is the command line over it, and the site's `/reference/crates/<crate>/` pages
 // draw it.
 //
 // A module uses another when it names one of its items: through a `use` (traced through re-exports

@@ -58,7 +58,7 @@ katex_macros: # this document only; wins over katex.config.ts
 An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`),
 the `crates` it changed (`[skoro-core]`), and the earlier entries it `revises`. Each page then shows
 the entries that changed it, newest first, under "How this came to be"; an entry links each of its
-crates to that crate's reading order; and an entry that a later one revises says so at its top.
+crates to that crate's page in the reference; and an entry that a later one revises says so at its top.
 
 - **Math:** `$inline$` and `$$display$$`. A KaTeX error does not fail the build. The formula
   renders in red, and the build prints a `katex:` warning naming the file.
@@ -235,10 +235,15 @@ export const order = defineReadingOrder({
 - The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are
   `src/styles/utils/reading.css`, from the graph palette's tokens.
 
-`/reading-order/<crate>/` draws the reading order of `crates/<crate>`, one page for each crate in
-the workspace, computed from its sources when the site is built (and on every request under
-`pnpm dev`). The crate map (`$lib/crates.ts`) links each crate to its page, so a crate it lists
-must be one under `crates/`. `$lib/server/reading.ts` reads the crates.
+`/reference/crates/<crate>/` is a page for each crate under `crates/`, from one template
+(`src/routes/reference/crates/[crate=slug]/`): the crate's purpose and dependencies from the crate
+map (`$lib/crates.ts`), its description from `content/reference/crates/<crate>/index.md`, and its
+reading order, computed from its sources when the site is built (and on every request under
+`pnpm dev`) by `$lib/server/reading.ts`. The description is plain Markdown, written at an entry's
+publish stage. The content database does not read it as a document of its own, so its links are
+not rewritten; its folder lies as deep as the page's URL, so a link written the way the files sit
+on disk works as it is. The crate map links each crate to its page, so a crate it lists must be one
+under `crates/`.
 
 ## For language models
 

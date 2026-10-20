@@ -29,14 +29,18 @@ landing page) before changing them.
 - **Guide (top-down).** Show what a user writes, with an example that works against the code as
   it is, and link down into the concepts for the curious.
 - **Reference.** The crate map (`site/src/lib/crates.ts`), glossary, notation and status, where
-  they changed.
+  they changed. Every crate the entry changed has a page at `/reference/crates/<crate>/`, which
+  shows its reading order, computed from its sources, under a description of what the crate is
+  for: write or revise that description, from a couple of sentences to a couple of paragraphs, in
+  `site/content/reference/crates/<crate>/index.md`. It is Markdown, with links written the way the
+  files sit on disk; add a crate the entry created to the crate map as well.
 - **Drop what is no longer true.** A page describes only the current library. What a revised
   entry built and this one replaced disappears from the pages; it stays in the archive.
 - **The entry's `index.md`.** Replace its opening paragraph with what the entry did, for a reader
   of the archive, list every page it changed under `pages`, and every crate it changed (by its
-  directory under `crates/`) under `crates`, which the archive links to the crates' reading
-  orders. `wf approve` refuses a changed page or crate that is not listed, and a listed one the
-  branch did not change.
+  directory under `crates/`) under `crates`, which the archive links to the crates' pages.
+  `wf approve` refuses a changed page or crate that is not listed, a listed one the branch did not
+  change, and a changed crate with no description.
 
 Build the site (`cd site && pnpm build`) and fix every warning and broken link. Commit as you go.
 

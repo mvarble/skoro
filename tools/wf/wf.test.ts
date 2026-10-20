@@ -249,17 +249,21 @@ test('publish needs the changed crates listed', () => {
     assert.equal(workflow(r.root).stage, 'publish');
 
     write(r.root, 'site/content/guide/first-model/index.md', '---\ntitle: First\norder: 1\n---\n\nNew.\n');
-    const index = (crates: string) =>
-        write(r.root, `${entry}/index.md`, `---\ntitle: The Normal\npages: [guide/first-model]\ncrates: ${crates}\n---\n\nA Gaussian.\n`);
+    const index = (crates: string, pages = 'guide/first-model') =>
+        write(r.root, `${entry}/index.md`, `---\ntitle: The Normal\npages: [${pages}]\ncrates: ${crates}\n---\n\nA Gaussian.\n`);
     index('[]');
     r.commit();
-    assert.match(r.wf('approve', '--base', 'main').stderr, /crate 'normal' changed on this branch/);
-    index('[normal, gone]');
+    const unlisted = r.wf('approve', '--base', 'main').stderr;
+    assert.match(unlisted, /crate 'normal' changed on this branch; list it/);
+    assert.match(unlisted, /describe it in site\/content\/reference\/crates\/normal\/index\.md/);
+    write(r.root, 'site/content/reference/crates/index.md', '---\ntitle: Crates\norder: 1\n---\n\nAll.\n');
+    write(r.root, 'site/content/reference/crates/normal/index.md', 'The normal distribution.\n');
+    index('[normal, gone]', 'guide/first-model, reference/crates');
     r.commit();
     const extra = r.wf('approve', '--base', 'main').stderr;
     assert.match(extra, /lists crate 'gone', which does not exist/);
     assert.match(extra, /lists crate 'gone', which this branch did not change/);
-    index('[normal]');
+    index('[normal]', 'guide/first-model, reference/crates');
     r.commit();
     const done = r.wf('approve', '--base', 'main');
     assert.equal(done.code, 0, done.stderr);

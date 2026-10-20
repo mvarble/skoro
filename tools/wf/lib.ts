@@ -369,4 +369,7 @@ export function crateExists(root: string, name: string): boolean {
     return fs.existsSync(path.join(root, 'crates', name, 'Cargo.toml'));
 }
 
+// A crate's description, which its page in the reference shows above its reading order.
+export const crateDescription = (name: string) => `${CONTENT}/reference/crates/${name}/index.md`;
+
 export const hasTodo = (text: string) => /^>\s*\[!TODO\]/m.test(text);

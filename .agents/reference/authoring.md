@@ -10,6 +10,8 @@ the same ground for a person editing the site; this file is what an agent follow
 site/content/
     landing.md                          the home page's prose
     <track>/<slug>/index.md             a page: start, guide, concepts, reference
+    reference/crates/<crate>/index.md   a crate's description, shown on its page with its
+                                        reading order (Markdown, read by no other route)
     math/<slug>/index.md                a math note
     archive/<slug>/index.md             an entry, opened by `bin/wf start`
     archive/<slug>/math.md              its documents, one per stage that has one

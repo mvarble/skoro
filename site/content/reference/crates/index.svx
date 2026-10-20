@@ -9,9 +9,9 @@ order: 1
 </script>
 
 skoro is a workspace of three crates. Each depends only on the crates above it here, and a user
-depends on the last, `skoro`, which re-exports the other two. Each crate below leads to the order
-in which to read its modules, computed from its sources when the site is built: an order that uses
-as little as possible before it is read.
+depends on the last, `skoro`, which re-exports the other two. Each crate has a page of its own, which
+says what it is for and gives the order in which to read its modules, computed from its sources when
+the site is built: an order that uses as little as possible before it is read.
 
 <CrateMap />
 

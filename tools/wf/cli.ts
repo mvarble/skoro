@@ -7,6 +7,7 @@ import {
     activeSlug,
     changedSince,
     checkboxes,
+    crateDescription,
     crateExists,
     crateOf,
     currentBranch,
@@ -419,8 +420,12 @@ function readiness(
             // The crates it changed, which the archive links to their reading orders.
             const edited = new Set(changed.map(crateOf).filter((name) => name !== undefined));
             for (const name of edited) {
-                if (!crates.includes(name) && crateExists(root, name)) {
+                if (!crateExists(root, name)) continue;
+                if (!crates.includes(name)) {
                     problems.push(`crate '${name}' changed on this branch; list it under \`crates\` in ${index}.`);
+                }
+                if (!fs.existsSync(path.join(root, crateDescription(name)))) {
+                    problems.push(`crate '${name}' changed on this branch; describe it in ${crateDescription(name)}.`);
                 }
             }
             for (const name of crates) {

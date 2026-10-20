@@ -66,12 +66,12 @@ export interface CrateLink {
 
 /**
  * The crates an archive entry changed, as its `index.md` lists them under `crates` (checked by
- * `bin/wf approve` at publish), linked to their reading orders. A crate since removed is left out.
+ * `bin/wf approve` at publish), linked to their pages. A crate since removed is left out.
  */
 export function entryCrates(filename: string): CrateLink[] {
     const text = fs.readFileSync(path.resolve(process.cwd(), filename), 'utf8');
     const existing = crateNames();
     return (frontmatterList(text, 'crates') ?? [])
         .filter((crate) => existing.includes(crate))
-        .map((crate) => ({ crate, href: resolve('/reading-order/[crate=slug]', { crate }) }));
+        .map((crate) => ({ crate, href: resolve('/reference/crates/[crate=slug]', { crate }) }));
 }

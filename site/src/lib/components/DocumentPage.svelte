@@ -103,7 +103,7 @@
                     <LinkList links={data.pages} />
                 {/if}
                 {#if data.crates.length}
-                    <p>The crates it changed, each in the order to read its modules:</p>
+                    <p>The crates it changed:</p>
                     <ul class="link-list">
                         {#each data.crates as link (link.crate)}
                             <li><a href={link.href}><code>{link.crate}</code></a></li>

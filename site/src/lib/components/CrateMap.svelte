@@ -2,9 +2,9 @@
     import { resolve } from '$app/paths';
     import { layers } from '$lib/crates';
 
-    // Each crate links to the order in which to read its modules.
+    // Each crate links to its page in the reference.
     const rows = layers();
-    const href = (crate: string) => resolve('/reading-order/[crate=slug]', { crate });
+    const href = (crate: string) => resolve('/reference/crates/[crate=slug]', { crate });
 </script>
 
 <ol class="crate-map" aria-label="Workspace crates, foundations first">

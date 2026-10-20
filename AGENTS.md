@@ -44,6 +44,7 @@ Rules that hold whether or not a command was invoked:
 | `crates/`                                   | the library (returns with the `core` work)                                   |
 | `site/`                                     | the documentation site; `site/README.md` says how it works                   |
 | `site/content/`                             | pages, math notes, and the archive of entries                                |
+| `site/content/reference/crates/<crate>/`    | each crate's description, which its page shows above its reading order       |
 | `bin/wf`, `tools/wf/`                       | the workflow's command line and its tests                                    |
 | `bin/reading-order`, `tools/reading-order/` | the order in which to read a crate's modules, and its tests                  |
 | `.workflow/active`                          | the entry this branch works on, written by `bin/wf` alone                    |

@@ -1,7 +1,7 @@
 // The workspace's crates and their direct workspace dependencies, as reported by
 // `cargo metadata --no-deps --format-version 1` (normal dependencies only). Regenerate the
 // `deps` lists by hand when the workspace changes; the layers are derived from them. Each crate links
-// to its reading order, which the site draws for every crate under `crates/`.
+// to its page in the reference, which the site makes for every crate under `crates/`.
 
 export interface Crate {
     name: string;
