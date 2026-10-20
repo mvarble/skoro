@@ -95,10 +95,20 @@
                 {:else}
                     <p class="muted">Nothing is written yet.</p>
                 {/if}
-                {#if data.pages.length}
+                {#if data.pages.length || data.crates.length}
                     <h2>What it changed</h2>
+                {/if}
+                {#if data.pages.length}
                     <p>The pages that say what this entry made true:</p>
                     <LinkList links={data.pages} />
+                {/if}
+                {#if data.crates.length}
+                    <p>The crates it changed, each in the order to read its modules:</p>
+                    <ul class="link-list">
+                        {#each data.crates as link (link.crate)}
+                            <li><a href={link.href}><code>{link.crate}</code></a></li>
+                        {/each}
+                    </ul>
                 {/if}
                 {#if data.revises.length}
                     <h2>What it revises</h2>

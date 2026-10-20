@@ -7,6 +7,8 @@ import {
     activeSlug,
     changedSince,
     checkboxes,
+    crateExists,
+    crateOf,
     currentBranch,
     defaultBase,
     documentHash,
@@ -291,6 +293,7 @@ function start(root: string, args: Args, io: Output): Result {
         '---',
         `title: ${JSON.stringify(title)}`,
         'pages: []',
+        'crates: []',
         ...(revises.length ? [`revises: [${revises.join(', ')}]`] : []),
         '---',
     ];
@@ -406,9 +409,23 @@ function readiness(
         for (const key of listed) {
             if (!pageExists(root, key)) problems.push(`${index} lists page '${key}', which does not exist.`);
         }
+        const crates = frontmatterList(text, 'crates') ?? [];
+        for (const name of crates) {
+            if (!crateExists(root, name)) problems.push(`${index} lists crate '${name}', which does not exist.`);
+        }
         const ref = base ?? defaultBase(root);
         const changed = ref ? changedSince(root, ref) : undefined;
         if (changed) {
+            // The crates it changed, which the archive links to their reading orders.
+            const edited = new Set(changed.map(crateOf).filter((name) => name !== undefined));
+            for (const name of edited) {
+                if (!crates.includes(name) && crateExists(root, name)) {
+                    problems.push(`crate '${name}' changed on this branch; list it under \`crates\` in ${index}.`);
+                }
+            }
+            for (const name of crates) {
+                if (!edited.has(name)) problems.push(`${index} lists crate '${name}', which this branch did not change.`);
+            }
             const pages = new Set(changed.map(pageKey).filter((key) => key !== undefined));
             for (const key of pages) {
                 if (!listed.includes(key) && pageExists(root, key)) {

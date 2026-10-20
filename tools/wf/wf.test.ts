@@ -235,6 +235,36 @@ test('publish needs the changed pages listed, and finishes the entry', () => {
     assert.equal(merge.code, 0, merge.stderr);
 });
 
+test('publish needs the changed crates listed', () => {
+    const r = repo();
+    toPlan(r);
+    write(r.root, `${entry}/plan.md`, '- [x] Done.\n');
+    r.commit();
+    r.wf('approve');
+    write(r.root, 'crates/normal/Cargo.toml', '[package]\nname = "normal"\n');
+    write(r.root, 'crates/normal/src/lib.rs', 'pub struct Normal;\n');
+    r.commit();
+    r.wf('approve');
+    r.commit();
+    assert.equal(workflow(r.root).stage, 'publish');
+
+    write(r.root, 'site/content/guide/first-model/index.md', '---\ntitle: First\norder: 1\n---\n\nNew.\n');
+    const index = (crates: string) =>
+        write(r.root, `${entry}/index.md`, `---\ntitle: The Normal\npages: [guide/first-model]\ncrates: ${crates}\n---\n\nA Gaussian.\n`);
+    index('[]');
+    r.commit();
+    assert.match(r.wf('approve', '--base', 'main').stderr, /crate 'normal' changed on this branch/);
+    index('[normal, gone]');
+    r.commit();
+    const extra = r.wf('approve', '--base', 'main').stderr;
+    assert.match(extra, /lists crate 'gone', which does not exist/);
+    assert.match(extra, /lists crate 'gone', which this branch did not change/);
+    index('[normal]');
+    r.commit();
+    const done = r.wf('approve', '--base', 'main');
+    assert.equal(done.code, 0, done.stderr);
+});
+
 test('publish refuses a listed page the branch did not change, and wants some page changed', () => {
     const r = repo();
     r.wf('start', 'charter', '--kind', 'decision');

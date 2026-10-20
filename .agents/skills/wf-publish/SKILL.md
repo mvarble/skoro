@@ -33,8 +33,10 @@ landing page) before changing them.
 - **Drop what is no longer true.** A page describes only the current library. What a revised
   entry built and this one replaced disappears from the pages; it stays in the archive.
 - **The entry's `index.md`.** Replace its opening paragraph with what the entry did, for a reader
-  of the archive, and list every page it changed under `pages`. `wf approve` refuses a changed
-  page that is not listed.
+  of the archive, list every page it changed under `pages`, and every crate it changed (by its
+  directory under `crates/`) under `crates`, which the archive links to the crates' reading
+  orders. `wf approve` refuses a changed page or crate that is not listed, and a listed one the
+  branch did not change.
 
 Build the site (`cd site && pnpm build`) and fix every warning and broken link. Commit as you go.
 

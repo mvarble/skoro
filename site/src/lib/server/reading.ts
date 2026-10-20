@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolve } from '$app/paths';
 import type { ReadingOrderSpec } from '$lib/reading/spec';
 import { REPO_ROOT } from '../../../plugins/file-ref';
 import { DEFAULT_LAST, readCrate, readingOrder } from '../../../../tools/reading-order/lib.ts';
+import { frontmatterList } from '../../../../tools/wf/lib.ts';
 
 // The reading orders of the workspace's crates, computed from their sources when the site is
 // built (and on every request under `pnpm dev`), so the pages follow the code as it is.
@@ -55,4 +57,21 @@ export function readingOf(crate: string): CrateReading | undefined {
             uses: order.uses,
         },
     };
+}
+
+export interface CrateLink {
+    crate: string;
+    href: string;
+}
+
+/**
+ * The crates an archive entry changed, as its `index.md` lists them under `crates` (checked by
+ * `bin/wf approve` at publish), linked to their reading orders. A crate since removed is left out.
+ */
+export function entryCrates(filename: string): CrateLink[] {
+    const text = fs.readFileSync(path.resolve(process.cwd(), filename), 'utf8');
+    const existing = crateNames();
+    return (frontmatterList(text, 'crates') ?? [])
+        .filter((crate) => existing.includes(crate))
+        .map((crate) => ({ crate, href: resolve('/reading-order/[crate=slug]', { crate }) }));
 }

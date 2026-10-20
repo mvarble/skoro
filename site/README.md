@@ -55,9 +55,10 @@ katex_macros: # this document only; wins over katex.config.ts
 ---
 ```
 
-An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`)
-and the earlier entries it `revises`. Each page then shows the entries that changed it, newest
-first, under "How this came to be"; an entry that a later one revises says so at its top.
+An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`),
+the `crates` it changed (`[skoro-core]`), and the earlier entries it `revises`. Each page then shows
+the entries that changed it, newest first, under "How this came to be"; an entry links each of its
+crates to that crate's reading order; and an entry that a later one revises says so at its top.
 
 - **Math:** `$inline$` and `$$display$$`. A KaTeX error does not fail the build. The formula
   renders in red, and the build prints a `katex:` warning naming the file.
