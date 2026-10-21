@@ -8,7 +8,9 @@
 
 <svelte:head>
     <title>{MATH.title} · {SITE.name}</title>
+    <meta property="og:title" content="{MATH.title} · {SITE.name}" />
     <meta name="description" content={MATH.blurb} />
+    <meta property="og:description" content={MATH.blurb} />
 </svelte:head>
 
 <div class="doc-layout">

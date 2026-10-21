@@ -23,7 +23,9 @@
 
 <svelte:head>
     <title>{doc.title} · {SITE.name}</title>
+    <meta property="og:title" content="{doc.title} · {SITE.name}" />
     <meta name="description" content={doc.summary} />
+    <meta property="og:description" content={doc.summary} />
     <link rel="alternate" type="text/markdown" href={markdownHrefOf(doc.key)} />
 </svelte:head>
 

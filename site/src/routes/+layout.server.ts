@@ -29,7 +29,10 @@ export const load: LayoutServerLoad = () => {
         { ...MATH, href: resolve('/math'), items: cms.math.list().map(linkOf) },
         { ...ARCHIVE, href: resolve('/archive'), items: cms.archive.list().map(linkOf) },
     ];
-    return { nav };
+    // Where the site is hosted, when the build knows it (`SITE_URL=https://example.org`): a link
+    // preview, such as LinkedIn's, takes only an absolute URL for its image.
+    const origin = (process.env.SITE_URL ?? '').replace(/\/$/, '');
+    return { nav, origin };
 };
 
 // Each crate's page, right after the page of the crates (or last, in content without one).

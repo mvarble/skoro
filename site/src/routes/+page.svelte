@@ -12,7 +12,9 @@
 
 <svelte:head>
     <title>{SITE.name}: probabilistic modeling in Rust</title>
+    <meta property="og:title" content="{SITE.name}: probabilistic modeling in Rust" />
     <meta name="description" content={SITE.description} />
+    <meta property="og:description" content={SITE.description} />
 </svelte:head>
 
 <section class="hero">

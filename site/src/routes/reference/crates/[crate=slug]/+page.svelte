@@ -20,7 +20,11 @@
 
 <svelte:head>
     <title>{reading.crate} · {SITE.name}</title>
-    {#if data.purpose}<meta name="description" content={data.purpose} />{/if}
+    <meta property="og:title" content="{reading.crate} · {SITE.name}" />
+    {#if data.purpose}
+        <meta name="description" content={data.purpose} />
+        <meta property="og:description" content={data.purpose} />
+    {/if}
 </svelte:head>
 
 <div class="doc-layout">
