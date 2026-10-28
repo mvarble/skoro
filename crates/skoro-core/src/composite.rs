@@ -100,10 +100,6 @@ impl Composite {
         &self.output
     }
 
-    #[allow(
-        dead_code,
-        reason = "the compiler expands a composite's body, in the next task"
-    )]
     pub(crate) fn body(&self) -> &Body {
         &self.body
     }

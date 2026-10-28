@@ -682,7 +682,6 @@ impl Program {
         reaches
     }
 
-    /// What the pass asks of each step.
     /// Whether `pass` can run: every step on it has a kernel of the order it requires
     /// (`OrderTooLow`, naming the first that does not, the composites it was expanded from and its
     /// node). Computed before anything runs.
