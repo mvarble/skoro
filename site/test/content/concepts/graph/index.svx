@@ -5,5 +5,18 @@ order: 1
 created: 2026-01-03
 ---
 
+<script>
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { building } from './graph.walk';
+</script>
+
 The compilation graph: a node for each value, an edge from each input of an operation to its
 output.
+
+<Walkthrough spec={building}>
+
+```rust
+{example.rs:2..7}
+```
+
+</Walkthrough>

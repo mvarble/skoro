@@ -203,6 +203,75 @@ export const normal = defineGraph({
   figure's names for their kinds, so a language model reads the same figure.
 - The geometry is `src/lib/graph/geometry.ts`, tested by `pnpm test`.
 
+## Walkthroughs
+
+`<Walkthrough spec={…}>` animates a graph figure step by step above the code that builds it: each
+step adds or removes nodes, edges and regions, changes their kinds, mutes them or runs a pass along
+them, and highlights the lines of the quoted code it is about. The code is the page's own
+file-reference fence, passed in as the component's children:
+
+````svelte
+<script>
+    import Walkthrough from '$lib/components/Walkthrough.svelte';
+    import { building } from './building.walk';
+</script>
+
+<Walkthrough spec={building}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:31..57}
+````
+
+</Walkthrough>
+```
+
+Put each spec in a `*.walk.ts` file beside its page. A spec is a graph figure's spec (above), with
+labelled `regions` drawn behind it (a scope, a snapshot, a cache) and its `steps`:
+
+```ts
+import { defineWalkthrough } from '$lib/walk/spec';
+
+export const building = defineWalkthrough({
+    title: 'A scope builds a graph',
+    width: 420,
+    height: 220,
+    nodeKinds: {
+        constant: { name: 'Constant', hue: 'gray', shape: 'square' },
+        mapped: { name: 'Mapped value', hue: 'blue' },
+        folded: { name: 'Folded value', hue: 'blue', fill: 'shaded' },
+    },
+    nodes: [/* … */],
+    edges: [{ from: 'half', to: 'y', id: 'hy' }], // `id` defaults to `half->y`
+    regions: [{ id: 'scope', x: 20, y: 20, width: 380, height: 180, label: 'scope' }],
+    steps: [
+        { note: 'The writer opens a scope.', code: 'writer.build', show: ['scope'] },
+        { note: 'Its inputs are constants, so it folds.', code: 'let y', kind: { y: 'folded' } },
+        { note: 'The pass.', code: { from: 'fn forward', to: '}' }, flow: ['hy'] },
+    ],
+});
+```
+
+- **Nodes and regions start hidden**, and a step `show`s them (`show: 'all'` shows everything). An
+  edge is drawn once both its nodes are, unless a step `hide`s it, so a node appears with its
+  input edges.
+- **What carries from step to step:** `show`/`hide`, `kind`, `annotate`, `label`, `mute`/`unmute`.
+  **What lasts one step:** `emphasize`, `flow` (a pass running along edges) and `flowBack`
+  (against them).
+- **A step points at code by text**, never by line number: `code` is a substring of a line, a
+  `{ from, to }` pair spanning the lines from one to the next, or a list of these. The `.md` export
+  fails the build when a match finds no line of the quoted code, so a walkthrough cannot drift
+  from the code it quotes.
+- A step's `note` may contain `$…$` TeX and `` `code` ``. A mistake in a spec, such as an id it
+  does not have, a kind it does not define or a `flow` along a node, fails the build with the
+  walkthrough's title in the message.
+- The prerendered page shows the last step and lists every note, which is the whole walkthrough
+  without JavaScript. Once mounted, it starts at the first step, with play, step and scrub
+  controls and the arrow keys. Transitions respect `prefers-reduced-motion`.
+- In the `.md` exports, the tag is replaced by the code it quotes and a numbered list of the steps:
+  each note, the code it points at, and what appears, changes, goes or flows.
+- The frames are `src/lib/walk/frames.ts` and the checks are in `src/lib/walk/spec.ts`, both tested
+  by `pnpm test`. The styles are `src/styles/utils/walkthrough.css`, over `graph.css`.
+
 ## Reading orders
 
 `<ReadingOrder spec={…} />` draws the order in which to read a crate's modules: the modules top to
