@@ -25,7 +25,8 @@ pub(crate) struct Body {
 impl Composite {
     /// Runs `body` with one handle per input; the operations inside build into the composite,
     /// and the handle `body` returns is its output. A quantity cannot be made there, nor looked
-    /// up (`NotInAModel`), and a handle from outside is not one of the composite's (`UnknownNode`).
+    /// up [`NotInAModel`](Error::NotInAModel), and a handle from outside is not one of the
+    /// composite's [`UnknownNode`](Error::UnknownNode).
     #[track_caller]
     pub fn define(
         name: &'static str,

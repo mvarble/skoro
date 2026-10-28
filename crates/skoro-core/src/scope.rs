@@ -2,11 +2,13 @@
 //! innermost scope.
 //!
 //! Every building function does four things. With no scope open it returns a handle marked as
-//! made outside a scope. Given a failed handle it returns one, recording `OutsideScope` or
-//! `FailedOperand` if the draft has no failure yet. It reads its inputs' spaces from the draft
-//! (`UnknownNode`) and asks the operation for its output space. And on an error it records the
-//! error and the caller's line, if the draft has none yet, and returns a failed handle; otherwise
-//! it inserts the node, folds it if its inputs are fixed in the model, and returns its handle.
+//! made outside a scope. Given a failed handle it returns one, recording
+//! [`OutsideScope`](Error::OutsideScope) or [`FailedOperand`](Error::FailedOperand) if the draft
+//! has no failure yet. It reads its inputs' spaces from the draft
+//! [`UnknownNode`](Error::UnknownNode) and asks the operation for its output space. And on an error
+//! it records the error and the caller's line, if the draft has none yet, and returns a failed
+//! handle; otherwise it inserts the node, folds it if its inputs are fixed in the model, and
+//! returns its handle.
 
 use std::cell::RefCell;
 use std::panic::Location;
