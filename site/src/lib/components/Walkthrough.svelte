@@ -241,7 +241,12 @@
             {#each layout.edges as edge, i (ids[i])}
                 {#if edge.label}
                     <span
-                        class={['edge-label', edgeClasses(edge.spec.kind), flags(ids[i]!)]}
+                        class={[
+                            'edge-label',
+                            'graph-edge',
+                            edgeClasses(edge.spec.kind),
+                            flags(ids[i]!),
+                        ]}
                         style={centered(edge.label.x, edge.label.y)}
                         >{@html text(edge.spec.label!)}</span
                     >
@@ -305,14 +310,14 @@
             <button
                 class="wt-button"
                 onclick={() => ((playing = false), go(0))}
-                disabled={step == 0}
+                aria-disabled={step == 0}
             >
                 <Icon name="restart" size={16} /><span class="visually-hidden">First step</span>
             </button>
             <button
                 class="wt-button"
                 onclick={() => ((playing = false), go(step - 1))}
-                disabled={step == 0}
+                aria-disabled={step == 0}
             >
                 <Icon name="arrowLeft" size={16} /><span class="visually-hidden">Previous step</span
                 >
@@ -324,7 +329,7 @@
             <button
                 class="wt-button"
                 onclick={() => ((playing = false), go(step + 1))}
-                disabled={step == last}
+                aria-disabled={step == last}
             >
                 <Icon name="arrowRight" size={16} /><span class="visually-hidden">Next step</span>
             </button>

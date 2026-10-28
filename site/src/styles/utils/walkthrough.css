@@ -5,7 +5,6 @@
 
 .walkthrough {
     .wt-region {
-        --c: var(--graph-gray);
         fill: color-mix(in srgb, var(--c) 6%, var(--bg-1));
         stroke: color-mix(in srgb, var(--c) 70%, var(--bg-1));
         stroke-width: 1.4;
@@ -123,12 +122,12 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
 
-    &:hover:not(:disabled) {
+    &:hover:not([aria-disabled='true']) {
         border-color: var(--fg-3);
         color: var(--fg-1);
     }
 
-    &:disabled {
+    &[aria-disabled='true'] {
         opacity: 0.4;
     }
 

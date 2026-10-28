@@ -18,10 +18,19 @@ export const building = defineWalkthrough({
     ],
     edges: [
         { from: 'half', to: 'y', kind: 'input' },
-        { from: 'x', to: 'y', kind: 'input' },
+        { from: 'x', to: 'y', kind: 'input', label: 'rhs' },
     ],
     regions: [
-        { id: 'scope', x: 20, y: 20, width: 380, height: 180, label: 'scope', line: 'dashed' },
+        {
+            id: 'scope',
+            x: 20,
+            y: 20,
+            width: 380,
+            height: 180,
+            label: 'scope',
+            hue: 'sky',
+            line: 'dashed',
+        },
     ],
     steps: [
         { note: 'The writer opens a scope.', code: 'writer.build', show: ['scope'] },
