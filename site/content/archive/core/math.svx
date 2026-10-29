@@ -1,0 +1,1210 @@
+---
+summary: The mathematics the core rests on, from quantities, their charts and their products, through operations and their derivatives of first and second order composed over programs, to queries, terms, importance weights, random keys and retirement.
+depends_on: [retraction, automatic-differentiation, derivatives-in-charts, product-manifold, generative-models]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import * as order from './statements/order.md';
+	import * as productAgreement from './statements/product-agreement.md';
+	import * as importance from './statements/importance.md';
+	import * as retirement from './statements/retirement.md';
+	import * as embedded from './statements/embedded.md';
+	import { probabilistic, compilation } from './model.graph';
+</script>
+
+## The problem
+
+The core is the part of skoro that every later entry builds on: the quantities a model is made of,
+the operations that relate them, the derivatives of those operations, the log-density a model
+defines, and the changes a model goes through as it is built, branched and retired. It ships no
+distribution, but it must be exactly right about what a distribution, an estimator or a sampler
+will ask of it, because each of those will trust it without checking.
+
+This document works out that mathematics, at the level of precision the implementation needs.
+Most of it is standard, and the standard parts are in the math notes it depends on:
+[retractions](../../math/retraction/), [automatic differentiation over frames](../../math/automatic-differentiation/),
+[derivatives in tangent charts](../../math/derivatives-in-charts/) and
+[product manifolds](../../math/product-manifold/). What is particular to skoro, and what this
+document settles, is how those pieces meet [the charter](../charter/writeup.md): which quantities
+are differentiated and when, what order of derivative a computation needs from each step, what
+selection and discrete quantities do to derivatives, what a query does to a model's density, how
+random keys make draws reproducible, and what retiring a quantity means.
+
+## Setting
+
+A *model* is a set of *quantities* and a set of *terms*. Each quantity takes values in its *type*:
+a manifold $\manifold$ of dimension $\dimension$ with a retraction, or a countable set. Each term
+$t$ is a real-valued function $\logterm_t$ of some of the quantities, its *log-density*, and the
+model's log-density is their sum (the measure theory underneath is in
+[the appendix](#appendix-the-probability-space-of-a-model)),
+
+$$
+	\log \density(\point) = \sum_t \logterm_t(\point) . @tag(log-density)
+$$
+
+For a manifold-valued quantity, $\point \oplus \tangent$ and $\otherPoint \ominus \point$ are its
+retraction and inverse retraction [](eq:math/retraction/oplus), and derivatives are read in tangent
+charts [](eq:math/derivatives-in-charts/derivative). A quantity's *dimension* is that of its tangent
+space; its *storage size* is the number of reals that represent a point, which may be larger (a
+rotation has dimension $3$ and is stored as $9$ or $4$ numbers). Every flat vector of derivative
+coordinates in this document is indexed by dimension, never by storage.
+
+Computation is batched: a model is evaluated at $N$ points at once, one per row of a batch. Rows
+never interact: an evaluation at $N$ points is $N$ independent evaluations, and every derivative
+below is per row. Batching is therefore absent from the mathematics, and only the implementation
+needs to keep it straight.
+
+A model is two graphs over the same objects, and the rest of this document uses both. Each answers
+different questions, and neither is ever called simply "the graph". The running example is a
+vehicle whose positions are the quantities $\randomPoint_0$ and then $\randomPoint_1$, which measures
+a landmark $\bfm$ once from each position, as $\bfz_0$ and $\bfz_1$. Its second position is drawn
+from $\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfzeta_1}$, the motion model of an inertial
+measurement unit (IMU), driven by the unit's reading $\bfzeta_1$ between the two positions. The
+reading is a parameter that nothing scores: it has no distribution and no prior, and a query for the
+positions observes it. The IMU's model knows nothing of the platform's own physics, how far it can
+plausibly move in one step, say, and that knowledge enters as a likelihood factor
+$L(\randomPoint_0, \randomPoint_1, \bfsigma)$: a second motion model, over positions the first one
+already scores, whose scale $\bfsigma$ is a parameter with an improper prior, the score
+$S(\bfsigma)$. The example thus has a parameter with a score and one without, and shows a
+likelihood factor adding information about quantities already in the model, as any number of
+further factors could.
+
+### The probabilistic graph
+
+The *probabilistic graph* records what depends on what in distribution. Its nodes are the model's
+quantities and its terms. It has an edge from each quantity a term is *conditioned on* to the term,
+and an edge from each term to the quantity it *scores*, if any.
+
+- It is bipartite: every edge joins a quantity and a term.
+- Each quantity is scored by at most one term: the term of the distribution it was drawn from. A
+  quantity scored by no term is a *parameter*: it has no seed distribution, and an improper prior on
+  it is a score, a likelihood factor conditioned on it
+  ([parameters](../../math/generative-models/#parameters-and-improper-priors)). A term that scores
+  nothing is a *likelihood factor* over the quantities it is conditioned on: in Bayesian terms, the
+  likelihood of data that is not a quantity of the model, such as the measurements a retirement
+  conditioned on. A term that scores an observed quantity is a likelihood too, but only in the
+  queries that observe it; a likelihood factor is one in every query.
+- It is acyclic, because a term is conditioned only on quantities that existed before the quantity
+  it scores. A topological order of it is therefore an *ancestral* order, in which each quantity
+  comes after everything its distribution is conditioned on.
+- Its edges are read off the compilation graph below rather than declared: a term is conditioned on the
+  quantities among the roots its log-density is reached from, other than the one it scores.
+
+<ModelGraph spec={probabilistic} />
+
+### The compilation graph
+
+The *compilation graph* records how values are computed. Its nodes are the model's values: its
+quantities, its constants, and its *mapped values*, the outputs of operations, among which are the
+terms' log-densities. It has an edge from each input of an operation to the operation's output, so
+a node with incoming edges is a mapped value, computed from the nodes those edges come from.
+
+- It is acyclic, because a model is built forward: an operation is added only after its inputs.
+- Its *roots*, the nodes with no incoming edge and so no ancestor, are the quantities and the
+  constants. They are the inputs of the map that the model computes, and every mapped value is a
+  function of the roots it is reached from.
+- A quantity is a root even when it was drawn from a distribution whose parameters are mapped
+  values. That dependence belongs to the probabilistic graph above, not to this one, which is why
+  no derivative ever flows through a sampler.
+
+<ModelGraph spec={compilation} />
+
+Evaluating a model compiles a program from the compilation graph: the subgraph of the nodes from
+which a requested target is reached, its operations taken in a topological order. That subgraph is
+the program's [computation graph](../../math/automatic-differentiation/#programs-and-their-computation-graphs),
+and its roots are the roots of the compilation graph that the targets reach.
+
+## Quantities
+
+**Euclidean quantities.** The core's flat types are the real line $\R$,
+vectors $\R^n$ and matrices $\R^{m \times n}$, with $\point \oplus \tangent = \point + \tangent$ and
+$\otherPoint \ominus \point = \otherPoint - \point$. A matrix is flattened column by column into
+$\R^{mn}$ for its tangent coordinates, so its dimension equals its storage size. The dimensions
+$n$, $m$ are fixed for each quantity when it is created, and every operation checks them then.
+
+**Positive quantities.** Scales, rates and variances live on the positive orthant
+$\positive^n$, where $\positive = (0, \infty)$, with the retraction of [the example in retractions](../../math/retraction/#the-definition),
+elementwise:
+
+$$
+	\point \oplus \tangent = \point \odot e^{\tangent}, \qquad
+	\otherPoint \ominus \point = \log \otherPoint - \log \point . @tag(positive)
+$$
+
+A tangent coordinate is a relative change, and a point is stored as its $n$ values, so its
+dimension equals its storage size. The positive orthant is not flat in the sense of the notes, since
+$\oplus$ is not addition, but it is flat in disguise: $\log(\point \oplus \tangent) = \log \point +
+\tangent$, so the logarithm is one chart of the whole space in which every retraction is a
+translation. Three things follow. The retraction is defined for every $\tangent \in \R^n$ and never
+leaves the space. The identities $(\point \oplus \tangent) \ominus \point = \tangent$ and
+$\point \ominus (\point \oplus \tangent) = -\tangent$ both hold exactly. And the chart Hessian equals
+the Hessian of the pull-back everywhere, not only at stationary points: in
+[%full](statement:math/derivatives-in-charts/chart-hessian), $\varphi_t(u) = t\tangent + u$, whose
+derivative does not move, so the correction vanishes. What is not trivial is reading a positive
+quantity as a real number, through the inclusion $\positive^n \subset \R^n$: its derivative in
+charts is $\operatorname{diag}(\point)$, which moves with the point.
+
+**Embedded types.** The curved types that later entries add, a sphere for one, are most simply
+written as submanifolds $\manifold \subset \R^n$ of a coordinate space, each point stored as the
+vector of $\R^n$ it is. The charter has each such type added by a crate of its own, built only on
+the core's public interface (position 12), and a type that needs no kernel of its own is the one
+easiest to keep working as burn changes (position 11).
+
+To every algorithm, a type is its retraction and its inverse. They make its tangent charts, and so
+its derivatives, its gradients and Hessians, and the steps an estimator takes. A later type must
+therefore choose them as its own geometry suggests, whatever form they take, and the core cannot
+fix one form for all types. Both are arithmetic on storage: the retraction maps a stored point and a
+tangent vector to a stored point, $R : \R^n \times \R^\dimension \to \R^n$, and its inverse maps two
+stored points to a tangent vector, $Q : \R^n \times \R^n \to \R^\dimension$. Each is an operation
+on Euclidean values, which the type writes as a composite, or as a fused operation where the
+primitives cannot compose it ([Operations in feature crates](#operations-in-feature-crates)). What
+the type cannot write so is the boundary between itself and its storage: the inclusion $\iota$,
+which reads a point as the vector that stores it; the retraction as an operation whose output is a
+point of the type rather than a vector; and, for a type that declares one, the projection $\pi$,
+which maps a vector near the type onto it. Each changes type, so none is an operation on Euclidean
+values, and the derivatives of each are read in the type's charts. The core therefore provides them
+once, for every *embedded type*: a type declared by its storage size $n$, its dimension
+$\dimension$, its retraction $R$ and its inverse $Q$, and, optionally, a projection $P$, again an
+operation on Euclidean values.
+
+<Statement {...embedded} />
+
+<Proof>
+
+Fix $\point \in \manifold$. The map $\tangent \mapsto R(\point, \tangent)$ takes a neighbourhood of
+$0$ into $\manifold$ and $0$ to $\point$, so its derivative $B(\point)$ at $0$ maps $\R^\dimension$
+into $T_\point \manifold$, and onto it, since its rank is $\dimension$. In the coordinates that the
+basis $B(\point)$ gives $T_\point \manifold$, which depend smoothly on $\point$ because $R$ is
+smooth, that derivative is the identity, so $R$ is a [retraction](../../math/retraction/). By the
+inverse function theorem, $R(\point, \cdot)$ is a diffeomorphism from a neighbourhood of $0$ onto a
+neighbourhood of $\point$ in $\manifold$, and $Q(\point, \cdot)$ is a left inverse of it there,
+hence its inverse: $\otherPoint \ominus \point = Q(\point, \otherPoint)$.
+
+The derivatives follow from [](eq:math/derivatives-in-charts/derivative). For the inclusion,
+$\iota(\point \oplus t u) - \iota(\point) = R(\point, t u) - \point$ has the derivative
+$B(\point)\, u$ at $t = 0$. For the retraction, the chart at its output $\otherPoint$ reads a point
+$z$ as $Q(\otherPoint, z)$, so its partial derivatives are those of
+$t \mapsto Q(\otherPoint, R(R(\point, t u), \tangent))$ and
+$t \mapsto Q(\otherPoint, R(\point, \tangent + t v))$ at $t = 0$, which are [](eq:retraction-maps)
+by the chain rule. Both hold at every point of the domain, with $\otherPoint$ the output there.
+
+For the second order, [Operations](#operations) defines $\hvp_j(\alpha)$ as the derivative of
+$\partial_j\transpose \alpha$ along the curves $\point_t = \point \oplus t u$ and
+$\tangent_t = \tangent + t v$, the output following as $\otherPoint_t = \point_t \oplus \tangent_t$.
+The factors of $\partial_j$ are $B$, $\partial_j R$ and $L$, each smooth on an open set of a
+coordinate space ($B(w) = \partial_2 R(w, 0)$ and $L(w) = \partial_2 Q(w, w)$ are defined for $w$
+near $\manifold$), so the derivative of each along a curve depends only on the curve's velocity in
+$\R^n$: $\dot \point = B(\point)\, u$ for $\point_t$, $v$ for $\tangent_t$, and
+$\dot \otherPoint$ for $\otherPoint_t$, by the chain rule. The product rule then gives
+[](eq:inclusion) and [](eq:retraction-second).
+
+For the projection, the chart at $\otherPoint = P(w)$ reads $P(w + t \dot w)$ as
+$Q(\otherPoint, P(w + t \dot w))$. The curve $P(w + t \dot w)$ lies in $\manifold$, so its velocity
+$\D P(w)\, \dot w$ is tangent there, and the derivative at $t = 0$ is
+$L(\otherPoint)\, \D P(w)\, \dot w$. The input of $\pi$ is flat, so $\hvp_\pi(\alpha)\, \dot w$ is
+the derivative of $\D P(w + t \dot w)\transpose L(P(w + t \dot w))\transpose \alpha$ at $t = 0$,
+which is [](eq:projection) by the product rule, since $P(w + t \dot w)$ has the velocity
+$\dot \otherPoint$.
+
+</Proof>
+
+Every factor in [](eq:inclusion), [](eq:retraction-maps), [](eq:retraction-second) and
+[](eq:projection) is a pass over $R$, $Q$ or $P$, at points the forward pass computes, with $g$ a
+cotangent at the output of $R$ and $h$ one at the output of $P$:
+
+| factor | pass |
+| --- | --- |
+| $B(\point)\, u$, $B(\point)\transpose g$ | tangent and cotangent passes over $R$ at $(\point, 0)$, at its second input |
+| $\bigl(\D B(\point)[\dot \point]\bigr)\transpose g$ | a Hessian pass over $R$ at $(\point, 0)$, with velocity $\dot \point$ at its first input and cotangent $g$, read at its second |
+| $\partial_j R$ and its transpose, $\bigl(\D \partial_j R\,[\dot \point, v]\bigr)\transpose L(\otherPoint)\transpose \alpha$ | tangent, cotangent and Hessian passes over $R$ at $(\point, \tangent)$, with velocities $(\dot \point, v)$ |
+| $L(\otherPoint)\, \dot \otherPoint$, $L(\otherPoint)\transpose \alpha$ | tangent and cotangent passes over $Q$ at $(\otherPoint, \otherPoint)$, at its second input |
+| $\bigl(\D L(\otherPoint)[\dot \otherPoint]\bigr)\transpose \alpha$ | a Hessian pass over $Q$ at $(\otherPoint, \otherPoint)$, with velocity $\dot \otherPoint$ at both inputs and cotangent $\alpha$, read at its second |
+| $\D P(w)\, \dot w$, $\D P(w)\transpose h$, $\bigl(\D^2 P(w)[\dot w]\bigr)\transpose h$ | tangent, cotangent and Hessian passes over $P$ at $w$, with velocity $\dot w$ and cotangent $h$ |
+
+The Hessian pass over $Q$ seeds both inputs because $L(w) = \partial_2 Q(w, w)$ moves with both arguments of
+$Q$. So the core's boundary operations are generic over embedded types: they assemble their
+derivative maps from passes over the type's own operations, rather than from derivatives written by
+hand, and the order of each is the most those passes admit under [%full](statement:order). The
+inclusion has order two when $R$ admits a Hessian pass, the retraction when $R$ and $Q$ both do,
+and the projection when $P$ and $Q$ both do; each has order one when the same operations admit
+first-order passes. Since $B$ is itself a derivative of $R$, a second-order map of the inclusion or
+the retraction needs the second derivatives of $R$: a type whose quantities are to have Hessians
+declares a retraction of order two.
+
+**Smooth as computed.** The passes in the table are taken at two places in particular: over $R$
+at $\tangent = 0$, and over $Q$ on the diagonal $(\otherPoint, \otherPoint)$. Every evaluation of
+a boundary operation's derivatives goes through them. [%full](statement:embedded) asks $R$ and $Q$
+to be smooth there, and they are, but the operations that compute them must also *compute* them
+smoothly there, which is a stronger requirement. A retraction from an exponential map, such as
+$R \operatorname{Exp}(\tangent)$ on the rotations, is smooth at $\tangent = 0$, yet its textbook
+formula divides $\sin \theta$ by $\theta = \lVert \tangent \rVert$, and the coefficients of its
+derivatives, $(1 - \cos \theta) / \theta^2$ and the like, divide too: computed as written, each is
+$0/0$ at $\tangent = 0$, and so is every derivative taken there. A logarithm written with
+$\operatorname{atan2}$ over $\theta$ does the same on the diagonal. So a type's $R$ and $Q$ must be
+smooth as computed at $\tangent = 0$ and on the diagonal, to the order the type claims. A formula
+with a removable singularity there switches, below a cutoff in $\theta^2$, to a truncation of its
+Taylor series in $\theta^2$, and the switch can be written in one of two places.
+
+- **Inside a fused operation's kernels**, element by element: each kernel compares $\theta^2$ with
+  the cutoff and evaluates either the series or the closed form, never both. This is how the
+  archive's rotations computed their exponential and logarithm, with the tangent, cotangent and
+  second-order maps of each, and it is the way for a type that is to be fast or precise. The type's
+  $R$ and $Q$ are then composites around the fused exponential and logarithm,
+  $R(\point, \tangent) = \point \operatorname{Exp}(\tangent)$ and
+  $Q(\point, \otherPoint) = \operatorname{Log}(\point\transpose \otherPoint)$, or fused operations
+  themselves. Either way, the boundary operations' passes reach the kernels' own derivative maps,
+  which take the series at the singularity.
+- **In a composite**, by a discretization of $\theta^2$ and [selection](#selection) between the two
+  formulas. A composite evaluates both formulas on every row, and the closed form still divides by
+  zero on the rows where the series is selected. Selection pulls a zero cotangent back into it there,
+  but the closed form's own partial derivatives are $0/0$ there, and zero times them is undefined,
+  which reaches $\theta$'s cotangent through the sum of its uses. So the closed form's input must be
+  guarded as well, by a second selection that gives it a harmless value, $\theta = 1$ say, on the
+  rows where it is not selected.
+
+Either way, the series keeps at least the terms through $\theta^2$ for a type of order two, so that
+the derivatives taken at the singularity are exact, and in practice more: it must be accurate across
+the whole region below the cutoff, and the closed form above it, where its cancellation grows as
+$\theta$ shrinks. The archive's exponential kept the terms through $\theta^8$, with the cutoff at
+$\theta^2 \approx 1.37$ in single precision and $\theta^2 \approx 0.025$ in double. Where to switch
+and how many terms to keep is a matter of rounding on both sides of the cutoff, and the type's
+entry's to settle. A fused kernel's branch is tested like the rest of it, against its composite or
+against finite differences, on both sides of the cutoff and at both precisions. The acceptance
+test's retraction and its inverse are rational, with no such singularity.
+
+The inverse retraction needs no boundary operation of its own, since its output is a tangent
+vector. It is the composite
+
+$$
+	\otherPoint \ominus \point = Q\bigl(\iota(\point), \iota(\otherPoint)\bigr), @tag(embedded)
+$$
+
+and its derivatives are its parts'. A point of an embedded type that a model computes, rather than
+creates as a quantity or a constant, comes from one of the two boundary operations whose output is a
+point. The retraction gives it from a base point the model has, or a constant one, and a tangent
+vector computed in Euclidean terms, and is defined where the base point's chart is. The projection
+gives it from storage computed in Euclidean terms, and is defined wherever $P$ is.
+
+The projection is what makes a map into an embedded type as easy to write as a map into $\R^n$. A
+map $F : \manifold_1 \times \cdots \times \manifold_m \to \otherManifold$ between embedded types is
+written in storage, as an operation $F_{\mathrm{s}}$ on the inputs' inclusions whose values lie on
+$\otherManifold$, or near it, and projected:
+
+$$
+	F(\point_1, \dots, \point_m) = \pi\bigl(F_{\mathrm{s}}(\iota(\point_1), \dots, \iota(\point_m))\bigr) . @tag(map-into)
+$$
+
+Its derivatives in charts are then its parts', by the chain rule: those of the inclusions, those of
+$F_{\mathrm{s}}$, which are Euclidean, and [](eq:projection). The projection also returns to
+$\otherManifold$ a value that rounding has carried off it. The composition of two rotations, for
+one, is the product of their matrices, projected. Without a projection, a map into a type is a
+retraction from a base point, valid in that point's chart alone, or a fused operation with its
+derivatives in charts written by hand and checked against finite differences of
+[](eq:math/derivatives-in-charts/derivative). The projection is optional because not every type
+has one that the primitives compose: the projection of a matrix onto the rotations needs a singular
+value decomposition, so the rotations' entry will write it as a fused operation, with a composite
+where one can be written.
+
+A type often writes its retraction with a tangent basis $B$ and a projection $P$, smooth near
+$\manifold$, onto it and the identity on it, as $R(\point, \tangent) = P(\point + B(\point)\, \tangent)$,
+which meets the conditions of [%full](statement:embedded) because $\D P(\point)$ is the identity on
+$T_\point \manifold$, and whose $\partial_2 R(\point, 0)$ is then that same $B(\point)$; such a
+type declares that $P$ as its projection too. The core does not impose that form. The retraction of
+[the acceptance test](#the-acceptance-test) is not of it, and a type whose geometry suggests another
+retraction declares that one, and its derivatives follow all the same. The conditions are asked only of $\manifold$, which may be the part of a
+manifold that the type's retraction covers smoothly: no basis is smooth on the whole sphere, for
+one, so the acceptance test's $\manifold$ is the sphere without a point. Where a type's points may
+stray outside it, and what then happens, is that type's entry's question, not the core's.
+
+The positive orthant meets the conditions too, as an open subset of $\R^n$ with
+$\dimension = n$, $R(\point, \tangent) = \point \odot e^{\tangent}$ and
+$Q(\point, \otherPoint) = \log \otherPoint - \log \point$, and its $B(\point)$ is
+$\operatorname{diag}(\point)$. The core keeps it as a type of its own all the same, with its
+operations written in its logarithmic chart, where they are linear.
+
+**Discrete quantities.** The core's discrete types are the finite sets
+$\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$, with $\mathrm{Boolean} = \mathrm{Categorical}(2)$,
+and the integers $\mathbb Z$. A discrete quantity has no tangent space, no retraction and no
+dimension, and it is never a coordinate of a derivative. Its values are written
+$\discretePoint$. A density over a discrete quantity is a probability mass, a density with respect
+to the counting measure.
+
+**Products.** A product of continuous types is a continuous type: a quantity of type
+$\manifold_1 \times \cdots \times \manifold_n$ is one point $(\point_1, \dots, \point_n)$, stored as
+its factors' storage concatenated, with the stacked tangent space
+[](eq:math/product-manifold/stack) and the factor-wise retraction of
+[%full](statement:math/product-manifold/product-retraction). The core has products of continuous
+types only. A quantity with a continuous part and a discrete part is two quantities, as the charter
+has it, and a joint density over several discrete quantities needs no product, since a term may be
+conditioned on any number of quantities.
+
+A product's factors may be of any continuous type, including products, and of dimensions known
+only at run time. That is what makes a product the natural type of a marginal over a Markov
+blanket, whose members are only known when a quantity is retired ([Retirement](#retirement)).
+
+## Operations
+
+An *operation* is a smooth map
+
+$$
+	\otherPoint = \map(\point_1, \dots, \point_m; \discretePoint_1, \dots, \discretePoint_r) @tag(operation)
+$$
+
+from continuous inputs $\point_j \in \manifold_j$ and discrete inputs $\discretePoint_i$ to an
+output $\otherPoint \in \otherManifold$, smooth in the continuous inputs for each value of the
+discrete ones. In the compilation graph it is a mapped node with an incoming edge from each input.
+Its partial derivatives $\partial_j \map$ are taken in tangent charts, and it may provide four maps,
+each over a *frame* of directions
+([automatic differentiation over frames](../../math/automatic-differentiation/)):
+
+| map | given | returns |
+| --- | --- | --- |
+| forward | the inputs | $\otherPoint$ |
+| tangent | a frame $\tangent_j$ per continuous input | $\otherTangent = \sum_j \partial_j \map\, \tangent_j$ |
+| cotangent | a frame $\alpha$ at the output | $\partial_j \map\transpose \alpha$ per continuous input |
+| second order | velocities $\tangent_j$, and one cotangent $\alpha$ | $\hvp_j(\alpha) = \frac{\dd}{\dd t}\big\vert_{t=0} \partial_j \map(\point \oplus t\tangent)\transpose \alpha$ per input |
+
+The second-order map takes a velocity frame of several columns, one Hessian direction each, and a
+single cotangent column. Its definition in charts is the one under which a forward-over-reverse pass
+computes the chart Hessian [](eq:math/derivatives-in-charts/chart-hessian), by
+[%full](statement:math/derivatives-in-charts/passes).
+
+Discrete inputs carry no derivatives, and a discrete output carries none either. A map that turns a
+discrete input into a continuous output (an *embedding*, such as an integer read as a real) has no
+partial derivative in it. A map that turns a continuous input into a discrete output (a
+*discretization*, such as the indicator $\mathbb 1[\point \ge 0]$) passes no cotangent back. For a
+step function that is the true derivative everywhere but at its steps, and the core makes no
+attempt to do better: a model that needs a derivative across a discretization needs a relaxation,
+which is a modelling choice, not the core's.
+
+### Two gates
+
+A pass runs over a program's computation graph, whose roots include the quantities it
+differentiates with respect to. Within a pass, an operation's continuous inputs differ in two ways
+that the implementation must keep apart:
+
+- an input is *differentiable* if it is reached from a root the pass differentiates with respect
+  to, which decides whether cotangents ($\alpha$, and in a Hessian pass $\beta$) are pulled back
+  into it along the
+  [backpropagation graph](../../math/automatic-differentiation/#reverse-pulling-cotangent-frames-over-the-backpropagation-graph);
+- an input *carries a velocity* if it is reached from a root seeded with a velocity in this pass,
+  which decides whether its velocity enters $\hvp$.
+
+The second implies the first, and not conversely: a Hessian pass is often seeded at one quantity
+while all of them are differentiated. An operation's $\hvp_j$ is absent whenever $\partial_j \map$
+is not needed, and a missing velocity counts as zero.
+
+### Order
+
+Every operation states its *order* $\order(\map)$: $0$ if it provides only the forward map, $1$ if
+it also provides the tangent and cotangent maps, $2$ if it also provides the second-order map. Most
+primitives have order $2$. An operation that runs burn's automatic differentiation inside, such as a
+neural network, has order $1$; one whose derivative does not exist or was not written has order
+$0$. What a pass needs of a step depends on where the step sits in the program's computation graph.
+
+<Statement {...order} />
+
+A pass that is not admissible is refused before it runs, naming a step $k$ with
+$\order(\map_k) < \req(k)$. This refines the charter's "least order over the program's steps" in two
+ways that matter in practice. A step that no differentiated root reaches, or that reaches no target,
+needs nothing, so a model may contain a first-order neural network and still be differentiated
+twice with respect to quantities that do not feed it. And a step that only pulls back cotangents in
+a Hessian pass, because no seeded velocity reaches it, needs only first order: its $\hvp$ terms are
+zero by [](eq:math/automatic-differentiation/leibniz).
+
+## Selection
+
+*Selection* chooses one of several continuous values by a discrete index:
+
+$$
+	\otherPoint = \operatorname{select}(\discretePoint;\, \point_0, \dots, \point_{n-1}) = \point_\discretePoint,
+	\qquad \discretePoint \in \mathrm{Categorical}(n),\; \point_i \in \manifold . @tag(select)
+$$
+
+All the $\point_i$ and $\otherPoint$ are of one type. For each $\discretePoint$ the map is a
+projection, so its derivatives in charts are as simple as derivatives get: since
+$\otherPoint = \point_\discretePoint$, the chart at $\otherPoint$ is the chart at
+$\point_\discretePoint$, and
+
+$$
+	\partial_{\point_i} \otherPoint = \begin{cases} I & i = \discretePoint, \\ 0 & i \ne \discretePoint, \end{cases}
+	\qquad \hvp_{\point_i} = 0 .
+$$
+
+The cotangent at $\otherPoint$ goes to the selected value and nowhere else, and the index receives
+nothing. Mixtures, switching models and data association are built on selection: a mixture whose
+component is a discrete quantity reads that component's parameters through selection, and a
+measurement associated by a discrete quantity selects the target it came from. The derivative with
+respect to the values, at a fixed index, is exactly what a gradient-based algorithm conditioned on
+the discrete quantities needs.
+
+## The primitives
+
+The core ships all of the primitive operations below, with the derivative maps they carry; those
+on Euclidean quantities first. In
+the table, $\odot$ is the elementwise product, $\tangent_a$ the velocity of an input $a$ in a
+Hessian pass (or its tangent, in the tangent map), and $\alpha$ the cotangent at the output. Each
+frame is handled column by column, so one column is shown.
+
+| operation | tangent | cotangent per input | second order per input |
+| --- | --- | --- | --- |
+| $a + b$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $a - b$ | $\tangent_a - \tangent_b$ | $\alpha,\ -\alpha$ | $0,\ 0$ |
+| $-a$ | $-\tangent_a$ | $-\alpha$ | $0$ |
+| $a \odot b$ | $\tangent_a \odot b + a \odot \tangent_b$ | $b \odot \alpha,\ a \odot \alpha$ | $\tangent_b \odot \alpha,\ \tangent_a \odot \alpha$ |
+| $s\,a$, $s \in \R$ | $\tangent_s\, a + s\, \tangent_a$ | $a\transpose \alpha,\ s\, \alpha$ | $\tangent_a\transpose \alpha,\ \tangent_s\, \alpha$ |
+| $A B$ | $\tangent_A B + A \tangent_B$ | $\alpha B\transpose,\ A\transpose \alpha$ | $\alpha \tangent_B\transpose,\ \tangent_A\transpose \alpha$ |
+| $\sum_i a_i$ | $\sum_i (\tangent_a)_i$ | $\alpha \mathbf 1$ | $0$ |
+| $e^{a}$ (elementwise) | $e^{a} \odot \tangent_a$ | $e^{a} \odot \alpha$ | $e^{a} \odot \tangent_a \odot \alpha$ |
+| $\log a$ (elementwise) | $\tangent_a / a$ | $\alpha / a$ | $-\tangent_a \odot \alpha / a^2$ |
+| $\sin a$ (elementwise) | $\cos a \odot \tangent_a$ | $\cos a \odot \alpha$ | $-\sin a \odot \tangent_a \odot \alpha$ |
+| $\cos a$ (elementwise) | $-\sin a \odot \tangent_a$ | $-\sin a \odot \alpha$ | $-\cos a \odot \tangent_a \odot \alpha$ |
+| $\operatorname{atan2}(a, b)$ (elementwise) | $(b \odot \tangent_a - a \odot \tangent_b) / r$ | $b \odot \alpha / r,\ -a \odot \alpha / r$ | [](eq:atan2) |
+| slice, concatenate, transpose | the same map | its adjoint | $0$ |
+| select | [](eq:select) | to the selected value | $0$ |
+
+The trigonometric rows are there because the retraction that a curved type's geometry suggests is
+often built from sines and cosines, and its inverse from an inverse tangent: with them, such a
+retraction is a composite, whose derivatives follow from the table, rather than a fused operation
+whose derivatives are written by hand, with no composite to fall back on while an upgrade of burn
+breaks its kernels. $\operatorname{atan2}(a, b) \in (-\pi, \pi]$ is the angle of the point
+$(b, a)$, defined where $r = a \odot a + b \odot b$ is positive. Its derivatives, with the second
+order read off the first by differentiating $b / r$ and $-a / r$, are
+
+$$
+	\hvp_a = \frac{(a^2 - b^2) \odot \tangent_b - 2\, a \odot b \odot \tangent_a}{r^2} \odot \alpha,
+	\qquad
+	\hvp_b = \frac{(a^2 - b^2) \odot \tangent_a + 2\, a \odot b \odot \tangent_b}{r^2} \odot \alpha, @tag(atan2)
+$$
+
+squares, products and quotients taken elementwise. They hold off the half-line $a = 0$, $b < 0$,
+where the angle jumps by $2\pi$; there the map is a discretization in the sense of
+[Operations](#operations), and a composite that must cross it, as an inverse retraction near a half
+turn may, switches formulas by [selection](#selection).
+
+The operations on positive quantities read their tangents and cotangents in the charts
+[](eq:positive), that is, in logarithmic coordinates, where all but the inclusion are linear. Here
+$a$ and $b$ are positive, $c$ is Euclidean, and the products, quotients and powers are
+elementwise.
+
+| operation | from, to | tangent | cotangent per input | second order per input |
+| --- | --- | --- | --- | --- |
+| $a$ as a real | $\positive^n \to \R^n$ | $a \odot \tangent_a$ | $a \odot \alpha$ | $a \odot \tangent_a \odot \alpha$ |
+| $e^{c}$ | $\R^n \to \positive^n$ | $\tangent_c$ | $\alpha$ | $0$ |
+| $\log a$ | $\positive^n \to \R^n$ | $\tangent_a$ | $\alpha$ | $0$ |
+| $a \odot b$ | $\positive^n \times \positive^n \to \positive^n$ | $\tangent_a + \tangent_b$ | $\alpha,\ \alpha$ | $0,\ 0$ |
+| $1 / a$ | $\positive^n \to \positive^n$ | $-\tangent_a$ | $-\alpha$ | $0$ |
+
+The exponential and logarithm here are not the rows of the first table: those map $\R^n$ to
+$\R^n$, read in the flat charts, where their derivatives are $e^{a}$ and $1/a$; these change type,
+and in the charts of the positive side their derivatives are identities. Both are kept, because a
+model may want either. The retraction [](eq:positive) is the composite $\point \odot e^{\tangent}$
+of the second and fourth rows, and its inverse $\log \otherPoint - \log \point$ of the third and a
+Euclidean subtraction, so every derivative of both, of either order, is an identity or zero.
+
+Beside the rows of both tables, every embedded type has the two boundary operations of
+[Embedded types](#quantities), its inclusion $\iota$ and its retraction $\oplus$, and a third, its
+projection $\pi$, when it declares one. Their derivative maps [](eq:inclusion),
+[](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) are assembled from passes
+over the type's own operations rather than written in a table.
+
+Every row is checked the same way: the tangent map is the derivative of the forward map, the
+cotangent map its transpose, and the second-order map the derivative of the cotangent map along the
+velocities, holding $\alpha$ fixed. The bilinear operations ($a \odot b$, $s\,a$, $A B$) and
+$\operatorname{atan2}$ are the only ones whose second-order maps mix inputs: the pull-back into one
+input involves the other, so the other's velocity appears. The linear ones have none. The discrete operations the core needs
+(integer arithmetic and comparison) and the embedding of an integer as a real carry no
+derivatives, by the conventions of [Operations](#operations).
+
+## Programs, composites and passes
+
+A model is evaluated by compiling a program from the compilation graph, as in
+[The compilation graph](#the-compilation-graph). Four passes run over a compiled program: the
+forward pass, the tangent pass [](eq:math/automatic-differentiation/jvp) along the edges of its
+computation graph, the cotangent pass [](eq:math/automatic-differentiation/vjp) along the edges of
+its backpropagation graph, and the Hessian pass [](eq:math/automatic-differentiation/leibniz), which
+runs both. Derivatives are collected at the program's roots only, which are the leaves of its
+backpropagation graph, and [Queries](#queries) says which roots those are.
+
+A *composite* operation is a named subgraph of the compilation graph, such as the retraction of a
+product, or (in later entries) a distribution's log-density: a set of operations with designated
+inputs and one output, stored under one name. Its derivative maps are *defined* as the composition
+of its parts', so expanding a composite into its parts at compilation changes no value that any
+pass computes, and its order is that of its parts under [%full](statement:order). A hand-written
+fused form of a composite, introduced for speed or for numerical care, is a different operation
+with the same mathematics, and it is correct only if every pass over it agrees with every pass over
+the composite, to within rounding. Feature crates write such operations too, as
+[Operations in feature crates](#operations-in-feature-crates) says.
+
+The product retraction is the composite the charter's acceptance test is about.
+
+<Statement {...productAgreement} />
+
+<Proof>
+
+Slicing and concatenation are linear, so their tangent maps are themselves, their cotangent maps
+are their adjoints (scattering into a zero block and gathering a block), and their second-order maps
+are zero. In the tangent pass, slicing hands each factor's retraction exactly its blocks of the
+frames, and concatenation stacks what they return. In the cotangent and Hessian passes, the
+concatenation's adjoint hands each factor exactly its blocks of $\alpha$ and $\beta$, the factors
+pull them back, and the slicing's adjoint places each result in its own block, adding only zeros. By
+[](eq:math/automatic-differentiation/leibniz), with the linear steps' $\hvp$ zero, the product's
+$\beta$ is the factors' $\beta$s, stacked. So every pass computes the block-diagonal assembly of the
+factors' passes, which is the derivative structure of [](eq:math/product-manifold/blocks).
+
+</Proof>
+
+The proof introduces no arithmetic beyond additions of zero, so a test may hold the agreement to a
+tolerance of a few units in the last place.
+
+### Operations in feature crates
+
+Every operation in a model is of one of three kinds, and the kind decides where it may be written.
+
+- **Primitives** are the core's alone: the operations of [The primitives](#the-primitives), with
+  derivative maps and kernels written by hand, and the boundary operations of embedded types, whose
+  derivative maps are assembled from passes over each type's retraction and its inverse.
+- **Composites** may be written anywhere, in a feature crate as in the core. They are built from
+  other operations, their derivative maps are those of their parts by the chain rule, and they
+  touch no tensor.
+- **Fused operations** may be written anywhere too. A fused operation provides its forward,
+  tangent, cotangent and second-order maps itself, as a primitive does, computed by kernels of its
+  own over the core's public tensor layer, and it states its order like any operation.
+
+A fused operation is what a feature crate writes when a composite is too slow, or loses precision
+where the feature needs it: a bespoke kernel for the exponential of $\operatorname{SO}(3)$, say, or
+for its logarithm near angle $\pi$. It owes three things.
+
+1. **A reference.** It names the composite it fuses, when one can be written, and every pass over
+   it agrees with every pass over that composite, to within rounding, at both precisions. When
+   none can, its derivative maps are checked against finite differences of
+   [](eq:math/derivatives-in-charts/derivative), at both precisions, as a primitive's are.
+2. **Every backend.** It runs on every backend skoro supports, or runs the composite it fuses on
+   the backends its kernels do not cover.
+3. **A name.** It is registered under a name, as every operation is, so that a serialized model
+   names it and a model read without the crate that defines it is refused, naming the operation,
+   rather than misread.
+
+This is what keeps the core stable as feature crates arrive. The core's primitives are the
+operations every feature shares (arithmetic, exponentials and logarithms, trigonometric functions,
+products of matrices, slicing and selection), and no feature's needs, however particular, add to them: what composes is
+a composite, and what must be faster or more careful than its composite is a fused operation in
+the feature's own crate. The core changes for a feature only when the feature needs something its
+public interface cannot express, such as the boundary operations of embedded types, and such a
+change is general: it is made once, for every later feature of the kind. The cost of a fused
+operation falls on its own crate, whose kernels are written against the tensor layer and may need
+changes when burn does. A composite bounds that cost. It is a correct operation with the same
+mathematics, so while a fused operation's kernels are broken by an upgrade, its feature can use the
+composite in its place, slower but right, and the upgrade does not wait on the feature. That is why
+a fused operation should have a composite whenever one can be written, and why numerical care is
+first sought in the composite itself, where it can often be had: a logarithm of
+$\operatorname{SO}(3)$ can switch formulas near angle $\pi$ by a discretization of the angle and
+[selection](#selection), whose derivatives are exact away from the switch, provided the formula not
+selected is guarded as [Embedded types](#quantities) describes.
+
+The mathematics here assumes the tensor layer is public: the tensor shapes skoro uses (batched
+points, tangent frames, integer values) and the operations on them that kernels need. What it
+exposes, and how, is the implementation's to settle.
+
+### The acceptance test
+
+The charter accepts its position on products on one condition: that the retraction of a runtime
+product, and its first and second derivatives, agree with the factor-wise computation. On the
+core's own types that is a weak test at second order. In the charts of every one of them a
+retraction is a translation, so every second-order map along it is zero, and the second
+derivatives under test are zeros on both sides. The test is therefore run on a product that
+includes a curved factor, and composed with a function whose second derivative does not vanish.
+
+**A sphere outside the core.** The test's curved factor is the unit sphere
+$S^2 = \{\point \in \R^3 : \lVert \point \rVert = 1\}$, of dimension $2$ and storage size $3$,
+declared as an embedded type. The test is written as a later entry's crate would be written,
+outside the core and with nothing but its public interface, so that it also shows a curved type
+being added with no derivative written by hand. The sphere is not a type of the core. skoro means
+to support it, but in an entry of its own, which settles what this test can leave aside: a basis
+for the whole sphere, the choice of retraction, and the sphere's reference measure. When that entry
+adds it, the acceptance test runs on that sphere instead, and this one is removed.
+
+The tangent plane at $\point$ is $\point^\perp$. No basis of it is smooth on the whole sphere (a
+smooth field of tangent bases on $S^2$ would give a nowhere-vanishing tangent vector field, which
+the hairy ball theorem rules out), so the test's basis is smooth on $U = \{\point : \point_3 > -1\}$,
+the sphere without its south pole, and the tests stay inside it:
+
+$$
+	B(\point) = \begin{pmatrix}
+		1 - c\, \point_1^2 & -c\, \point_1 \point_2 \\
+		-c\, \point_1 \point_2 & 1 - c\, \point_2^2 \\
+		-\point_1 & -\point_2
+	\end{pmatrix},
+	\qquad c = \frac{1}{1 + \point_3} .
+$$
+
+Its columns are orthogonal to $\point$ and orthonormal on the sphere, as expanding with
+$\point_1^2 + \point_2^2 = (1 - \point_3)(1 + \point_3)$ shows: the first column's product with
+$\point$, for one, is $\point_1 (1 - \point_3) - c\, \point_1 (1 - \point_3^2) = 0$. The test's
+retraction is the inverse of the stereographic projection from $-\point$, in coordinates scaled so
+that its derivative at $0$ is $B(\point)$, and needs no projection: with
+$s = \lVert \tangent \rVert^2 / 4$,
+
+$$
+	\point \oplus \tangent = \frac{(1 - s)\, \point + B(\point)\,\tangent}{1 + s},
+	\qquad
+	\otherPoint \ominus \point = Q(\point, \otherPoint) = \frac{2\, B(\point)\transpose \otherPoint}{1 + \point\transpose \otherPoint}
+	\quad (\point\transpose \otherPoint > -1) . @tag(sphere)
+$$
+
+The retraction stays on the sphere because $\point\transpose B(\point) = 0$ and
+$B(\point)\transpose B(\point) = I$ give
+$\lVert (1 - s)\, \point + B(\point)\,\tangent \rVert^2 = (1 - s)^2 + 4 s = (1 + s)^2$, and its
+derivative in $\tangent$ at $0$ is $B(\point)$, since $s$ is quadratic. For the inverse, the same
+identities give $\point\transpose \otherPoint = (1 - s)/(1 + s)$ and
+$B(\point)\transpose \otherPoint = \tangent / (1 + s)$, so $1 + \point\transpose \otherPoint = 2/(1 + s)$
+and $\tangent = 2\, B(\point)\transpose \otherPoint / (1 + \point\transpose \otherPoint)$. The
+retraction is defined for every $\tangent$ and reaches every point but $-\point$, where its inverse
+is undefined. It is not of the form $P(\point + B(\point)\,\tangent)$ for the normalizing
+projection, which would go in the direction of $\point + B(\point)\,\tangent$ rather than of
+$(1 - s)\, \point + B(\point)\,\tangent$, so the test exercises a retraction that the core knows
+only as an operation. The sphere also declares that normalizing projection,
+$P(w) = w / \lVert w \rVert$, defined where $w \ne 0$ and $w$ is not a positive multiple of the
+south pole, which plays no part in its retraction. Each of $R$, $Q$ and $P$ is a composite of the
+core's Euclidean primitives. The reciprocals are exponentials of logarithms,
+$c = e^{-\log(1 + \point_3)}$, $1 / (1 + s) = e^{-\log(1 + s)}$,
+$1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$ and
+$1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$, each logarithm taken of a number positive
+on the domain; the rest is products, sums, slicing and concatenation.
+
+Unlike the core's types, the sphere is curved: its tangent charts do not commute, the correction term of
+[%full](statement:math/derivatives-in-charts/chart-hessian) is not zero away from stationary
+points, and the second-order maps of its boundary operations are not zero, since its basis turns
+as the point moves.
+
+**What it compares.** The test builds a runtime product of two Euclidean factors, a real line, a
+positive factor and the sphere, and a nonlinear scalar function $f$ on it that reads the positive
+factor and the sphere as real numbers, through their inclusions. It checks, at points of $U$:
+
+1. that every pass over the product's retraction, values, tangent frames, cotangent frames and
+   Hessian products, agrees with the factor-wise computation, block by block, as
+   [%full](statement:product-agreement) says it must;
+2. that the chart gradient and the chart Hessian products of $f$ through the product's retraction,
+   computed by the passes, agree with the factor-wise assembly of
+   [](eq:math/product-manifold/blocks), and with finite differences of their definitions
+   [](eq:math/derivatives-in-charts/gradient) and [](eq:math/derivatives-in-charts/chart-hessian);
+3. that on the sphere's block, away from a stationary point, the chart Hessian differs from the
+   Hessian of the pull-back by the correction term, and on every other block it does not.
+
+The sphere's boundary operations are checked the same way first, [](eq:inclusion),
+[](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) against finite differences
+of [](eq:math/derivatives-in-charts/derivative), and its $Q$ against the retraction it must invert,
+so that a failure of the acceptance test points at the product rather than at the type. The two
+ways into the type are checked against each other as well: the retraction, and the projection of
+the retraction computed in storage, $\pi(R(\iota(\point), \tangent))$, a map into the sphere
+written as [](eq:map-into) says, agree in value and in every derivative map, though one is a
+boundary operation and the other a composite through the projection.
+
+## Queries
+
+The charter puts conditioning in the query: the model holds the joint density
+[](eq:log-density), and each question asked of it says which quantities are fixed. A *query*
+partitions the quantities its targets reach in the compilation graph twice over, into observed and
+free, and into continuous and discrete:
+
+- the *observed* quantities, continuous $\point_O$ and discrete $\discretePoint_O$, fixed at values
+  the query gives: what the query conditions on;
+- the *free* quantities, continuous $\point_F$ and discrete $\discretePoint_F$: the variables of the
+  query, whose values are the point at which it is evaluated.
+
+The query's log-density is then a function of the free values,
+
+$$
+	\log \density(\point_F, \discretePoint_F;\, \point_O, \discretePoint_O) = \sum_t \logterm_t(\point_F, \discretePoint_F, \point_O, \discretePoint_O), @tag(query)
+$$
+
+which is, up to an additive constant, the log-density of the conditional distribution of the free quantities given the observed ones, with respect to Lebesgue
+measure on the continuous free quantities and counting measure on the discrete ones. One model
+answers many queries: with the measurements observed it is a posterior; with nothing observed, a
+prior to simulate from; with the states observed, a likelihood of measurements. A switching model's
+mode, or the association of a measurement with the landmark it came from, is observed when it is
+known and free when it is not. Parameters are quantities like any other here: a
+query for the example's positions observes the IMU reading $\bfzeta_1$ along with the measurements,
+and either observes the scale $\bfsigma$ or leaves it free, to be estimated with the positions.
+
+**Roots.** The roots of a query's program, the roots of its computation graph, are the
+quantities and constants its targets reach. Of these, the free continuous quantities are the ones
+every pass differentiates with respect to, in their tangent charts; the observed quantities, the
+free discrete ones and the constants are inputs no pass differentiates. A quantity's value is an input of the query even
+when the quantity was drawn from a distribution whose parameters depend on other quantities, since
+it is a root of the compilation graph: $\partial \log \density / \partial \point_i$ counts
+$\point_i$'s appearances in the terms, never its role in generating its children.
+
+**Folding.** A mapped value whose inputs are all fixed is itself fixed, and need not be computed on
+every evaluation: it can be computed once and put in place of the subgraph that computes it, as a
+new root. Nothing a pass computes changes, since no derivative flows into a fixed value. A value is
+fixed at one of two levels, and is folded at that level.
+
+- **In the model.** A value reached only from constants is the same in every query, snapshot and
+  branch, so it is folded once, when it is added to the compilation graph, and the model keeps the
+  result, in double precision on the host like every value it stores. A query casts it to its own
+  precision like any other constant. Conditioning in the query does not prevent this: a constant is
+  not a quantity, so no query can observe or free it.
+- **In a compiled query.** A value reached from observed quantities, continuous or discrete, and
+  from constants, is fixed only for the queries that observe those quantities, so it is folded when
+  such a query is compiled, and reused by every evaluation of the compiled program.
+
+A value reached from a free quantity is not folded. The difference shows in a Gaussian term written
+with a covariance factor $L$, whose log-density reads its inverse and the logarithms of its diagonal
+(a later entry decides how the Gaussian takes its covariance). If $L$ is a constant, both are
+folded once in the model; if it is an observed quantity, once per compiled query; if it is free,
+they are computed on every evaluation, together with their derivatives with respect to $L$.
+
+Selection by an observed index folds further than its value. Since
+$\operatorname{select}(\discretePoint;\, \point_0, \dots, \point_{n-1})$ is $\point_\discretePoint$,
+an observed $\discretePoint$ makes the selection the chosen input itself, and the compiled program
+takes that input in its place. The inputs not chosen, and every value that reaches the program's
+targets only through them, drop out of the program: a mixture with its component observed computes
+that component alone.
+
+**Discrete quantities in a query.** Observing a discrete quantity and leaving it free give the same
+density at the same values, since [](eq:query) is the same sum either way. What differs is the
+distribution the query targets. An observed $\discretePoint_O$ is conditioned on: the target is the
+distribution of the free quantities given its value, which every evaluation holds. A free
+$\discretePoint_F$ is part of the target: an algorithm evaluates the density at values of
+$\discretePoint_F$ it chooses (the current state of a Markov chain, or a drawn particle) and must
+sum or sample over them to answer for the target. Derivatives stop at discrete quantities, so the
+gradient of [](eq:query) at given values of $\discretePoint_F$ is the gradient of the conditional
+density of $\point_F$ given those values, not of the target. A gradient cannot sum or sample out
+$\discretePoint_F$, so a gradient-based algorithm refuses a query with a free discrete quantity
+(charter, position 7), rather than silently condition on the values it was given. Observing the
+discrete quantities is how a model that has them is given to such an algorithm.
+
+**Flattened coordinates.** An estimator works with vectors, not with quantities. Ordered as the
+estimator chooses, the free continuous quantities $\point_F = (\point_1, \dots, \point_n)$ are one point of the
+product manifold $\manifold_1 \times \cdots \times \manifold_n$, a tangent of which is a vector
+$\tangent \in \R^\dimension$, $\dimension = \sum_i \dimension_i$, stacked by
+[](eq:math/product-manifold/stack). An estimator's step is that product's retraction,
+
+$$
+	\point_F \oplus \tangent = (\point_1 \oplus \tangent_1, \dots, \point_n \oplus \tangent_n), @tag(step)
+$$
+
+and a Jacobian, gradient or Hessian over $\point_F$ is the block matrix of
+[](eq:math/product-manifold/blocks). So the layout an estimator uses and a product quantity type are
+the same mathematical object, and the core should build them from one construction.
+
+## Terms and the importance weight
+
+A term $t$ is a node of the probabilistic graph. Its log-density $\logterm_t$ is a node of the
+compilation graph, computed from the quantities it is reached from there. Following the charter, a
+term records the quantity it *scores*, $s_t$, if any, and the quantities it is *conditioned on*,
+$C_t$, so that $\logterm_t$ reads as $\log \density_t(s_t \mid C_t)$. The quantities a term
+involves, $V_t = \{s_t\} \cup C_t$, its neighbours in the probabilistic graph, determine every
+structural question the core answers: which terms touch a quantity, what a quantity's Markov
+blanket is, and what retiring it disturbs. They are only right if they contain every quantity
+$\logterm_t$ depends on, so the core reads $V_t$ off the compilation graph, as the quantities among
+the roots $\logterm_t$ is reached from, rather than trusting a declaration; $C_t$ is then $V_t$
+without $s_t$. In the example, $\logterm_6$ is reached from $\randomPoint_0$, $\randomPoint_1$
+and $\bfsigma$ (and two constants, which are not quantities), and the term $t_6$ scores nothing,
+so it is conditioned on all three: it is the likelihood factor $L(\randomPoint_0, \randomPoint_1,
+\bfsigma)$. The motion term's $\logterm_3$ is reached from $\randomPoint_0$, $\randomPoint_1$ and
+$\bfzeta_1$, and $t_3$ scores $\randomPoint_1$, so it is conditioned on $\randomPoint_0$ and
+$\bfzeta_1$: it is the density of $\rmP_{\randomPoint_1 \mid \randomPoint_0, \bfzeta_1}$.
+
+**The generative reading.** A distribution may provide a sampler for the quantity it scores, which
+draws $s_t$ given $C_t$, with a log-density $\log \proposal_t(s_t \mid C_t)$ of its own; an exact
+sampler has $\proposal_t = \density_t$ (charter, position 9).
+
+A parameter has no distribution, and so no sampler; the core supplies a *proposal* for it instead.
+A proposal is a conditional density $\proposal_\theta(\theta \mid C_\theta)$ attached to the
+parameter $\theta$ in the model, with respect to the parameter's base measure and conditioned on
+quantities $C_\theta$ that existed before the parameter, from which the parameter is drawn when it
+is generated. It is not a term: it contributes nothing to $\log \density$, and enters only the
+weights below. Ancestral order places each parameter after its $C_\theta$, as it places a scored
+quantity after the quantities its term is conditioned on. A parameter without a proposal is legal,
+as a distribution without a sampler is.
+
+A query generates its free quantities, continuous and discrete, ancestrally: each scored quantity
+from the sampler of the term that scores it, and each parameter from its proposal, in a
+topological order of the probabilistic graph. In this section, $\point_F$ stands for all of them,
+$\discretePoint_F$ included, $\point_O$ for all the observed quantities, $\discretePoint_O$
+included, and $\Theta_F$ for the parameters among the free ones. Generation is possible exactly when every free
+quantity is scored by a term with a sampler or is a parameter with a proposal; it is refused
+otherwise, naming a quantity that is neither. The importance weight of a generated point is
+
+$$
+	\log \weight(\point_F) = \sum_t \logterm_t(\point_F, \point_O)
+	- \sum_{t \,:\, s_t \in F} \log \proposal_t(s_t \mid C_t)
+	- \sum_{\theta \in \Theta_F} \log \proposal_\theta(\theta \mid C_\theta), @tag(weight)
+$$
+
+which is the charter's [](eq:archive/charter/writeup/weight), with the observed quantities' terms,
+the likelihood factors and the parameters' scores, the likelihoods of this query, contributing
+$\logterm_t$ alone, each term whose sampler is exact cancelling, and each free parameter
+contributing its proposal. An optimizer generates nothing, and needs a starting value for each free
+parameter instead: the query gives one, or it is drawn from the parameter's proposal.
+
+<Statement {...importance} />
+
+<Proof>
+
+Ancestral generation draws $\point_F$ with density
+$\proposal(\point_F) = \prod_{t : s_t \in F} \proposal_t(s_t \mid C_t) \prod_{\theta \in \Theta_F} \proposal_\theta(\theta \mid C_\theta)$
+with respect to the product of the base measures, since each free quantity is drawn given
+quantities drawn or fixed before it. Then
+$\weight = \density(\point_F, \point_O) / \proposal(\point_F)$ wherever $\proposal > 0$, which
+covers the set where $\density(\cdot, \point_O) > 0$ by the positivity condition, and
+$\E_\proposal[\weight h] = \int h\, \density(\point_F, \point_O)\, \dd \point_F$. When $Z$ is
+finite and positive, $\pi = \density(\cdot, \point_O)\, \dd\point_F / Z$ is a probability
+measure, and the integral is $Z\, \E_\pi[h]$.
+
+</Proof>
+
+Two conditions in the statement are the core's to check or to state. The base measures must match.
+In the core, a continuous quantity's density is with respect to Lebesgue measure on the space its
+values lie in, $\R^n$ or the open subset $\positive^n$ of it, and a discrete quantity's with
+respect to counting measure, so this holds as long as every distribution keeps to that convention.
+The one place it is easy to break is a density written in the logarithmic chart of a positive
+quantity, such as a log-normal written as a normal in $u = \log \point$. If $g$ is the density of
+$\log \randomPoint$ with respect to Lebesgue measure on $\R^n$, the density $f$ of $\randomPoint$
+with respect to Lebesgue measure on $\positive^n$ carries the Jacobian of the chart,
+
+$$
+	\log f(\point) = \log g(\log \point) - \sum_i \log \point_i . @tag(log-chart-density)
+$$
+
+Densities on manifolds without such a chart will need a base measure of their own when the first
+of them arrives. Positivity is the distribution's responsibility, and the core cannot check it.
+
+## Random keys
+
+Every draw comes from a key (charter, position 10). Mathematically a key is an element of a finite
+set $\mathcal K$, with two deterministic maps: $\operatorname{split} : \mathcal K \to \mathcal K^n$,
+and $\operatorname{fold} : \mathcal K \times \Sigma \to \mathcal K$, which folds in one address
+segment from the set $\Sigma$ of names and integers. The key of the quantity at address
+$a = a_1 / \cdots / a_m$ in a run with key $\key$ is
+
+$$
+	\key_a = \operatorname{fold}(\cdots \operatorname{fold}(\operatorname{fold}(\key, a_1), a_2) \cdots, a_m), @tag(address-key)
+$$
+
+and its sampler turns $\key_a$ into the uniform variates it consumes. Because $\key_a$ depends
+on $\key$ and $a$ alone, a quantity's draw does not depend on the order in which the model was
+built, on what was retired before it, or on which branch holds it, and a namespace's keys share the
+prefix of folds that the namespace's own address determines.
+
+The independence of draws rests on an idealization: that $\operatorname{fold}$ and
+$\operatorname{split}$ behave as a pseudorandom function, so that distinct addresses yield keys
+indistinguishable from independent uniform ones. Two things the core must ensure for that to mean
+anything. Distinct addresses must give distinct inputs: each segment's encoding must be injective
+and tagged by its kind, so that the name `"3"` and the integer $3$ differ, and folding segment by
+segment, rather than hashing a concatenated string, rules out collisions such as `ab/c` against
+`a/bc`. And each batch row of a run must have its own run key, split from the run's, so that rows
+are independent.
+
+Because the uniform variates are drawn on the host from the key and then converted to the
+precision a query computes in, one key gives the same draws at single and double precision, up to
+the rounding of the conversion.
+
+## Retirement
+
+Retiring is the one change that shrinks a model: a set of quantities is removed, and what they said
+about the rest is kept. The quantities are named by their addresses: a retirement is given a
+collection $A$ of addresses, and retires the quantities $E$ at those addresses. A namespace is one
+way of writing such a collection, the addresses that have its own address as a proper prefix, and
+is the natural one when a tick leaves a sliding window; but the mathematics below asks nothing of
+$E$'s addresses, and the collection need not be a namespace. A tick's sub-model may create a
+quantity that should outlive the tick, such as a landmark first seen in it, which is then left out
+of the tick's collection. A fixed-lag smoother may retire a tick's states but keep its
+measurements for a later query to observe. And several ticks may be retired together, which, once
+the replacement is approximated, is not the same as retiring them one after another (below).
+
+Retirement is read on the probabilistic graph. Let $E$ be the quantities to retire,
+$\mathcal T_E$ the terms joined to any of them ($V_t \cap E \neq \emptyset$), and
+
+$$
+	B = \Bigl(\bigcup_{t \in \mathcal T_E} V_t\Bigr) \setminus E @tag(blanket)
+$$
+
+their *Markov blanket*: the other quantities joined to those terms. In the example, retiring the
+first tick, $E = \{\randomPoint_0, \bfz_0\}$, touches the terms $t_1$, $t_3$, $t_4$ and $t_6$,
+and its blanket is $\{\randomPoint_1, \bfm, \bfzeta_1, \bfsigma\}$: both parameters join it,
+because the motion model $t_3$ and the likelihood factor $t_6$ they condition are among the terms
+replaced. The score $t_7$ of $\bfsigma$ is not touched, and stays.
+
+Retirement must condition as well as marginalize. The quantities retired with a tick are often its
+measurements as well as its states, and integrating the measurements out of the joint would discard
+exactly the information a sliding window keeps them for. So the quantities of $E$ split into those
+fixed at given values, $E_O$ (usually the measurements, with the values the estimator observed),
+and those integrated out, $E_F$. Since conditioning belongs to the query, the values of $E_O$ are
+given to the retirement itself, and once retired they become part of the model: what remains is the
+joint of the remaining quantities given those values. Only a quantity of $E$ can be given a value:
+one outside $E$ stays in the model, where a query observes it.
+
+<Statement {...retirement} />
+
+<Proof>
+
+Split [](eq:log-density) into the terms of $\mathcal T_E$, which involve only $E$ and $B$, and the
+rest, which involve no quantity of $E$. Fixing $E_O$ and integrating over $E_F$, the second group
+comes out of the integral as a constant factor, by Tonelli's theorem for the non-negative
+integrand, and what remains of the first group is $\exp \logterm_B(\point_B)$.
+
+</Proof>
+
+The replacement must be computed from the terms $\mathcal T_E$ alone. Computing the marginal of the
+whole model on $B$ instead would fold in the terms outside $\mathcal T_E$, which the model still
+holds, and count them twice. The integral defining $\logterm_B$ rarely has a closed form. It has one
+for linear-Gaussian terms, where retiring the oldest state of a chain is the update-and-predict step
+of a Kalman filter; otherwise it is approximated, by a Laplace approximation at the current
+estimate in the archive's sliding windows. Either way, computing it needs the distributions and the
+linear algebra of later entries, which the core does not have.
+
+**Retiring together and one after another.** [%full](statement:retirement) holds for any $E$, so
+retiring $E_1$ and then a disjoint $E_2$ can be compared with retiring $E_1 \cup E_2$ at once. With exact
+replacements they agree: the first replacement is a term of the model when the second retirement
+reads it, and integrating over $E_{1,F}$ and then over $E_{2,F}$ is integrating over both, by
+Tonelli's theorem. With approximate replacements they do not, in general. A Laplace approximation
+of the second retirement is taken of a density that already contains the approximation of the
+first, and the result differs from the Laplace approximation of the joint integral, as
+marginalizing in steps differs from marginalizing at once. The difference vanishes when the two
+retirements share no term, $\mathcal T_{E_1} \cap \mathcal T_{E_2} = \emptyset$. Then no
+quantity of $E_2$ lies in the blanket of $E_1$, since a term joined to it would be in both sets;
+the first replacement is not reached from $E_2$; and the joint integral is the product of the
+two. Retiring a collection at once is then the choice of the caller who wants one approximation
+of the whole, rather than a sequence of approximations.
+
+**What the core does.** The core retires; it does not compute the replacement. A retirement is
+given a collection of addresses and the values of $E_O$, and goes in three steps.
+
+1. The core reads $E$, the quantities at the given addresses, and $E_F = E \setminus E_O$; it refuses an
+   address at which there is no quantity, and a value given for a quantity outside $E$. It reads
+   $\mathcal T_E$ off the probabilistic graph, and $B$ by [](eq:blanket). It hands these to the
+   caller with the values of $E_O$: the terms with their log-densities in the compilation graph,
+   and the blanket's quantities with their types.
+2. The caller builds the replacement $\logterm_B$, a likelihood factor added to the compilation
+   graph as any term's log-density is, from the quantities of $B$ and constants: exactly the
+   integral of [%full](statement:retirement), or an approximation of it, as the caller chooses. When
+   it is one density over the blanket's tangent coordinates jointly, its natural type is the product
+   of the blanket's types. The caller may also give a proposal for each blanket quantity the
+   retirement leaves unscored (below).
+3. The core checks the replacement and applies the change. It refuses a replacement reached from a
+   quantity outside $B$, read off the compilation graph as every term's $V_t$ is: one reached from a
+   quantity of $E$ would be removed with it, and one reached from a quantity outside the blanket
+   would add a dependence the retired terms did not have. Otherwise it removes $E$, the terms
+   $\mathcal T_E$ and the mapped values reached from $E$, and adds $\logterm_B$, in one change: no
+   reader of the model sees it partly retired.
+
+An empty collection is not an error, since a window that no tick has yet left retires nothing:
+$E$, $\mathcal T_E$ and $B$ are empty, the integral of [%full](statement:retirement) is over a
+single point and equals $1$, and the core makes no change.
+
+The core cannot check that the replacement is the integral it stands for, or how good an
+approximation of it is; that is the caller's to answer for. When it is exact, every query of the new
+model has the density of the corresponding query of the old one, with $E_F$ integrated out and
+$E_O$ fixed, by [%full](statement:retirement).
+
+Two consequences for the rest of the model:
+
+- **Mapped values.** Retirement removes the quantities $E$, the terms $\mathcal T_E$, and exactly
+  the mapped values reached from $E$ in the compilation graph; every other node stays, whatever its
+  address. The given addresses select $E$ and nothing else. Removal is safe because every node reached
+  from $E$ is a mapped value reached from $E$ or the log-density of a term in $\mathcal T_E$: a
+  term whose log-density is reached from a quantity of $E$ has that quantity among $V_t$. In the
+  example, the step $r = \point_1 - \point_0$ of the compilation graph above is reached from
+  $\randomPoint_0$, and goes with it, as does every value between it and $\logterm_6$. A mapped
+  value reached from $E$ that a user holds as a target is removed with the rest, and is no longer
+  available after the retirement.
+- **Blanket quantities may become parameters.** A blanket quantity whose scoring term was in
+  $\mathcal T_E$ ($\randomPoint_1$ in the example, whose motion model $t_3$ was conditioned on
+  $\randomPoint_0$) is scored by no term afterwards, and so, by the definition in
+  [The probabilistic graph](#the-probabilistic-graph), it is a parameter. That changes nothing a
+  query computes. [%full](statement:retirement) holds at every value of it; the replacement is
+  conditioned on it, as a score is conditioned on a parameter with an improper prior; and a query
+  leaves it free or observes it as before. Its uncertainty is a matter of the query's target, not
+  of the quantity's kind, and is what it was. In the measure theory of
+  [parameters and improper priors](../../math/generative-models/#parameters-and-improper-priors),
+  the new model is a family indexed by it, and $\exp \logterm_B$ is its score: for linear-Gaussian
+  terms, the Kalman filter's predicted density of $\randomPoint_1$ times a constant, a proper prior
+  written as a score. What changes is generation, as for every parameter: the quantity is drawn
+  from a proposal when it has one, which the caller may give with the replacement, and generation
+  is refused for it otherwise. With the Kalman prediction as its proposal, $\logterm_B$ and the
+  proposal's log-density cancel in the weight [](eq:weight) up to a constant, so the draw is as
+  good as an exact sampler's. The core never writes a replacement in generative form, as a term
+  scoring a blanket quantity with a sampler: a proposal gives generation all it needs.
+
+**Testing retirement.** The core's tests exercise retirement on a model whose replacement is known
+in closed form. A private normal distribution with constant variance, written in the tests as a
+composite like the sphere of [the acceptance test](#the-acceptance-test), builds a scalar chain
+
+$$
+	\randomPoint_0 \sim \mathcal N(a, s^2), \quad
+	\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2), \quad
+	\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2), \quad
+	\bfz_1 \mid \randomPoint_1 \sim \mathcal N(\randomPoint_1, r^2),
+$$
+
+with constants $a$, $s$, $r$ and $q$. Retiring $E = \{\randomPoint_0, \bfz_0\}$ with $\bfz_0$
+observed at $\hat z_0$ touches the terms of $\randomPoint_0$, $\bfz_0$ and $\randomPoint_1$, and its
+blanket is $\{\randomPoint_1\}$. Completing the square in $\point_0$ gives the update
+$\mathcal N(a, s^2)(\point_0)\, \mathcal N(\point_0, r^2)(\hat z_0) = \mathcal N(a, s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P)(\point_0)$,
+and integrating the motion against it gives the prediction, so that
+
+$$
+	\logterm_B(\point_1) = \log \mathcal N(a, s^2 + r^2)(\hat z_0) + \log \mathcal N(\mu, P + q^2)(\point_1),
+	\qquad
+	K = \frac{s^2}{s^2 + r^2}, \quad \mu = a + K(\hat z_0 - a), \quad P = (1 - K)\, s^2, @tag(kalman)
+$$
+
+with $\mathcal N(m, v)(\point)$ the normal density of mean $m$ and variance $v$ at $\point$. The
+tests check:
+
+1. that $E_F$, $\mathcal T_E$ and $B$ are as above, and that exactly the nodes the rule for mapped
+   values names are removed;
+2. that a replacement reached from $\randomPoint_0$, or from a quantity outside the blanket, is
+   refused, and leaves the model as it was;
+3. that with [](eq:kalman) as the replacement, the new model's log-density and the derivatives of a
+   query free in $\randomPoint_1$ agree, constants included, with the old model's with
+   $\point_0$ integrated out by quadrature and $\bfz_0$ fixed at $\hat z_0$, as
+   [%full](statement:retirement) says they must;
+4. that generation is refused for $\randomPoint_1$ without a proposal, and that with the proposal
+   $\mathcal N(\mu, P + q^2)$ every generated point has the same weight, the evidence
+   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$;
+5. that a collection holding part of a tick is retired by the same rule. Retiring
+   $E = \{\randomPoint_0\}$ alone, with nothing observed, touches the same three terms, and its
+   blanket is $\{\bfz_0, \randomPoint_1\}$, both of which become parameters. The integral is the
+   joint normal density of $\bfz_0 = \randomPoint_0 + \varepsilon_r$ and
+   $\randomPoint_1 = \randomPoint_0 + \varepsilon_q$,
+
+   $$
+   	\logterm_B(z_0, \point_1) = \log \mathcal N\!\left(\begin{pmatrix} a \\ a \end{pmatrix}, \begin{pmatrix} s^2 + r^2 & s^2 \\ s^2 & s^2 + q^2 \end{pmatrix}\right)\!(z_0, \point_1), @tag(joint-blanket)
+   $$
+
+   and with it as the replacement, a query that observes $\bfz_0$ at $\hat z_0$ and is free in
+   $\randomPoint_1$ has the log-density and derivatives of the model retired by [](eq:kalman),
+   constants included: conditioning the joint normal on $z_0 = \hat z_0$ gives
+   $\mathcal N(a, s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P + q^2)(\point_1)$. Conditioning in
+   the retirement and conditioning in the query agree, as they must.
+
+## In skoro's terms
+
+- **Quantities** are Euclidean (real, vector, matrix), positive ($\positive^n$, with the
+  retraction [](eq:positive)), and discrete (categorical, boolean, integer), and products of
+  continuous quantities. Later entries add curved types as embedded types, each declared by its
+  retraction and that retraction's inverse, written as operations on storage, in whatever form the
+  type's geometry suggests and smooth as computed at the identity of its charts, and optionally by
+  a projection onto it. The core provides their boundary operations, the inclusion, the retraction
+  and the projection, whose derivatives follow by [%full](statement:embedded) from passes over the
+  declared operations. A map into an embedded type is written in storage and projected,
+  [](eq:map-into). Dimensions are fixed when a quantity is created, and every
+  derivative coordinate is indexed by tangent dimension.
+- **The compilation graph** holds values and operations, and programs are compiled from it; **the
+  probabilistic graph** holds quantities and terms, and is read off the compilation graph and each
+  term's scored quantity.
+- **Operations** are maps [](eq:operation) with up to four derivative maps over frames, each with
+  an order. The core's primitives are those of [The primitives](#the-primitives) and the boundary
+  operations of embedded types; every other operation, the product's retraction included, is a
+  composite of them or a fused operation, which a feature crate may write over the core's tensor
+  layer, tested against the composite it fuses.
+- **Folding** replaces a value reached only from fixed inputs with a root: in the model when they
+  are constants, in a compiled query when they include observed quantities.
+- **Passes** are the forward, tangent, cotangent and Hessian passes over a compiled program,
+  differentiating with respect to a query's free continuous quantities in their charts, refused
+  before running when not admissible by [%full](statement:order).
+- **The density** is the sum of terms [](eq:log-density). A query fixes the observed quantities,
+  continuous and discrete, and its density [](eq:query) is a function of the free ones,
+  differentiated in the continuous ones alone. Generation is ancestral, from the samplers of
+  scored quantities and the proposals the core supplies for parameters, and its weight is
+  [](eq:weight).
+- **Random keys** are derived from addresses by [](eq:address-key).
+- **Retirement** removes the quantities $E$ at a given collection of addresses, of which a
+  namespace is one example, conditioning on the given values of $E_O$ and integrating out $E_F$,
+  and replaces the terms $\mathcal T_E$ with one likelihood factor over the blanket
+  [](eq:blanket). The core computes $E$, $\mathcal T_E$ and $B$, checks the replacement and
+  applies the change; the caller computes the replacement. A blanket quantity left unscored becomes a
+  parameter, generated from a proposal the caller may give.
+
+## Appendix: the probability space of a model
+
+A skoro model is a *model built forward* in the sense of
+[models built forward, for the measure theorist](../../math/generative-models/), and every object
+in this document has a place in that note's measure theory.
+
+- **Quantities are the coordinates.** Each quantity lives in a space with a reference measure:
+  Lebesgue measure on $\R^n$ and $\R^{m \times n}$ and on the open subset $\positive^n$, counting
+  measure on $\mathrm{Categorical}(n)$ and on $\mathbb Z$, and product measures on products. The
+  probability space can be taken to be the product of the quantities' spaces, with the quantities as
+  its coordinates, and the probabilistic graph's ancestral order as the order in which they were
+  built.
+- **Terms are conditional densities.** A term that scores a quantity has, as its $\exp \logterm_t$,
+  that quantity's conditional density given those it is conditioned on, so [](eq:log-density) is the
+  logarithm of the joint density of
+  [%full](statement:math/generative-models/joint-law). A likelihood factor is the change of measure
+  of [%full](statement:math/generative-models/likelihood-factor).
+- **Mapped values are functions of the quantities,** and by
+  [%full](statement:math/generative-models/doob-dynkin) they are all the random variables a model can
+  express. Each is determined by the quantities it is computed from, so it is generated with them
+  and weighed through them, and needs no term of its own.
+- **A query conditions by dividing densities.** Its log-density [](eq:query) is that of the
+  regular conditional distribution of [%full](statement:math/generative-models/conditioning), up to
+  an additive constant, which is why a query may drop it.
+- **Every number an algorithm estimates is an integral** against the joint density, by
+  [%full](statement:math/generative-models/integral): an expectation, a marginal, the evidence. Generation draws from the conditional densities in the order the model was built,
+  which is Ionescu-Tulcea's construction, and importance weighting [](eq:weight) estimates such an
+  integral from those draws.
+- **Retirement integrates and conditions.** [%full](statement:retirement) integrates the retired
+  free quantities out of the terms that touch them and conditions on the retired observed ones,
+  which is the same marginalization and the same division of densities, carried out once and kept.
+
+An embedded type, such as the acceptance test's sphere, has no reference measure in this sense,
+since it is not an open subset of a coordinate space; the sphere carries no density in the core's
+tests. Manifold-valued quantities beyond the
+positive orthant will need reference measures of their own (surface measure on a sphere, Haar
+measure on the rotations) when they arrive.
+
+## Open questions
+
+None remain.
+
+## Revisions
+
+**2026-10-14.** Reopened because an embedded type's retraction was fixed as
+$P(\point + B(\point)\, \tangent)$, so a type could not declare a retraction of another form,
+such as $R \operatorname{Exp}(\tangent)$ on the rotations. An embedded type is now declared by its
+retraction $R$ and its inverse $Q$ alone, written as operations on storage in any form, and the
+core's boundary operations are the inclusion and the retraction itself, whose derivative maps
+[%full](statement:embedded) assembles from passes over $R$ and $Q$. The tangent basis is now the
+derivative of the retraction, and need no longer be orthonormal, since the inverse retraction
+supplies the derivative of the chart at the output. The acceptance test's sphere now uses a
+retraction that is not a projection. The elementwise sine, cosine and two-argument inverse tangent
+were added to the primitives, so that retractions built from them can be composites. An optional
+projection and optional closed forms of $B$ and $L$ were considered during the reopening and left
+out: the projection has no use in the core and can be added later without changing a declared type,
+and the closed forms are derivatives written by hand, a second path to every boundary factor, whose
+only benefit is speed no measurement has yet asked for. What they would have avoided, the
+removable singularity of an exponential map's formula at $\tangent = 0$, is ruled out by a
+requirement instead: a type's $R$ and $Q$ must be smooth as computed there.
+
+**2026-10-15.** Reopened because a map into an embedded type, written by a feature crate, can reach
+the type only through the retraction from a base point it already has, valid in that point's chart
+alone, while the natural way to write most such maps is in storage. The projection from storage
+onto the type, left out at the previous reopening, is restored as an optional declaration $P$,
+with its boundary operation $\pi$, whose derivative maps [](eq:projection) the core assembles from
+passes over $P$ and $Q$. A map into an embedded type is now written in storage and projected,
+[](eq:map-into), with its derivatives in charts following by the chain rule. The acceptance test's
+sphere declares the normalizing projection, and the test checks that its two ways into the type,
+the retraction and the projection of the retraction computed in storage, agree.
+
+**2026-10-29.** Reopened because a retirement was given a namespace, and so could remove only the
+quantities under one address prefix, where it should be given any collection of addresses: the
+quantities to retire need not share a prefix, and a namespace becomes one way among others of
+naming them. A retirement is now given a collection $A$ of addresses and retires the quantities $E$
+at them; a namespace is the collection of the addresses under it. Nothing in
+[%full](statement:retirement), the blanket or the rule for mapped values depended on $E$ sharing a
+prefix, so they are unchanged. Three things were added. The core refuses an address at which there
+is no quantity and a value given for a quantity outside $E$, and an empty collection changes
+nothing. Retiring two collections one after another is compared with retiring their union at once:
+the two agree when the replacements are exact or the retirements share no term, and differ in
+general when the replacements are approximated, which is a reason to allow collections of any
+shape. And a fifth test retires $\randomPoint_0$ alone, which is part of a tick rather than all of
+it, with the joint normal replacement [](eq:joint-blanket), and checks that observing $\bfz_0$ in
+the query then agrees with observing it in the retirement.

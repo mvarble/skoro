@@ -60,10 +60,41 @@ const config: KatexOptions & Settings = {
 
         // Skoro-wide notation.
         '\\R': '\\mathbb{R}',
+        '\\positive': '\\mathbb{R}_{>0}', // the positive reals, (0, ∞), and never [0, ∞)
         '\\E': '\\mathbb{E}',
         '\\T': '\\mathrm{T}',
         '\\retr': '\\operatorname{retract}',
         '\\invretr': '\\operatorname{retract}^{-1}',
+
+        // Typography.
+        '\\D': '\\mathrm{D}', // the derivative in tangent charts
+        '\\dd': '\\mathrm{d}', // the differential: `\dd x`, `\frac{\dd}{\dd t}`
+        '\\hvp': '\\operatorname{hvp}', // an operation's second-order map
+
+        // Points, tangents and maps. `\tangent` is a tangent vector or a frame of them alike.
+        '\\manifold': '\\bbX',
+        '\\point': 'x',
+        '\\tangent': 'v',
+        '\\dimension': 'd',
+        '\\otherManifold': '\\bbY',
+        '\\otherPoint': 'y',
+        '\\otherTangent': 'v',
+        // A random variable, in boldface: the measurable function whose values are points.
+        '\\randomPoint': '\\boldsymbol{\\point}',
+        '\\otherRandomPoint': '\\boldsymbol{\\otherPoint}',
+        '\\map': 'F',
+        '\\discretePoint': 'k',
+        // The order of derivative an operation supports, and the order a pass requires of a step.
+        '\\order': '\\operatorname{order}',
+        '\\req': '\\operatorname{req}',
+
+        // Densities.
+        '\\density': 'p', // a model's density, which its terms' log-densities sum to
+        '\\logterm': '\\ell', // a term's log-density
+        '\\proposal': 'q', // the density of a sampler's draws
+        '\\weight': 'w', // the importance weight
+        '\\kernel': '\\kappa', // a probability kernel, such as a regular conditional distribution
+        '\\key': '\\xi', // a random key, from which every draw is derived
         '\\transpose': '^{\\top}',
     },
 };

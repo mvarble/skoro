@@ -39,15 +39,17 @@ Rules that hold whether or not a command was invoked:
 
 ## Layout
 
-| path                          | what it is                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| `crates/`                     | the library (returns with the `core` work)                                    |
-| `site/`                       | the documentation site; `site/README.md` says how it works                    |
-| `site/content/`               | pages, math notes, and the archive of entries                                 |
-| `bin/wf`, `tools/wf/`         | the workflow's command line and its tests                                     |
-| `.workflow/active`            | the entry this branch works on, written by `bin/wf` alone                     |
-| `.agents/skills/`             | the skills (linked into `.claude/skills/` for Claude Code)                    |
-| `.agents/reference/`          | `workflow.md` (the procedure) and `authoring.md` (how documents are written)  |
+| path                                        | what it is                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| `crates/`                                   | the library (returns with the `core` work)                                   |
+| `site/`                                     | the documentation site; `site/README.md` says how it works                   |
+| `site/content/`                             | pages, math notes, and the archive of entries                                |
+| `site/content/reference/crates/<crate>/`    | each crate's description, which its page shows above its reading order       |
+| `bin/wf`, `tools/wf/`                       | the workflow's command line and its tests                                    |
+| `bin/reading-order`, `tools/reading-order/` | the order in which to read a crate's modules, and its tests                  |
+| `.workflow/active`                          | the entry this branch works on, written by `bin/wf` alone                    |
+| `.agents/skills/`                           | the skills (linked into `.claude/skills/` for Claude Code)                   |
+| `.agents/reference/`                        | `workflow.md` (the procedure) and `authoring.md` (how documents are written) |
 
 ## Writing documents
 
@@ -73,10 +75,22 @@ Before pushing, run what applies:
 
 ```sh
 bin/wf check
-node --test 'tools/wf/*.test.ts' && site/node_modules/.bin/tsc -p tools
+cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same, and `bin/wf check --merge` on pull requests into
 `main`.
+
+wgpu is the one GPU runtime skoro claims, and CI has no adapter to run it on. A change to
+`skoro-tensor`, to a primitive's kernel or to a fused operation is pushed only after
+
+```sh
+cargo test --workspace --features wgpu
+```
+
+passes on a machine with an adapter, and its commit says so. Without an adapter the wgpu tests
+fail, naming it, rather than pass with nothing run.

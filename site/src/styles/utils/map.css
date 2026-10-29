@@ -1,7 +1,7 @@
 /* `mesearch-ui`'s map, given skoro's colours. The component reads mesearch's token names, which
  * are defined here, inside it, in terms of skoro's; the dark theme follows on its own. */
 
-.math-map {
+.document-map {
     margin: var(--space-6) 0;
 
     --ink: var(--fg-1);
@@ -30,13 +30,16 @@
     --graph-node: var(--bg-1);
     --graph-label: var(--fg-1);
 
-    & [class*='kind-'] {
-        --kind: var(--fg-accent);
-        --kind-soft: var(--bg-accent-soft);
+    /* One hue per kind, from the graph figures' palette and far apart on the wheel, so that the two
+     * kinds tell apart at a glance in either theme. */
+    & [class*='kind-'],
+    & .kind-math {
+        --kind: var(--graph-blue);
+        --kind-soft: color-mix(in srgb, var(--graph-blue) 12%, var(--bg-1));
     }
 
     & .kind-entry-document {
-        --kind: var(--callout-decision);
-        --kind-soft: color-mix(in srgb, var(--callout-decision) 12%, var(--bg-1));
+        --kind: var(--graph-orange);
+        --kind-soft: color-mix(in srgb, var(--graph-orange) 14%, var(--bg-1));
     }
 }

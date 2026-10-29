@@ -1,0 +1,90 @@
+---
+title: Terms and the probabilistic graph
+summary: A model's density is a sum of terms, each a log-density that scores one quantity or none, and the terms and quantities together make the probabilistic graph inference reads.
+order: 4
+depends_on: [concepts/building, generative-models]
+---
+
+<script>
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { probabilistic } from '../../archive/core/model.graph';
+	import { blanket } from './terms.walk';
+</script>
+
+A model's quantities say what is uncertain; its **terms** say how. A term is a log-density, built
+from the model's quantities by [operations](../operations/) like any other value, and the model's
+density is the sum of its terms. This page describes terms, the probabilistic graph they make with
+the quantities, and what a snapshot can say about it.
+
+## A term
+
+```rust
+{../../../../crates/skoro-core/src/term.rs:16..27}
+```
+
+A term is added in one of two ways:
+
+```rust
+{../../../../crates/skoro-core/src/term.rs:274..296}
+```
+
+`score` adds the term of the distribution a quantity was drawn from: its density, as a function of
+the quantity it **scores** and the quantities it is **conditioned on**. `factor` adds a
+**likelihood factor**, which scores nothing: the likelihood of data that is not a quantity of the
+model. Either way, the log-density must be computed by an operation and be a `Real`.
+
+Which quantities a term involves is never declared. It is read off the
+[compilation graph](../building/#the-compilation-graph): the quantities among the roots its
+log-density is computed from. Two rules keep the model generative. A quantity is scored by at most
+one term, the distribution it was drawn from. And a term is conditioned only on quantities made
+before the one it scores, so the order in which quantities were made is an ancestral order, in
+which each comes after everything its distribution depends on. A quantity no term scores is a
+**parameter**, such as a sensor reading the model is driven by.
+
+## An example
+
+A vehicle at $x_0$ and then $x_1$ measures a landmark $m$ once from each position, as $z_0$ and
+$z_1$. Its motion is driven by an inertial reading $\zeta$, and a second motion model is a
+likelihood factor over $x_0$, $x_1$ and a scale $\sigma$:
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:31..57}
+```
+
+Five terms score the five quantities $x_0$, $m$, $x_1$, $z_0$ and $z_1$; $\zeta$ and $\sigma$ are
+parameters; `t6` and `t7` are likelihood factors, the second an improper prior on $\sigma$.
+
+## The probabilistic graph
+
+The quantities and terms make the model's **probabilistic graph**. Its nodes are the quantities and
+the terms; it has an edge from each quantity a term is conditioned on to the term, and from each
+term to the quantity it scores. Every edge joins a quantity and a term, and the graph is acyclic,
+by the rule above. For the example:
+
+<ModelGraph spec={probabilistic} />
+
+Inference reads this graph rather than being told about it. A snapshot answers the questions an
+algorithm asks of it, among them the **Markov blanket** of some quantities, which is what a sampler
+or a sliding window needs: the other quantities the same terms involve, so that the quantities'
+conditional density, given everything else, is the sum of the terms they are joined to, up to a
+constant. For the first tick of the example:
+
+<Walkthrough spec={blanket}>
+
+```rust
+{../../../../crates/skoro-core/src/model.rs:235..278}
+```
+
+</Walkthrough>
+
+The mathematics of all this is in the note on [generative models](../../math/generative-models/).
+
+A term may also carry a **sampler**, which draws the quantity it scores, and **bindings**, which
+mark its parts by role (a residual, a whitening factor) for the algorithms that read them. A
+parameter may carry a **proposal**, which draws it when the model is generated.
+
+> [!DECISION] Conditioning belongs to the query
+> A term scores a quantity whether or not that quantity is later observed; which quantities are
+> observed is part of each query. See
+> [position 1 of the charter](../../archive/charter/writeup.md#1-a-model-is-the-joint-conditioning-belongs-to-the-query).

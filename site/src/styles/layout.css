@@ -212,6 +212,22 @@ main {
             padding-left: calc(var(--space-3) - 1px);
         }
     }
+
+    /* A crate's page, listed under the page of the crates. */
+    li.nav-crate a {
+        padding-left: calc(2 * var(--space-3));
+
+        &[aria-current='page'] {
+            padding-left: calc(2 * var(--space-3) - 1px);
+        }
+
+        code {
+            font-size: var(--font-size-mono);
+            color: inherit;
+            background: none;
+            padding: 0;
+        }
+    }
 }
 
 .sidebar-scrim {

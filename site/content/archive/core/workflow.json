@@ -1,0 +1,176 @@
+{
+    "kind": "feature",
+    "stage": "done",
+    "started": "2026-10-11",
+    "events": [
+        {
+            "date": "2026-10-11",
+            "action": "start",
+            "stage": "math"
+        },
+        {
+            "date": "2026-10-14",
+            "action": "approve",
+            "stage": "math",
+            "commit": "a9ddb89"
+        },
+        {
+            "date": "2026-10-14",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "An embedded type's retraction is fixed as P(x + B(x)τ), so a type such as the rotations cannot declare its own retraction, R·Exp(τ).",
+            "commit": "caabf79"
+        },
+        {
+            "date": "2026-10-14",
+            "action": "approve",
+            "stage": "math",
+            "commit": "6d8365d"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "A map into an embedded type can only reach it through a retraction from a base point, so the core needs a boundary operation from storage onto the type.",
+            "commit": "6da9352"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "math",
+            "commit": "404b265"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "cf93fe1"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "b50d064"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The test that refuses an unclaimed cubecl runtime needs an LLVM toolchain to build any such runtime, and the device check needs burn-dispatch, which burn does not re-export.",
+            "commit": "292e919"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "e60da34"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "6242e20"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The variate formula ((u >> 11) + 0.5) * 2^-53 rounds to exactly 1.0 in f64 when u >> 11 is 2^53 - 1, so the open interval it promises does not hold.",
+            "commit": "0f50a95"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "04d55e7"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "659d7b3"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "reopen",
+            "stage": "plan",
+            "reason": "narrow checks a node's space inside the open scope, which arrives with the building task, so it cannot be built with the spaces.",
+            "commit": "8bffce7"
+        },
+        {
+            "date": "2026-10-15",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "ac9c2dd"
+        },
+        {
+            "date": "2026-10-20",
+            "action": "approve",
+            "stage": "build",
+            "commit": "3455ef5"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "Retirement was given a namespace, so it could remove only the quantities under one address prefix, where it should take any collection of addresses.",
+            "commit": "44135d7"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "math",
+            "commit": "dcaf04c"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "a13281f"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "175bcd4"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "build",
+            "commit": "8bcae1c"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "82e9425"
+        }
+    ],
+    "approvals": {
+        "math": {
+            "date": "2026-10-29",
+            "commit": "dcaf04c",
+            "hash": "de96e3fc7f0d2fc375235db7f40f5657903637b71ff050354d0720b69bb31a4b"
+        },
+        "implementation": {
+            "date": "2026-10-29",
+            "commit": "a13281f",
+            "hash": "598487d504e4ff54fcf6b0b013455dc30aeadffa63b1395b0a3d4ac5f2e277cb"
+        },
+        "plan": {
+            "date": "2026-10-29",
+            "commit": "175bcd4",
+            "hash": "f17bf0ee97bb3ad9cbeb191304dacc8ff825f699cf639acabfaae6bf5fc66951"
+        },
+        "build": {
+            "date": "2026-10-29",
+            "commit": "8bcae1c"
+        },
+        "publish": {
+            "date": "2026-10-29",
+            "commit": "82e9425"
+        }
+    },
+    "finished": "2026-10-29"
+}

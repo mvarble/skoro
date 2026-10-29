@@ -1,0 +1,217 @@
+/* `<Walkthrough>` figures: a `<ModelGraph>` drawing (its rules are in `graph.css`) whose nodes,
+ * edges and regions fade in, change kind and carry passes step by step, above the code they are
+ * built by. Transitions run only once the component has mounted (`.wt-animate`), and not at all
+ * for a reader who prefers reduced motion. */
+
+.walkthrough {
+    .wt-region {
+        fill: color-mix(in srgb, var(--c) 6%, var(--bg-1));
+        stroke: color-mix(in srgb, var(--c) 70%, var(--bg-1));
+        stroke-width: 1.4;
+
+        &.line-dashed {
+            stroke-dasharray: 6 4;
+        }
+
+        &.wt-emphasis {
+            fill: color-mix(in srgb, var(--c) 14%, var(--bg-1));
+            stroke: var(--c);
+            stroke-width: 2.6;
+        }
+    }
+
+    .wt-region-label {
+        color: var(--c);
+        font-family: var(--font-family-ui);
+        font-size: 0.72em;
+        font-weight: 600;
+    }
+
+    .wt-hidden {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    .graph-node.wt-hidden {
+        transform: scale(0.6);
+    }
+
+    .graph-node.wt-emphasis :is(circle, rect) {
+        stroke-width: 4;
+        filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c) 60%, transparent));
+    }
+
+    .graph-edge.wt-emphasis path {
+        stroke-width: 2.8;
+    }
+
+    /* A pass along an edge, or back against it. */
+    .graph-edge:is(.wt-flow, .wt-flow-back) path {
+        stroke-width: 2.6;
+        stroke-dasharray: 7 6;
+        stroke-linecap: round;
+        animation: wt-flow 0.9s linear infinite;
+    }
+
+    .graph-edge.wt-flow-back path {
+        animation-direction: reverse;
+    }
+}
+
+@keyframes wt-flow {
+    to {
+        stroke-dashoffset: -26;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .walkthrough.wt-animate {
+        :is(.graph-node, .graph-edge, .wt-region, .graph-labels > span) {
+            transition:
+                opacity 0.45s ease,
+                visibility 0.45s,
+                transform 0.45s ease;
+        }
+
+        .graph-node :is(circle, rect),
+        .wt-region {
+            transition:
+                fill 0.45s ease,
+                stroke 0.45s ease,
+                stroke-width 0.3s ease,
+                opacity 0.45s ease,
+                visibility 0.45s;
+        }
+
+        .graph-edge :is(path, polygon) {
+            transition:
+                stroke 0.45s ease,
+                fill 0.45s ease;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .walkthrough .graph-edge:is(.wt-flow, .wt-flow-back) path {
+        animation: none;
+    }
+}
+
+/* ---- controls and the current note -------------------------------------- */
+.wt-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+
+    input[type='range'] {
+        flex: 1;
+        min-width: 4rem;
+        accent-color: var(--fg-accent);
+    }
+}
+
+.wt-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--fg-2);
+    background: var(--bg-1);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+
+    &:hover:not([aria-disabled='true']) {
+        border-color: var(--fg-3);
+        color: var(--fg-1);
+    }
+
+    &[aria-disabled='true'] {
+        opacity: 0.4;
+    }
+
+    &.wt-play {
+        color: var(--fg-on-accent);
+        background: var(--bg-accent);
+        border-color: transparent;
+    }
+}
+
+.wt-count {
+    font: var(--font-tiny);
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.walkthrough .wt-note {
+    min-height: 3.2em;
+    margin: var(--space-3) 0;
+    padding: var(--space-2) var(--space-3);
+    border-left: 3px solid var(--fg-accent);
+    background: var(--bg-accent-soft);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--fg-1);
+}
+
+/* ---- the quoted code ------------------------------------------------------ */
+.wt-code {
+    .code-block {
+        margin: 0;
+    }
+
+    pre.shiki {
+        position: relative;
+        max-height: 22rem;
+        overflow-y: auto;
+    }
+
+    .line {
+        display: inline-block;
+        min-width: calc(100% + 2 * var(--space-4));
+        margin: 0 calc(-1 * var(--space-4));
+        padding: 0 var(--space-4);
+        border-left: 3px solid transparent;
+    }
+
+    .line.wt-line {
+        background: var(--bg-selection);
+        border-left-color: var(--fg-accent);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .walkthrough.wt-animate .wt-code .line {
+        transition: background 0.3s ease;
+    }
+}
+
+/* ---- every step ----------------------------------------------------------- */
+.wt-steps {
+    margin-top: var(--space-3);
+    font: var(--font-small);
+
+    summary {
+        cursor: pointer;
+        color: var(--fg-3);
+    }
+
+    ol {
+        margin: var(--space-2) 0 0;
+    }
+
+    li[aria-current='step'] {
+        color: var(--fg-1);
+        font-weight: 600;
+    }
+
+    button {
+        all: unset;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 2px solid var(--fg-accent);
+        }
+    }
+}

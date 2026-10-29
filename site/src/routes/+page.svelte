@@ -12,7 +12,9 @@
 
 <svelte:head>
     <title>{SITE.name}: probabilistic modeling in Rust</title>
+    <meta property="og:title" content="{SITE.name}: probabilistic modeling in Rust" />
     <meta name="description" content={SITE.description} />
+    <meta property="og:description" content={SITE.description} />
 </svelte:head>
 
 <section class="hero">
@@ -50,7 +52,8 @@
     <section class="landing-crates">
         <h2>The workspace</h2>
         <p>
-            Each crate depends only on the crates above it. The bottom-up track follows this order.
+            Each crate depends only on the crates above it, and leads to the order in which to read
+            its modules.
         </p>
         <CrateMap />
     </section>

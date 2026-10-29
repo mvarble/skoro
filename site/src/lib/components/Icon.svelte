@@ -11,6 +11,9 @@
         copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
         check: 'M20 6 9 17l-5-5',
         file: 'M14 3H6v18h12V7l-4-4Zm0 0v4h4',
+        play: 'M7 4v16l13-8L7 4Z',
+        pause: 'M8 5v14M16 5v14',
+        restart: 'M5 4v16M19 20 9 12l10-8v16Z',
     } as const;
 
     let { name, size = 18 }: { name: keyof typeof PATHS; size?: number } = $props();

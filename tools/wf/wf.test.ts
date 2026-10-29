@@ -130,6 +130,32 @@ test('a document cannot be written before its stage', () => {
     assert.match(r.wf('check').stderr, /plan\.md was written before its stage/);
 });
 
+test('a draft written before a reopening waits, unchanged, for its stage', () => {
+    const r = repo();
+    r.wf('start', 'normal', '--kind', 'feature');
+    write(r.root, `${entry}/math.md`, '# Math\n\n$x$\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, `${entry}/implementation.md`, 'A draft.\n');
+    r.commit();
+    assert.equal(r.wf('reopen', 'math', '--reason', 'the chart was wrong').code, 0);
+    r.commit();
+    assert.equal(r.wf('check').code, 0, 'the draft may stay');
+
+    write(r.root, `${entry}/implementation.md`, 'A changed draft.\n');
+    assert.match(r.wf('check').stderr, /implementation\.md changed after 'normal' was reopened/);
+    write(r.root, `${entry}/implementation.md`, 'A draft.\n');
+    write(r.root, `${entry}/plan.md`, '- [ ] Early.\n');
+    assert.match(r.wf('check').stderr, /plan\.md was written before its stage/);
+    fs.rmSync(path.join(r.root, `${entry}/plan.md`));
+
+    write(r.root, `${entry}/math.md`, '# Math\n\n$y$\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, `${entry}/implementation.md`, 'A changed draft.\n');
+    assert.equal(r.wf('check').code, 0, 'back at its stage, the draft may change');
+});
+
 test('code waits for the build stage', () => {
     const r = repo();
     write(r.root, 'crates/skoro/src/lib.rs', '// code\n');
@@ -140,6 +166,21 @@ test('code waits for the build stage', () => {
     r.commit();
     assert.equal(r.wf('approve').code, 0);
     assert.equal(r.wf('check').code, 0, 'code is open once the plan is approved');
+});
+
+test('code written before a reopening waits, unchanged, for the build stage', () => {
+    const r = repo();
+    toPlan(r);
+    write(r.root, `${entry}/plan.md`, '- [ ] Add it.\n- [ ] Test it.\n');
+    r.commit();
+    assert.equal(r.wf('approve').code, 0);
+    write(r.root, 'crates/skoro/src/lib.rs', '// code\n');
+    r.commit();
+    assert.equal(r.wf('reopen', 'implementation', '--reason', 'a test cannot be built').code, 0);
+    r.commit();
+    assert.equal(r.wf('check', '--base', 'main').code, 0, 'the code may stay');
+    write(r.root, 'crates/skoro/src/lib.rs', '// changed code\n');
+    assert.match(r.wf('check', '--base', 'main').stderr, /is code, which opens at the build stage/);
 });
 
 test('the plan is ticked during build, and build needs every box ticked', () => {
@@ -192,6 +233,40 @@ test('publish needs the changed pages listed, and finishes the entry', () => {
     r.commit();
     const merge = r.wf('check', '--base', 'main', '--merge');
     assert.equal(merge.code, 0, merge.stderr);
+});
+
+test('publish needs the changed crates listed', () => {
+    const r = repo();
+    toPlan(r);
+    write(r.root, `${entry}/plan.md`, '- [x] Done.\n');
+    r.commit();
+    r.wf('approve');
+    write(r.root, 'crates/normal/Cargo.toml', '[package]\nname = "normal"\n');
+    write(r.root, 'crates/normal/src/lib.rs', 'pub struct Normal;\n');
+    r.commit();
+    r.wf('approve');
+    r.commit();
+    assert.equal(workflow(r.root).stage, 'publish');
+
+    write(r.root, 'site/content/guide/first-model/index.md', '---\ntitle: First\norder: 1\n---\n\nNew.\n');
+    const index = (crates: string, pages = 'guide/first-model') =>
+        write(r.root, `${entry}/index.md`, `---\ntitle: The Normal\npages: [${pages}]\ncrates: ${crates}\n---\n\nA Gaussian.\n`);
+    index('[]');
+    r.commit();
+    const unlisted = r.wf('approve', '--base', 'main').stderr;
+    assert.match(unlisted, /crate 'normal' changed on this branch; list it/);
+    assert.match(unlisted, /describe it in site\/content\/reference\/crates\/normal\/index\.md/);
+    write(r.root, 'site/content/reference/crates/index.md', '---\ntitle: Crates\norder: 1\n---\n\nAll.\n');
+    write(r.root, 'site/content/reference/crates/normal/index.md', 'The normal distribution.\n');
+    index('[normal, gone]', 'guide/first-model, reference/crates');
+    r.commit();
+    const extra = r.wf('approve', '--base', 'main').stderr;
+    assert.match(extra, /lists crate 'gone', which does not exist/);
+    assert.match(extra, /lists crate 'gone', which this branch did not change/);
+    index('[normal]', 'guide/first-model, reference/crates');
+    r.commit();
+    const done = r.wf('approve', '--base', 'main');
+    assert.equal(done.code, 0, done.stderr);
 });
 
 test('publish refuses a listed page the branch did not change, and wants some page changed', () => {

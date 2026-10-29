@@ -92,8 +92,4 @@
         font: var(--font-small);
         color: var(--fg-3);
     }
-
-    &.umbrella {
-        border-style: dashed;
-    }
 }

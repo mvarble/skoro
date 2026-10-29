@@ -2,28 +2,19 @@
     import { resolve } from '$app/paths';
     import { layers } from '$lib/crates';
 
+    // Each crate links to its page in the reference.
     const rows = layers();
-    const href = (page: string) => {
-        const [track, slug] = page.split('/');
-        return resolve('/[track=track]/[slug=slug]', { track, slug });
-    };
+    const href = (crate: string) => resolve('/reference/crates/[crate=slug]', { crate });
 </script>
 
 <ol class="crate-map" aria-label="Workspace crates, foundations first">
     {#each rows as row, depth (depth)}
         <li class="crate-layer">
             {#each row as crate (crate.name)}
-                {#if crate.page}
-                    <a class="crate" href={href(crate.page)} title={crate.purpose}>
-                        <code>{crate.name}</code>
-                        <span>{crate.purpose}</span>
-                    </a>
-                {:else}
-                    <div class="crate umbrella" title={crate.purpose}>
-                        <code>{crate.name}</code>
-                        <span>{crate.purpose}</span>
-                    </div>
-                {/if}
+                <a class="crate" href={href(crate.name)} title={crate.purpose}>
+                    <code>{crate.name}</code>
+                    <span>{crate.purpose}</span>
+                </a>
             {/each}
         </li>
     {/each}

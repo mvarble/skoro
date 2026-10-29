@@ -55,7 +55,8 @@ And the commands that move an entry, all of them the user's to give:
 5. **Approval is a gate, not a formality.** `wf approve` refuses a document that is uncommitted,
    empty, or still has a `> [!TODO]`; an implementation without a `## Tests` section; a plan
    without a checklist; a build with unticked boxes or uncommitted work; a publish whose changed
-   pages are not listed in the entry's `pages`.
+   pages and crates are not listed in the entry's `pages` and `crates`, or whose changed crates
+   have no description in `site/content/reference/crates/<crate>/index.md`.
 
 Anything outside these areas (the tooling, the skills, the site's own code) is not gated.
 
@@ -92,7 +93,7 @@ reopenings.
 
 ```sh
 bin/wf check                      # the rules above, against origin/main
-node --test 'tools/wf/*.test.ts' && site/node_modules/.bin/tsc -p tools   # when the tooling changed
+node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools   # when the tooling changed
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test   # once crates exist
 ```

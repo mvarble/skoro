@@ -11,5 +11,7 @@
 @import './utils/tables.css';
 @import './utils/cards.css';
 @import './utils/graph.css';
+@import './utils/reading.css';
+@import './utils/walkthrough.css';
 @import './utils/map.css';
 @import './utils/archive.css';

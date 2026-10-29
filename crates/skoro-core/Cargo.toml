@@ -1,0 +1,20 @@
+[package]
+name = "skoro-core"
+description = "The core of skoro: quantities, operations and their derivatives, models, queries."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+wgpu = ["skoro-tensor/wgpu"]
+
+[dependencies]
+skoro-tensor.workspace = true
+blake3.workspace = true
+rpds.workspace = true
+
+[lints]
+workspace = true

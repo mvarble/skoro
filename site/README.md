@@ -6,8 +6,8 @@ A static SvelteKit site whose pages are `.svx` (Markdown + Svelte, via mdsvex) w
 pnpm install
 pnpm dev                          # http://localhost:5173
 pnpm build                        # static site in build/
-BASE_PATH=/skoro pnpm build       # when served under a subpath (e.g. GitHub Pages)
-SITE_URL=https://… pnpm build     # makes the links in llms.txt absolute
+BASE_PATH=/docs pnpm build        # when served under a subpath, not at the root of a domain
+SITE_URL=https://skoro.dev pnpm build  # makes the links in llms.txt absolute, as CI does
 pnpm check && pnpm lint && pnpm test
 pnpm todos                        # every `[!TODO]` left in the content
 SITE_CONTENT=test/content pnpm build   # the fixture, with a document of every kind
@@ -55,9 +55,10 @@ katex_macros: # this document only; wins over katex.config.ts
 ---
 ```
 
-An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`)
-and the earlier entries it `revises`. Each page then shows the entries that changed it, newest
-first, under "How this came to be"; an entry that a later one revises says so at its top.
+An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`),
+the `crates` it changed (`[skoro-core]`), and the earlier entries it `revises`. Each page then shows
+the entries that changed it, newest first, under "How this came to be"; an entry links each of its
+crates to that crate's page in the reference; and an entry that a later one revises says so at its top.
 
 - **Math:** `$inline$` and `$$display$$`. A KaTeX error does not fail the build. The formula
   renders in red, and the build prints a `katex:` warning naming the file.
@@ -118,12 +119,15 @@ first, under "How this came to be"; an entry that a later one revises says so at
   `katex_macros` belong to the Markdown pipeline and don't reach components.
 - A bad formula renders in KaTeX's red, and the build prints a `katex: component` warning.
 
-## Model-graph figures
+## Graph figures
 
-`<ModelGraph spec={…} />` draws a hand-placed model graph as SVG, colour-coded by node kind
-(`Constant`, `Parameter`, `Stochastic`, `Observed`, `Mapped`, `LogLikelihood`, and `Given` for a
-cut), with solid parent edges, dotted `scores` edges, and dashed bindings coloured by role. It adds a
-legend of whatever the figure uses, and a caption.
+`<ModelGraph spec={…} />` draws a hand-placed figure of a graph as SVG: one of skoro's graphs (a
+compilation graph, a probabilistic graph, or a program's computation or backpropagation graph), or
+any other. The component knows nothing of what a node means. Each figure declares its own kinds of
+node and edge, with the name the legend and the Markdown export give each, and how each is drawn: a
+hue from a fixed palette (`gray`, `blue`, `orange`, `green`, `purple`, `teal`, `red`, `sky`,
+`amber`, `olive`, `magenta`), a shape, a fill and an outline for nodes, a line style for edges. It
+adds a legend of the kinds the figure uses, in the order it declares them, and a caption.
 
 Put each spec in a `*.graph.ts` file beside its page, and import it by name:
 
@@ -141,29 +145,43 @@ import { defineGraph } from '$lib/graph/spec';
 
 export const normal = defineGraph({
     title: 'A Gaussian quantity', // accessible name; starts the caption
-    caption: 'What add_quantity adds.', // optional
+    caption: 'Its mean, and the term that scores it.', // optional
     width: 760,
     height: 430, // the viewport
+    nodeKinds: {
+        quantity: { name: 'Quantity', hue: 'orange' },
+        observed: { name: 'Observed quantity', hue: 'orange', fill: 'shaded' },
+        term: { name: 'Term', hue: 'purple', shape: 'square' },
+    },
+    edgeKinds: {
+        conditions: { name: 'conditions a term' },
+        scores: { name: 'scores a quantity', line: 'dotted' },
+    },
     nodes: [
         {
             id: 'mu',
             x: 70,
             y: 300,
-            kind: 'parameter',
+            kind: 'quantity',
             label: 'μ',
             annotation: 'mean',
             annotationAngle: 180,
         },
-        { id: 'p', x: 650, y: 175, kind: 'log-likelihood', label: 'p' },
+        { id: 'x', x: 400, y: 300, kind: 'observed', label: 'x' },
+        { id: 't', x: 650, y: 175, kind: 'term', label: 't' },
     ],
     edges: [
-        { from: 'mu', to: 'p' }, // parent, straight
-        { from: 'p', to: 'mu', kind: 'binding', role: 'location', bend: 30 },
-        { from: 'p', to: 'mu', kind: 'scores', via: [[400, 400]], curve: 'bezier', toAngle: 90 },
+        { from: 'mu', to: 't', kind: 'conditions' }, // straight
+        { from: 't', to: 'x', kind: 'scores', bend: 30 },
+        { from: 'mu', to: 'x', via: [[400, 400]], curve: 'bezier', toAngle: 90 }, // no kind: plain, unlisted
     ],
 });
 ```
 
+- **Kinds are the figure's own.** A node's `kind` and an edge's `kind` are keys of the figure's
+  `nodeKinds` and `edgeKinds`, and a key the figure does not define fails the build. An edge with no
+  kind is a plain solid line in the neutral colour, and the legend leaves it out. Kind names may
+  contain TeX.
 - **Coordinates are mathematical:** the origin is the bottom-left corner and +Y points up. Angles are
   degrees counter-clockwise from +X, so 90 is straight up.
 - **Endpoints are computed for you.** An edge meets a node's boundary (circle, or square for
@@ -177,13 +195,126 @@ export const normal = defineGraph({
   spec's `katexMacros` are added over the site-wide macros for that figure. Text is laid out in an
   HTML layer over the SVG rather than inside it, so it needs no `<foreignObject>` and no JavaScript.
 - **Styling:** `arrow` (`end`, `start`, `both`, `none`), `label` / `labelAt`, `muted`, and the
-  escape hatches `class` / `style` on nodes and edges. Colours are tokens in
+  escape hatches `class` / `style` on nodes and edges. The hues are tokens `--graph-<hue>` in
   `src/styles/tokens/colors.css`, and the rules are in `src/styles/utils/graph.css`.
-- A mistake, such as an edge to a missing node or a binding with no role, fails the build with the
-  figure's title in the message.
-- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with their
-  kinds, so a language model reads the same graph.
+- A mistake, such as an edge to a missing node or a kind the figure does not define, fails the
+  build with the figure's title in the message.
+- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with the
+  figure's names for their kinds, so a language model reads the same figure.
 - The geometry is `src/lib/graph/geometry.ts`, tested by `pnpm test`.
+
+## Walkthroughs
+
+`<Walkthrough spec={…}>` animates a graph figure step by step above the code that builds it: each
+step adds or removes nodes, edges and regions, changes their kinds, mutes them or runs a pass along
+them, and highlights the lines of the quoted code it is about. The code is the page's own
+file-reference fence, passed in as the component's children:
+
+````svelte
+<script>
+    import Walkthrough from '$lib/components/Walkthrough.svelte';
+    import { building } from './building.walk';
+</script>
+
+<Walkthrough spec={building}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:31..57}
+````
+
+</Walkthrough>
+```
+
+Put each spec in a `*.walk.ts` file beside its page. A spec is a graph figure's spec (above), with
+labelled `regions` drawn behind it (a scope, a snapshot, a cache) and its `steps`:
+
+```ts
+import { defineWalkthrough } from '$lib/walk/spec';
+
+export const building = defineWalkthrough({
+    title: 'A scope builds a graph',
+    width: 420,
+    height: 220,
+    nodeKinds: {
+        constant: { name: 'Constant', hue: 'gray', shape: 'square' },
+        mapped: { name: 'Mapped value', hue: 'blue' },
+        folded: { name: 'Folded value', hue: 'blue', fill: 'shaded' },
+    },
+    nodes: [/* … */],
+    edges: [{ from: 'half', to: 'y', id: 'hy' }], // `id` defaults to `half->y`
+    regions: [{ id: 'scope', x: 20, y: 20, width: 380, height: 180, label: 'scope' }],
+    steps: [
+        { note: 'The writer opens a scope.', code: 'writer.build', show: ['scope'] },
+        { note: 'Its inputs are constants, so it folds.', code: 'let y', kind: { y: 'folded' } },
+        { note: 'The pass.', code: { from: 'fn forward', to: '}' }, flow: ['hy'] },
+    ],
+});
+```
+
+- **Nodes and regions start hidden**, and a step `show`s them (`show: 'all'` shows everything). An
+  edge is drawn once both its nodes are, unless a step `hide`s it, so a node appears with its
+  input edges.
+- **What carries from step to step:** `show`/`hide`, `kind`, `annotate`, `label`, `mute`/`unmute`.
+  **What lasts one step:** `emphasize`, `flow` (a pass running along edges) and `flowBack`
+  (against them).
+- **A step points at code by text**, never by line number: `code` is a substring of a line, a
+  `{ from, to }` pair spanning the lines from one to the next, or a list of these. The `.md` export
+  fails the build when a match finds no line of the quoted code, so a walkthrough cannot drift
+  from the code it quotes.
+- Every text of a walkthrough (a note, a label, an annotation, a region's label, the caption) may
+  contain `$…$` TeX and `` `code` ``. Write a text with code as a quoted string, doubling the TeX
+  backslashes: a `String.raw` template keeps the backslash of an escaped `` \` ``, which then
+  shows. A mistake in a spec, such as an id it does not have, a kind it does not define or a
+  `flow` along a node, fails the build with the walkthrough's title in the message.
+- The prerendered page shows the last step and lists every note, which is the whole walkthrough
+  without JavaScript. Once mounted, it starts at the first step, with play, step and scrub
+  controls and the arrow keys. Transitions respect `prefers-reduced-motion`.
+- In the `.md` exports, the tag is replaced by the code it quotes and a numbered list of the steps:
+  each note, the code it points at, and what appears, changes, goes or flows.
+- The frames are `src/lib/walk/frames.ts` and the checks are in `src/lib/walk/spec.ts`, both tested
+  by `pnpm test`. The styles are `src/styles/utils/walkthrough.css`, over `graph.css`.
+
+## Reading orders
+
+`<ReadingOrder spec={…} />` draws the order in which to read a crate's modules: the modules top to
+bottom, each use of an earlier module as an arc on the left, and each use of a later one as a dashed
+orange arc on the right, with the items it uses named beside the module. A band marks each cycle,
+and hovering, focusing or tapping a module shows all of its uses and what uses it. Uses that a
+longer chain of earlier uses already implies are hidden until the checkbox shows them.
+
+```ts
+import { defineReadingOrder } from '$lib/reading/spec';
+
+export const order = defineReadingOrder({
+    title: 'The order in which to read skoro-core',
+    caption: 'Optional: shown under the figure.',
+    modules: [{ id: 'address' }, { id: 'key' }, { id: 'testing', apart: true }],
+    uses: [
+        { from: 'key', to: 'address', items: ['Address', 'Segment'] },
+        { from: 'testing', to: 'key', items: ['Key'] },
+    ],
+});
+```
+
+- **The order is the spec's.** The component draws the modules in the order given; it does not
+  choose one. `bin/reading-order` (in `tools/reading-order/`) reads a crate's sources and computes
+  an order with as few items used ahead as can be.
+- **Items:** a name with a lower-case last segment (`narrow`, `Lowering.compile`) is a function or
+  method, and is shown with `()`.
+- A use of a module the spec does not list, a module listed twice, or a module set `apart` before
+  one that is not, fails with the figure's title in the message.
+- The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are
+  `src/styles/utils/reading.css`, from the graph palette's tokens.
+
+`/reference/crates/<crate>/` is a page for each crate under `crates/`, from one template
+(`src/routes/reference/crates/[crate=slug]/`): the crate's purpose and dependencies from the crate
+map (`$lib/crates.ts`), its description from `content/reference/crates/<crate>/index.md`, and its
+reading order, computed from its sources when the site is built (and on every request under
+`pnpm dev`) by `$lib/server/reading.ts`. The description is plain Markdown, written at an entry's
+publish stage. The content database does not read it as a document of its own, so its links are
+not rewritten; its folder lies as deep as the page's URL, so a link written the way the files sit
+on disk works as it is. The crate map links each crate to its page, so a crate it lists must be one
+under `crates/`.
 
 ## For language models
 

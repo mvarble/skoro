@@ -41,5 +41,15 @@ never edit an approved document.
 
 ## At the end
 
-When every box is ticked: run the plan's "Done when" checks and `bin/wf check`, and reply that
-`/wf-approve` moves to publishing. Never approve yourself.
+When every box is ticked: run the plan's "Done when" checks and `bin/wf check`.
+
+Then show the user what was built, to read before they approve it. For each crate the branch
+changed (the directories under `crates/` in `git diff --name-only origin/main...HEAD -- crates/`,
+the base `bin/wf check` compares against), run `bin/reading-order crates/<crate>`, which prints its
+modules in the order to read them and what each uses of a module that comes later. Put each list
+in the reply, leaving out a crate it reports as having nothing to order, and say that the crate's
+page in the reference, `/reference/crates/<crate>/`, draws it, and that `pnpm dev` in `site/` reads
+it from the sources on every load. It describes the code as it is, not a promise of the plan:
+nothing in it is to be approved, and it changes no document.
+
+Reply that `/wf-approve` moves to publishing. Never approve yourself.

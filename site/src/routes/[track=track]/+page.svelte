@@ -7,7 +7,9 @@
 
 <svelte:head>
     <title>{data.track.title} · {SITE.name}</title>
+    <meta property="og:title" content="{data.track.title} · {SITE.name}" />
     <meta name="description" content={data.track.blurb} />
+    <meta property="og:description" content={data.track.blurb} />
 </svelte:head>
 
 <!-- The same frame as a documentation page, so the two line up. -->

@@ -2,11 +2,15 @@
 """Skoro logo generator: stitched eight-pointed star with posterior-tail samples,
 plus the word "skoro" drawn as a cadlag path in R^2. Standard library only.
 
-Writes skoro-mark.svg, skoro-lockup.svg and the site's favicon (../static/favicon.svg). All geometry is in stitch units (1 unit = 1 cell).
+Writes skoro-mark.svg, skoro-lockup.svg, the site's favicon (../static/favicon.svg), and the
+image shown when a page is shared (skoro-card.svg, rendered to ../static/og-image.png by
+rsvg-convert when it is installed). All geometry is in stitch units (1 unit = 1 cell).
 """
 
 import math
 import random
+import shutil
+import subprocess
 
 # ---- settings ----
 COLOR, INK, PAPER = "#7a5cd6", "#1c1c1c", "#ffffff"
@@ -159,6 +163,30 @@ def favicon_svg(cells, width=0.42, dark_ink="#e6e6ea"):
     )
 
 
+def card_svg(lockup, lw, x0, density=0.3, decay=4.0):
+    """The lockup centred on a 1200x630 card (the Open Graph size LinkedIn and others crop to). The
+    star's tail samples carry on across the card, thinning along its contours, clear of the word."""
+    w, h = 96, 50.4  # 12.5px a stitch
+    ox, oy = round((w - lw) / 2), round((h - H) / 2)
+    rng = random.Random(SEED)
+    field = []
+    for x in range(int(w)):
+        for y in range(int(h) + 1):
+            i, j = x - ox - M, y - oy - M
+            e = radius(abs(i), abs(j)) - 7
+            if e < 5 or (x0 - 1 <= i + M <= lw and 4 <= j + M <= H - 5):
+                continue
+            p = density * math.exp(-(e - 5) / decay)
+            if rng.random() < p:
+                field.append(stitch(x, y, COLOR, 0.1 + 0.35 * p / density))
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="1200" height="630">\n'
+        f'<title>Skoro</title>\n<rect width="{w}" height="{h}" fill="{PAPER}"/>\n'
+        f'<g fill="none" stroke-linecap="round" stroke-width="0.24">\n' + "\n".join(field) + "\n</g>\n"
+        f'<g transform="translate({ox},{oy})">\n{lockup}\n</g>\n</svg>\n'
+    )
+
+
 def svg(w, h, inner):
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.2f} {h}" width="{w * 10:.0f}" height="{h * 10}">\n'
@@ -178,8 +206,16 @@ def main():
     kept = [
         s for s in samples if s[0] + M + 1 <= x0 - 0.6
     ]  # drop tail stitches that would sit under the text
+    lockup, lw = mark_svg(kept + stars) + "\n" + word, x0 + wd + 1.5
     with open("skoro-lockup.svg", "w") as f:
-        f.write(svg(x0 + wd + 1.5, H, mark_svg(kept + stars) + "\n" + word))
+        f.write(svg(lw, H, lockup))
+
+    with open("skoro-card.svg", "w") as f:
+        f.write(card_svg(lockup, lw, x0))
+    if shutil.which("rsvg-convert"):
+        subprocess.run(["rsvg-convert", "skoro-card.svg", "-o", "../static/og-image.png"], check=True)
+    else:
+        print("rsvg-convert not found: ../static/og-image.png left as it was")
 
     with open("../static/favicon.svg", "w") as f:
         f.write(favicon_svg(stars))

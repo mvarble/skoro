@@ -1,8 +1,8 @@
 import { hasTex } from '$lib/tex';
-import { EDGE_KIND_NAMES, NODE_KIND_NAMES, ROLE_NAMES, type GraphSpec } from './spec';
+import type { GraphSpec } from './spec';
 
-// A graph as Markdown text, for the `.md` exports: a reader without the SVG still gets every node
-// and edge, and which kind each one is.
+// A graph figure as Markdown text, for the `.md` exports: a reader without the SVG still gets every
+// node and edge, and the figure's name for the kind of each.
 export function describeGraph(spec: GraphSpec): string {
     // A label with math is left as `$…$`, which Markdown readers treat as math; anything else is
     // set as code.
@@ -13,16 +13,17 @@ export function describeGraph(spec: GraphSpec): string {
     lines.push('Nodes:', '');
     for (const node of spec.nodes) {
         const extra = node.annotation ? `, ${node.annotation}` : '';
-        lines.push(`- ${name.get(node.id)}: ${NODE_KIND_NAMES[node.kind]}${extra}`);
+        lines.push(
+            `- ${name.get(node.id)}: ${spec.nodeKinds[node.kind]?.name ?? node.kind}${extra}`,
+        );
     }
 
     lines.push('', 'Edges:', '');
     for (const edge of spec.edges) {
-        const kind = edge.kind ?? 'parent';
-        const what =
-            kind == 'binding' ? `binding ${ROLE_NAMES[edge.role!]}` : EDGE_KIND_NAMES[kind];
+        const kind = edge.kind === undefined ? undefined : spec.edgeKinds?.[edge.kind];
+        const what = kind ? `: ${kind.name}` : '';
         const label = edge.label ? ` (“${edge.label}”)` : '';
-        lines.push(`- ${name.get(edge.from)} → ${name.get(edge.to)}: ${what}${label}`);
+        lines.push(`- ${name.get(edge.from)} → ${name.get(edge.to)}${what}${label}`);
     }
     return lines.join('\n');
 }

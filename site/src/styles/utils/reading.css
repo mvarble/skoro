@@ -1,0 +1,186 @@
+/* `<ReadingOrder>` figures. Uses of earlier modules are drawn in the neutral edge colour, uses of
+ * later modules in orange, and a cycle's band is a tint of blue: the graph palette's tokens. */
+
+.reading-order {
+    --reading-earlier: var(--graph-edge);
+    --reading-later: var(--graph-orange);
+    --reading-band: color-mix(in srgb, var(--graph-blue) 9%, transparent);
+
+    margin: var(--space-6) 0;
+    display: grid;
+    gap: var(--space-3);
+
+    figcaption {
+        font: var(--font-small);
+        color: var(--fg-3);
+    }
+}
+
+.reading-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-6);
+    font: var(--font-small);
+    color: var(--fg-3);
+}
+
+.reading-key {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+
+    svg {
+        width: 30px;
+        height: 10px;
+    }
+
+    input {
+        accent-color: var(--fg-accent);
+    }
+}
+
+label.reading-key {
+    color: var(--fg-2);
+    cursor: pointer;
+}
+
+.key-earlier {
+    stroke: var(--reading-earlier);
+    stroke-width: 1.5;
+}
+
+.key-later {
+    stroke: var(--reading-later);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+}
+
+.reading-canvas {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-2);
+    padding: var(--space-2) var(--space-1);
+
+    svg {
+        display: block;
+        width: 100%;
+        min-width: 36rem;
+        height: auto;
+        margin: 0 auto;
+    }
+}
+
+.reading-band {
+    fill: var(--reading-band);
+}
+
+.reading-use {
+    fill: none;
+    stroke: var(--reading-earlier);
+    stroke-width: 1.1;
+    transition: opacity 0.15s;
+
+    &.implied {
+        display: none;
+    }
+
+    &.later {
+        stroke: var(--reading-later);
+        stroke-width: 1.4;
+        stroke-dasharray: 4 3;
+    }
+}
+
+.head-earlier {
+    fill: var(--reading-earlier);
+}
+
+.head-later {
+    fill: var(--reading-later);
+}
+
+.show-implied .reading-use.implied {
+    display: inline;
+    opacity: 0.45;
+}
+
+.reading-row {
+    cursor: pointer;
+    outline: none;
+    transition: opacity 0.15s;
+
+    .row-hit {
+        fill: transparent;
+    }
+
+    &:hover .row-hit,
+    &.on .row-hit {
+        fill: var(--reading-band);
+    }
+
+    &:focus-visible .row-hit {
+        stroke: var(--fg-accent);
+    }
+}
+
+.row-dot {
+    fill: var(--fg-2);
+}
+
+.row-number {
+    fill: var(--fg-4);
+    font: 11px var(--font-family-mono);
+    text-anchor: end;
+    font-variant-numeric: tabular-nums;
+}
+
+.row-name {
+    fill: var(--fg-1);
+    font: 500 13px var(--font-family-mono);
+}
+
+.row-later {
+    fill: var(--reading-later);
+    font: 11.5px var(--font-family-mono);
+}
+
+/* With a module in focus, everything not touching it fades. */
+.focusing {
+    .reading-use {
+        opacity: 0.12;
+    }
+
+    .reading-use.on {
+        display: inline;
+        opacity: 1;
+    }
+
+    .reading-use.on:not(.later) {
+        stroke: var(--fg-accent);
+        stroke-width: 1.6;
+    }
+
+    .reading-row {
+        opacity: 0.4;
+    }
+
+    .reading-row.on,
+    .reading-row.related {
+        opacity: 1;
+    }
+}
+
+.reading-info {
+    margin: 0;
+    min-height: 3.2em;
+    font: var(--font-small);
+    color: var(--fg-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reading-use,
+    .reading-row {
+        transition: none;
+    }
+}

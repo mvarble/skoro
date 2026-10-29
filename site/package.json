@@ -14,17 +14,9 @@
         "todos": "grep -rn '\\[!TODO\\]' content",
         "test": "vitest run"
     },
-    "engines": {
-        "pnpm": "^10.10.0"
-    },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "esbuild"
-        ]
-    },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@mvarble/mesearch-cms": "^0.2.0",
+        "@mvarble/mesearch-cms": "^0.2.1",
         "@mvarble/mesearch-markdown": "^0.1.0",
         "@mvarble/mesearch-ui": "^0.2.0",
         "@sveltejs/adapter-static": "^3.0.10",

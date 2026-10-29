@@ -1,0 +1,64 @@
+---
+title: Product manifolds
+summary: A product of manifolds is a manifold whose tangent space stacks its factors', and whose retraction acts factor by factor; derivatives in its charts are block matrices of the factors'.
+depends_on: [retraction, derivatives-in-charts]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as productRetraction from './statements/product-retraction.md';
+</script>
+
+Several quantities taken together, such as a pose and a velocity, or every state in a window of an
+estimator, are one point of a product manifold. This note shows that the product inherits a
+retraction from its factors, and how derivatives in its charts break into blocks.
+
+## The product and its tangent space
+
+Let $\manifold_1, \dots, \manifold_k$ be manifolds of dimensions $\dimension_1, \dots, \dimension_k$, each with a
+[retraction](../retraction/). Their product $\manifold = \manifold_1 \times \cdots \times \manifold_k$
+is a manifold of dimension $\dimension = \sum_i \dimension_i$, whose points are tuples $\point = (\point_1, \dots, \point_k)$. Its
+tangent space at $\point$ is the direct sum of the factors', identified with $\R^\dimension$ by stacking:
+
+$$
+	\T_\point \manifold = \T_{\point_1}\manifold_1 \oplus \cdots \oplus \T_{\point_k}\manifold_k \;\cong\; \R^\dimension,
+	\qquad \tangent = (\tangent_1; \dots; \tangent_k) . @tag(stack)
+$$
+
+(The $\oplus$ of vector spaces here is the direct sum, not the retraction.)
+
+<Statement {...productRetraction} />
+
+<Proof>
+
+$R_\point(0) = (\point_1, \dots, \point_k) = \point$. The derivative of $R_\point$ at $0$ is block diagonal, its $i$-th
+block the derivative of $R^i_{\point_i}$ at $0$, which is $I_{\dimension_i}$; so it is $I_\dimension$. The inverse and
+flatness follow factor by factor.
+
+</Proof>
+
+## Derivatives in product charts
+
+Let $\map : \manifold \to \otherManifold$ be smooth, with $\otherPoint = \map(\point)$. Because a step in the product chart
+moves each factor in its own chart, the [derivative in charts](../derivatives-in-charts/) of $\map$ is
+a row of blocks,
+
+$$
+	\D \map(\point) = \bigl[\, \D_1 \map(\point) \;\; \cdots \;\; \D_k \map(\point) \,\bigr],
+	\qquad
+	\D_i \map(\point)\, \tangent_i = \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point_1, \dots, \point_i \oplus t \tangent_i, \dots, \point_k) \ominus \otherPoint\bigr),
+	@tag(blocks)
+$$
+
+each the derivative in the $i$-th factor's chart with the other factors held fixed. A map into a
+product is a column of blocks in the same way, one per factor of the output. For a scalar $f : \manifold \to \R$, the
+chart gradient stacks the factors' partial gradients, $g = (g_1; \dots; g_k)$, and the chart
+Hessian is the block matrix whose $(i, j)$ block differentiates $g_i$ along the $j$-th factor:
+$H_{ij}(\point)\, \tangent_j = \frac{\dd}{\dd t} g_i(\point_1, \dots, \point_j \oplus t \tangent_j, \dots, \point_k)$ at
+$t = 0$.
+
+In particular, the retraction of the product is, as a map of the pair $(\point, \tangent)$, the factors'
+retractions side by side, and its derivatives of every order are block diagonal in the factors.
+Nothing about a product's derivatives requires more than its factors' derivatives and the
+bookkeeping of [](eq:stack).

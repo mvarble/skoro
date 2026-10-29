@@ -360,4 +360,16 @@ export function pageExists(root: string, key: string): boolean {
     );
 }
 
+// The crate a path belongs to, as its directory under `crates/`, if it is one.
+export function crateOf(rel: string): string | undefined {
+    return /^crates\/([^/]+)\//.exec(rel)?.[1];
+}
+
+export function crateExists(root: string, name: string): boolean {
+    return fs.existsSync(path.join(root, 'crates', name, 'Cargo.toml'));
+}
+
+// A crate's description, which its page in the reference shows above its reading order.
+export const crateDescription = (name: string) => `${CONTENT}/reference/crates/${name}/index.md`;
+
 export const hasTodo = (text: string) => /^>\s*\[!TODO\]/m.test(text);

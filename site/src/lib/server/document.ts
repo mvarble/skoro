@@ -5,6 +5,7 @@ import { referenceHtml } from '@mvarble/mesearch-ui/server';
 
 import { resolve } from '$app/paths';
 import { hrefOf, linkOf, type DocumentLink, type SkoroDocument } from '$lib/documents';
+import { entryCrates } from '$lib/server/reading';
 import { ARCHIVE, MATH, SITE, TRACKS } from '$lib/site';
 
 export interface Crumb {
@@ -70,10 +71,11 @@ export function documentData(key: string) {
         references,
         prerequisites: links(cms.prerequisites(key)),
         dependents: links(cms.dependents(key)),
-        // A page: the development behind it. An entry: what it changed, and what it revises or
-        // is revised by. An entry's document: its siblings.
+        // A page: the development behind it. An entry: what it changed (its pages and its
+        // crates), and what it revises or is revised by. An entry's document: its siblings.
         entries: doc.kind == 'page' ? keys(doc.entries) : [],
         pages: doc.kind == 'entry' ? keys(doc.pages) : [],
+        crates: doc.kind == 'entry' ? entryCrates(doc.filename) : [],
         revises: doc.kind == 'entry' ? keys(doc.revises) : [],
         revisedBy: doc.kind == 'entry' ? keys(doc.revisedBy) : [],
         documents: doc.kind == 'entry' ? links(cms.archive.documents(key)) : [],

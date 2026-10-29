@@ -1,19 +1,17 @@
 <script lang="ts">
     import { layoutGraph, type TextLayout } from '$lib/graph/geometry';
     import {
-        EDGE_KIND_NAMES,
-        NODE_KIND_NAMES,
-        ROLE_NAMES,
+        edgeKindClasses,
+        nodeKindClasses,
         type EdgeSpec,
         type GraphSpec,
-        type NodeKind,
-        type Role,
+        type NodeSpec,
     } from '$lib/graph/spec';
     import { renderMixed } from '$lib/tex';
 
-    // Renders a hand-placed model graph (see `$lib/graph/spec.ts`) as an SVG figure, with a
-    // caption and a legend of the node and edge kinds it uses. All geometry is computed in
-    // `$lib/graph/geometry.ts`; this component only writes it out.
+    // Renders a hand-placed graph figure (see `$lib/graph/spec.ts`) as SVG, with a caption and a
+    // legend of the node and edge kinds it uses, named and styled as the figure defines them. All
+    // geometry is computed in `$lib/graph/geometry.ts`; this component only writes it out.
     //
     // Text is not drawn in the SVG. It sits in an HTML layer over it, so that labels can hold
     // KaTeX: HTML inside an SVG would need `<foreignObject>`, whose box must be sized in advance
@@ -28,11 +26,15 @@
     const id = $props.id();
     const text = (source: string) => renderMixed(source, spec.katexMacros);
 
+    const nodeClass = (node: NodeSpec) =>
+        ['graph-node', nodeKindClasses(spec.nodeKinds[node.kind]), node.class]
+            .filter(Boolean)
+            .join(' ');
+
     const edgeClass = (edge: EdgeSpec) =>
         [
             'graph-edge',
-            `kind-${edge.kind ?? 'parent'}`,
-            edge.role && `role-${edge.role}`,
+            edgeKindClasses(edge.kind === undefined ? undefined : spec.edgeKinds?.[edge.kind]),
             edge.muted && 'graph-muted',
             edge.class,
         ]
@@ -49,15 +51,13 @@
     const centered = (x: number, y: number) =>
         place({ x, y, anchor: 'middle', baseline: 'middle' });
 
-    // The legend lists what this figure uses, in a fixed order.
+    // The legend lists the kinds this figure uses, in the order the figure declares them.
     const legend = $derived.by(() => {
-        const kinds = new Set(spec.nodes.map((n) => n.kind));
-        const edgeKinds = new Set(spec.edges.map((e) => e.kind ?? 'parent'));
-        const roles = new Set(spec.edges.flatMap((e) => (e.kind == 'binding' ? [e.role!] : [])));
+        const nodeKinds = new Set(spec.nodes.map((n) => n.kind));
+        const edgeKinds = new Set(spec.edges.map((e) => e.kind));
         return {
-            nodes: (Object.keys(NODE_KIND_NAMES) as NodeKind[]).filter((k) => kinds.has(k)),
-            edges: (['parent', 'scores', 'plain'] as const).filter((k) => edgeKinds.has(k)),
-            roles: (Object.keys(ROLE_NAMES) as Role[]).filter((r) => roles.has(r)),
+            nodes: Object.entries(spec.nodeKinds).filter(([key]) => nodeKinds.has(key)),
+            edges: Object.entries(spec.edgeKinds ?? {}).filter(([key]) => edgeKinds.has(key)),
         };
     });
 </script>
@@ -83,7 +83,7 @@
 
             {#each layout.nodes as node (node.spec.id)}
                 <g
-                    class="graph-node kind-{node.spec.kind} {node.spec.class ?? ''}"
+                    class={nodeClass(node.spec)}
                     class:graph-muted={node.spec.muted}
                     style={node.spec.style}
                 >
@@ -134,40 +134,29 @@
 
     {#if spec.legend ?? true}
         <ul class="graph-legend" aria-label="Legend">
-            {#each legend.nodes as kind (kind)}
+            {#each legend.nodes as [key, kind] (key)}
                 <li>
                     <svg viewBox="-9 -9 18 18" width="14" height="14" aria-hidden="true">
-                        <g class="graph-node kind-{kind}">
-                            {#if kind == 'log-likelihood'}
+                        <g class="graph-node {nodeKindClasses(kind)}">
+                            {#if kind.shape == 'square'}
                                 <rect x="-7" y="-7" width="14" height="14" rx="2" />
                             {:else}
                                 <circle r="7" />
                             {/if}
                         </g>
                     </svg>
-                    {NODE_KIND_NAMES[kind]}
+                    <span>{@html text(kind.name)}</span>
                 </li>
             {/each}
-            {#each legend.edges as kind (kind)}
+            {#each legend.edges as [key, kind] (key)}
                 <li>
                     <svg viewBox="0 0 28 10" width="28" height="10" aria-hidden="true">
-                        <g class="graph-edge kind-{kind}">
+                        <g class="graph-edge {edgeKindClasses(kind)}">
                             <path d="M 1 5 L 20 5" />
                             <polygon points="27,5 19,1.5 19,8.5" />
                         </g>
                     </svg>
-                    {EDGE_KIND_NAMES[kind]}
-                </li>
-            {/each}
-            {#each legend.roles as role (role)}
-                <li>
-                    <svg viewBox="0 0 28 10" width="28" height="10" aria-hidden="true">
-                        <g class="graph-edge kind-binding role-{role}">
-                            <path d="M 1 5 L 20 5" />
-                            <polygon points="27,5 19,1.5 19,8.5" />
-                        </g>
-                    </svg>
-                    <code>{ROLE_NAMES[role]}</code>
+                    <span>{@html text(kind.name)}</span>
                 </li>
             {/each}
         </ul>

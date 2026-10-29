@@ -39,7 +39,11 @@ export default defineConfig(
     {
         // These insert KaTeX output, and text that `renderMixed` has escaped, from specs authored
         // in this repository: nothing a visitor supplies reaches them.
-        files: ['src/lib/components/Tex.svelte', 'src/lib/components/ModelGraph.svelte'],
+        files: [
+            'src/lib/components/Tex.svelte',
+            'src/lib/components/ModelGraph.svelte',
+            'src/lib/components/Walkthrough.svelte',
+        ],
         rules: { 'svelte/no-at-html-tags': 'off' },
     },
     {

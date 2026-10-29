@@ -1,0 +1,89 @@
+---
+title: Retractions and tangent charts
+summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations $\oplus$ and $\ominus$.
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as retraction from './statements/retraction.md';
+	import * as mirror from './statements/mirror.md';
+</script>
+
+Estimation moves points. On $\R^\dimension$ a step is an addition, $\point + \tangent$; on a curved manifold, such
+as the rotations or the unit sphere, there is no addition, and a *retraction* takes its place. This
+note defines it, shows how it turns every tangent space into a chart, and introduces the notation
+$\oplus$ and $\ominus$ used throughout these notes.
+
+## The definition
+
+Let $\manifold$ be a smooth manifold of dimension $\dimension$. In computation, a tangent space
+$\T_\point\manifold$ is never handled abstractly: each is identified with $\R^\dimension$ by a basis chosen
+smoothly in $\point$, and a tangent vector is a column of $\dimension$ numbers. We assume such an identification
+throughout. Some manifolds have none that is smooth everywhere: by the hairy ball theorem, no
+smooth choice of tangent bases covers the whole sphere $S^2$. There the identification is smooth on
+an open part of the manifold, and a computation stays inside it.
+
+<Statement {...retraction} />
+
+The definition is the one used in optimization on manifolds, where retractions replace the
+exponential map of a Riemannian manifold. The exponential map is a retraction, but
+so is any map that agrees with it to first order, which is usually cheaper. Nothing here needs a
+metric.
+
+Two examples. On $\R^\dimension$, $R_\point(\tangent) = \point + \tangent$. On the positive reals, with
+$\T_\point\positive$, with $\positive = (0, \infty)$, identified with $\R$ by measuring relative change,
+$R_\point(\tangent) = \point\,e^{\tangent}$: it is defined for every $\tangent$, never leaves the positive reals,
+and satisfies $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity
+in the chosen identification (a tangent at $\point$ of coordinate $1$ is the velocity $\point$).
+
+## Tangent charts
+
+Because $\D R_\point(0)$ is invertible, the inverse function theorem makes $R_\point$ a diffeomorphism
+from a neighbourhood of $0 \in \R^\dimension$ onto a neighbourhood of $\point$. So $R_\point$ is a *chart* of
+$\manifold$ around $\point$, the tangent chart at $\point$, and every point near $\point$ has coordinates in it.
+As is common in robotics, we write
+
+$$
+	\point \oplus \tangent \defeq R_\point(\tangent), \qquad \otherPoint \ominus \point \defeq R_\point^{-1}(\otherPoint), @tag(oplus)
+$$
+
+the second for $\otherPoint$ in the neighbourhood where $R_\point$ is invertible. In words, $\otherPoint \ominus \point$ is where
+$\otherPoint$ sits in the chart at $\point$. By construction,
+
+$$
+	(\point \oplus \tangent) \ominus \point = \tangent @tag(roundtrip)
+$$
+
+for every $\tangent$ in the chart's domain, and $\point \oplus (\otherPoint \ominus \point) = \otherPoint$ for every $\otherPoint$ in its
+image. On $\R^\dimension$, $\oplus$ and $\ominus$ are addition and subtraction; on the positive reals above,
+$\otherPoint \ominus \point = \log(\otherPoint / \point)$.
+
+## The mirror identity
+
+On $\R^\dimension$, $\point \ominus (\point \oplus \tangent) = -\tangent$ as well: the step back from $\point \oplus \tangent$ to
+$\point$ is the reverse of the step forward. On a curved manifold it generally is not, because the left
+side is measured in the chart at the *moved* point $\point \oplus \tangent$, not at $\point$.
+
+<Statement {...mirror} />
+
+<Proof>
+
+Write $\otherPoint = \point \oplus \tangent$ and $\varphi(\tangent, c) = R_\point^{-1}(R_{\point \oplus \tangent}(c))$, the chart
+at $\otherPoint$ read in the chart at $\point$. It is smooth near $(0, 0)$, with $\varphi(\tangent, 0) = \tangent$
+and, since $R_{\point \oplus 0} = R_\point$, $\varphi(0, c) = c$. Hence
+$\varphi(\tangent, c) = \tangent + c + O(\lVert\tangent\rVert\,\lVert c\rVert)$. The coordinate
+$c = \point \ominus \otherPoint$ is the one with $\varphi(\tangent, c) = R_\point^{-1}(\point) = 0$, so
+$c = -\tangent + O(\lVert\tangent\rVert\,\lVert c\rVert)$, and $\lVert c \rVert = O(\lVert\tangent\rVert)$
+gives the claim.
+
+</Proof>
+
+The identity holds exactly in some cases: on $\R^\dimension$, on the positive reals above, and on any Lie
+group whose retraction is $R_\point(\tangent) = \point \operatorname{Exp}(\tangent)$, since then
+$\point \ominus (\point \oplus \tangent) = \operatorname{Log}(\operatorname{Exp}(\tangent)^{-1}) = -\tangent$. It
+fails at second order for other retractions, and a computation that needs "the point whose
+coordinate is $-\tangent$" must not assume it.
+
+A manifold whose retraction is $\point + \tangent$, so that both identities hold exactly and every chart is
+the same affine chart, is called *flat* in these notes.

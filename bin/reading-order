@@ -1,0 +1,3 @@
+#!/bin/sh
+# The order in which to read a crate's modules; see tools/reading-order/lib.ts.
+exec node "$(dirname "$0")/../tools/reading-order/main.ts" "$@"

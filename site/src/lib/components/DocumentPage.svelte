@@ -23,7 +23,9 @@
 
 <svelte:head>
     <title>{doc.title} · {SITE.name}</title>
+    <meta property="og:title" content="{doc.title} · {SITE.name}" />
     <meta name="description" content={doc.summary} />
+    <meta property="og:description" content={doc.summary} />
     <link rel="alternate" type="text/markdown" href={markdownHrefOf(doc.key)} />
 </svelte:head>
 
@@ -95,10 +97,20 @@
                 {:else}
                     <p class="muted">Nothing is written yet.</p>
                 {/if}
-                {#if data.pages.length}
+                {#if data.pages.length || data.crates.length}
                     <h2>What it changed</h2>
+                {/if}
+                {#if data.pages.length}
                     <p>The pages that say what this entry made true:</p>
                     <LinkList links={data.pages} />
+                {/if}
+                {#if data.crates.length}
+                    <p>The crates it changed:</p>
+                    <ul class="link-list">
+                        {#each data.crates as link (link.crate)}
+                            <li><a href={link.href}><code>{link.crate}</code></a></li>
+                        {/each}
+                    </ul>
                 {/if}
                 {#if data.revises.length}
                     <h2>What it revises</h2>

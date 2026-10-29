@@ -7,6 +7,9 @@ import {
     activeSlug,
     changedSince,
     checkboxes,
+    crateDescription,
+    crateExists,
+    crateOf,
     currentBranch,
     defaultBase,
     documentHash,
@@ -29,6 +32,7 @@ import {
     repoRoot,
     setActive,
     today,
+    tryGit,
     type Kind,
     type Stage,
     type Workflow,
@@ -290,6 +294,7 @@ function start(root: string, args: Args, io: Output): Result {
         '---',
         `title: ${JSON.stringify(title)}`,
         'pages: []',
+        'crates: []',
         ...(revises.length ? [`revises: [${revises.join(', ')}]`] : []),
         '---',
     ];
@@ -405,9 +410,27 @@ function readiness(
         for (const key of listed) {
             if (!pageExists(root, key)) problems.push(`${index} lists page '${key}', which does not exist.`);
         }
+        const crates = frontmatterList(text, 'crates') ?? [];
+        for (const name of crates) {
+            if (!crateExists(root, name)) problems.push(`${index} lists crate '${name}', which does not exist.`);
+        }
         const ref = base ?? defaultBase(root);
         const changed = ref ? changedSince(root, ref) : undefined;
         if (changed) {
+            // The crates it changed, which the archive links to their reading orders.
+            const edited = new Set(changed.map(crateOf).filter((name) => name !== undefined));
+            for (const name of edited) {
+                if (!crateExists(root, name)) continue;
+                if (!crates.includes(name)) {
+                    problems.push(`crate '${name}' changed on this branch; list it under \`crates\` in ${index}.`);
+                }
+                if (!fs.existsSync(path.join(root, crateDescription(name)))) {
+                    problems.push(`crate '${name}' changed on this branch; describe it in ${crateDescription(name)}.`);
+                }
+            }
+            for (const name of crates) {
+                if (!edited.has(name)) problems.push(`${index} lists crate '${name}', which this branch did not change.`);
+            }
             const pages = new Set(changed.map(pageKey).filter((key) => key !== undefined));
             for (const key of pages) {
                 if (!listed.includes(key) && pageExists(root, key)) {
@@ -502,8 +525,8 @@ function resume(root: string, args: Args, io: Output): Result {
 // ---------------------------------------------------------------------------
 // check, guard
 
-// Documents changed after they were approved, and documents written before
-// their stage.
+// Documents changed after they were approved, documents written before their
+// stage, and drafts changed while the entry was reopened at an earlier stage.
 function lockProblems(root: string, slug: string, workflow: Workflow): string[] {
     const problems: string[] = [];
     const stages = KINDS[workflow.kind];
@@ -520,13 +543,31 @@ function lockProblems(root: string, slug: string, workflow: Workflow): string[] 
                 );
             }
         } else if (exists && current != 'done') {
-            problems.push(`${doc} was written before its stage; '${slug}' is at ${current}.`);
+            // A draft the entry had reached before it was reopened waits, unchanged, for its
+            // stage to come round again.
+            const reopened = workflow.events.findLast((event) => event.action == 'reopen')?.commit;
+            const kept = reopened && tryGit(root, 'cat-file', '-e', `${reopened}:${doc}`) != undefined;
+            if (!kept) {
+                problems.push(`${doc} was written before its stage; '${slug}' is at ${current}.`);
+            } else if (tryGit(root, 'diff', '--quiet', reopened, '--', doc) == undefined) {
+                problems.push(
+                    `${doc} changed after '${slug}' was reopened at ${reopened}; it waits for its stage.`,
+                );
+            }
         }
         if (current == 'done' && (!approval || approval.stale)) {
             problems.push(`'${slug}' is done, but its ${stage} stage was never approved.`);
         }
     }
     return problems;
+}
+
+// Whether `rel` was in the tree at `commit` and is unchanged since.
+function keptSince(root: string, commit: string, rel: string): boolean {
+    return (
+        tryGit(root, 'cat-file', '-e', `${commit}:${rel}`) != undefined &&
+        tryGit(root, 'diff', '--quiet', commit, '--', rel) != undefined
+    );
 }
 
 function check(root: string, args: Args, io: Output): Result {
@@ -568,9 +609,14 @@ function check(root: string, args: Args, io: Output): Result {
         const slug = active ?? touched[0];
         const workflow = slug ? workflows.get(slug) : undefined;
         const subject = slug && workflow ? { slug, workflow } : undefined;
+        // Code, math notes and pages written before a reopening wait, unchanged, for the stage
+        // that opens them to come round again, as a draft does.
+        const reopened = subject?.workflow.events.findLast((event) => event.action == 'reopen')?.commit;
         for (const rel of changed) {
             const why = refusal(rel, subject, false);
-            if (why) problems.push(why);
+            if (!why) continue;
+            if (reopened && placeOf(rel).area != 'entry' && keptSince(root, reopened, rel)) continue;
+            problems.push(why);
         }
     }
     if (args.flags.merge && active) {

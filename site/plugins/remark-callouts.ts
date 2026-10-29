@@ -6,7 +6,7 @@ import type { Plugin } from 'unified';
 //     > [!NOTE]
 //     > Body text.
 //
-//     > [!DECISION] Why the graph owns the bindings
+//     > [!DECISION] Why conditioning belongs to the query
 //     > Body text.
 //
 // Anything after the marker on its first line becomes the title. The old remark that mdsvex runs
