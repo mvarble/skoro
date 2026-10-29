@@ -108,10 +108,11 @@ $\operatorname{diag}(1 / \point)$ on a positive one, where $\point \ominus \mu =
 
 The Jacobian $J$ is what keeps the term's base measure the core's. It does not depend on $\mu$ or
 on the scale, so it changes no derivative with respect to them, but it is a function of $\point$
-and it is not a constant of a query that leaves $\point$ free: its chart gradient is $-1$ at each
-positive coordinate, since $J(\point \oplus \tangent) = J(\point) + \sum_{i \in P} \tangent_i$. It
-moves the mode of the density away from $\mu$, as it must, because the density is with respect to
-Lebesgue measure in storage coordinates and not in the chart. Without it, three things the core
+and it is not a constant of a query that leaves $\point$ free: since $J(\point \oplus \tangent) =
+J(\point) + \sum_{i \in P} \tangent_i$, the term's $-J$ adds $-1$ to its chart gradient at each
+positive coordinate. On a positive factor it moves the mode of the density away from $\mu$, as it
+must, because the density is with respect to Lebesgue measure in storage coordinates and not in the
+chart. Without it, three things the core
 relies on would fail: the sampler below would not be exact for the term, so the importance weight
 [](eq:archive/core/math/weight) would be wrong by $J$ at every draw; a quadrature of the term over
 $\point$, as in the core's tests of retirement, would not integrate to one; and a model mixing the
