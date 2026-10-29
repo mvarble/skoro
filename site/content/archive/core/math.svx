@@ -960,7 +960,7 @@ estimate in the archive's sliding windows. Either way, computing it needs the di
 linear algebra of later entries, which the core does not have.
 
 **Retiring together and one after another.** [%full](statement:retirement) holds for any $E$, so
-retiring $E_1$ and then $E_2$ can be compared with retiring $E_1 \cup E_2$ at once. With exact
+retiring $E_1$ and then a disjoint $E_2$ can be compared with retiring $E_1 \cup E_2$ at once. With exact
 replacements they agree: the first replacement is a term of the model when the second retirement
 reads it, and integrating over $E_{1,F}$ and then over $E_{2,F}$ is integrating over both, by
 Tonelli's theorem. With approximate replacements they do not, in general. A Laplace approximation
