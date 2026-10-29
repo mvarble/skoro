@@ -11,8 +11,9 @@ publishes snapshots, branches and readers, addresses and namespaces, and the
 and roles. It compiles [queries](../../../concepts/queries/) for a target into programs, whose passes
 give values, tangents, gradients and Hessian-vector products in tangent charts, and it holds
 generation, which draws a model's free quantities from explicit random keys and weighs the draw, and
-retirement, which removes the quantities under a namespace and keeps what they said about the
-rest as a likelihood factor over their Markov blanket, which the caller builds.
+retirement, which removes the quantities at a collection of addresses, named one by one or as
+the namespaces they lie under, and keeps what they said about the rest as a likelihood factor over
+their Markov blanket, which the caller builds.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the

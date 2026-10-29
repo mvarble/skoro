@@ -19,7 +19,8 @@ holds the spaces of quantities (the Euclidean and positive types, products, the 
 the embedded types later crates declare), the primitive operations with kernels of up to second
 order, composites, the writer with its snapshots, branches and building scopes, addresses, terms
 and the probabilistic graph, explicit random keys, queries and their compiler, the passes of a
-program in tangent charts, generation weighed by importance, and retirement under a namespace.
+program in tangent charts, generation weighed by importance, and retirement of the quantities at
+any collection of addresses, a namespace's among them.
 `skoro` re-exports both. Much of it was ported from the `archive` branch and reshaped to the
 charter, and `REVISIT.md` lists what the archive had that the core does not bring back, each to
 return as an entry of its own. Along the way the workflow gained the reading orders of the crates,
