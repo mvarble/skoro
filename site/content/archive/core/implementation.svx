@@ -57,7 +57,7 @@ let second = program.hessian_products(&at, &Frames::identity(program.layout()))?
 ```
 
 And it is *changed* only through the writer, by building again, by forking a snapshot into a
-branch, or by retiring a namespace.
+branch, or by retiring the quantities at a collection of addresses.
 
 The pieces map to [the mathematics](math.svx) as follows. A model's density is the sum of its
 terms [](eq:archive/core/math/log-density), and a query's density is that sum as a function of the
@@ -1223,7 +1223,7 @@ impl Writer {
     pub fn build<R>(&mut self, body: impl FnOnce() -> R) -> Result<R, Failure>;
     pub fn snapshot(&self) -> Snapshot;
     pub fn reader(&self) -> Reader; // Clone, Send, Sync; `latest()` gives the newest snapshot
-    pub fn retire(&mut self, namespace: impl Into<Address>, observed: &Observations)
+    pub fn retire(&mut self, addresses: Addresses, observed: Observations)
         -> Result<Retirement<'_>, Error>;
 }
 
@@ -1496,9 +1496,23 @@ otherwise; and, for each free parameter, minus its proposal's log-density.
 ### Retirement
 
 Retirement is the three steps of [Retirement](math.svx#retirement), with the caller's step
-between two of the core's:
+between two of the core's. What to retire is the collection $A$ of addresses of the mathematics,
+written the way `Observations` is, in the `retire` module and public:
 
 ```rust
+/// The addresses a retirement retires: some named one by one, and every address under some
+/// namespaces.
+#[derive(Clone, Default, Debug)]
+pub struct Addresses { exact: BTreeSet<Address>, namespaces: BTreeSet<Address> }
+
+impl Addresses {
+    pub fn new() -> Addresses;
+    /// The quantity at `address`, which must exist when the retirement is read.
+    pub fn at(self, address: impl Into<Address>) -> Addresses;
+    /// Every quantity whose address has `namespace` as a proper prefix, when the retirement is read.
+    pub fn under(self, namespace: impl Into<Address>) -> Addresses;
+}
+
 pub struct Retirement<'w> { /* the writer, borrowed, and the plan */ }
 
 pub struct Plan {
@@ -1525,9 +1539,32 @@ impl Retirement<'_> {
 }
 ```
 
-`Writer::retire` reads $E$ as the quantities whose address has the namespace as a proper prefix,
-refuses an observed quantity outside $E$ (`NotInNamespace`), and reads $\mathcal T_E$ from `joined`
-and $B$ by [](eq:archive/core/math/blanket). It changes nothing. `replace` opens a building scope,
+`Writer::retire` resolves the collection on the latest snapshot. Each address given by `at` must
+hold a quantity (`UnknownAddress`, naming it); each namespace given by `under` contributes the
+quantities `Snapshot::under` finds, less one at the namespace's own address, and contributes none
+when it holds none. $E$ is the union, a set, so an address named twice, or named by `at` and lying
+under a namespace too, is retired once. `retire` then refuses an observed quantity outside $E$
+(`ObservedNotRetired`), and reads $\mathcal T_E$ from `joined` and $B$ by
+[](eq:archive/core/math/blanket). It changes nothing.
+
+A namespace is resolved when the retirement is read, not when `under` is called: `Addresses`
+holds no snapshot, so one collection, such as `Addresses::new().under(0)` for the first tick of a
+window, may be built ahead of the model it applies to. An empty $E$, from `Addresses::new()` or a
+namespace that holds nothing, is not an error, as the mathematics says: its plan is empty, and
+`replace` returns at once without calling `body` and publishes nothing, so the model is as it was.
+A caller that wants to know beforehand reads `plan().retired.is_empty()`.
+
+> [!DECISION] Why a collection of addresses, and not handles or a bare address
+> The mathematics names $E$ by addresses, which are what a caller holds for a quantity it did not
+> build, what branches agree on, and what the charter retires by. Taking `QDyn` handles instead
+> would make a caller that retires by position, such as a window counting its ticks, look up
+> every quantity first. A bare `impl Into<Address>`, as
+> `retire` took before, could mean one quantity or a namespace, and `retire("tick/0")` would
+> silently change meaning from the second to the first; `Addresses` makes the caller say which,
+> so every earlier call fails to compile rather than retire something else. A list of addresses
+> computed by the caller, with namespaces expanded through `Snapshot::under` beforehand, would need
+> a snapshot in hand before every retirement, and would expand a namespace against a snapshot that
+> may no longer be the latest. `replace` opens a building scope,
 in which the caller builds $\logterm_B$ from the blanket's quantities and constants, by exact
 integration or by an approximation computed beforehand on `snapshot()`. Then, on the draft:
 
@@ -1565,7 +1602,7 @@ carrying what a caller needs to name the fault:
 | adding terms | `NotALogDensity`, `AlreadyScored`, `ConditionedOnLater`, `Binding`, `BindingOutsideTerm` |
 | compiling and running | `Tensor(TensorError)`, `NotAQuantity`, `NotATerm`, `ValueShape`, `MissingValue`, `BatchSize`, `OrderTooLow`, `CompositeCycle`, `FreeDiscrete`, `FrameShape` |
 | generating | `SamplerOutsideTerm`, `CannotGenerate` |
-| retiring | `NotInNamespace`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
+| retiring | `UnknownAddress`, `ObservedNotRetired`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
 | naming | `DuplicateName`, `UnknownOperation` |
 
 A cycle met while a model folds a node, which lowers for `Target::host()`, is recorded as a
@@ -1982,12 +2019,29 @@ log-density and a sampler by inversion.
   order, after a retirement, and on another branch, is the same.
 - `rows_draw_independently`, and `draws_agree_across_precisions`, to the cast.
 
-**Retirement** (`crates/skoro/tests/retirement.rs`), the four checks of the mathematics on its
-scalar chain.
+**Retirement** (`crates/skoro/tests/retirement.rs`), the five checks of the mathematics on its
+scalar chain, whose quantities are at `tick/0/x`, `tick/0/z`, `tick/1/x` and `tick/1/z`. Every
+retirement of the first tick below is given `Addresses::new().under("tick/0")`.
 
 - `retirement_reads_the_blanket_and_removes_what_it_names`.
 - `replacement_outside_the_blanket_is_refused_and_changes_nothing`: reached from
   $\randomPoint_0$, and reached from a quantity outside the blanket.
+- `addresses_name_quantities_exactly_and_namespaces_by_prefix`: `at("tick/0/x")` retires
+  $\randomPoint_0$ alone; `under("tick/0")` retires $\randomPoint_0$ and $\bfz_0$; `under` of a
+  quantity's own address, `under("tick/0/x")`, retires nothing; and `at("tick/0/x")` with
+  `under("tick/0")` retires the two once, with the plan of `under("tick/0")` alone.
+- `unknown_address_or_observed_outside_is_refused_and_changes_nothing`: `at("tick/2/x")` is
+  refused as `UnknownAddress`, and $\bfz_1$ observed while retiring the first tick as
+  `ObservedNotRetired`, each before anything is read, with the latest snapshot unchanged.
+- `empty_retirement_changes_nothing`: with `Addresses::new()`, and with `under("tick/2")`, the plan
+  is empty, `replace` does not call its body, and the latest snapshot equals the one before.
+- `part_of_a_tick_matches_the_joint_normal`: retiring `at("tick/0/x")` alone with nothing observed
+  reads $E_F = \{\randomPoint_0\}$, the same three terms, and $B = \{\bfz_0, \randomPoint_1\}$;
+  with [](eq:archive/core/math/joint-blanket) as the replacement, both are parameters afterwards,
+  and a query observing $\bfz_0$ at $\hat z_0$ and free in $\randomPoint_1$ has the log-density,
+  gradient and Hessian of the model retired by `kalman_replacement_matches_quadrature`, constants
+  included, to rounding. The joint normal is written in the test as the normal of $\bfz_0$ and
+  the normal of $\randomPoint_1$ given it, by the same completion of the square.
 - `kalman_replacement_matches_quadrature`: with [](eq:archive/core/math/kalman), the new model's
   log-density, gradient and Hessian in $\randomPoint_1$ equal the old model's with $\point_0$
   integrated by Gauss–Hermite quadrature and $\bfz_0$ fixed, constants included.
@@ -1995,8 +2049,8 @@ scalar chain.
   the proposal, and with it every row's weight is the evidence
   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$.
 - `retired_handle_fails_on_the_new_model_and_works_on_the_old`.
-- `proposal_reading_a_retired_quantity_is_removed_and_reported`: a parameter outside the
-  namespace, proposed conditionally on $\randomPoint_0$, is named in the plan's `unproposed`,
+- `proposal_reading_a_retired_quantity_is_removed_and_reported`: a parameter outside $E$,
+  proposed conditionally on $\randomPoint_0$, is named in the plan's `unproposed`,
   cannot be generated afterwards, and can once the replacement gives it a proposal; a replacement
   proposal that reads $\randomPoint_0$ is refused.
 - `nothing_left_refers_to_a_removed_node`: after each retirement above, every input, binding,
@@ -2026,3 +2080,14 @@ sampler's $\log(1 - u)$ or inverse distribution function is infinite. A variate 
 bits, $((u \gg 12) + 0.5) \cdot 2^{-52}$, which is exact in `f64` at every step;
 [Identities, addresses and keys](#identities-addresses-and-keys) says why, and
 `uniforms_lie_in_the_open_interval` checks the extremes of the map as well as a sample of it.
+
+**2026-10-29.** Reopened with the mathematics, which now retires the quantities at any collection
+of addresses rather than those under one namespace. `Writer::retire` takes an `Addresses` in place
+of a namespace: addresses named one by one with `at`, each of which must hold a quantity
+(`UnknownAddress`), and namespaces with `under`, resolved against the latest snapshot when the
+retirement is read. `NotInNamespace` becomes `ObservedNotRetired`, since there may be no namespace
+to name. An empty collection yields an empty plan, and `replace` then changes nothing without
+calling its body. The tests gain the cases of `at` and `under` and their union, the two refusals,
+the empty retirement, and the fifth check of the mathematics, which retires part of a tick and
+compares the result against the Kalman retirement. Observations are taken by value, as the build
+already took them.
