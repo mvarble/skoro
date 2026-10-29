@@ -210,7 +210,7 @@ the test macro unless the companion says otherwise.
       the existing retirement tests retiring `Addresses::new().under("tick/0")` (or `"tick/1"`).
       Tests: `addresses_name_quantities_exactly_and_namespaces_by_prefix`,
       `unknown_address_or_observed_outside_is_refused_and_changes_nothing`.
-- [ ] An empty retirement: an empty plan, and `replace` returning without calling its body or
+- [x] An empty retirement: an empty plan, and `replace` returning without calling its body or
       publishing. Tests: `empty_retirement_changes_nothing`.
 - [ ] The fifth check of the mathematics, retiring part of a tick with the joint normal
       replacement. Tests: `part_of_a_tick_matches_the_joint_normal`.

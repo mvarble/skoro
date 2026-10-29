@@ -202,7 +202,7 @@ impl Retirement<'_> {
     /// Then `E`, the terms of `𝒯_E`, the proposals of `E` and of `unproposed`, and every mapped
     /// node reached from `E` are removed, the replacement is added as a likelihood factor and
     /// the proposals attached, and one snapshot is published. A failure at any point leaves the
-    /// model as it was.
+    /// model as it was. A retirement of nothing changes nothing, and does not call `body`.
     #[track_caller]
     pub fn replace(self, body: impl FnOnce(&Plan) -> Replacement) -> Result<(), Failure> {
         let location = Location::caller();
@@ -212,6 +212,9 @@ impl Retirement<'_> {
             snapshot,
             plan,
         } = self;
+        if plan.retired.is_empty() {
+            return Ok(());
+        }
         let draft = Draft::new(snapshot.0.as_ref().clone());
         let (replacement, frame) = scope::open(Frame::Scope(draft), || body(&plan));
         let Frame::Scope(mut draft) = frame else {

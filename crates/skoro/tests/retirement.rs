@@ -296,6 +296,22 @@ fn unknown_address_or_observed_outside_is_refused_and_changes_nothing() {
     assert_eq!(chain.writer.snapshot(), before);
 }
 
+#[test]
+fn empty_retirement_changes_nothing() {
+    let mut chain = chain();
+    let before = chain.writer.snapshot();
+    for addresses in [Addresses::new(), Addresses::new().under("tick/2")] {
+        let retirement = chain.writer.retire(addresses, Observations::new()).unwrap();
+        let plan = retirement.plan();
+        assert!(plan.retired.is_empty() && plan.integrated.is_empty());
+        assert!(plan.terms.is_empty() && plan.blanket.is_empty() && plan.unproposed.is_empty());
+        retirement
+            .replace(|_| panic!("an empty retirement calls no body"))
+            .unwrap();
+        assert_eq!(chain.writer.snapshot(), before);
+    }
+}
+
 /// Gauss–Hermite nodes and weights of `n` points, for `∫ e^{-t²} f(t) dt`.
 fn gauss_hermite(n: usize) -> (Vec<f64>, Vec<f64>) {
     let (mut nodes, mut weights) = (vec![0.0; n], vec![0.0; n]);
