@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "math",
+    "stage": "implementation",
     "started": "2026-10-11",
     "events": [
         {
@@ -115,14 +115,19 @@
             "stage": "math",
             "reason": "Retirement was given a namespace, so it could remove only the quantities under one address prefix, where it should take any collection of addresses.",
             "commit": "44135d7"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "math",
+            "commit": "dcaf04c"
         }
     ],
     "approvals": {
         "math": {
-            "date": "2026-10-15",
-            "commit": "404b265",
-            "hash": "92a375defb41fd1ad99e47204628e12cbe5e64a3d3439f5eb57077b6fb73e75f",
-            "stale": true
+            "date": "2026-10-29",
+            "commit": "dcaf04c",
+            "hash": "de96e3fc7f0d2fc375235db7f40f5657903637b71ff050354d0720b69bb31a4b"
         },
         "implementation": {
             "date": "2026-10-15",
