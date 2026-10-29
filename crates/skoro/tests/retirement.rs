@@ -439,6 +439,83 @@ fn kalman_replacement_matches_quadrature() {
     }
 }
 
+/// The log-density of `snapshot` given `given`, free in `x1`, with its gradient and Hessian there.
+fn density_in_x1(snapshot: &Snapshot, given: Observations, x1: Q<Real>, at: f64) -> [f64; 3] {
+    let target = Target::host();
+    let program = snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap();
+    let values = Values::new().with(x1, value(&[at], &target));
+    let (density, gradient) = program.gradient(&values).unwrap();
+    let unit = Frames::new().with(x1, Frame::from_host(&[1.0], 1, 1, 1, &target));
+    let hessian = program.hessian_products(&values, &unit).unwrap();
+    [
+        host(&density, NodeId::DENSITY)[0],
+        gradient.get(x1).unwrap().to_host()[0],
+        hessian.beta.get(x1).unwrap().to_host()[0],
+    ]
+}
+
+#[test]
+fn part_of_a_tick_matches_the_joint_normal() {
+    let mut chain = chain();
+    let mut part = chain.writer.snapshot().fork();
+    retire_exactly(&mut chain);
+    let (x0, z0, x1) = (chain.x0, chain.z0, chain.x1);
+
+    // Retire x0 alone, nothing observed: the replacement is the joint normal of z0 and x1, written
+    // as the normal of z0 and the normal of x1 given it.
+    let retirement = part
+        .retire(Addresses::new().at("tick/0/x"), Observations::new())
+        .unwrap();
+    let plan = retirement.plan();
+    assert_eq!(ids(&plan.retired), [x0.id()]);
+    assert_eq!(ids(&plan.integrated), [x0.id()]);
+    let terms: Vec<NodeId> = plan.terms.iter().map(|t| t.log_density).collect();
+    assert_eq!(terms, chain.terms[..3]);
+    let blanket: Vec<NodeId> = plan.blanket.iter().map(|(q, ..)| q.id()).collect();
+    assert_eq!(blanket, [z0.id(), x1.id()]);
+    let gain = S * S / (S * S + R * R);
+    let variance = (1.0 - gain) * S * S + QN * QN;
+    retirement
+        .replace(|_| {
+            let evidence = log_density(z0, constant(Real, A), (S * S + R * R).sqrt());
+            let mean = z0 * gain + A * (1.0 - gain);
+            let predicted = log_density(x1, mean, variance.sqrt());
+            Replacement {
+                log_density: (evidence.untyped() + predicted.untyped()).narrow::<Real>(),
+                proposals: Vec::new(),
+            }
+        })
+        .unwrap();
+    let part = part.snapshot();
+    assert!(part.is_parameter(z0) && part.is_parameter(x1));
+
+    // Observing z0 in the query agrees with observing it in the retirement.
+    let kalman = chain.writer.snapshot();
+    for at in [-0.8, 0.4, 1.7] {
+        let by_query = density_in_x1(
+            &part,
+            Observations::new().observe(z0, Z0).observe(chain.z1, Z1),
+            x1,
+            at,
+        );
+        let by_retirement =
+            density_in_x1(&kalman, Observations::new().observe(chain.z1, Z1), x1, at);
+        for (name, a, b) in ["log-density", "gradient", "Hessian"]
+            .into_iter()
+            .zip(by_query)
+            .zip(by_retirement)
+            .map(|((name, a), b)| (name, a, b))
+        {
+            assert!(
+                (a - b).abs() < 1e-12 * b.abs().max(1.0),
+                "{name} at {at}: {a} against {b}"
+            );
+        }
+    }
+}
+
 #[test]
 fn blanket_quantity_becomes_a_parameter_drawn_from_its_proposal() {
     let (key, rows, target) = (Key::from_seed(21), 8, Target::host());
