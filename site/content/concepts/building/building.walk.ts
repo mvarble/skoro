@@ -12,7 +12,8 @@ const roots = {
 /** One node per `let` of the running example; each blue node stands for its line's operations. */
 export const scope = defineWalkthrough({
     title: 'A scope builds the compilation graph',
-    caption: String.raw`The running example, line by line. Each blue or purple node stands for the operations on its line, drawn as one; the compilation graph has a node for each.`,
+    caption:
+        'The running example, line by line. Each blue or purple node stands for the operations on its line, drawn as one; the compilation graph has a node for each.',
     width: 760,
     height: 560,
     nodeKinds: {
@@ -102,7 +103,7 @@ export const scope = defineWalkthrough({
             show: ['x0'],
         },
         {
-            note: String.raw`Its log-density $\ell_1 = -\tfrac12 \, x_0 \cdot x_0$ is four operations, each a node with an edge from each input. \`score\` then records $\ell_1$ as the term \`t1\`, which scores $x_0$: a term names a node of the graph, and adds none.`,
+            note: 'Its log-density $\\ell_1 = -\\tfrac12 \\, x_0 \\cdot x_0$ is four operations, each a node with an edge from each input. `score` then records $\\ell_1$ as the term `t1`, which scores $x_0$: a term names a node of the graph, and adds none.',
             code: 'let t1',
             show: ['l1'],
             kind: { l1: 'term' },
@@ -116,12 +117,12 @@ export const scope = defineWalkthrough({
             annotate: { l2: 't2' },
         },
         {
-            note: String.raw`Three more quantities: an inertial reading $\zeta$, a scale $\sigma$ and the next position $x_1$. The order quantities are made in is the model's ancestral order.`,
+            note: "Three more quantities: an inertial reading $\\zeta$, a scale $\\sigma$ and the next position $x_1$. The order quantities are made in is the model's ancestral order.",
             code: ['let zeta', 'let sigma', 'let x1 ='],
             show: ['zeta', 'sigma', 'x1'],
         },
         {
-            note: String.raw`\`step\`, computed from three quantities, gets an edge from each, and its square scores $x_1$ as \`t3\`.`,
+            note: '`step`, computed from three quantities, gets an edge from each, and its square scores $x_1$ as `t3`.',
             code: ['let step', 'let t3'],
             show: ['step', 'l3'],
             kind: { l3: 'term' },
@@ -135,7 +136,7 @@ export const scope = defineWalkthrough({
             annotate: { l4: 't4', l5: 't5' },
         },
         {
-            note: String.raw`Two likelihood factors, \`t6\` and \`t7\`: terms that score nothing. A function of handles never asks which model it builds into, so the same code could as well have built these into a branch.`,
+            note: 'Two likelihood factors, `t6` and `t7`: terms that score nothing. A function of handles never asks which model it builds into, so the same code could as well have built these into a branch.',
             code: ['let r =', 'let inverse', 'let t6', 'let t7'],
             show: ['r', 'inverse', 'l6', 'l7'],
             kind: { l6: 'term', l7: 'term' },
@@ -154,7 +155,8 @@ export const scope = defineWalkthrough({
 /** `a_call_of_constants_folds_when_added`, in `tests/composite.rs`. */
 export const folding = defineWalkthrough({
     title: 'A call of constants folds as it is added',
-    caption: String.raw`The composite's body is $\Sigma(e^{q_0} \odot \sin q_0) \, q_1$, from \`in_place\`.`,
+    caption:
+        "The composite's body is $\\Sigma(e^{q_0} \\odot \\sin q_0) \\, q_1$, from `in_place`.",
     width: 720,
     height: 380,
     nodeKinds: {

@@ -185,7 +185,8 @@ const mixRegion = (dx: number, label: string) =>
 /** The model of `tests/passes.rs`, compiled for `[f, g]`. */
 export const expansion = defineWalkthrough({
     title: 'A composite is expanded into the program',
-    caption: String.raw`The body of \`mix\` is $\Sigma(e^{x \odot y} + s \sin x + x \odot x)$. On the left, the compilation graph; on the right, the computation graph of the program for $[f, g]$.`,
+    caption:
+        'The body of `mix` is $\\Sigma(e^{x \\odot y} + s \\sin x + x \\odot x)$. On the left, the compilation graph; on the right, the computation graph of the program for $[f, g]$.',
     width: 760,
     height: 560,
     nodeKinds: {
