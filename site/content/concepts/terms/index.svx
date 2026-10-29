@@ -7,7 +7,9 @@ depends_on: [concepts/building, generative-models]
 
 <script>
 	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
 	import { probabilistic } from '../../archive/core/model.graph';
+	import { blanket } from './terms.walk';
 </script>
 
 A model's quantities say what is uncertain; its **terms** say how. A term is a log-density, built
@@ -63,16 +65,20 @@ by the rule above. For the example:
 <ModelGraph spec={probabilistic} />
 
 Inference reads this graph rather than being told about it. A snapshot answers the questions an
-algorithm asks of it:
+algorithm asks of it, among them the **Markov blanket** of some quantities, which is what a sampler
+or a sliding window needs: the other quantities the same terms involve, so that the quantities'
+conditional density, given everything else, is the sum of the terms they are joined to, up to a
+constant. For the first tick of the example:
+
+<Walkthrough spec={blanket}>
 
 ```rust
 {../../../../crates/skoro-core/src/model.rs:235..278}
 ```
 
-The **Markov blanket** of some quantities is what a sampler or a sliding window needs: the other
-quantities the same terms involve, so that the quantities' conditional density, given everything
-else, is the sum of the terms they are joined to, up to a constant. The mathematics of all this is
-in the note on [generative models](../../math/generative-models/).
+</Walkthrough>
+
+The mathematics of all this is in the note on [generative models](../../math/generative-models/).
 
 A term may also carry a **sampler**, which draws the quantity it scores, and **bindings**, which
 mark its parts by role (a residual, a whitening factor) for the algorithms that read them. A
