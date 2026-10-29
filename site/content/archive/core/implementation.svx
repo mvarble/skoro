@@ -1564,7 +1564,11 @@ A caller that wants to know beforehand reads `plan().retired.is_empty()`.
 > so every earlier call fails to compile rather than retire something else. A list of addresses
 > computed by the caller, with namespaces expanded through `Snapshot::under` beforehand, would need
 > a snapshot in hand before every retirement, and would expand a namespace against a snapshot that
-> may no longer be the latest. `replace` opens a building scope,
+> may no longer be the latest. The charter's example, `writer.retire("0")` for a tick leaving a
+> window, is written `writer.retire(Addresses::new().under(0), observed)`: the example's spelling
+> changes, and what the charter commits to, retiring a whole namespace in one call, does not. The
+> archive's elimination took a set too: `marginalize_out(graph, eliminate: &[K])`, in
+> `crates/skoro-dense/src/marginal.rs` at `019e888`, over keys rather than addresses. `replace` opens a building scope,
 in which the caller builds $\logterm_B$ from the blanket's quantities and constants, by exact
 integration or by an approximation computed beforehand on `snapshot()`. Then, on the draft:
 
@@ -1604,6 +1608,10 @@ carrying what a caller needs to name the fault:
 | generating | `SamplerOutsideTerm`, `CannotGenerate` |
 | retiring | `UnknownAddress`, `ObservedNotRetired`, `ReplacementOutsideBlanket`, `ProposalNotNeeded`, `ProposalReadsRetired` |
 | naming | `DuplicateName`, `UnknownOperation` |
+
+Of the retiring variants, `ObservedNotRetired { quantity: NodeId }` replaces
+`NotInNamespace { quantity, namespace }`, carrying no address since $E$ may not be a namespace,
+and `UnknownAddress { address: Address }` is the building variant, reused unchanged.
 
 A cycle met while a model folds a node, which lowers for `Target::host()`, is recorded as a
 building failure at the line that added the node, as any other is.
@@ -2038,9 +2046,10 @@ retirement of the first tick below is given `Addresses::new().under("tick/0")`.
 - `part_of_a_tick_matches_the_joint_normal`: retiring `at("tick/0/x")` alone with nothing observed
   reads $E_F = \{\randomPoint_0\}$, the same three terms, and $B = \{\bfz_0, \randomPoint_1\}$;
   with [](eq:archive/core/math/joint-blanket) as the replacement, both are parameters afterwards,
-  and a query observing $\bfz_0$ at $\hat z_0$ and free in $\randomPoint_1$ has the log-density,
-  gradient and Hessian of the model retired by `kalman_replacement_matches_quadrature`, constants
-  included, to rounding. The joint normal is written in the test as the normal of $\bfz_0$ and
+  and the query of `kalman_replacement_matches_quadrature` on the new model, free in
+  $\randomPoint_1$ with $\bfz_1$ observed, with $\bfz_0$ now observed at $\hat z_0$ too, has the
+  log-density, gradient and Hessian of that query on the model retired there, constants included,
+  to rounding. The joint normal is written in the test as the normal of $\bfz_0$ and
   the normal of $\randomPoint_1$ given it, by the same completion of the square.
 - `kalman_replacement_matches_quadrature`: with [](eq:archive/core/math/kalman), the new model's
   log-density, gradient and Hessian in $\randomPoint_1$ equal the old model's with $\point_0$
