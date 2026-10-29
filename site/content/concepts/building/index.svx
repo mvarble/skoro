@@ -5,6 +5,11 @@ order: 3
 depends_on: [concepts/operations]
 ---
 
+<script>
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { branches, folding, scope } from './building.walk';
+</script>
+
 A model is built forward, the way it is thought of: a quantity, then what is computed from it,
 then the next quantity. Building happens inside a **scope** that a **writer** opens, by ordinary
 functions of [handles](../spaces/#typed-handles) that name no writer, device or precision, and
@@ -45,6 +50,30 @@ log-densities of [terms](../terms/). Its edges run from each input of an operati
 The graph only grows: each scope adds nodes on top of the previous snapshot's, and nothing already
 published changes.
 
+Here is a scope building the compilation graph of a model of a vehicle and a landmark, to which
+the page on [terms](../terms/#an-example) returns, one line at a time. Step through it, or play it:
+
+<Walkthrough spec={scope}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:32..57}
+```
+
+</Walkthrough>
+
+A node all of whose inputs are fixed in the model, constants or nodes folded before it, is
+**folded** as it is added: its operation is lowered for the host and run once, at double
+precision, and the node keeps the value. A call of a [composite](../operations/#composites) is
+folded the same way, by a program compiled from the composite's body:
+
+<Walkthrough spec={folding}>
+
+```rust
+{../../../../crates/skoro-core/tests/composite.rs:325..342}
+```
+
+</Walkthrough>
+
 ## Mistakes, and where they were made
 
 Building never panics on a mistake in the model. Each building function checks its inputs (that
@@ -71,9 +100,13 @@ A snapshot can also be **forked** into a writer of its own: a branch, which shar
 the snapshot it came from and changes independently of it. This is how a model is held under
 several hypotheses at once.
 
+<Walkthrough spec={branches}>
+
 ```rust
 {../../../../crates/skoro-core/tests/branches.rs:41..55}
 ```
+
+</Walkthrough>
 
 A handle stays valid on every branch that shares its node, so the quantities made before the fork
 are named the same way on each.

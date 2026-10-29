@@ -34,15 +34,15 @@
     const layout = $derived(layoutGraph(frame.graph));
     const ids = $derived(spec.edges.map(edgeId));
 
-    const text = (source: string) => renderMixed(source, spec.katexMacros);
-    // A note: TeX between dollars, as `renderMixed` does, and `code` between backticks.
-    const note = (source: string) =>
+    // Any text of the figure: TeX between dollars, as `renderMixed` does, and `code` between
+    // backticks.
+    const text = (source: string) =>
         source
             .split(/(`[^`]*`)/)
             .map((part) =>
                 /^`[^`]*`$/.test(part)
                     ? `<code>${renderMixed(part.slice(1, -1).replace(/\$/g, '\\$'))}</code>`
-                    : text(part),
+                    : renderMixed(part, spec.katexMacros),
             )
             .join('');
 
@@ -344,7 +344,7 @@
             />
             <span class="wt-count">{step + 1} / {last + 1}</span>
         </div>
-        <p class="wt-note" aria-live="polite">{@html note(spec.steps[step]!.note)}</p>
+        <p class="wt-note" aria-live="polite">{@html text(spec.steps[step]!.note)}</p>
     {/if}
 
     <div class="wt-code" bind:this={code}>
@@ -358,10 +358,10 @@
                 <li aria-current={mounted && i == step ? 'step' : undefined}>
                     {#if mounted}
                         <button onclick={() => ((playing = false), go(i))}
-                            >{@html note(s.note)}</button
+                            >{@html text(s.note)}</button
                         >
                     {:else}
-                        {@html note(s.note)}
+                        {@html text(s.note)}
                     {/if}
                 </li>
             {/each}

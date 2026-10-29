@@ -4,7 +4,7 @@ import { codeMatches, edgeId, matchLines, showMatch, type WalkthroughSpec } from
 // A walkthrough as Markdown text, for the `.md` exports: each step's note, the code it points at,
 // and what appears, changes kind, goes, or carries a pass, by the figure's own names.
 export function describeWalkthrough(spec: WalkthroughSpec): string {
-    const quote = (text: string) => (hasTex(text) ? text : `\`${text}\``);
+    const quote = (text: string) => (hasTex(text) || text.includes('`') ? text : `\`${text}\``);
     const nodes = new Map(spec.nodes.map((n) => [n.id, n]));
     const regions = new Map((spec.regions ?? []).map((r) => [r.id, r]));
     const edges = new Map(spec.edges.map((e) => [edgeId(e), e]));

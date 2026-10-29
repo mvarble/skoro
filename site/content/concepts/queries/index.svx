@@ -5,6 +5,11 @@ order: 5
 depends_on: [concepts/terms, derivatives-in-charts]
 ---
 
+<script>
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { cache, expansion, folding, passes, retraction } from './queries.walk';
+</script>
+
 A model holds a joint distribution and computes nothing by itself. Computation starts with a
 **query**: what to compute, and which quantities are observed. A query is compiled from a
 [snapshot](../building/#snapshots-readers-and-branches) for a **target** (a device and a
@@ -47,19 +52,53 @@ double precision, where the model folds its constants.
 A snapshot compiles a query for a target with
 `Snapshot::compile(&self, query: &Query, target: &Target) -> Result<Arc<Program>, Error>`.
 Compiling walks back from the targets through the compilation graph, keeping only the operations
-they need, lowers each operation for the target, expanding composites into their bodies, and folds
-what the observations fix: an operation all of whose inputs are observed or constant is computed
-once, when the program is made, and never again. A selection by an observed index keeps only the
-branch it selects. A snapshot keeps its most recently used programs, so compiling the same query
-again, for the same target and the same set of observations, returns the same program.
+they need, lowers each operation for the target, and folds what the observations fix: an operation
+all of whose inputs are observed or constant is computed once, when the program is made, and never
+again.
+
+<Walkthrough spec={folding}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:327..355}
+```
+
+</Walkthrough>
+
+A selection by an observed index, shared by every row, keeps only the branch it selects. And a
+[composite](../operations/#composites) is lowered by expanding its body in place, so that the
+program differentiates through the primitives it is built from:
+
+<Walkthrough spec={expansion}>
+
+```rust
+{../../../../crates/skoro-core/tests/passes.rs:25..51}
+```
+
+</Walkthrough>
+
+A snapshot keeps its most recently used programs, so compiling the same query again, for the same
+target and the same set of observations, returns the same program:
+
+<Walkthrough spec={cache}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:444..460}
+```
+
+</Walkthrough>
 
 ## Passes
 
-A program runs a **pass** over a batch of rows, given a value of each free quantity:
+A program runs a **pass** over a batch of rows, given a value of each free quantity. Here are the
+passes over the program compiled above:
+
+<Walkthrough spec={passes}>
 
 ```rust
 {../../../../crates/skoro-core/src/program.rs:288..332}
 ```
+
+</Walkthrough>
 
 `forward` gives the targets' values. `tangent` pushes tangent frames forward from the free
 quantities to the targets; `cotangent` pulls cotangent frames back from the targets to every free
@@ -74,7 +113,16 @@ note on [derivatives in charts](../../math/derivatives-in-charts/) gives the mat
 where the Hessian in a chart differs from the Hessian of the pulled-back function.
 
 A program's `layout` lays its free continuous quantities out in one tangent vector, in ancestral
-order, for algorithms that work with the whole of it at once.
+order, for algorithms that work with the whole of it at once. An estimator's step is such a vector,
+and the layout moves the quantities along it by the retraction of the product of their spaces:
+
+<Walkthrough spec={retraction}>
+
+```rust
+{../../../../crates/skoro-core/tests/queries.rs:664..693}
+```
+
+</Walkthrough>
 
 ## What a pass may refuse
 

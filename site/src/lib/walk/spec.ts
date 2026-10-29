@@ -41,7 +41,7 @@ export interface WalkEdgeSpec extends EdgeSpec {
 export type CodeMatch = string | { from: string; to: string };
 
 export interface StepSpec {
-    /** What happens, in a sentence or two. May contain `$…$` TeX and `` `code` ``. */
+    /** What happens, in a sentence or two. Like every text, it may contain `$…$` and `` `code` ``. */
     note: string;
     /** The lines of the quoted code this step is about. */
     code?: CodeMatch | CodeMatch[];

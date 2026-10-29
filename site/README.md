@@ -261,9 +261,10 @@ export const building = defineWalkthrough({
   `{ from, to }` pair spanning the lines from one to the next, or a list of these. The `.md` export
   fails the build when a match finds no line of the quoted code, so a walkthrough cannot drift
   from the code it quotes.
-- A step's `note` may contain `$…$` TeX and `` `code` ``. A mistake in a spec, such as an id it
-  does not have, a kind it does not define or a `flow` along a node, fails the build with the
-  walkthrough's title in the message.
+- Every text of a walkthrough (a note, a label, an annotation, a region's label, the caption) may
+  contain `$…$` TeX and `` `code` ``. A mistake in a spec, such as an id it does not have, a kind
+  it does not define or a `flow` along a node, fails the build with the walkthrough's title in the
+  message.
 - The prerendered page shows the last step and lists every note, which is the whole walkthrough
   without JavaScript. Once mounted, it starts at the first step, with play, step and scrub
   controls and the arrow keys. Transitions respect `prefers-reduced-motion`.
