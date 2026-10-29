@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use skoro_core::primitive::Add;
 use skoro_core::scope::{apply, constant, quantity};
-use skoro_core::{Error, Observations, Operation, QDyn, Real, Replacement, Writer};
+use skoro_core::{Addresses, Error, Observations, Operation, QDyn, Real, Replacement, Writer};
 
 #[track_caller]
 fn add(a: impl Into<QDyn>, b: impl Into<QDyn>) -> QDyn {
@@ -110,7 +110,7 @@ fn dropping_the_last_snapshot_frees_retired_nodes() {
         .unwrap();
     let held = writer.snapshot();
     writer
-        .retire("old", Observations::new())
+        .retire(Addresses::new().under("old"), Observations::new())
         .unwrap()
         .replace(|_| Replacement {
             log_density: (constant(Real, 0.0).untyped() * 2.0).narrow::<Real>(),

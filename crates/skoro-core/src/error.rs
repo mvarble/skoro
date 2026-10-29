@@ -74,11 +74,8 @@ pub enum Error {
     SamplerOutsideTerm { term: NodeId, quantity: NodeId },
     /// A free quantity scored by no term with a sampler, or a parameter with no proposal.
     CannotGenerate { quantity: NodeId, address: Address },
-    /// An observed quantity given to a retirement that is not under its namespace.
-    NotInNamespace {
-        quantity: NodeId,
-        namespace: Address,
-    },
+    /// An observed quantity given to a retirement that does not retire it.
+    ObservedNotRetired { quantity: NodeId },
     /// A replacement reached from a quantity outside the blanket.
     ReplacementOutsideBlanket { quantity: NodeId },
     /// A proposal given with a replacement for a quantity the retirement leaves as it was.
@@ -127,10 +124,9 @@ impl fmt::Display for Error {
                 f,
                 "{address} ({quantity:?}) has neither a term with a sampler nor a proposal"
             ),
-            Error::NotInNamespace {
-                quantity,
-                namespace,
-            } => write!(f, "{quantity:?} is observed but not under {namespace}"),
+            Error::ObservedNotRetired { quantity } => {
+                write!(f, "{quantity:?} is observed but not retired")
+            }
             Error::ReplacementOutsideBlanket { quantity } => {
                 write!(f, "the replacement reads {quantity:?}, outside the blanket")
             }

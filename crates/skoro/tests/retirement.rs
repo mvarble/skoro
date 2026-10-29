@@ -10,8 +10,8 @@ use common::normal::{exact, log_density, log_normal, proposal};
 use skoro::scope::{constant, propose, quantity, score};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
 use skoro::{
-    Address, Error, Frames, Key, NodeId, Observations, Plan, Q, QDyn, Query, Real, Replacement,
-    Snapshot, Target, Values, Writer,
+    Address, Addresses, Error, Frames, Key, NodeId, Observations, Plan, Q, QDyn, Query, Real,
+    Replacement, Snapshot, Target, Values, Writer,
 };
 
 const A: f64 = 0.3;
@@ -98,7 +98,7 @@ fn retire_exactly(chain: &mut Chain) {
     let observed = observed_z0(chain);
     chain
         .writer
-        .retire("tick/0", observed)
+        .retire(Addresses::new().under("tick/0"), observed)
         .unwrap()
         .replace(|_| replacement(x1))
         .unwrap();
@@ -152,7 +152,10 @@ fn retirement_reads_the_blanket_and_removes_what_it_names() {
     let mut chain = chain();
     let old = chain.writer.snapshot();
     let observed = observed_z0(&chain);
-    let retirement = chain.writer.retire("tick/0", observed).unwrap();
+    let retirement = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed)
+        .unwrap();
     let plan: &Plan = retirement.plan();
     let (x0, z0, x1) = (chain.x0.untyped(), chain.z0.untyped(), chain.x1.untyped());
     assert_eq!(ids(&plan.retired), ids(&[x0, z0]));
@@ -202,7 +205,7 @@ fn replacement_outside_the_blanket_is_refused_and_changes_nothing() {
         let observed = observed_z0(&chain);
         let failure = chain
             .writer
-            .retire("tick/0", observed)
+            .retire(Addresses::new().under("tick/0"), observed)
             .unwrap()
             .replace(|_| Replacement {
                 log_density: log_density(x1, read, 1.0),
@@ -218,13 +221,79 @@ fn replacement_outside_the_blanket_is_refused_and_changes_nothing() {
         assert_eq!(after.terms().len(), before.terms().len());
         assert!(after.node(x0).is_some());
     }
-    // An observed quantity outside the namespace is refused before anything is read.
-    let refused = chain
+}
+
+#[test]
+fn addresses_name_quantities_exactly_and_namespaces_by_prefix() {
+    let mut chain = chain();
+    let (x0, z0) = (chain.x0.untyped(), chain.z0.untyped());
+    let cases: [(Addresses, Vec<QDyn>); 4] = [
+        (Addresses::new().at("tick/0/x"), vec![x0]),
+        (Addresses::new().under("tick/0"), vec![x0, z0]),
+        (Addresses::new().under("tick/0/x"), vec![]),
+        (
+            Addresses::new().at("tick/0/x").under("tick/0"),
+            vec![x0, z0],
+        ),
+    ];
+    for (addresses, expected) in cases {
+        let retirement = chain.writer.retire(addresses, Observations::new()).unwrap();
+        assert_eq!(ids(&retirement.plan().retired), ids(&expected));
+    }
+    let union = chain
         .writer
-        .retire("tick/0", Observations::new().observe(chain.z1, Z1));
-    assert!(
-        matches!(refused, Err(Error::NotInNamespace { quantity, .. }) if quantity == chain.z1.id())
+        .retire(
+            Addresses::new().at("tick/0/x").under("tick/0"),
+            observed_z0(&chain),
+        )
+        .unwrap()
+        .plan()
+        .clone();
+    let namespace = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed_z0(&chain))
+        .unwrap()
+        .plan()
+        .clone();
+    assert_eq!(ids(&union.retired), ids(&namespace.retired));
+    assert_eq!(ids(&union.integrated), ids(&namespace.integrated));
+    let terms = |plan: &Plan| -> Vec<NodeId> { plan.terms.iter().map(|t| t.log_density).collect() };
+    assert_eq!(terms(&union), terms(&namespace));
+    let blanket =
+        |plan: &Plan| -> Vec<NodeId> { plan.blanket.iter().map(|(q, ..)| q.id()).collect() };
+    assert_eq!(blanket(&union), blanket(&namespace));
+    assert_eq!(ids(&union.unproposed), ids(&namespace.unproposed));
+}
+
+#[test]
+fn unknown_address_or_observed_outside_is_refused_and_changes_nothing() {
+    let mut chain = chain();
+    let before = chain.writer.snapshot();
+    let unknown = chain
+        .writer
+        .retire(Addresses::new().at("tick/2/x"), Observations::new())
+        .err();
+    assert_eq!(
+        unknown,
+        Some(Error::UnknownAddress {
+            address: Address::from("tick/2/x")
+        })
     );
+    assert_eq!(chain.writer.snapshot(), before);
+    let outside = chain
+        .writer
+        .retire(
+            Addresses::new().under("tick/0"),
+            Observations::new().observe(chain.z1, Z1),
+        )
+        .err();
+    assert_eq!(
+        outside,
+        Some(Error::ObservedNotRetired {
+            quantity: chain.z1.id()
+        })
+    );
+    assert_eq!(chain.writer.snapshot(), before);
 }
 
 /// Gauss–Hermite nodes and weights of `n` points, for `∫ e^{-t²} f(t) dt`.
@@ -375,7 +444,7 @@ fn blanket_quantity_becomes_a_parameter_drawn_from_its_proposal() {
     let observed = observed_z0(&chain);
     chain
         .writer
-        .retire("tick/0", observed)
+        .retire(Addresses::new().under("tick/0"), observed)
         .unwrap()
         .replace(|_| {
             let (_, mean, variance) = kalman();
@@ -442,7 +511,10 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
     // Named in the plan, and left without a proposal.
     let (mut chain, theta) = with_theta();
     let (x1, observed) = (chain.x1, observed_z0(&chain));
-    let retirement = chain.writer.retire("tick/0", observed).unwrap();
+    let retirement = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed)
+        .unwrap();
     assert_eq!(ids(&retirement.plan().unproposed), [theta.id()]);
     retirement
         .replace(|_| Replacement {
@@ -464,7 +536,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
     let (x1, observed) = (chain.x1, observed_z0(&chain));
     chain
         .writer
-        .retire("tick/0", observed)
+        .retire(Addresses::new().under("tick/0"), observed)
         .unwrap()
         .replace(|_| Replacement {
             proposals: vec![
@@ -485,7 +557,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
     let (x0, x1, observed) = (chain.x0, chain.x1, observed_z0(&chain));
     let failure = chain
         .writer
-        .retire("tick/0", observed)
+        .retire(Addresses::new().under("tick/0"), observed)
         .unwrap()
         .replace(|_| Replacement {
             proposals: vec![(theta.untyped(), proposal(theta, x0, 2.0))],
@@ -503,7 +575,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
     let (z1, observed) = (chain.z1, observed_z0(&chain));
     let failure = chain
         .writer
-        .retire("tick/0", observed)
+        .retire(Addresses::new().under("tick/0"), observed)
         .unwrap()
         .replace(|_| Replacement {
             proposals: vec![(z1.untyped(), proposal(z1, constant(Real, 0.0), 1.0))],
@@ -538,7 +610,10 @@ fn nothing_left_refers_to_a_removed_node() {
     assert_closed(&new, every.clone());
     // Retiring the next tick as well, the replacement now among the terms it replaces.
     let observed = Observations::new().observe(chain.z1, Z1);
-    let retirement = chain.writer.retire("tick/1", observed).unwrap();
+    let retirement = chain
+        .writer
+        .retire(Addresses::new().under("tick/1"), observed)
+        .unwrap();
     assert_eq!(retirement.plan().terms.len(), 2);
     assert!(retirement.plan().blanket.is_empty());
     retirement

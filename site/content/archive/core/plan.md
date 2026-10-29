@@ -203,7 +203,7 @@ the test macro unless the companion says otherwise.
 
 ## Retiring a collection of addresses
 
-- [ ] `Addresses`, with `at` and `under`, public in `retire` and re-exported from `skoro-core`;
+- [x] `Addresses`, with `at` and `under`, public in `retire` and re-exported from `skoro-core`;
       `Writer::retire` taking it and resolving it on the latest snapshot, refusing an `at` address
       with no quantity (`UnknownAddress`); `NotInNamespace` replaced by
       `ObservedNotRetired { quantity }`; the doc comments that say "namespace" brought in line; and

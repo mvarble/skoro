@@ -1,8 +1,8 @@
-//! Retirement: the quantities under a namespace removed, and what they said about the rest kept as
-//! a replacement the caller builds, in [the three steps](math.svx#retirement) of the mathematics,
+//! Retirement: the quantities at a collection of addresses removed, and what they said about the
+//! rest kept as a replacement the caller builds, in [the three steps](math.svx#retirement) of the mathematics,
 //! with the caller's step between two of the core's.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::panic::Location;
 use std::sync::Arc;
 
@@ -15,10 +15,59 @@ use crate::{
     Address, Error, Failure, NodeId, Observations, Q, QDyn, Real, Snapshot, Space, Writer,
 };
 
+/// The addresses a retirement retires: some named one by one, and every address under some
+/// namespaces.
+#[derive(Clone, Default, Debug)]
+pub struct Addresses {
+    exact: BTreeSet<Address>,
+    namespaces: BTreeSet<Address>,
+}
+
+impl Addresses {
+    pub fn new() -> Addresses {
+        Addresses::default()
+    }
+
+    /// The quantity at `address`, which must exist when the retirement is read.
+    pub fn at(mut self, address: impl Into<Address>) -> Addresses {
+        self.exact.insert(address.into());
+        self
+    }
+
+    /// Every quantity whose address has `namespace` as a proper prefix, when the retirement is read.
+    pub fn under(mut self, namespace: impl Into<Address>) -> Addresses {
+        self.namespaces.insert(namespace.into());
+        self
+    }
+
+    /// The quantities at these addresses in `snapshot`, in ancestral order; `UnknownAddress` for
+    /// an exact address with no quantity.
+    fn resolve(&self, snapshot: &Snapshot) -> Result<Vec<NodeId>, Error> {
+        let mut quantities: BTreeSet<NodeId> = BTreeSet::new();
+        for address in &self.exact {
+            let q = snapshot
+                .lookup(address)
+                .ok_or_else(|| Error::UnknownAddress {
+                    address: address.clone(),
+                })?;
+            quantities.insert(q);
+        }
+        for namespace in &self.namespaces {
+            quantities.extend(
+                snapshot
+                    .under(namespace)
+                    .into_iter()
+                    .filter(|&q| snapshot.address(q) != Some(namespace)),
+            );
+        }
+        Ok(quantities.into_iter().collect())
+    }
+}
+
 /// What a retirement reads before anything changes.
 #[derive(Clone, Debug)]
 pub struct Plan {
-    /// `E`: the quantities under the namespace, in ancestral order.
+    /// `E`: the quantities at the retirement's addresses, in ancestral order.
     pub retired: Vec<QDyn>,
     /// The values of `E_O`.
     pub observed: Observations,
@@ -47,27 +96,21 @@ pub struct Retirement<'w> {
 }
 
 impl Writer {
-    /// Reads the retirement of the quantities whose addresses lie under `namespace`, with
-    /// `observed` the values of those it fixes rather than integrates; refuses an observed
-    /// quantity outside them (`NotInNamespace`). Changes nothing.
+    /// Reads the retirement of the quantities at `addresses`, resolved on the latest snapshot,
+    /// with `observed` the values of those it fixes rather than integrates; refuses an exact
+    /// address with no quantity (`UnknownAddress`) and an observed quantity outside them
+    /// (`ObservedNotRetired`). Changes nothing.
     pub fn retire(
         &mut self,
-        namespace: impl Into<Address>,
+        addresses: Addresses,
         observed: Observations,
     ) -> Result<Retirement<'_>, Error> {
-        let (snapshot, namespace) = (self.snapshot(), namespace.into());
-        let retired: Vec<NodeId> = snapshot
-            .under(&namespace)
-            .into_iter()
-            .filter(|&q| snapshot.address(q) != Some(&namespace))
-            .collect();
+        let snapshot = self.snapshot();
+        let retired = addresses.resolve(&snapshot)?;
         let inside: HashSet<NodeId> = retired.iter().copied().collect();
         for id in observed.ids() {
             if !inside.contains(&id) {
-                return Err(Error::NotInNamespace {
-                    quantity: id,
-                    namespace,
-                });
+                return Err(Error::ObservedNotRetired { quantity: id });
             }
             if matches!(observed.get(id), Some(None)) {
                 let space = snapshot.space(id).cloned().unwrap_or(Space::Real);

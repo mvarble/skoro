@@ -9,8 +9,8 @@ use skoro::scope::{constant, factor, propose, quantity, score};
 use skoro::tensor::Value;
 use skoro::testing::flex;
 use skoro::{
-    Address, Error, Generated, Key, NodeId, Observations, Precision, Q, Query, Real, Replacement,
-    Sampler, Snapshot, Target, Values, Writer,
+    Address, Addresses, Error, Generated, Key, NodeId, Observations, Precision, Q, Query, Real,
+    Replacement, Sampler, Snapshot, Target, Values, Writer,
 };
 
 fn host(values: &Values, q: impl Into<NodeId>) -> Vec<f64> {
@@ -340,7 +340,7 @@ fn draw_depends_on_key_and_address_alone() {
         })
         .unwrap();
     retiring
-        .retire("old", Observations::new())
+        .retire(Addresses::new().under("old"), Observations::new())
         .unwrap()
         .replace(|_| Replacement {
             log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),

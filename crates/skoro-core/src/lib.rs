@@ -49,7 +49,7 @@ pub use q::{
 };
 pub use query::{Observations, Query};
 pub use registry::{MakeEmbedded, MakeOperation, Registry};
-pub use retire::{Plan, Replacement, Retirement};
+pub use retire::{Addresses, Plan, Replacement, Retirement};
 pub use space::{Block, Space};
 pub use term::{
     AnyNumber, AtMostOne, ExactlyOne, Multiplicity, Proposal, Role, Sample, Sampler, Term,
