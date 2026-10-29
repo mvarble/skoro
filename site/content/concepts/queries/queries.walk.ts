@@ -287,7 +287,7 @@ const forward = programEdges.map((e) => e.id ?? `${e.from}->${e.to}`);
 
 /** The passes of `Program`, over the program of the expansion. */
 export const passes = defineWalkthrough({
-    title: 'The forward pass, and the cotangent pass back',
+    title: 'The forward passes, and the cotangent pass back',
     caption:
         'The program for $[f, g]$ drawn above. The cotangent pass runs over its backpropagation graph: the same nodes, every edge reversed.',
     width: 470,
@@ -299,14 +299,9 @@ export const passes = defineWalkthrough({
     regions: [mixRegion(shift, 'from $f$')],
     steps: [
         {
-            note: "`forward` runs every step once, in order, from the free values it is given to the targets' values. A value is dropped after the last step that reads it, unless it is a target.",
-            code: 'pub fn forward',
+            note: "`forward` runs every step once, in order, from the free values it is given to the targets' values; a value is dropped after the last step that reads it, unless it is a target. `tangent` runs along the same edges, each step's kernel pushing its inputs' tangent frames forward to its output as well.",
+            code: ['pub fn forward', 'pub fn tangent'],
             show: 'all',
-            flow: forward,
-        },
-        {
-            note: "`tangent` carries tangent frames along the same edges: each step's kernel pushes its inputs' frames forward to its output.",
-            code: 'pub fn tangent',
             flow: forward,
         },
         {
@@ -592,6 +587,102 @@ export const retraction = defineWalkthrough({
         {
             note: 'The next step, on the same target, finds the composite and its program both kept, and compiles nothing.',
             emphasize: ['product', 'R'],
+        },
+    ],
+});
+
+/** The model of `tests/order.rs`, and the passes its tests ask of it. */
+export const refusal = defineWalkthrough({
+    title: 'Which steps a pass is on',
+    caption:
+        '$f = \\Sigma(S(y) + x \\odot x)$ and $g = \\Sigma x$, where $S$ squares its input by a kernel of the order a test chooses. A muted step is off the pass, and runs forward alone.',
+    width: 600,
+    height: 340,
+    nodeKinds: {
+        free,
+        step,
+        refused: { name: 'Refused: its kernel falls short', hue: 'red' },
+    },
+    edgeKinds: { input: { name: 'input of' } },
+    nodes: [
+        { id: 'x', x: 70, y: 220, kind: 'free', label: '$x$' },
+        { id: 'y', x: 70, y: 80, kind: 'free', label: '$y$' },
+        { id: 'xx', x: 220, y: 170, kind: 'step', label: '×' },
+        { id: 's', x: 220, y: 80, kind: 'step', label: '$S$', annotation: 'order 1' },
+        { id: 'a', x: 370, y: 125, kind: 'step', label: '+' },
+        { id: 'f', x: 510, y: 125, kind: 'step', label: '$f$', annotation: 'Σ' },
+        {
+            id: 'g',
+            x: 370,
+            y: 285,
+            kind: 'step',
+            label: '$g$',
+            annotation: 'Σ',
+            annotationAngle: 0,
+        },
+    ],
+    edges: [
+        { from: 'x', to: 'xx', kind: 'input' },
+        { from: 'x', to: 'g', kind: 'input' },
+        { from: 'y', to: 's', kind: 'input' },
+        { from: 'xx', to: 'a', kind: 'input' },
+        { from: 's', to: 'a', kind: 'input' },
+        { from: 'a', to: 'f', kind: 'input' },
+    ],
+    steps: [
+        {
+            note: 'The first test compiles the program for $[f, g]$, with $S$ of order one: five steps over two free quantities.',
+            code: ['fn model(', 'let program = m.program(&[m.f, m.g]);'],
+            show: 'all',
+        },
+        {
+            note: 'A Hessian pass seeds velocities at $x$ and $y$ and a cotangent at $g$ alone. From the free quantities, every step is reached.',
+            code: 'let (seeded, targets) =',
+            flow: ['x->xx', 'x->g', 'y->s', 'xx->a', 's->a', 'a->f'],
+        },
+        {
+            note: 'Back from the target the pass seeds, only $g$ is reached, and $x$ through it.',
+            code: 'let (seeded, targets) =',
+            emphasize: ['g'],
+            flowBack: ['x->g'],
+        },
+        {
+            note: "A step is on the pass when it is reached both ways: here $g$'s sum alone. $S$ runs forward only, which asks order zero of it, so its kernel of order one holds nothing back and the pass is admitted.",
+            code: 'assert!(program.admits(&pass).is_ok());',
+            mute: ['xx', 's', 'a', 'f'],
+        },
+        {
+            note: 'Another test compiles $f$ alone, with $S$ of order zero. A forward pass asks order zero of every step, and runs.',
+            code: ['fn zero_order_step_on_the_pass', 'program.forward(&m.at()).is_ok()'],
+            hide: ['g'],
+            unmute: ['xx', 's', 'a', 'f'],
+            annotate: { s: 'order 0' },
+            flow: ['x->xx', 'y->s', 'xx->a', 's->a', 'a->f'],
+        },
+        {
+            note: 'A gradient seeds $f$. Every step is reached from a free quantity and reaches $f$, so every step is on the pass, and each needs order one.',
+            code: 'program.gradient(&m.at()).unwrap_err()',
+            emphasize: ['xx', 's', 'a', 'f'],
+            flowBack: ['x->xx', 'y->s', 'xx->a', 's->a', 'a->f'],
+        },
+        {
+            note: '$S$ has order zero, so the pass is refused before any kernel runs, with `OrderTooLow` naming its operation, the composites it was expanded from (none here) and its node.',
+            code: ['program.gradient(&m.at()).unwrap_err()', 'operation: "test.square0"'],
+            kind: { s: 'refused' },
+        },
+        {
+            note: 'With $S$ of order one, a Hessian pass with a velocity at $x$ asks order two of the steps fed from $x$, and order one of $S$, which is fed from $y$ alone: it is admitted.',
+            code: '.hessian_products(&m.at(), &m.velocity(m.x))',
+            kind: { s: 'step' },
+            annotate: { s: 'order 1' },
+            emphasize: ['xx', 'a', 'f'],
+            flow: ['x->xx', 'xx->a', 'a->f'],
+        },
+        {
+            note: 'With the velocity at $y$ instead, $S$ is fed from it and needs order two, so the pass is refused, naming `test.square1`.',
+            code: ['.hessian_products(&m.at(), &m.velocity(m.y))', 'operation: "test.square1"'],
+            kind: { s: 'refused' },
+            flow: ['y->s', 's->a', 'a->f'],
         },
     ],
 });

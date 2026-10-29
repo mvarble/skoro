@@ -7,7 +7,7 @@ depends_on: [concepts/terms, derivatives-in-charts]
 
 <script>
 	import Walkthrough from '$lib/components/Walkthrough.svelte';
-	import { cache, expansion, folding, passes, retraction } from './queries.walk';
+	import { cache, expansion, folding, passes, refusal, retraction } from './queries.walk';
 </script>
 
 A model holds a joint distribution and computes nothing by itself. Computation starts with a
@@ -132,8 +132,19 @@ when its output is continuous and reaches a target, and one of its continuous in
 a free quantity. It needs order one on a gradient pass, and order two on a Hessian pass when one of
 its inputs carries a velocity. A program that cannot carry a pass refuses it, naming the first step
 that falls short, the composites it was expanded from, and its node, rather than computing a wrong
-derivative. In the same spirit, an algorithm that differentiates refuses a program with a free
-discrete quantity, which it could not condition on.
+derivative. The tests of admissibility ask passes of a small model whose one operation they choose
+the order of:
+
+<Walkthrough spec={refusal}>
+
+```rust
+{../../../../crates/skoro-core/tests/order.rs:180..316}
+```
+
+</Walkthrough>
+
+In the same spirit, an algorithm that differentiates refuses a program with a free discrete
+quantity, which it could not condition on.
 
 > [!DECISION] Algorithms refuse by structure
 > What a model can do is read off its structure when a pass is asked for, never declared by its
