@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "publish",
+    "stage": "math",
     "started": "2026-10-11",
     "events": [
         {
@@ -108,27 +108,38 @@
             "action": "approve",
             "stage": "build",
             "commit": "3455ef5"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "Retirement was given a namespace, so it could remove only the quantities under one address prefix, where it should take any collection of addresses.",
+            "commit": "44135d7"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-10-15",
             "commit": "404b265",
-            "hash": "92a375defb41fd1ad99e47204628e12cbe5e64a3d3439f5eb57077b6fb73e75f"
+            "hash": "92a375defb41fd1ad99e47204628e12cbe5e64a3d3439f5eb57077b6fb73e75f",
+            "stale": true
         },
         "implementation": {
             "date": "2026-10-15",
             "commit": "04d55e7",
-            "hash": "65db82f55683ed7bf8b2b098a431baff514569e80473a55589a582ed836999b3"
+            "hash": "65db82f55683ed7bf8b2b098a431baff514569e80473a55589a582ed836999b3",
+            "stale": true
         },
         "plan": {
             "date": "2026-10-15",
             "commit": "ac9c2dd",
-            "hash": "e1288552c2a1357c6da5295f99ccd9b79334fb9889bb36c447360358a3a4bd8e"
+            "hash": "e1288552c2a1357c6da5295f99ccd9b79334fb9889bb36c447360358a3a4bd8e",
+            "stale": true
         },
         "build": {
             "date": "2026-10-20",
-            "commit": "3455ef5"
+            "commit": "3455ef5",
+            "stale": true
         }
     }
 }

@@ -1148,3 +1148,8 @@ passes over $P$ and $Q$. A map into an embedded type is now written in storage a
 [](eq:map-into), with its derivatives in charts following by the chain rule. The acceptance test's
 sphere declares the normalizing projection, and the test checks that its two ways into the type,
 the retraction and the projection of the retraction computed in storage, agree.
+
+**2026-10-29.** Reopened because a retirement was given a namespace, and so could remove only the
+quantities under one address prefix, where it should be given any collection of addresses: the
+quantities to retire need not share a prefix, and a namespace becomes one way among others of
+naming them.
