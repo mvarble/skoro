@@ -907,10 +907,19 @@ the rounding of the conversion.
 
 ## Retirement
 
-Retiring is the one change that shrinks a model: the quantities under a namespace are removed, and
-what they said about the rest is kept. Retirement is read on the probabilistic graph. Let $E$ be
-the quantities to retire, $\mathcal T_E$ the terms joined to any of them ($V_t \cap E \neq \emptyset$),
-and
+Retiring is the one change that shrinks a model: a set of quantities is removed, and what they said
+about the rest is kept. The quantities are named by their addresses: a retirement is given a
+collection $A$ of addresses, and retires the quantities $E$ at those addresses. A namespace is one
+way of writing such a collection, the addresses that have its own address as a proper prefix, and
+is the natural one when a tick leaves a sliding window; but the mathematics below asks nothing of
+$E$'s addresses, and the collection need not be a namespace. A tick's sub-model may create a
+quantity that should outlive the tick, such as a landmark first seen in it, which is then left out
+of the tick's collection. A fixed-lag smoother may retire a tick's states but keep its
+measurements for a later query to observe. And several ticks may be retired together, which, once
+the replacement is approximated, is not the same as retiring them one after another (below).
+
+Retirement is read on the probabilistic graph. Let $E$ be the quantities to retire,
+$\mathcal T_E$ the terms joined to any of them ($V_t \cap E \neq \emptyset$), and
 
 $$
 	B = \Bigl(\bigcup_{t \in \mathcal T_E} V_t\Bigr) \setminus E @tag(blanket)
@@ -922,13 +931,14 @@ and its blanket is $\{\randomPoint_1, \bfm, \bfzeta_1, \bfsigma\}$: both paramet
 because the motion model $t_3$ and the likelihood factor $t_6$ they condition are among the terms
 replaced. The score $t_7$ of $\bfsigma$ is not touched, and stays.
 
-Retirement must condition as well as marginalize. The retired namespace of a tick holds that tick's
+Retirement must condition as well as marginalize. The quantities retired with a tick are often its
 measurements as well as its states, and integrating the measurements out of the joint would discard
 exactly the information a sliding window keeps them for. So the quantities of $E$ split into those
 fixed at given values, $E_O$ (usually the measurements, with the values the estimator observed),
 and those integrated out, $E_F$. Since conditioning belongs to the query, the values of $E_O$ are
 given to the retirement itself, and once retired they become part of the model: what remains is the
-joint of the remaining quantities given those values.
+joint of the remaining quantities given those values. Only a quantity of $E$ can be given a value:
+one outside $E$ stays in the model, where a query observes it.
 
 <Statement {...retirement} />
 
@@ -949,10 +959,25 @@ of a Kalman filter; otherwise it is approximated, by a Laplace approximation at 
 estimate in the archive's sliding windows. Either way, computing it needs the distributions and the
 linear algebra of later entries, which the core does not have.
 
-**What the core does.** The core retires; it does not compute the replacement. A retirement is
-given a namespace and the values of $E_O$, and goes in three steps.
+**Retiring together and one after another.** [%full](statement:retirement) holds for any $E$, so
+retiring $E_1$ and then $E_2$ can be compared with retiring $E_1 \cup E_2$ at once. With exact
+replacements they agree: the first replacement is a term of the model when the second retirement
+reads it, and integrating over $E_{1,F}$ and then over $E_{2,F}$ is integrating over both, by
+Tonelli's theorem. With approximate replacements they do not, in general. A Laplace approximation
+of the second retirement is taken of a density that already contains the approximation of the
+first, and the result differs from the Laplace approximation of the joint integral, as
+marginalizing in steps differs from marginalizing at once. The difference vanishes when the two
+retirements share no term, $\mathcal T_{E_1} \cap \mathcal T_{E_2} = \emptyset$. Then no
+quantity of $E_2$ lies in the blanket of $E_1$, since a term joined to it would be in both sets;
+the first replacement is not reached from $E_2$; and the joint integral is the product of the
+two. Retiring a collection at once is then the choice of the caller who wants one approximation
+of the whole, rather than a sequence of approximations.
 
-1. The core reads $E$, the quantities under the namespace, and $E_F = E \setminus E_O$; it reads
+**What the core does.** The core retires; it does not compute the replacement. A retirement is
+given a collection of addresses and the values of $E_O$, and goes in three steps.
+
+1. The core reads $E$, the quantities at the given addresses, and $E_F = E \setminus E_O$; it refuses an
+   address at which there is no quantity, and a value given for a quantity outside $E$. It reads
    $\mathcal T_E$ off the probabilistic graph, and $B$ by [](eq:blanket). It hands these to the
    caller with the values of $E_O$: the terms with their log-densities in the compilation graph,
    and the blanket's quantities with their types.
@@ -969,6 +994,10 @@ given a namespace and the values of $E_O$, and goes in three steps.
    $\mathcal T_E$ and the mapped values reached from $E$, and adds $\logterm_B$, in one change: no
    reader of the model sees it partly retired.
 
+An empty collection is not an error, since a window that no tick has yet left retires nothing:
+$E$, $\mathcal T_E$ and $B$ are empty, the integral of [%full](statement:retirement) is over a
+single point and equals $1$, and the core makes no change.
+
 The core cannot check that the replacement is the integral it stands for, or how good an
 approximation of it is; that is the caller's to answer for. When it is exact, every query of the new
 model has the density of the corresponding query of the old one, with $E_F$ integrated out and
@@ -978,7 +1007,7 @@ Two consequences for the rest of the model:
 
 - **Mapped values.** Retirement removes the quantities $E$, the terms $\mathcal T_E$, and exactly
   the mapped values reached from $E$ in the compilation graph; every other node stays, whatever its
-  address. The namespace selects $E$ and nothing else. Removal is safe because every node reached
+  address. The given addresses select $E$ and nothing else. Removal is safe because every node reached
   from $E$ is a mapped value reached from $E$ or the log-density of a term in $\mathcal T_E$: a
   term whose log-density is reached from a quantity of $E$ has that quantity among $V_t$. In the
   example, the step $r = \point_1 - \point_0$ of the compilation graph above is reached from
@@ -1039,7 +1068,22 @@ tests check:
    [%full](statement:retirement) says they must;
 4. that generation is refused for $\randomPoint_1$ without a proposal, and that with the proposal
    $\mathcal N(\mu, P + q^2)$ every generated point has the same weight, the evidence
-   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$.
+   $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$;
+5. that a collection holding part of a tick is retired by the same rule. Retiring
+   $E = \{\randomPoint_0\}$ alone, with nothing observed, touches the same three terms, and its
+   blanket is $\{\bfz_0, \randomPoint_1\}$, both of which become parameters. The integral is the
+   joint normal density of $\bfz_0 = \randomPoint_0 + \varepsilon_r$ and
+   $\randomPoint_1 = \randomPoint_0 + \varepsilon_q$,
+
+   $$
+   	\logterm_B(z_0, \point_1) = \log \mathcal N\!\left(\begin{pmatrix} a \\ a \end{pmatrix}, \begin{pmatrix} s^2 + r^2 & s^2 \\ s^2 & s^2 + q^2 \end{pmatrix}\right)\!(z_0, \point_1), @tag(joint-blanket)
+   $$
+
+   and with it as the replacement, a query that observes $\bfz_0$ at $\hat z_0$ and is free in
+   $\randomPoint_1$ has the log-density and derivatives of the model retired by [](eq:kalman),
+   constants included: conditioning the joint normal on $z_0 = \hat z_0$ gives
+   $\mathcal N(a, s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P + q^2)(\point_1)$. Conditioning in
+   the retirement and conditioning in the query agree, as they must.
 
 ## In skoro's terms
 
@@ -1072,9 +1116,10 @@ tests check:
   scored quantities and the proposals the core supplies for parameters, and its weight is
   [](eq:weight).
 - **Random keys** are derived from addresses by [](eq:address-key).
-- **Retirement** removes a namespace's quantities $E$, conditioning on the given values of $E_O$ and
-  integrating out $E_F$, and replaces the terms $\mathcal T_E$ with one likelihood factor over the
-  blanket [](eq:blanket). The core computes $E$, $\mathcal T_E$ and $B$, checks the replacement and
+- **Retirement** removes the quantities $E$ at a given collection of addresses, of which a
+  namespace is one example, conditioning on the given values of $E_O$ and integrating out $E_F$,
+  and replaces the terms $\mathcal T_E$ with one likelihood factor over the blanket
+  [](eq:blanket). The core computes $E$, $\mathcal T_E$ and $B$, checks the replacement and
   applies the change; the caller computes the replacement. A blanket quantity left unscored becomes a
   parameter, generated from a proposal the caller may give.
 
@@ -1152,4 +1197,14 @@ the retraction and the projection of the retraction computed in storage, agree.
 **2026-10-29.** Reopened because a retirement was given a namespace, and so could remove only the
 quantities under one address prefix, where it should be given any collection of addresses: the
 quantities to retire need not share a prefix, and a namespace becomes one way among others of
-naming them.
+naming them. A retirement is now given a collection $A$ of addresses and retires the quantities $E$
+at them; a namespace is the collection of the addresses under it. Nothing in
+[%full](statement:retirement), the blanket or the rule for mapped values depended on $E$ sharing a
+prefix, so they are unchanged. Three things were added. The core refuses an address at which there
+is no quantity and a value given for a quantity outside $E$, and an empty collection changes
+nothing. Retiring two collections one after another is compared with retiring their union at once:
+the two agree when the replacements are exact or the retirements share no term, and differ in
+general when the replacements are approximated, which is a reason to allow collections of any
+shape. And a fifth test retires $\randomPoint_0$ alone, which is part of a tick rather than all of
+it, with the joint normal replacement [](eq:joint-blanket), and checks that observing $\bfz_0$ in
+the query then agrees with observing it in the retirement.
