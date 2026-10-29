@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "implementation",
+    "stage": "plan",
     "started": "2026-10-11",
     "events": [
         {
@@ -121,6 +121,12 @@
             "action": "approve",
             "stage": "math",
             "commit": "dcaf04c"
+        },
+        {
+            "date": "2026-10-29",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "a13281f"
         }
     ],
     "approvals": {
@@ -130,10 +136,9 @@
             "hash": "de96e3fc7f0d2fc375235db7f40f5657903637b71ff050354d0720b69bb31a4b"
         },
         "implementation": {
-            "date": "2026-10-15",
-            "commit": "04d55e7",
-            "hash": "65db82f55683ed7bf8b2b098a431baff514569e80473a55589a582ed836999b3",
-            "stale": true
+            "date": "2026-10-29",
+            "commit": "a13281f",
+            "hash": "598487d504e4ff54fcf6b0b013455dc30aeadffa63b1395b0a3d4ac5f2e277cb"
         },
         "plan": {
             "date": "2026-10-15",
