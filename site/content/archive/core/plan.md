@@ -201,6 +201,20 @@ the test macro unless the companion says otherwise.
       `proposal_reading_a_retired_quantity_is_removed_and_reported`,
       `nothing_left_refers_to_a_removed_node`.
 
+## Retiring a collection of addresses
+
+- [ ] `Addresses`, with `at` and `under`, public in `retire` and re-exported from `skoro-core`;
+      `Writer::retire` taking it and resolving it on the latest snapshot, refusing an `at` address
+      with no quantity (`UnknownAddress`); `NotInNamespace` replaced by
+      `ObservedNotRetired { quantity }`; the doc comments that say "namespace" brought in line; and
+      the existing retirement tests retiring `Addresses::new().under("tick/0")` (or `"tick/1"`).
+      Tests: `addresses_name_quantities_exactly_and_namespaces_by_prefix`,
+      `unknown_address_or_observed_outside_is_refused_and_changes_nothing`.
+- [ ] An empty retirement: an empty plan, and `replace` returning without calling its body or
+      publishing. Tests: `empty_retirement_changes_nothing`.
+- [ ] The fifth check of the mathematics, retiring part of a tick with the joint normal
+      replacement. Tests: `part_of_a_tick_matches_the_joint_normal`.
+
 ## Finishing
 
 - [x] Write `REVISIT.md` at the root of the repository, listing what the companion names: what
@@ -237,3 +251,10 @@ each moved to where it can be built:
   the primitives be checked as they are written; inputs of an embedded type are moved by its
   retraction once the embedded types exist. A retraction computed apart from its composite also
   makes the check independent of the composites it will later be used to check.
+
+**2026-10-29.** Reopened with the mathematics and the implementation, which now retire the
+quantities at any collection of addresses rather than those under one namespace. The tasks already
+built stand as they were; a new group, [Retiring a collection of addresses](#retiring-a-collection-of-addresses),
+adds three tasks after them: `Addresses` and the new `retire` with its refusals, the empty
+retirement, and the test that retires part of a tick, with the four tests the implementation's
+revision added.
