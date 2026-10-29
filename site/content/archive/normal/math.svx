@@ -1,0 +1,371 @@
+---
+summary: The normal distribution on the core's flat and positive spaces and their products, as a density with respect to the core's base measures, with its scale, its exact sampler, its expected information, and its use as a likelihood factor over a retirement's blanket.
+depends_on: [retraction, product-manifold, derivatives-in-charts, archive/core/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as density from './statements/density.md';
+	import * as information from './statements/information.md';
+</script>
+
+## The problem
+
+[The core](../core/math.svx) can build, query and differentiate a model, but it has no
+distribution: a term's log-density is whatever composite its author writes, and its tests keep a
+private normal of a real quantity for want of a public one. The normal distribution is the one
+nearly every model skoro is meant for reaches first. A prior on a state, a motion model, a
+measurement with Gaussian noise, and the replacement a retirement leaves behind under a Laplace
+approximation are all normal. It is therefore the first distribution to return from the `archive`
+branch.
+
+The archive's normal was written for any manifold: its term was the Gaussian log-density of the
+tangent $\point \ominus \mu$ at the mean, whitened by a triangular factor of the covariance. That
+form is right on a flat space and on none other without a correction. The archive had no positive
+type, but carried over unchanged to the core's positive orthant, the form would drop the Jacobian
+of the logarithmic chart, so that its density would not be with respect to the base measure the
+core fixes for positive quantities ([](eq:archive/core/math/log-chart-density)), and its sampler,
+drawing exactly from the normal in the chart, would not be exact for its own term. On a curved type
+such as the rotations it omitted the volume factor of the retraction, and its expected information
+held only to second order in the dispersion. This document works out the
+normal on exactly the spaces where it can be stated with respect to the core's base measures
+without approximation, and the parts of it that the rest of skoro will need: how its scale is
+given, how it is drawn, its expected information, and its use as a likelihood factor over values
+that are not quantities.
+
+## Setting
+
+A *flat-in-disguise* space, in this document, is a space of the core whose inverse retraction at
+any one point is a chart of the whole space: the real line, vectors $\R^n$ and matrices
+$\R^{m \times n}$, read as vectors column by column, the positive orthant $\positive^n$ with its
+retraction [](eq:archive/core/math/positive), and products of these, with the stacked tangent
+[](eq:math/product-manifold/stack). For such a space $\manifold$, of dimension $\dimension$, and
+any $\mu \in \manifold$, the map $\point \mapsto \point \ominus \mu$ is a diffeomorphism of
+$\manifold$ onto $\R^\dimension$ whose inverse is $\tangent \mapsto \mu \oplus \tangent$, and both
+identities
+
+$$
+	(\point \oplus \tangent) \ominus \mu = (\point \ominus \mu) + \tangent,
+	\qquad
+	\point \ominus (\mu \oplus u) = (\point \ominus \mu) - u @tag(translation)
+$$
+
+hold exactly, for every $\tangent$ and $u$: on a Euclidean factor because $\ominus$ is subtraction,
+and on a positive one because it is subtraction of logarithms. Each such space is an open subset of
+$\R^\dimension$ in its storage coordinates, its dimension equals its storage size, and its base
+measure is Lebesgue measure there ([the core's appendix](../core/math.svx#appendix-the-probability-space-of-a-model)).
+Write $P$ for the storage coordinates that belong to positive factors, and
+
+$$
+	J(\point) = \sum_{i \in P} \log \point_i , @tag(jacobian)
+$$
+
+which is zero on a space with no positive factor.
+
+The normal's *mean* is $\mu \in \manifold$, and its *scale* is a symmetric positive definite
+$\dimension \times \dimension$ matrix, given in one of the forms of [The scale](#the-scale) and
+read, in every one of them, through its *whitening* $W$: the lower-triangular matrix with a
+positive diagonal such that the precision $\Lambda = \Sigma^{-1}$ is $W\transpose W$. Then
+$L = W^{-1}$ is lower triangular with a positive diagonal and $\Sigma = L L\transpose$. Both are
+unique: $L$ is the Cholesky factor of $\Sigma$.
+
+## The density
+
+The normal $\mathcal N(\mu, \Sigma)$ on a flat-in-disguise space $\manifold$ is the law of
+$\mu \oplus \varepsilon$, where $\varepsilon$ is normal on $\R^\dimension$ with mean zero and
+covariance $\Sigma$. Its term is
+
+$$
+	\logterm_{\mathcal N}(\point;\, \mu, W)
+	= -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
+	+ \sum_{i=1}^{\dimension} \log W_{ii}
+	- \tfrac{\dimension}{2} \log 2\pi
+	- J(\point), @tag(term)
+$$
+
+and $r = W (\point \ominus \mu)$ is its *whitened residual*, a standard normal vector when
+$\randomPoint$ is drawn from the normal.
+
+<Statement {...density} />
+
+<Proof>
+
+The map $\tangent \mapsto \mu \oplus \tangent$ is a diffeomorphism of $\R^\dimension$ onto
+$\manifold$, with inverse $\point \mapsto \point \ominus \mu$. The vector $\varepsilon = L \zeta$ is
+normal with mean zero and covariance $L L\transpose = \Sigma$, so its density at $\tangent$ is
+$(2\pi)^{-\dimension/2} \det W \exp(-\tfrac12 \lVert W \tangent \rVert^2)$, since
+$(\det \Sigma)^{-1/2} = \det W$ and $\tangent\transpose \Sigma^{-1} \tangent = \lVert W \tangent
+\rVert^2$. By the change of variables $\tangent = \point \ominus \mu$, the
+density of $\randomPoint = \mu \oplus \varepsilon$ with respect to Lebesgue measure on $\manifold$
+is that density at $\point \ominus \mu$ times $\lvert \det \partial (\point \ominus \mu) / \partial
+\point \rvert$, the derivative taken in storage coordinates. The inverse retraction acts factor by
+factor, so that derivative is block diagonal: the identity on a Euclidean factor, and
+$\operatorname{diag}(1 / \point)$ on a positive one, where $\point \ominus \mu = \log \point - \log
+\mu$. Its determinant is $\prod_{i \in P} \point_i^{-1}$, whose logarithm is $-J(\point)$.
+
+</Proof>
+
+The Jacobian $J$ is what keeps the term's base measure the core's. It does not depend on $\mu$ or
+on the scale, so it changes no derivative with respect to them, but it is a function of $\point$
+and it is not a constant of a query that leaves $\point$ free: its chart gradient is $-1$ at each
+positive coordinate, since $J(\point \oplus \tangent) = J(\point) + \sum_{i \in P} \tangent_i$. It
+moves the mode of the density away from $\mu$, as it must, because the density is with respect to
+Lebesgue measure in storage coordinates and not in the chart. Without it, three things the core
+relies on would fail: the sampler below would not be exact for the term, so the importance weight
+[](eq:archive/core/math/weight) would be wrong by $J$ at every draw; a quadrature of the term over
+$\point$, as in the core's tests of retirement, would not integrate to one; and a model mixing the
+normal with another distribution of a positive quantity would compare densities with respect to
+two different measures.
+
+On a positive factor the normal is the log-normal distribution: $\log \randomPoint$ is normal with
+mean $\log \mu$ and covariance $\Sigma$, so $\mu$ is the median of each coordinate rather than its
+mean, which is $\mu_i e^{\Sigma_{ii} / 2}$. On a Euclidean factor it is the familiar normal, with
+mean $\mu$ and covariance $\Sigma$. On a product the two kinds of factor are correlated through
+$\Sigma$ in their tangent coordinates, which is what a state with a position and a positive scale
+needs.
+
+**Curved types are left out.** On an embedded type, such as the sphere of the core's acceptance
+test or the rotations of a later entry, $\mu \oplus \tangent$ is not a diffeomorphism of
+$\R^\dimension$ onto the type (on the sphere it misses a point, on the rotations it wraps around),
+there is as yet no base measure (the core's appendix leaves surface and Haar measure to the entries
+that bring those types), and the density of the pushed-forward normal carries a volume factor of
+the retraction that is not a composite of the type's declared operations. A normal on a curved type
+is that type's entry to work out, against the base measure it chooses.
+
+## The scale
+
+The term [](eq:term) reads the scale through $W$ alone, and $W$ enters linearly in the residual
+and through the logarithms of its diagonal in the normalizer. A model gives the scale in whichever
+form it has, and each form is a map to $W$ composed from the core's primitives, so that its
+derivatives, of both orders, follow by composition:
+
+| form | given | $W$ | $\sum_i \log W_{ii}$ |
+| --- | --- | --- | --- |
+| isotropic | $\sigma \in \positive$, with $\Sigma = \sigma^2 I$ | $\sigma^{-1} I$ | $-\dimension \log \sigma$ |
+| diagonal | $\sigma \in \positive^\dimension$, with $\Sigma = \operatorname{diag}(\sigma)^2$ | $\operatorname{diag}(\sigma)^{-1}$ | $-\sum_i \log \sigma_i$ |
+| covariance factor | $L$, with $\Sigma = L L\transpose$ | $L^{-1}$ | $-\sum_i \log L_{ii}$ |
+| whitening | $W$, with $\Lambda = W\transpose W$ | $W$ | $\sum_i \log W_{ii}$ |
+
+The first two are the forms most models write, a measurement's standard deviation or a motion
+model's per-axis noise, and their whitened residual is the elementwise product of $\point \ominus
+\mu$ with $\sigma^{-1}$, which the core composes as the reciprocal of a positive value read as a
+real. The whitening is the form a precision arrives in: elimination produces information rather
+than covariance, and a retirement's replacement is written in it (see
+[As a likelihood factor](#as-a-likelihood-factor)). The residual is then the product $W (\point
+\ominus \mu)$, and nothing is inverted. The covariance factor is the form a user with a full
+covariance writes, and its residual is the solution $z$ of $L z = \point \ominus \mu$, by forward
+substitution,
+
+$$
+	z_i = \frac{1}{L_{ii}} \Bigl( (\point \ominus \mu)_i - \sum_{j < i} L_{ij}\, z_j \Bigr),
+	\qquad i = 1, \dots, \dimension, @tag(forward-substitution)
+$$
+
+a composite of $\dimension$ steps, each a sum of products and a multiplication by the reciprocal
+of a positive diagonal entry. When $L$ is fixed in a query, $W = L^{-1}$ can instead be computed
+once, column by column by the same substitution against the columns of the identity, and folded,
+as the core folds every value reached only from fixed inputs; when $L$ is free, the residual is
+solved on every evaluation, and its derivatives with respect to $L$ come with it.
+
+**A triangular factor as a quantity.** When a scale is to be estimated, its factor is a quantity,
+and its type must have exactly as many tangent directions as the factor has free entries,
+$\dimension (\dimension + 1) / 2$. A matrix $\R^{\dimension \times \dimension}$ would have
+$\dimension (\dimension - 1) / 2$ more, along which the term does not change: the chart Hessian and
+the expected information would be singular in them, and an estimator would have to know to ignore
+them. The core already has the right type, a product
+$\positive^\dimension \times \R^{\dimension (\dimension - 1) / 2}$ of the diagonal and the entries
+strictly below it, in a fixed order. Its positive factor keeps the diagonal positive, so that the
+factor is the unique Cholesky factor, its logarithms are defined, and no absolute value is needed,
+which the core does not have. Its chart on the diagonal is logarithmic, so a tangent coordinate of
+the diagonal is a relative change: these are the log-Cholesky coordinates of a covariance. For
+$\dimension = 1$ the strictly lower part is empty and the factor is a positive scalar, the
+isotropic form. The same type serves a covariance factor and a whitening, and a positive vector
+serves a diagonal scale.
+
+## The sampler
+
+The normal draws $\point = \mu \oplus L \zeta$, with $\zeta$ standard normal on
+$\R^\dimension$. By [%full](statement:density), that draw has the density $\exp
+\logterm_{\mathcal N}$, Jacobian included, so the sampler is exact for the term
+[](eq:term) and contributes nothing to the importance weight. The coordinates of $\zeta$ are drawn
+from the quantity's key as the core draws every variate (charter, position 10): $\dimension$
+uniform variates $u_i \in (0, 1)$, in double precision on the host, each turned into
+$\zeta_i = \Phi^{-1}(u_i)$ by the standard normal quantile. A draw is then a deterministic
+function of the key, smooth in $\mu$ and the scale, and the same key gives the same draw at either
+precision, up to the rounding of the final cast.
+
+Two computations in a draw are approximate, and neither is a matter of the model. The quantile
+$\Phi^{-1}$ has no closed form; Wichura's algorithm AS 241, which the core's tests already use, is
+a rational approximation in three pieces accurate to about $10^{-16}$ relative error, below the
+rounding of double precision. And $L \zeta$ needs $L$, which the whitening form must invert: it is
+the solution $y$ of $W y = \zeta$, found on the host, in double precision, by the substitution
+[](eq:forward-substitution) with $W$ in place of $L$, as the charter has every solve run
+(position 11). Inversion of the distribution function was chosen over
+the Box–Muller transform because it spends exactly one uniform variate per coordinate, so that the
+draw of coordinate $i$ depends on $u_i$ alone, and is monotone in it.
+
+## The expected information
+
+An estimator that uses the expected information of the model in place of its Hessian, Fisher
+scoring or a Riemannian sampler, asks of each term a matrix that is positive semidefinite by
+construction. For the normal it has a closed form, and on flat-in-disguise spaces that form is
+exact.
+
+<Statement {...information} />
+
+<Proof>
+
+By [](eq:translation), along $\point \oplus t \tangent$ and $\mu \oplus t u$ the tangent
+$\varepsilon = \point \ominus \mu$ moves to $\varepsilon + t(\tangent - u)$ exactly, and $J$ moves
+linearly, so the chart Hessian of [](eq:term) in $(\point, \mu)$ is that of
+$\tfrac12 \varepsilon\transpose \Lambda \varepsilon$ in $\varepsilon$ composed with
+$(\tangent, u) \mapsto \tangent - u$: the upper-left blocks of $\mathcal I$, at every point, before
+any expectation. The mixed second derivative in $(\varepsilon, \theta_i)$ is
+$\partial_i \Lambda\, \varepsilon$, whose expectation is zero since $\varepsilon$ has mean zero. In
+$\theta$, the negative term is $\tfrac12 \varepsilon\transpose \Lambda \varepsilon - \tfrac12 \log
+\det \Lambda$ plus what does not depend on $\theta$, since $\sum_i \log W_{ii} = \frac12 \log \det
+\Lambda$. With $\partial_j \log \det \Lambda = \operatorname{tr}(\Sigma\, \partial_j \Lambda)$ and
+$\partial_i \Sigma = -\Sigma\, \partial_i \Lambda\, \Sigma$, and $\E[\varepsilon
+\varepsilon\transpose] = \Sigma$,
+
+$$
+	\E\Bigl[\partial_i \partial_j \bigl(\tfrac12 \varepsilon\transpose \Lambda \varepsilon - \tfrac12 \log \det \Lambda\bigr)\Bigr]
+	= \tfrac12 \operatorname{tr}(\partial_i \partial_j \Lambda\, \Sigma)
+	- \tfrac12 \operatorname{tr}(\partial_i \Sigma\, \partial_j \Lambda)
+	- \tfrac12 \operatorname{tr}(\Sigma\, \partial_i \partial_j \Lambda)
+	= \tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda\, \Sigma\, \partial_j \Lambda) .
+$$
+
+Neither the mean nor $J$ depends on $\theta$, so the score in $\theta$ is that of a centred normal,
+and the expected negative Hessian equals its covariance, the Fisher information.
+
+</Proof>
+
+The archive's information was a matrix of the same blocks, but with $\pm I$ in place of the
+derivatives of $\point \ominus \mu$, which on a group hold only at $\point = \mu$; it was therefore
+correct to second order in the dispersion there. Here [](eq:translation) makes those derivatives
+exactly $\pm I$, and nothing is approximated.
+
+**A root.** An estimator assembles the information of a model from roots of its terms', matrices
+$C$ with $C\transpose C = \mathcal I$, composed with the Jacobians of the term's inputs with
+respect to the free quantities. With $T_i = L\transpose\, \partial_i \Lambda\, L$, symmetric, the
+trace is $\operatorname{tr}(\Sigma\, \partial_i \Lambda\, \Sigma\, \partial_j \Lambda) =
+\operatorname{tr}(T_i T_j) = \sum_a (T_i)_{aa} (T_j)_{aa} + 2 \sum_{a > b} (T_i)_{ab} (T_j)_{ab}$,
+so a root has $\dimension + \dimension (\dimension + 1) / 2$ rows,
+
+$$
+	C = \begin{pmatrix} W & -W & 0 \\ 0 & 0 & C_\theta \end{pmatrix},
+	\qquad
+	(C_\theta)_{(a, b),\, i} = \begin{cases} (T_i)_{aa} / \sqrt 2 & a = b, \\ (T_i)_{ab} & a > b, \end{cases} @tag(root)
+$$
+
+and $T_i$ in each form of the scale, with $E_{ab}$ the matrix unit and the diagonal entries
+differentiated in their logarithmic charts, is
+
+| form | coordinate | $T_i$ | $F$ |
+| --- | --- | --- | --- |
+| isotropic | $\log \sigma$ | $-2 I$ | $2 \dimension$ |
+| diagonal | $\log \sigma_a$ | $-2 E_{aa}$ | $2 I$ |
+| covariance factor | $L_{ab}$, $a > b$; $\log L_{aa}$ | $-(G + G\transpose)$, $G = W E_{ab}$; times $L_{aa}$ on the diagonal | $\frac12 \operatorname{tr}(T_i T_j)$ |
+| whitening | $W_{ab}$, $a > b$; $\log W_{aa}$ | $G + G\transpose$, $G = E_{ab} L$; times $W_{aa}$ on the diagonal | $\frac12 \operatorname{tr}(T_i T_j)$ |
+
+The rows for the covariance factor follow from $\partial \Lambda = -\Lambda\, \partial \Sigma\,
+\Lambda$ and $\partial \Sigma = \partial L\, L\transpose + L\, \partial L\transpose$, those for the
+whitening from $\partial \Lambda = \partial W\transpose W + W\transpose\, \partial W$, and the
+logarithmic chart multiplies a diagonal column by the entry, by the derivative of the inclusion of
+a positive value, $\operatorname{diag}(\point)$. The root of a scale given as a triangular factor
+therefore needs both $W$ and $L$, whichever of them the model gives: the other is computed once and
+folded when the scale is fixed, and by a solve [](eq:forward-substitution) on every evaluation when
+it is free.
+
+## As a likelihood factor
+
+A retirement's replacement is a likelihood factor over the quantities of its blanket $B$, scoring
+none of them ([the core's retirement](../core/math.svx#retirement)). Under a Laplace approximation,
+and exactly for linear-Gaussian terms, it is a Gaussian function of their tangent coordinates at an
+anchor: with constants $p_i$ for the blanket's quantities, the stacked tangent
+
+$$
+	\delta(\point_B) = (\point_1 \ominus p_1;\ \dots;\ \point_k \ominus p_k) \in \R^D,
+	\qquad D = \sum_i \dimension_i, @tag(stacked)
+$$
+
+and
+
+$$
+	\logterm_B(\point_B) = \logterm_{\mathcal N}\bigl(\delta(\point_B);\, m, W\bigr) + c , @tag(joint)
+$$
+
+the normal's term on $\R^D$, where $J$ vanishes, at the mapped value $\delta$, with mean $m$,
+whitening $W$ and a constant $c$. No new distribution is needed for it: it is the normal on a
+Euclidean space evaluated at a value that is not a quantity, which scores nothing and so has no
+sampler. The archive wrote its residual as $W\delta - b$, an offset form; that is [](eq:joint) with
+$b = W m$, which the core folds when both are constants. The anchors must be constants, so that
+the factor does not move with the quantities it summarizes. On a positive blanket quantity $\delta$
+reads its logarithm, and no Jacobian is added: a likelihood factor is a function of the quantities,
+not a density over them, and whatever measure the approximated integral was taken in is already in
+its values.
+
+The core's tests of retirement are of this form. The replacement
+[](eq:archive/core/math/kalman) is [](eq:joint) with $k = 1$, the anchor $p_1 = a + K(\hat z_0 -
+a)$ at that equation's updated mean, $m = 0$,
+$W = (P + q^2)^{-1/2}$ and $c = \log \mathcal N(a, s^2 + r^2)(\hat z_0)$, and
+[](eq:archive/core/math/joint-blanket) is [](eq:joint) with $k = 2$, both anchors at $a$, $m = 0$,
+$c = 0$, and $W$ the whitening of its $2 \times 2$ covariance. With the normal in the library,
+both can be written with it rather than by hand.
+
+## In skoro's terms
+
+- **The normal scores one quantity** $\point$, of a flat-in-disguise type: real, vector, matrix,
+  positive, or a product of them. Its term [](eq:term) is a composite of the core's primitives,
+  conditioned on the quantities its mean and scale are reached from, which may be constants,
+  quantities or mapped values of any kind the core allows. Its log-density is with respect to the
+  core's base measure, Jacobian [](eq:jacobian) included.
+- **Its derivatives** with respect to $\point$, to $\mu$ and to the scale, of first and second
+  order, are those of the composite. Every step of it, from the inverse retraction to the
+  logarithms of the diagonal and the substitution [](eq:forward-substitution), is a primitive of
+  order two, so the term has order two.
+- **Its scale** is given in one of the four forms of [The scale](#the-scale): positive values for
+  the isotropic and diagonal forms, and the product $\positive^\dimension \times
+  \R^{\dimension(\dimension-1)/2}$ for a triangular factor when it is a quantity. A fixed scale's
+  whitening and normalizer are folded, in the model when it is a constant and in a compiled query
+  when it is observed.
+- **Its sampler is exact**, drawing $\mu \oplus L \Phi^{-1}(u)$ from the variates of the
+  quantity's key, on the host in double precision.
+- **Its expected information** over $(\point, \mu, \theta)$ is exact, with the root [](eq:root).
+- **As a likelihood factor**, the normal on $\R^D$ evaluated at the stacked tangent [](eq:stacked)
+  of a blanket at constant anchors is the form of a retirement's Gaussian replacement.
+- **Curved types** are not covered, and wait for the entries that give them base measures.
+
+## Open questions
+
+> [!TODO] Which spaces the normal covers
+> This draft defines the normal on the flat-in-disguise spaces only, with the Jacobian of the
+> logarithmic chart in its term, so that on a positive factor it is the log-normal with median
+> $\mu$, and leaves curved types to their own entries. Is that the coverage wanted, and is a
+> normal of a positive quantity, being a log-normal, to be offered under the normal's name, or
+> only under a name of its own?
+
+> [!TODO] Which forms of the scale
+> The draft offers all four forms of [The scale](#the-scale). The isotropic and diagonal forms
+> are the ones most models write, and compose with no linear algebra; the whitening is what a
+> retirement's replacement needs; the covariance factor adds the substitution
+> [](eq:forward-substitution), and a solve on every evaluation when it is free. Are all four
+> wanted in this entry, or the first three, with the covariance factor added when a model asks
+> for it?
+
+> [!TODO] The expected information and the roles
+> The charter has a Gaussian term bind its whitened residual, its mean and its scale, and a term
+> with a closed-form information bind a root of it, but no reader of those roles exists yet: the
+> least-squares readers and Fisher scoring are entries of their own. Does this entry bind the
+> roles and the root [](eq:root), so that those readers find them waiting, or does each role
+> arrive with its first reader, which then revises this entry? If the latter, the section on the
+> expected information may move to that reader's entry, and to a math note on the Fisher
+> information, which a second distribution would also need.
+
+> [!TODO] The joint form
+> The draft takes a retirement's Gaussian replacement to be the normal on $\R^D$ at the stacked
+> tangent [](eq:stacked), rather than a distribution of its own as the archive's `JointNormal`
+> was. Is that the right reading, and does this entry provide the stacked tangent at constant
+> anchors as a convenience, or leave it to the elimination entry that will compute replacements?
