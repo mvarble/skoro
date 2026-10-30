@@ -183,6 +183,16 @@ once, column by column by the same substitution against the columns of the ident
 as the core folds every value reached only from fixed inputs; when $L$ is free, the residual is
 solved on every evaluation, and its derivatives with respect to $L$ come with it.
 
+**All four forms.** The normal offers all four, because each is the form some model has, and none
+is reached from another without a computation the model did not ask for. The isotropic and
+diagonal forms need no linear algebra at all. The whitening is what elimination and a retirement's
+replacement produce, and inverting it to a covariance would cost a solve and lose the sparsity
+elimination keeps. The covariance factor is what a user with a full covariance, from a datasheet
+or a calibration, writes; it costs the substitution [](eq:forward-substitution), and a solve on
+every evaluation when it is free, which is the price of not inverting a matrix the user has and
+the term does not need inverted. Every form is a map to the same $W$, so the rest of this document,
+the tangent normal included, holds for each of them alike.
+
 **A triangular factor as a quantity.** When a scale is to be estimated, its factor is a quantity,
 and its type must have exactly as many tangent directions as the factor has free entries,
 $\dimension (\dimension + 1) / 2$. A matrix $\R^{\dimension \times \dimension}$ would have
@@ -292,7 +302,8 @@ logarithmic chart multiplies a diagonal column by the entry, by the derivative o
 a positive value, $\operatorname{diag}(\point)$. The root of a scale given as a triangular factor
 therefore needs both $W$ and $L$, whichever of them the model gives: the other is computed once and
 folded when the scale is fixed, and by a solve [](eq:forward-substitution) on every evaluation when
-it is free.
+it is free. This root is what the normal binds as the root of its expected information, among the
+roles of [The roles](#the-roles).
 
 ## The tangent normal
 
@@ -491,8 +502,21 @@ c(\theta) [\varepsilon]_\times^2)\, u$, with $c$ even in $\varepsilon$, so the e
 derivative of $-\logterm_{\mathcal T}$ along $u$ and $\theta_i$ is
 $-\tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda\, [u]_\times)$, up to the wrapped mass. It
 is zero for every $u$ only when $\Sigma\, \partial_i \Lambda$ is symmetric, as for an isotropic or a
-diagonal scale. What an estimator uses in place of these blocks is the question
-[the open question on the expected information](#open-questions) leaves to the readers' entries.
+diagonal scale.
+
+The tangent normal's root, which [The roles](#the-roles) binds as the normal's is bound, is
+therefore [](eq:root) unchanged: $\pm W$ in the blocks of $\point$ and $\mu$, which are the
+derivatives of $\point \ominus \mu$ at a zero residual, and $C_\theta$ in the scale's. On a
+curved space its accuracy is that of each block. In the scale's block it is exact on a global
+chart. In the blocks of $\point$ and $\mu$ it is exact at a zero residual, and its relative error
+is of second order in the dispersion: the derivatives of $\ominus$ differ from $\pm I$ by terms
+of first order in $\varepsilon$, whose expectation in a quadratic form is of second order since
+$\varepsilon$ is symmetric; the second derivatives of $\ominus$ meet the residual $\Lambda
+\varepsilon$, whose expectation is zero; and the Hessian of $\lambda$, $\tfrac16 I$ on the
+rotations with the exponential chart, is of order $\Sigma$ against $\Lambda$. The mixed block,
+which the root sets to zero, is of first order, the correlation it omits between the mean and the
+scale being of the order of the dispersion; on $SO(3)$ with the exponential chart it is zero for
+the isotropic and diagonal forms. This is the archive's information, with its error now stated.
 
 **Without a volume.** A space that declares no reference measure or no log-volume can still carry a
 measurement, as a likelihood factor. With $z$ a constant, the measured value, the Gaussian part
@@ -560,6 +584,57 @@ $W = (P + q^2)^{-1/2}$ and $c = \log \mathcal N(a, s^2 + r^2)(\hat z_0)$, and
 $c = 0$, and $W$ the whitening of its $2 \times 2$ covariance. With the normal in the library,
 both can be written with it rather than by hand.
 
+## The roles
+
+The charter has a distribution declare, as its term is added, the nodes that readers other than the
+model's density need, each under a *role*, and has each role arrive with the distribution or reader
+that gives it meaning ([position 8](../charter/writeup.md)). No reader of the normal's roles exists
+yet: the least-squares readers and Fisher scoring are entries of their own. The normal binds them
+all the same, so that those readers find them waiting rather than revising this entry, and so that
+the mathematics of each binding, which is the normal's to settle, is settled here.
+
+| role | multiplicity | the node it binds |
+| --- | --- | --- |
+| whitened residual | exactly one | $r = W (\point \ominus \mu) \in \R^\dimension$, computed as the form of the scale computes it |
+| mean | exactly one | $\mu$ |
+| scale | exactly one | the scale as the model gives it, $\sigma$, $\sigma$, $L$ or $W$, together with its form |
+| log-volume | at most one | $\lambda_\mu(\point \ominus \mu)$, where it is not identically zero |
+| information root | at most one | the root $C$ of [](eq:root) |
+
+The charter's example binds a covariance factor. With four forms of the scale, the role binds
+whichever the model gave, and its form, from which a reader computes $W$ or $L$ as
+[The scale](#the-scale) says; in the covariance factor's form the residual is the solution $z$ of
+[](eq:forward-substitution), which is $W (\point \ominus \mu)$ without $W$ ever being formed.
+
+**What a reader of the residual estimates.** The term is $-\tfrac12 \lVert r \rVert^2$ plus a
+normalizer in the scale, less the log-volume. A least-squares reader that minimizes
+$\tfrac12 \lVert r \rVert^2$ over the free quantities, with the scale fixed, therefore maximizes the
+term itself only where the log-volume is constant in them. On a Euclidean space it is zero. On a
+positive factor it is $J(\point)$, constant when $\point$ is observed, and not when $\point$ is
+free, where ignoring it finds the mode in the logarithmic chart rather than with respect to Lebesgue
+measure. On a curved space it is $\lambda_\mu(\point \ominus \mu)$, which moves with the mean, so
+that a measurement's estimate of the state differs by the precision change of
+[The tangent normal](#the-tangent-normal). The log-volume's role is what lets a reader add its
+gradient and Hessian, and so estimate the tangent normal's own mode; a reader that ignores it
+estimates, on a group, the law of [%full](statement:invariant), the model of factor-graph
+libraries, and should say so.
+
+**The information root.** The role binds the matrix $C$ of [](eq:root), of
+$\dimension + \dimension(\dimension+1)/2$ rows, whose three block columns a reader composes with
+the Jacobians, with respect to the free quantities, of $\point$, of $\mu$ and of the scale's
+coordinates $\theta$. When the scale is a constant there is no $\theta$, and the root is its first
+block row, $(W \;\, -W)$. On the flat-in-disguise spaces the root is exact by
+[%full](statement:information); on a curved space its accuracy, block by block, is the one
+[The tangent normal](#the-tangent-normal) states.
+
+**Likelihood factors.** A likelihood factor in the forms of this document, a retirement's
+replacement [](eq:joint) or a measurement over data on a space without a volume, binds the whitened
+residual, the mean and the scale, and binds no information root: the expected information is an
+expectation over the quantity a term scores, and a likelihood factor scores none. A reader that needs
+a positive semidefinite matrix from one has it in the Gauss–Newton product of its residual's
+Jacobian, which the residual's role gives, and which for the replacement [](eq:joint), a Gaussian
+of $\delta$, is its negative Hessian in $\delta$.
+
 ## In skoro's terms
 
 - **The normal scores one quantity** $\point$, of a flat-in-disguise type: real, vector, matrix,
@@ -571,7 +646,8 @@ both can be written with it rather than by hand.
   order, are those of the composite. Every step of it, from the inverse retraction to the
   logarithms of the diagonal and the substitution [](eq:forward-substitution), is a primitive of
   order two, so the term has order two.
-- **Its scale** is given in one of the four forms of [The scale](#the-scale): positive values for
+- **Its scale** is given in any of the four forms of [The scale](#the-scale), all of which it
+  offers: positive values for
   the isotropic and diagonal forms, and the product $\positive^\dimension \times
   \R^{\dimension(\dimension-1)/2}$ for a triangular factor when it is a quantity. A fixed scale's
   whitening and normalizer are folded, in the model when it is a constant and in a compiled query
@@ -579,6 +655,9 @@ both can be written with it rather than by hand.
 - **Its sampler is exact**, drawing $\mu \oplus L \Phi^{-1}(u)$ from the variates of the
   quantity's key, on the host in double precision.
 - **Its expected information** over $(\point, \mu, \theta)$ is exact, with the root [](eq:root).
+- **Its roles**, bound as its term is added though no reader uses them yet, are its whitened
+  residual, its mean, its scale with its form, its log-volume where it is not zero, and the root
+  [](eq:root) of its expected information ([The roles](#the-roles)).
 - **As a likelihood factor**, the normal on $\R^D$ evaluated at the stacked tangent [](eq:stacked)
   of a blanket at constant anchors is the form of a retirement's Gaussian replacement.
 - **The tangent normal scores one quantity** of any continuous type whose space has a reference
@@ -590,8 +669,10 @@ both can be written with it rather than by hand.
   a residual: observed in a query that has the measurement, and free, to be drawn, in one that
   simulates it.
 - **Its sampler** draws $\mu \oplus L \Phi^{-1}(u)$, exact on a global chart and within the
-  wrapped mass of [%full](statement:wrapping) on an exponential one. Its expected information is
-  exact in the scale's block on a global chart, and not in closed form elsewhere.
+  wrapped mass of [%full](statement:wrapping) on an exponential one. It binds the normal's roles,
+  its root [](eq:root) among them, which on a curved space is exact in the scale's block on a
+  global chart, of second order in the blocks of $\point$ and $\mu$, and of first order in the
+  mixed block it omits.
 - **A space without a volume** carries a measurement as a likelihood factor over data, the
   Gaussian part of [](eq:tangent-term) at a constant measured value, which with a fixed scale is
   the exact log-likelihood of the law of [%full](statement:invariant).
@@ -630,23 +711,6 @@ both can be written with it rather than by hand.
 > \rVert^2 / 4)$ against surface measure. Does this entry test the tangent normal on that sphere,
 > on a rotation group added to its tests for the purpose, or bring the flat spaces' normal alone
 > and leave the tangent normal to the first curved type's entry?
-
-> [!TODO] Which forms of the scale
-> The draft offers all four forms of [The scale](#the-scale). The isotropic and diagonal forms
-> are the ones most models write, and compose with no linear algebra; the whitening is what a
-> retirement's replacement needs; the covariance factor adds the substitution
-> [](eq:forward-substitution), and a solve on every evaluation when it is free. Are all four
-> wanted in this entry, or the first three, with the covariance factor added when a model asks
-> for it?
-
-> [!TODO] The expected information and the roles
-> The charter has a Gaussian term bind its whitened residual, its mean and its scale, and a term
-> with a closed-form information bind a root of it, but no reader of those roles exists yet: the
-> least-squares readers and Fisher scoring are entries of their own. Does this entry bind the
-> roles and the root [](eq:root), so that those readers find them waiting, or does each role
-> arrive with its first reader, which then revises this entry? If the latter, the section on the
-> expected information may move to that reader's entry, and to a math note on the Fisher
-> information, which a second distribution would also need.
 
 > [!TODO] The joint form
 > The draft takes a retirement's Gaussian replacement to be the normal on $\R^D$ at the stacked
