@@ -1,5 +1,5 @@
 ---
-summary: The normal distribution on the core's flat and positive spaces and their products, with its scale, its exact sampler, its expected information and its use as a likelihood factor, and the tangent normal, the law of a point moved by normal noise through its chart, on every space whose chart's volume is known, so that a measurement of a curved quantity is held as what was measured.
+summary: One normal distribution for every space whose chart's volume is known, the tangent normal, the law of a point moved by normal noise through its chart, so that a measurement of a curved quantity is held as what was measured; with its scale, its sampler, its expected information, its roles and its use as a likelihood factor, all exact on the core's flat and positive spaces.
 depends_on: [retraction, product-manifold, derivatives-in-charts, chart-volume, archive/core/math]
 ---
 
@@ -45,9 +45,13 @@ archive's fault was its density, which omitted the volume of the chart at the me
 volume, which [the note on densities in tangent charts](../../math/chart-volume/) works out for
 the rotations, the rigid motions and the sphere, the same form has an exact density on every space
 whose chart is global, and one exact to within a stated tail on the exponential charts of the
-groups. This document therefore also works out the *tangent normal*, the law of $\mu \oplus
-\varepsilon$ on any space whose chart's volume is known, of which the normal is the case of the
-flat spaces, and what a space must supply to carry it.
+groups. This document therefore works out one distribution, the *tangent normal*, the law of
+$\mu \oplus \varepsilon$ on any space whose chart's volume is known. On the flat-in-disguise
+spaces it is the normal, the log-normal on positive factors, and has there an exact expected
+information that no curved space allows it. The sections up to
+[The expected information](#the-expected-information) work out that case, under the name of the
+normal, $\mathcal N(\mu, \Sigma)$; [The tangent normal](#the-tangent-normal) carries the same
+distribution to curved spaces, and says what a space must supply to carry it.
 
 ## Setting
 
@@ -139,7 +143,10 @@ mean $\log \mu$ and covariance $\Sigma$, so $\mu$ is the median of each coordina
 mean, which is $\mu_i e^{\Sigma_{ii} / 2}$. On a Euclidean factor it is the familiar normal, with
 mean $\mu$ and covariance $\Sigma$. On a product the two kinds of factor are correlated through
 $\Sigma$ in their tangent coordinates, which is what a state with a position and a positive scale
-needs.
+needs. A positive quantity's normal is offered under the one distribution's name all the same,
+rather than as a log-normal of its own: a model that gives a positive quantity a normal has said
+how its noise acts, multiplicatively, through the space's chart, and a second name would describe
+the same law twice.
 
 **Curved types.** On an embedded type, such as the sphere of the core's acceptance test or the
 rotations of a later entry, the chart at $\mu$ does not satisfy [](eq:translation), may not be a
@@ -183,7 +190,7 @@ once, column by column by the same substitution against the columns of the ident
 as the core folds every value reached only from fixed inputs; when $L$ is free, the residual is
 solved on every evaluation, and its derivatives with respect to $L$ come with it.
 
-**All four forms.** The normal offers all four, because each is the form some model has, and none
+**All four forms.** The tangent normal offers all four, because each is the form some model has, and none
 is reached from another without a computation the model did not ask for. The isotropic and
 diagonal forms need no linear algebra at all. The whitening is what elimination and a retirement's
 replacement produce, and inverting it to a covariance would cost a solve and lose the sparsity
@@ -356,8 +363,11 @@ a product $\lambda_\mu(\point \ominus \mu) = \sum_{i \in P} \log \point_i = J(\p
 
 So the normal of the previous sections is the tangent normal on the flat-in-disguise spaces, and
 the two terms are one formula: the Gaussian log-density of the tangent coordinate, less the chart's
-log-volume there. What the flat-in-disguise spaces add is the identity [](eq:translation), on which
-the exactness of [%full](statement:information) rests, and which no curved space has.
+log-volume there. skoro therefore has one distribution, the tangent normal, and not a normal beside
+it. What the flat-in-disguise spaces add is not a different law but a property of their charts, the
+identity [](eq:translation), on which the exactness of [%full](statement:information) rests, and
+which no curved space has: on those spaces the one distribution's information is exact, and on the
+others it is stated with its error below.
 
 **What a space supplies.** Beyond its retraction and its inverse, the term needs three things of the
 space of $\point$:
@@ -504,7 +514,7 @@ $-\tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda\, [u]_\times)$, up to t
 is zero for every $u$ only when $\Sigma\, \partial_i \Lambda$ is symmetric, as for an isotropic or a
 diagonal scale.
 
-The tangent normal's root, which [The roles](#the-roles) binds as the normal's is bound, is
+The tangent normal's root, which [The roles](#the-roles) binds on every space, is
 therefore [](eq:root) unchanged: $\pm W$ in the blocks of $\point$ and $\mu$, which are the
 derivatives of $\point \ominus \mu$ at a zero residual, and $C_\theta$ in the scale's. On a
 curved space its accuracy is that of each block. In the scale's block it is exact on a global
@@ -589,9 +599,9 @@ both can be written with it rather than by hand.
 The charter has a distribution declare, as its term is added, the nodes that readers other than the
 model's density need, each under a *role*, and has each role arrive with the distribution or reader
 that gives it meaning ([position 8](../charter/writeup.md)). No reader of the normal's roles exists
-yet: the least-squares readers and Fisher scoring are entries of their own. The normal binds them
-all the same, so that those readers find them waiting rather than revising this entry, and so that
-the mathematics of each binding, which is the normal's to settle, is settled here.
+yet: the least-squares readers and Fisher scoring are entries of their own. The tangent normal
+binds them all the same, so that those readers find them waiting rather than revising this entry,
+and so that the mathematics of each binding, which is the distribution's to settle, is settled here.
 
 | role | multiplicity | the node it binds |
 | --- | --- | --- |
@@ -637,56 +647,46 @@ of $\delta$, is its negative Hessian in $\delta$.
 
 ## In skoro's terms
 
-- **The normal scores one quantity** $\point$, of a flat-in-disguise type: real, vector, matrix,
-  positive, or a product of them. Its term [](eq:term) is a composite of the core's primitives,
-  conditioned on the quantities its mean and scale are reached from, which may be constants,
-  quantities or mapped values of any kind the core allows. Its log-density is with respect to the
-  core's base measure, Jacobian [](eq:jacobian) included.
-- **Its derivatives** with respect to $\point$, to $\mu$ and to the scale, of first and second
-  order, are those of the composite. Every step of it, from the inverse retraction to the
-  logarithms of the diagonal and the substitution [](eq:forward-substitution), is a primitive of
-  order two, so the term has order two.
-- **Its scale** is given in any of the four forms of [The scale](#the-scale), all of which it
-  offers: positive values for
-  the isotropic and diagonal forms, and the product $\positive^\dimension \times
-  \R^{\dimension(\dimension-1)/2}$ for a triangular factor when it is a quantity. A fixed scale's
-  whitening and normalizer are folded, in the model when it is a constant and in a compiled query
-  when it is observed.
-- **Its sampler is exact**, drawing $\mu \oplus L \Phi^{-1}(u)$ from the variates of the
-  quantity's key, on the host in double precision.
-- **Its expected information** over $(\point, \mu, \theta)$ is exact, with the root [](eq:root).
-- **Its roles**, bound as its term is added though no reader uses them yet, are its whitened
-  residual, its mean, its scale with its form, its log-volume where it is not zero, and the root
-  [](eq:root) of its expected information ([The roles](#the-roles)).
-- **As a likelihood factor**, the normal on $\R^D$ evaluated at the stacked tangent [](eq:stacked)
-  of a blanket at constant anchors is the form of a retirement's Gaussian replacement.
-- **The tangent normal scores one quantity** of any continuous type whose space has a reference
-  measure and declares its chart's log-volume and domain. Its term [](eq:tangent-term) is
-  conditioned on the quantities its mean and scale are reached from; its mean is any value of the
-  quantity's type, a mapped value $h(\point)$ of the state among them. On the flat-in-disguise
-  spaces it is the normal.
+- **One distribution, the tangent normal, scores one quantity** $\point$, of any continuous type
+  whose space has a reference measure and declares its chart's log-volume and domain. The
+  flat-in-disguise types (real, vector, matrix, positive, and products of them) are such types,
+  with Lebesgue measure, global charts and the log-volume $J$ [](eq:jacobian): on them the
+  distribution is the normal, and on a positive factor the log-normal, under the same name.
+- **Its term** [](eq:tangent-term), which is [](eq:term) on the flat-in-disguise types, is a
+  composite of the core's operations and the type's log-volume, conditioned on the quantities its
+  mean and scale are reached from, which may be constants, quantities or mapped values of any kind
+  the core allows. Its mean is any value of the scored quantity's type, a mapped value $h(\point)$
+  of the state among them. Its log-density is with respect to the type's reference measure.
 - **A measurement** [](eq:measurement) is such a quantity, held as what was measured rather than as
   a residual: observed in a query that has the measurement, and free, to be drawn, in one that
   simulates it.
-- **Its sampler** draws $\mu \oplus L \Phi^{-1}(u)$, exact on a global chart and within the
-  wrapped mass of [%full](statement:wrapping) on an exponential one. It binds the normal's roles,
-  its root [](eq:root) among them, which on a curved space is exact in the scale's block on a
-  global chart, of second order in the blocks of $\point$ and $\mu$, and of first order in the
-  mixed block it omits.
-- **A space without a volume** carries a measurement as a likelihood factor over data, the
-  Gaussian part of [](eq:tangent-term) at a constant measured value, which with a fixed scale is
-  the exact log-likelihood of the law of [%full](statement:invariant).
+- **Its derivatives** with respect to $\point$, to $\mu$ and to the scale, of first and second
+  order, are those of the composite. On the flat-in-disguise types every step, from the inverse
+  retraction to the logarithms of the diagonal and the substitution [](eq:forward-substitution),
+  is a primitive of order two, so the term has order two; on a curved type its order is the least
+  of the type's inverse retraction's and log-volume's.
+- **Its scale** is given in any of the four forms of [The scale](#the-scale), all of which it
+  offers: positive values for the isotropic and diagonal forms, and the product
+  $\positive^\dimension \times \R^{\dimension(\dimension-1)/2}$ for a triangular factor when it is a
+  quantity. A fixed scale's whitening and normalizer are folded, in the model when it is a constant
+  and in a compiled query when it is observed.
+- **Its sampler** draws $\mu \oplus L \Phi^{-1}(u)$ from the variates of the quantity's key, on the
+  host in double precision. It is exact on every global chart, the flat-in-disguise types' among
+  them, and within the wrapped mass of [%full](statement:wrapping) on an exponential chart.
+- **Its expected information** over $(\point, \mu, \theta)$ has the root [](eq:root). On the
+  flat-in-disguise types it is exact; on a curved type it is exact in the scale's block on a global
+  chart, of second order in the blocks of $\point$ and $\mu$, and of first order in the mixed block
+  it omits.
+- **Its roles**, bound as its term is added though no reader uses them yet, are its whitened
+  residual, its mean, its scale with its form, its log-volume where it is not zero, and the root
+  [](eq:root) of its expected information ([The roles](#the-roles)).
+- **As a likelihood factor**, the distribution's Gaussian part on $\R^D$ evaluated at the stacked
+  tangent [](eq:stacked) of a blanket at constant anchors is the form of a retirement's Gaussian
+  replacement, and at a constant measured value it carries a measurement on a space without a
+  volume, which with a fixed scale is the exact log-likelihood of the law of
+  [%full](statement:invariant).
 
 ## Open questions
-
-> [!TODO] One distribution or two
-> The normal and the tangent normal are one formula, [](eq:tangent-term), and on the
-> flat-in-disguise spaces one distribution; what the normal has besides is the identity
-> [](eq:translation) and the exact information it gives. Is the library to have one distribution,
-> the tangent normal, whose information is exact on those spaces, or two, a normal on the
-> flat-in-disguise spaces and a tangent normal on every space with a volume, which coincide where
-> both apply? And is the normal of a positive quantity, being a log-normal, to be offered under the
-> normal's name, or only under a name of its own?
 
 > [!TODO] Where a space's volume is declared
 > The tangent normal needs of each curved type a reference measure, the log-volume of its chart as
