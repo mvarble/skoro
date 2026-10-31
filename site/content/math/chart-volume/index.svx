@@ -1,0 +1,257 @@
+---
+title: Densities in tangent charts
+summary: A retraction's chart at a point carries the manifold's reference measure to a density on the tangent space, the chart's volume; with it, a random tangent vector pushed through the chart has a density on the manifold, given here for the charts of the rotations, the poses and the sphere.
+depends_on: [retraction, product-manifold]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as chartVolume from './statements/chart-volume.md';
+	import * as pushforward from './statements/pushforward.md';
+	import * as localChart from './statements/local-chart.md';
+	import * as normalized from './statements/normalized.md';
+	import * as group from './statements/group.md';
+</script>
+
+A random point of a curved manifold is most easily made from a random tangent vector: draw
+$\varepsilon$ in $\R^\dimension$ and move a point $\mu$ by it, $\mu \oplus \varepsilon$. A density
+of $\varepsilon$ is not, as it stands, a density of the point. The chart at $\mu$ stretches some
+regions and compresses others, and the density of the point carries the factor by which it does,
+the chart's *volume*. This note defines that factor, says what it does to a density pushed through
+a chart, and works it out for the charts that the rotations, the rigid motions and the sphere are
+usually given.
+
+## The volume of a chart
+
+Let $\manifold$ be a manifold of dimension $\dimension$ with a
+[retraction](../retraction/) $\point \oplus \tangent = R_\point(\tangent)$, and a *reference
+measure* $\nu$: a measure on $\manifold$ with a smooth positive density in every chart, against
+which densities on $\manifold$ are taken. On $\R^\dimension$ it is Lebesgue measure; on a Lie
+group, Haar measure; on a sphere, surface measure.
+
+<Statement {...chartVolume} />
+
+On $V_\mu$, the point $\point \ominus \mu$ is $R_\mu^{-1}(\point)$, the inverse of the chart on its
+whole image, which may be larger than the neighbourhood in which the
+[retraction note](../retraction/) first defines it. In words, the image under the chart of the
+measure $v_\mu(\tangent)\, \dd \tangent$ on $U_\mu$ is $\nu$ restricted to $V_\mu$, and so, for
+every nonnegative measurable $g$ on $U_\mu$,
+
+$$
+	\int_{U_\mu} g(\tangent)\, v_\mu(\tangent) \, \dd \tangent = \int_{V_\mu} g(\point \ominus \mu) \, \dd \nu(\point), @tag(image)
+$$
+
+which follows from the definition for indicator functions, and for the rest by linearity and
+monotone limits.
+
+Two examples. On $\R^\dimension$ with Lebesgue measure, $R_\mu(\tangent) = \mu + \tangent$ is a
+translation, so $v_\mu = 1$, and the chart is global and full. On the positive reals with Lebesgue
+measure, $R_\mu(\tangent) = \mu e^\tangent$ has derivative $\mu e^\tangent$, so
+$v_\mu(\tangent) = \mu e^\tangent$, the point itself: the chart is again global and full, but its
+volume is not $1$ at $\tangent = 0$. A chart's volume depends on the reference measure as much as
+on the retraction, and on the positive reals with the measure $\dd \point / \point$ the same chart
+would have volume $1$.
+
+## A density pushed through a chart
+
+<Statement {...pushforward} />
+
+<Proof>
+
+Let $S \subseteq V_\mu$ be measurable and $A = R_\mu^{-1}(S) \subseteq U_\mu$. Since
+$\varepsilon \in U_\mu$ almost surely,
+$\Pr(\randomPoint \in S) = \Pr(\varepsilon \in A) = \int_A f(\tangent)\, \dd \tangent$, which by
+[](eq:image), with $g = \mathbb 1_A f / v_\mu$, is $\int_S f(\point \ominus \mu) / v_\mu(\point
+\ominus \mu)\, \dd \nu(\point)$. And $\Pr(\randomPoint \notin V_\mu) = \Pr(\varepsilon \notin
+U_\mu) = 0$.
+
+</Proof>
+
+So the log-density of the point is the log-density of its tangent coordinate, less the chart's
+log-volume there. Where the chart compresses, $v_\mu < 1$, and the point's density is larger than
+its coordinate's, because the same probability sits on less of $\manifold$.
+
+The condition $\varepsilon \in U_\mu$ is where the curvature of a space shows. A global chart meets
+it for every $\varepsilon$. A chart that is not global, such as the exponential chart of the
+rotations below, is a diffeomorphism only on a ball, while a normal $\varepsilon$ has mass outside
+any ball. The retraction is still defined there, but it *wraps*: a vector outside $U_\mu$ reaches a
+point that a vector inside $U_\mu$ reaches too, and the law of $\mu \oplus \varepsilon$ has a
+density that sums $f / v$ over every vector reaching the point, an infinite sum on the rotations. The
+single term of [%full](statement:pushforward) is then the density of part of that law, and the part
+it misses is no larger than the mass $f$ puts outside $U_\mu$.
+
+<Statement {...localChart} />
+
+<Proof>
+
+By [%full](statement:pushforward), applied to the sub-probability density $\mathbb 1_{U_\mu} f$,
+$\Pr(\mu \oplus \varepsilon \in S,\ \varepsilon \in U_\mu) = \int_S \density \, \dd \nu$ for every
+measurable $S$, so $\density$ integrates to $\Pr(\varepsilon \in U_\mu) = 1 - p$ and $Q$ is the
+conditional law. If $p > 0$, let $P'$ be the law of $\mu \oplus \varepsilon$ given
+$\varepsilon \notin U_\mu$; then $P = (1 - p)\, Q + p\, P'$, so $P(S) - Q(S) = p\,\bigl(P'(S) -
+Q(S)\bigr)$, whose absolute value is at most $p$. If $p = 0$, $P = Q$.
+
+</Proof>
+
+## Embedded manifolds and their measure
+
+A manifold stored as a submanifold $\manifold \subset \R^n$ has a measure at hand, the surface
+measure $\sigma$ that $\R^n$ induces, and its charts' volumes follow from the Jacobian of the
+retraction in storage. That measure depends on the storage, though, and not only on the manifold:
+the rotations stored as $3 \times 3$ matrices and stored as unit quaternions have surface measures
+that differ by a constant factor, and for a type whose basis is not orthonormal, by a factor that
+varies from point to point. A density is only meaningful against a measure that is fixed, so the
+measure is better fixed by the retraction itself, as the one whose charts all have volume $1$ at
+their centre.
+
+<Statement {...normalized} />
+
+<Proof>
+
+The chart $R_\mu$ restricted to $U_\mu$ is a smooth embedding of an open set of $\R^\dimension$
+into $\R^n$, with image in $\manifold$, and the surface measure of the image of a set $A$ under it
+is $\int_A \sqrt{\det(\partial R_\mu\transpose \partial R_\mu)}\, \dd \tangent$, the classical
+formula for the area of a parametrized surface. That is $v^\sigma_\mu$. A measure
+$\dd \nu = h \, \dd \sigma$ with $h$ continuous then has chart volumes
+$v_\mu(\tangent) = h(\mu \oplus \tangent)\, v^\sigma_\mu(\tangent)$, so $v_\mu(0) = 1$ at $\mu$ if
+and only if $h(\mu) = 1 / v^\sigma_\mu(0)$, and $\partial R_\mu(0) = B(\mu)$ gives
+$v^\sigma_\mu(0) = \det(B(\mu)\transpose B(\mu))^{1/2}$. This fixes $h$ at every point, and
+substituting it gives the chart volumes $v_\mu(\tangent) = v^\sigma_\mu(\tangent) /
+v^\sigma_{\mu \oplus \tangent}(0)$.
+
+</Proof>
+
+When $\det(B\transpose B)$ is the same at every point, as it is for an orthonormal basis or a basis
+translated by a group, the normalized measure is a constant multiple of $\sigma$, and its chart
+volumes are $v^\sigma_\mu / v^\sigma_\mu(0)$. For the rotations stored as matrices with the
+left-translated basis $B(\point) = (\point E_1, \point E_2, \point E_3)$, where $E_i$ is the skew
+matrix of the $i$th unit vector, each column has Frobenius norm $\sqrt 2$, so $v^\sigma_\mu(0) =
+2\sqrt 2$; stored as unit quaternions, with the chart below, each column has norm $\tfrac12$, so
+$v^\sigma_\mu(0) = \tfrac18$. The normalized measure is the same in both: the Haar measure that
+agrees with Lebesgue measure in the tangent coordinates at the identity. The positive reals with
+Lebesgue measure, as in the example above, are a measure that is not normalized; the normalized one
+for their chart is $\dd \point / \point$.
+
+## Charts of Lie groups
+
+On a Lie group whose retraction translates a fixed chart of the identity, every chart is a
+translate of that one, and so is its volume.
+
+<Statement {...group} />
+
+<Proof>
+
+For a measurable $A \subseteq U$, $\nu(\mu\, \varphi(A)) = \nu(\varphi(A))$ by the invariance of
+$\nu$ under left translation, and $\nu(\varphi(A)\, \mu) = \nu(\varphi(A))$ by its invariance under
+right translation, so both charts have the volume of the chart at $e$. For the exponential, the
+derivative of $\operatorname{Exp}$ at $\tangent$ along $u$ is $\operatorname{Exp}(\tangent)\,
+(J_r(\tangent)\, u)^\wedge$, where $(\cdot)^\wedge$ maps $\R^\dimension$ to the Lie algebra in the
+basis of the tangent coordinates. The normalized Haar measure is that of the left-invariant volume
+form taking the value $1$ on that basis at $e$, and its pull-back by $\operatorname{Exp}$ is
+therefore $\det J_r(\tangent)\, \dd \tangent$, positive on $U$ because $\operatorname{Exp}$ is a
+diffeomorphism there. Since $J_r(\tangent) = g(\operatorname{ad}_\tangent)$ with
+$g(z) = (1 - e^{-z}) / z$, its eigenvalues are $g(\alpha)$, and its determinant their product.
+
+</Proof>
+
+Compact groups and the semidirect products of the rotations with a vector space are *unimodular*:
+their left Haar measure is invariant under right translation too. The groups below are both, so a
+retraction that perturbs a point on the right, in its own frame, and one that perturbs it on the
+left, in a fixed frame of the world, have the same chart volume.
+
+## The usual charts
+
+Write $\theta = \lVert \phi \rVert$ for the angle of a rotation's tangent coordinate $\phi$ in the
+exponential chart, $\operatorname{sinc} u = \sin u / u$, and $[\phi]_\times$ for the skew matrix of
+$\phi$. Each row is with respect to the normalized measure of
+[%full](statement:normalized): Haar measure on the groups, and surface measure on the sphere with
+an orthonormal basis $B(\point)$ of $\point^\perp$.
+
+| space | chart $\mu \oplus \tangent$ | $\point \ominus \mu$ | $\lambda_\mu(\tangent)$ | global | full |
+| --- | --- | --- | --- | --- | --- |
+| $SO(3)$, exponential | $\mu \operatorname{Exp}(\phi)$ | $\operatorname{Log}(\mu\transpose \point)$ | $2 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
+| $SE(3)$, exponential | $\mu \operatorname{Exp}(\phi, \rho)$ | $\operatorname{Log}(\mu^{-1} \point)$ | $4 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
+| $SE_2(3)$, exponential | $\mu \operatorname{Exp}(\phi, w, \rho)$ | $\operatorname{Log}(\mu^{-1} \point)$ | $6 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
+| $SO(3)$, Cayley | $\mu\, (I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12 [\tangent]_\times)$ | [](eq:cayley-inverse) | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
+| $SO(3)$, polar | $\mu \operatorname{polar}(I + [\tangent]_\times)$ | $\frac{\operatorname{vee}(R - R\transpose)}{\operatorname{tr} R - 1}$, $R = \mu\transpose \point$ | [](eq:polar) | yes | no, angles $< \pi / 2$ |
+| $S^2$, stereographic | $\frac{(1 - s)\, \mu + B(\mu)\, \tangent}{1 + s}$, $s = \frac14 \lVert \tangent \rVert^2$ | $\frac{2 B(\mu)\transpose \point}{1 + \mu\transpose \point}$ | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
+| $S^2$, normalization | $\frac{\mu + B(\mu)\, \tangent}{\lVert \mu + B(\mu)\, \tangent \rVert}$ | $\frac{B(\mu)\transpose \point}{\mu\transpose \point}$ | $-\tfrac32 \log\bigl(1 + \lVert \tangent \rVert^2\bigr)$ | yes | no, a hemisphere |
+
+**The exponential charts.** On $SO(3)$, $\operatorname{ad}_\phi = [\phi]_\times$ has the
+eigenvalues $0$ and $\pm i \theta$, so by [%full](statement:group)
+
+$$
+	v(\phi) = \frac{(1 - e^{-i\theta})(1 - e^{i\theta})}{\theta^2} = \frac{2 (1 - \cos \theta)}{\theta^2}
+	= \operatorname{sinc}^2 \frac{\theta}{2},
+	\qquad
+	\lambda(\phi) = -\frac{\theta^2}{12} - \frac{\theta^4}{1440} + O(\theta^6) . @tag(so3-exp)
+$$
+
+$\operatorname{Exp}$ is a diffeomorphism of the open ball $\theta < \pi$ onto the rotations by an
+angle less than $\pi$, whose complement, the half-turns, has measure zero. On $SE(3)$, with
+coordinates $(\phi, \rho)$ of rotation and translation, $\operatorname{ad}_{(\phi, \rho)}$ is block
+triangular with $[\phi]_\times$ twice on its diagonal, and on $SE_2(3)$, with a velocity $w$
+besides, three times, so their volumes are the square and the cube of [](eq:so3-exp). Their
+exponentials, $(\operatorname{Exp} \phi, V(\phi)\, \rho)$ and $(\operatorname{Exp} \phi,
+V(\phi)\, w, V(\phi)\, \rho)$ with $V(\phi)$ invertible for $\theta < 2\pi$, are diffeomorphisms
+of $\{\theta < \pi\}$ onto the motions whose rotation is by less than $\pi$. In every one of them
+the chart wraps beyond $\theta = \pi$, and the volume depends on the rotation alone.
+
+**The Cayley chart.** The rotation $(I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12
+[\tangent]_\times)$ is by the angle $\theta = 2 \arctan(\lVert \tangent \rVert / 2)$ about
+$\tangent$, and as a unit quaternion it is $(1, \tangent / 2) / \lVert (1, \tangent / 2) \rVert$:
+the chart is the familiar first-order quaternion update $\mu \otimes (1, \tangent / 2)$,
+normalized. Its inverse needs no trigonometry,
+
+$$
+	\point \ominus \mu = \frac{2 \operatorname{vec}(q)}{w(q)}, \quad q = \mu^{-1} \otimes \point,
+	\qquad\text{or}\qquad
+	\point \ominus \mu = \frac{2 \operatorname{vee}(R - R\transpose)}{1 + \operatorname{tr} R}, \quad R = \mu\transpose \point, @tag(cayley-inverse)
+$$
+
+for a quaternion or a matrix, where $\operatorname{vec}(q)$ and $w(q)$ are the vector and scalar
+parts and $\operatorname{vee}$ inverts $[\cdot]_\times$; the first is the same for $q$ and $-q$.
+The chart is a diffeomorphism of all of $\R^3$ onto the rotations by less than $\pi$. In the
+exponential chart, in polar coordinates $(\theta, a)$ with $a$ a unit axis, the normalized Haar
+measure is $\operatorname{sinc}^2(\theta/2)\, \theta^2 \, \dd \theta \, \dd a = 4 \sin^2(\theta/2)
+\, \dd \theta \, \dd a$. With $r = \lVert \tangent \rVert = 2 \tan(\theta / 2)$ along the same axis,
+$\dd \theta = \dd r / (1 + r^2/4)$ and $\sin^2(\theta/2) = (r^2/4) / (1 + r^2/4)$, so the measure
+is $r^2 \, \dd r \, \dd a / (1 + r^2/4)^2$, and Lebesgue measure in $\tangent$ is
+$r^2 \, \dd r \, \dd a$: $v(\tangent) = (1 + \lVert \tangent \rVert^2 / 4)^{-2}$.
+
+**The polar chart.** The polar factor of $I + [\tangent]_\times$, the rotation nearest it, which
+an SVD also gives, is the rotation by $\arctan \lVert \tangent \rVert$ about $\tangent$. The same
+substitution as for the Cayley chart, with $\theta = \arctan r$, gives
+
+$$
+	v(\tangent) = \frac{2 \bigl(1 - (1 + r^2)^{-1/2}\bigr)}{r^2 (1 + r^2)}, \qquad r = \lVert \tangent \rVert . @tag(polar)
+$$
+
+The chart is global but reaches only the rotations by less than $\pi / 2$: a point $\mu \oplus
+\varepsilon$ is never further than a quarter turn from $\mu$, whatever $\varepsilon$ is.
+
+**The stereographic chart.** The chart is the inverse of the stereographic projection from $-\mu$,
+with coordinates halved so that its derivative at $0$ is $B(\mu)$. The inverse stereographic projection
+$u \mapsto ((1 - \lVert u \rVert^2)\, \mu + 2 B(\mu)\, u) / (1 + \lVert u \rVert^2)$ is conformal,
+with scale factor $2 / (1 + \lVert u \rVert^2)$ and so area factor $4 / (1 + \lVert u \rVert^2)^2$,
+and $u = \tangent / 2$ multiplies it by $\tfrac14$. The chart reaches every point but $-\mu$.
+
+**The normalization chart.** The point $\mu + B(\mu)\, \tangent$ of the tangent plane at $\mu$ lies
+at the distance $r = (1 + \lVert \tangent \rVert^2)^{1/2}$ from the centre, and the ray to it meets
+the plane's normal at an angle $\alpha$ with $\cos \alpha = 1/r$; a small area of the plane is
+projected along the ray onto the sphere with the factor $\cos \alpha / r^2 = r^{-3}$. The chart, the gnomonic projection, reaches
+the open hemisphere around $\mu$ alone.
+
+**Products.** A product of manifolds with the product of their reference measures and the
+[product retraction](../product-manifold/) has, at every point, the product of the factors'
+charts, so its volume is the product of the factors' volumes, and its log-volume their sum, on the
+product of their domains. A Euclidean factor with Lebesgue measure adds nothing. A pose stored as a
+rotation and a position in a fixed frame of the world, $SO(3) \times \R^3$, with the rotation
+retracted by any of the charts above and the position by addition, has the rotation's log-volume
+alone, which is what distinguishes it from $SE(3)$, whose exponential couples the two.
+
+**Computing the log-volumes.** The log-volume [](eq:so3-exp) has a removable
+singularity at $\theta = 0$, as $\operatorname{Exp}$ itself does, and is computed there from its
+series in $\theta^2$. The Cayley and stereographic log-volumes are $-2 \log(1 + \lVert \tangent
+\rVert^2 / 4)$, and the normalization chart's is of the same kind, smooth everywhere as written.
