@@ -187,6 +187,19 @@ Each condition of the definition is there for a use.
   the core says of $R$. Its order is the type's to claim: a term over the type has Hessians only
   if $\Lambda$ admits Hessian passes.
 
+> [!DECISION] Only full charts declare a volume
+> A type whose chart is not full, such as one retracted by the normalization chart of the sphere
+> (a hemisphere) or the polar chart of the rotations (the rotations by less than a quarter turn),
+> declares no volume, though the laws its charts push forward are proper laws, supported on the
+> image. Its quantities are still parameters with likelihood factors over data, as on any type
+> without a volume ([Types without a volume](#types-without-a-volume)). The alternative would
+> admit such a type with a second discretization, true on the image $V_\mu$ ($\mu\transpose
+> \point > 0$ for the normalization chart, $\operatorname{tr}(\mu\transpose \point) > 1$ for the
+> polar), at which a term would select a log-density of $-\infty$ outside the image. Fullness is
+> the simpler rule, it cannot be silently wrong, and its cost is felt only by types that choose a
+> chart which no distribution skoro plans needs. The second discretization can be added later as
+> an optional declaration, without changing any type that already declares a volume.
+
 **The acceptance-test sphere.** The core's acceptance test declares the unit sphere $S^2 \subset
 \R^3$ outside the core, with the stereographic retraction and inverse [](eq:archive/core/math/sphere)
 and a basis $B(\point)$ orthonormal on the sphere. Its normalized measure is surface measure
@@ -411,15 +424,4 @@ with a law that can be sampled and integrated.
 
 ## Open questions
 
-> [!TODO] Charts that are not full
-> [%full](statement:declaration) asks that a declared chart be full, so that a density read through
-> $Q$ is right at every point a model can be given. That excludes, from declaring a volume, a type
-> whose retraction is the normalization chart of the sphere (a hemisphere) or the polar chart of the
-> rotations (the rotations by less than a quarter turn), though the laws those charts push forward
-> are proper laws, supported on the image. The alternative admits them with a second
-> discretization, true on the image $V_\mu$ ($\mu\transpose \point > 0$ for the normalization chart,
-> $\operatorname{tr}(\mu\transpose \point) > 1$ for the polar), at which a term selects a
-> log-density of $-\infty$ outside the image. This draft asks for fullness, as the simpler rule
-> whose cost is felt only by types that choose a chart which no distribution skoro plans needs; the
-> second discretization can be added later without changing a declared type. Is fullness the rule
-> wanted?
+None remain.
