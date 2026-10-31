@@ -11,6 +11,7 @@ depends_on: [retraction, product-manifold, derivatives-in-charts, chart-volume, 
 	import * as tangentDensity from './statements/tangent-density.md';
 	import * as wrapping from './statements/wrapping.md';
 	import * as invariant from './statements/invariant.md';
+	import * as gaussNewton from './statements/gauss-newton.md';
 </script>
 
 ## The problem
@@ -628,6 +629,71 @@ that a measurement's estimate of the state differs by the precision change of
 gradient and Hessian, and so estimate the tangent normal's own mode; a reader that ignores it
 estimates, on a group, the law of [%full](statement:invariant), the model of factor-graph
 libraries, and should say so.
+
+**Gauss–Newton with a log-volume.** A model of tangent normals with fixed scales, every free
+quantity $q$ taken together as a point of the product of their types, has the negative
+log-density
+
+$$
+	f(q) = \tfrac12 \sum_i \lVert r_i(q) \rVert^2 + s(q), \qquad s(q) = \sum_i \lambda_{\mu_i}(t_i), \quad t_i = \point_i \ominus \mu_i , @tag(gn-objective)
+$$
+
+up to a constant, the sums over the terms, each with its residual $r_i = W_i t_i$. The log-volumes
+are not squares, and cannot be made into squares: near $t = 0$ they are concave, $-\lVert t
+\rVert^2 / 12$ on the rotations with the exponential chart and $-\lVert t \rVert^2 / 2$ with the
+Cayley and stereographic charts, since the chart compresses volume away from its centre. A reader
+that accepts only residuals has nothing to do with them. A Gauss–Newton reader that takes the
+log-volume's role as well loses nothing by it.
+
+<Statement {...gaussNewton} />
+
+<Proof>
+
+The matrix $J\transpose J$ is invertible, so $\delta_k = 0$ exactly when $g(q_k) = 0$. Read the
+iteration in the chart at $q^*$ as the map $\Phi(q) = q \oplus \bigl(-(J\transpose J)^{-1}
+g(q)\bigr)$. At $q^*$, $g = 0$, so the derivative of $\Phi$ there is
+$I - (J\transpose J)^{-1} \D g(q^*)$, the derivative of the retraction in its tangent argument
+being the identity at $0$. At a stationary point the derivative of the chart gradient is the chart
+Hessian, the correction term of [%full](statement:math/derivatives-in-charts/chart-hessian)
+vanishing with the gradient, so $\D \Phi(q^*) = I - (J\transpose J)^{-1} H^* =
+-(J\transpose J)^{-1} E$. A fixed point of a smooth map whose derivative has spectral radius
+$\rho < 1$ attracts every start near enough to it, at the linear rate $\rho$ (Ostrowski's theorem).
+
+</Proof>
+
+Three consequences follow for a reader of the roles.
+
+- **The answer depends on the gradient alone.** Whatever matrix stands on the left, the
+  iteration stops where $g = 0$, so a reader that adds the log-volume's gradient to $g$ converges
+  to the mode of [](eq:gn-objective), the model's own, and one that leaves it out converges to the
+  mode of the factor-graph model. The sparsity of $J\transpose J$ is unchanged, since each
+  $\lambda_{\mu_i}$ depends on the quantities its own residual already touches.
+- **Leaving its Hessian out costs little.** In $E$ the log-volumes contribute $\D^2 s = \sum_i
+  A_i\transpose \nabla^2 \lambda_i\, A_i$, with $A_i = \D t_i$, besides terms in $\nabla
+  \lambda_i$ that vanish at $t_i = 0$ and are of the order of the residual-curvature terms below,
+  while $J\transpose J = \sum_i
+  A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq \nabla^2 \lambda_i \preceq \kappa
+  \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq \D^2 s \preceq \kappa J\transpose
+  J$, and the log-volumes add at most $\kappa$ to $\rho$, with
+  $\kappa = \max_i \lVert \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rVert$. Near
+  $t = 0$ that is $\sigma^2 / 6$ for the exponential chart of the rotations and $\sigma^2$ for the
+  Cayley and stereographic charts, $\sigma^2$ the largest variance of a rotation's or a
+  direction's noise: $0.0017$ and $0.01$ per iteration at $\sigma = 0.1$ rad. The rest of $E$ is
+  $\sum_i \sum_k (r_i)_k \nabla^2 (r_i)_k$, which every Gauss–Newton method omits, and which on a
+  curved space includes the second derivatives of $\ominus$, of the same relative order
+  $\sigma^2$: the log-volume does not change the order of the approximation. A free positive
+  quantity adds nothing at all to $E$, its log-volume $J(\point)$ being linear in its chart.
+- **Adding its Hessian is safe where a Gaussian approximation is.** When $\kappa < 1$,
+  $J\transpose J + \D^2 s \succeq (1 - \kappa)\, J\transpose J$ is positive definite, so a reader
+  may use it as the matrix, and converge faster. The condition $\kappa < 1$ is, term by term, the
+  one under which the paragraph *What the mean is* of [The tangent normal](#the-tangent-normal)
+  found $\mu$ a mode at all: $\sigma^2 < 6$
+  for the exponential chart and $\sigma < 1$ for the Cayley chart. Where it fails, the posterior is
+  not concentrated around one mode, and no method of this kind fits it. The covariance
+  $(J\transpose J)^{-1}$ that a Laplace approximation reads off the Gauss–Newton matrix is then
+  smaller than $(J\transpose J + \D^2 s)^{-1}$, by a relative $\kappa$ at most, since $\D^2 s
+  \preceq 0$ for the charts above: the volume makes the posterior a little broader than the squares
+  alone say.
 
 **The information root.** The role binds the matrix $C$ of [](eq:root), of
 $\dimension + \dimension(\dimension+1)/2$ rows, whose three block columns a reader composes with
