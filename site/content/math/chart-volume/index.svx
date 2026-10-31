@@ -10,7 +10,9 @@ depends_on: [retraction, product-manifold]
 	import * as chartVolume from './statements/chart-volume.md';
 	import * as pushforward from './statements/pushforward.md';
 	import * as localChart from './statements/local-chart.md';
+	import * as basis from './statements/basis.md';
 	import * as normalized from './statements/normalized.md';
+	import * as product from './statements/product.md';
 	import * as group from './statements/group.md';
 </script>
 
@@ -94,16 +96,38 @@ Q(S)\bigr)$, whose absolute value is at most $p$. If $p = 0$, $P = Q$.
 
 </Proof>
 
-## Embedded manifolds and their measure
+## The measure a retraction normalizes
 
-A manifold stored as a submanifold $\manifold \subset \R^n$ has a measure at hand, the surface
-measure $\sigma$ that $\R^n$ induces, and its charts' volumes follow from the Jacobian of the
-retraction in storage. That measure depends on the storage, though, and not only on the manifold:
-the rotations stored as $3 \times 3$ matrices and stored as unit quaternions have surface measures
-that differ by a constant factor, and for a type whose basis is not orthonormal, by a factor that
-varies from point to point. A density is only meaningful against a measure that is fixed, so the
-measure is better fixed by the retraction itself, as the one whose charts all have volume $1$ at
-their centre.
+A density is only meaningful against a measure that is fixed, and the measure a manifold carries
+most obviously is not always the right one. A manifold stored as a submanifold
+$\manifold \subset \R^n$ has a measure at hand, the surface measure $\sigma$ that $\R^n$ induces,
+and its charts' volumes follow from the Jacobian of the retraction in storage. That measure depends
+on the storage, though, and not only on the manifold: the rotations stored as $3 \times 3$ matrices
+and stored as unit quaternions have surface measures that differ by a constant factor, and for a
+type whose basis is not orthonormal, by a factor that varies from point to point. The measure is
+better fixed by the retraction itself, as the one whose charts all have volume $1$ at their centre,
+and such a measure exists on every manifold with a retraction.
+
+<Statement {...basis} />
+
+<Proof>
+
+The metric $g$ is smooth because $b$ is, and positive definite because each $b(\point)$ is
+invertible. In the chart at $\mu$, its volume measure has the density
+$\det G(\tangent)^{1/2}$ with respect to Lebesgue measure, where
+$G_{ij}(\tangent) = g\bigl(\partial_i R_\mu(\tangent), \partial_j R_\mu(\tangent)\bigr)$ is the
+metric read in the chart. At $\tangent = 0$, $\partial_i R_\mu(0) = b(\mu)\, e_i$, so $G(0) = I$
+and $v_\mu(0) = 1$. Any other measure $\nu'$ with a continuous positive density in every chart has
+one with respect to $\nu$ too, $\dd \nu' = h \, \dd \nu$ with $h$ continuous, and its chart volumes
+are $v'_\mu = (h \circ R_\mu)\, v_\mu$, so $v'_\mu(0) = h(\mu)$. They are all $1$ if and only if
+$h = 1$. The metric is defined by the bases alone, and so is its volume measure.
+
+</Proof>
+
+On $\R^\dimension$, with $b$ the identity, it is Lebesgue measure. On the positive reals, with
+$b(\point) = \point$, the metric is $g_\point(u, w) = u w / \point^2$ and the measure is
+$\dd \point / \point$, which is why the chart of the example above, with Lebesgue measure, does not
+have volume $1$ at its centre. For an embedded manifold, the measure is computed from the storage.
 
 <Statement {...normalized} />
 
@@ -122,16 +146,16 @@ v^\sigma_{\mu \oplus \tangent}(0)$.
 
 </Proof>
 
+The measure of [%full](statement:normalized) is that of [%full](statement:basis), read in storage.
 When $\det(B\transpose B)$ is the same at every point, as it is for an orthonormal basis or a basis
-translated by a group, the normalized measure is a constant multiple of $\sigma$, and its chart
-volumes are $v^\sigma_\mu / v^\sigma_\mu(0)$. For the rotations stored as matrices with the
-left-translated basis $B(\point) = (\point E_1, \point E_2, \point E_3)$, where $E_i$ is the skew
-matrix of the $i$th unit vector, each column has Frobenius norm $\sqrt 2$, so $v^\sigma_\mu(0) =
-2\sqrt 2$; stored as unit quaternions, with the chart below, each column has norm $\tfrac12$, so
-$v^\sigma_\mu(0) = \tfrac18$. The normalized measure is the same in both: the Haar measure that
-agrees with Lebesgue measure in the tangent coordinates at the identity. The positive reals with
-Lebesgue measure, as in the example above, are a measure that is not normalized; the normalized one
-for their chart is $\dd \point / \point$.
+translated by a group, it is a constant multiple of $\sigma$. For the rotations stored as matrices
+with the left-translated basis $B(\point) = (\point E_1, \point E_2, \point E_3)$, where $E_i$ is
+the skew matrix of the $i$th unit vector, each column has Frobenius norm $\sqrt 2$, so
+$v^\sigma_\mu(0) = 2\sqrt 2$; stored as unit quaternions, with the chart below, each column has
+norm $\tfrac12$, so $v^\sigma_\mu(0) = \tfrac18$. The normalized measure is the same in both, as
+[%full](statement:basis) says it must be: the Haar measure that agrees with Lebesgue measure in the
+tangent coordinates at the identity. For a sphere with an orthonormal basis of each tangent plane,
+it is surface measure itself.
 
 ## Charts of Lie groups
 
@@ -159,6 +183,39 @@ Compact groups and the semidirect products of the rotations with a vector space 
 their left Haar measure is invariant under right translation too. The groups below are both, so a
 retraction that perturbs a point on the right, in its own frame, and one that perturbs it on the
 left, in a fixed frame of the world, have the same chart volume.
+
+## Products of charts
+
+A product of manifolds, with the product of their reference measures and the
+[product retraction](../product-manifold/), has at every point the product of the factors' charts.
+
+<Statement {...product} />
+
+<Proof>
+
+The product retraction is $R_\mu(\tangent) = (R_{\mu_1}(\tangent_1), \dots,
+R_{\mu_k}(\tangent_k))$, a diffeomorphism of $U$ onto $V$ because each factor is one of $U_i$ onto
+$V_i$. For a rectangle $A = A_1 \times \cdots \times A_k$ of Borel sets $A_i \subseteq U_i$,
+$\nu(R_\mu(A)) = \prod_i \nu_i(R_{\mu_i}(A_i)) = \prod_i \int_{A_i} v_i = \int_A \prod_i
+v_i(\tangent_i) \, \dd \tangent$, by Tonelli's theorem. Both $A \mapsto \nu(R_\mu(A))$ and
+$A \mapsto \int_A \prod_i v_i$ are measures on the Borel sets of $U$, finite on the rectangles
+whose closures are compact in $U$, of which countably many cover $U$; they agree on the rectangles,
+which are closed under intersection and generate the Borel sets, so they agree everywhere. The
+domain is all of $\R^\dimension$ if and only if every $U_i$ is all of $\R^{\dimension_i}$.
+The complement of $V$ is the union of the sets in which the $i$th coordinate lies outside $V_i$,
+each of measure $\nu_i(\manifold_i \setminus V_i) \prod_{j \ne i} \nu_j(\manifold_j)$, so the chart
+is full if every factor's is; and if a factor's is not, the complement contains
+$(\manifold_i \setminus V_i) \times \prod_{j \ne i} V_j$, of positive measure since each open $V_j$
+has. Finally, the bases of the product retraction are block diagonal in the factors' bases, so the
+metric of [%full](statement:basis) is the product of the factors' metrics, whose volume measure is
+the product of theirs.
+
+</Proof>
+
+A Euclidean factor with Lebesgue measure adds nothing to the log-volume. A pose stored as a
+rotation and a position in a fixed frame of the world, $SO(3) \times \R^3$, with the rotation
+retracted by any of the charts below and the position by addition, has the rotation's log-volume
+alone, which is what distinguishes it from $SE(3)$, whose exponential couples the two.
 
 ## The usual charts
 
@@ -242,14 +299,6 @@ at the distance $r = (1 + \lVert \tangent \rVert^2)^{1/2}$ from the centre, and 
 the plane's normal at an angle $\alpha$ with $\cos \alpha = 1/r$; a small area of the plane is
 projected along the ray onto the sphere with the factor $\cos \alpha / r^2 = r^{-3}$. The chart, the gnomonic projection, reaches
 the open hemisphere around $\mu$ alone.
-
-**Products.** A product of manifolds with the product of their reference measures and the
-[product retraction](../product-manifold/) has, at every point, the product of the factors'
-charts, so its volume is the product of the factors' volumes, and its log-volume their sum, on the
-product of their domains. A Euclidean factor with Lebesgue measure adds nothing. A pose stored as a
-rotation and a position in a fixed frame of the world, $SO(3) \times \R^3$, with the rotation
-retracted by any of the charts above and the position by addition, has the rotation's log-volume
-alone, which is what distinguishes it from $SE(3)$, whose exponential couples the two.
 
 **Computing the log-volumes.** The log-volume [](eq:so3-exp) has a removable
 singularity at $\theta = 0$, as $\operatorname{Exp}$ itself does, and is computed there from its

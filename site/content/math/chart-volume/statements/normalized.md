@@ -1,7 +1,7 @@
 ---
 type: statement
 kind: proposition
-title: The measure a retraction normalizes
+title: The normalized measure of an embedded manifold
 ---
 
 Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$ with a retraction whose
@@ -21,4 +21,12 @@ $$
 	\dd \nu(\point) = \det\bigl(B(\point)\transpose B(\point)\bigr)^{-1/2} \, \dd \sigma(\point),
 $$
 
-and its chart volumes are $v_\mu = v^\sigma_\mu / v^\sigma_\mu(0)$.
+and its chart volumes are
+
+$$
+	v_\mu(\tangent) = \frac{v^\sigma_\mu(\tangent)}{v^\sigma_{\mu \oplus \tangent}(0)},
+	\qquad v^\sigma_\point(0) = \det\bigl(B(\point)\transpose B(\point)\bigr)^{1/2},
+$$
+
+which is $v^\sigma_\mu(\tangent) / v^\sigma_\mu(0)$ when $\det(B\transpose B)$ is the same at
+every point.

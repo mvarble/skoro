@@ -1,0 +1,425 @@
+---
+summary: Every continuous type of the core gets a reference measure and the log-volume of its retraction's chart, Lebesgue measure with log-volumes $0$ and $\sum_i \log \point_i$ on the core's own types, the measure the retraction normalizes on an embedded type that declares its chart's domain and log-volume, and sums over products; a type that declares none has no densities.
+depends_on: [chart-volume, retraction, product-manifold, archive/core/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as declaration from './statements/declaration.md';
+	import * as coreTypes from './statements/core-types.md';
+	import * as area from './statements/area.md';
+</script>
+
+## The problem
+
+A density is a density with respect to a measure. [The core](../core/math.svx) fixes one for each
+of its own types, Lebesgue measure on the Euclidean and positive types, counting measure on the
+discrete ones and product measures on products, and states every density, importance weight and
+retirement against them ([the appendix](../core/math.svx#appendix-the-probability-space-of-a-model)).
+It leaves the embedded types, the curved types that later crates declare, without one: their
+points are stored in a coordinate space $\R^n$ of which they fill no open set, so Lebesgue measure
+gives them none, and the appendix defers "surface measure on a sphere, Haar measure on the
+rotations" to the entries that bring those types.
+
+Every distribution with a density on a curved type needs that measure, and the first of them is
+already being worked out: the normal distribution, generalized to the law of $\mu \oplus
+\varepsilon$ for a normal $\varepsilon$ on any space whose chart's volume is known, so that a
+measurement of a rotation or of a direction is held as what was measured rather than as a residual.
+Its log-density is that of $\varepsilon$ less the log-volume of the chart at $\mu$
+([%full](statement:math/chart-volume/pushforward)), and so it needs, of every type it is used on, a
+reference measure and that log-volume as something it can compute and differentiate.
+
+Asking each distribution's entry to supply them would put a type's measure outside the type, and
+have every curved type answer the same question once per distribution. This entry answers it once,
+for every type: it gives each continuous type of the core a reference measure and the log-volume
+of its retraction's chart, lets an embedded type declare its own, and completes the appendix with
+the rule for a type that declares none.
+
+## Setting
+
+The mathematics of densities in tangent charts is in
+[the note on densities in tangent charts](../../math/chart-volume/), and this document uses its
+notation throughout. A continuous type is a manifold $\manifold$ of dimension $\dimension$ with a
+[retraction](../../math/retraction/) $\mu \oplus \tangent = R_\mu(\tangent)$; with a reference
+measure $\nu$ on $\manifold$, the chart at $\mu$ has a domain $U_\mu \ni 0$ on which it is a
+diffeomorphism onto its image $V_\mu$, and a volume $v_\mu$ on $U_\mu$, with
+$\nu(R_\mu(A)) = \int_A v_\mu$ ([%full](statement:math/chart-volume/chart-volume)). Its log-volume
+is $\lambda_\mu = \log v_\mu$. The chart is *global* if $U_\mu = \R^\dimension$, and *full* if
+$V_\mu$ has a complement of measure zero. A random vector $\varepsilon \in U_\mu$ of density $f$
+moves $\mu$ to a point of density $f(\point \ominus \mu) / v_\mu(\point \ominus \mu)$
+([%full](statement:math/chart-volume/pushforward)).
+
+An embedded type is declared to the core by its storage size $n$, its dimension $\dimension$, a
+retraction $R : \R^n \times \R^\dimension \to \R^n$, its inverse $Q : \R^n \times \R^n \to
+\R^\dimension$ and optionally a projection, each an operation on Euclidean values, smooth as
+computed at $\tangent = 0$ and on the diagonal, with bases $B(\point) = \partial_2 R(\point, 0)$
+([%full](statement:archive/core/math/embedded)). Its boundary operations are the inclusion
+$\iota$, the retraction and the projection, whose derivative maps the core assembles from passes
+over $R$, $Q$ and the projection. Every operation has derivative maps of first and second order at
+most, tangent, cotangent and Hessian passes, and an order that says which of them it admits
+([Operations](../core/math.svx#operations)).
+
+The measure a retraction *normalizes* is the one whose charts have volume $1$ at their centre,
+$v_\mu(0) = 1$ at every $\mu$. It exists on every manifold with a retraction, and is the
+Riemannian volume of the metric in which every basis of the retraction is orthonormal, so that it
+depends on the bases alone and not on how the manifold is stored
+([%full](statement:math/chart-volume/basis)); for an embedded type it is
+$\det(B\transpose B)^{-1/2}$ times surface measure ([%full](statement:math/chart-volume/normalized)).
+
+## The core's own types
+
+The core's types keep the measures the appendix gives them, and their charts' volumes follow
+directly from their retractions.
+
+<Statement {...coreTypes} />
+
+<Proof>
+
+On $\R^n$ the chart at $\mu$ is the translation $\tangent \mapsto \mu + \tangent$, a diffeomorphism
+of $\R^n$ onto itself with Jacobian determinant $1$, so it is global and full with $v_\mu = 1$. A
+matrix of $\R^{m \times n}$ is flattened column by column into $\R^{mn}$, which carries Lebesgue
+measure to Lebesgue measure, so the same holds. On $\positive^n$, $R_\mu(\tangent) = \mu \odot
+e^\tangent$ maps $\R^n$ onto $\positive^n$, with inverse $\log \point - \log \mu$, and its Jacobian
+is $\operatorname{diag}(\mu \odot e^\tangent)$, whose determinant is
+$\prod_i \mu_i e^{\tangent_i} = \prod_i (\mu \oplus \tangent)_i$; the change of variables formula
+gives the volume. Products are [%full](statement:math/chart-volume/product).
+
+</Proof>
+
+As operations of the base point's storage and the tangent vector, the log-volumes are
+
+$$
+	\Lambda_{\R}(\mu, \tangent) = 0, \qquad
+	\Lambda_{\positive}(\mu, \tangent) = \sum_{i=1}^n \bigl(\log \mu_i + \tangent_i\bigr), @tag(core-volumes)
+$$
+
+and read at the coordinate $\tangent = \point \ominus \mu$ of a point, the positive one is
+$\Lambda_{\positive}(\mu, \point \ominus \mu) = \sum_i \log \point_i$, which does not depend on
+$\mu$. With [](eq:core-volumes), [%full](statement:math/chart-volume/pushforward) gives back the
+core's own formula for a density written in the logarithmic chart of a positive quantity,
+[](eq:archive/core/math/log-chart-density): a vector whose logarithm has density $g$ has the
+density $g(\log \point) \prod_i \point_i^{-1}$, which is $f(\point \ominus \mu) /
+v_\mu(\point \ominus \mu)$ with $f(\tangent) = g(\log \mu + \tangent)$, at every $\mu$.
+
+**Why the positive orthant keeps Lebesgue measure.** The measure the positive orthant's retraction
+normalizes is not Lebesgue measure but $\prod_i \dd \point_i / \point_i$
+([the note's example](../../math/chart-volume/#the-measure-a-retraction-normalizes)), so the core's
+positive type is the one continuous type whose reference measure is not the one its retraction
+normalizes, and the one whose log-volume depends on the base point. It keeps Lebesgue measure all
+the same. The densities of positive quantities in common use, the gamma, the inverse gamma, the
+log-normal and the exponential, are published and computed against Lebesgue measure, and a
+log-density that differed from theirs by $\sum_i \log \point_i$ would surprise everyone comparing
+skoro with them. The difference is not a constant: a mode with respect to $\dd \point / \point$ is a
+mode in the logarithmic chart, and is not the mode a user of the gamma distribution expects. And the
+appendix already fixes Lebesgue measure, which the core's tests rely on. The cost is that the
+log-volume of a type must be allowed to depend on the base point, which an embedded type whose
+bases are not of constant volume needs anyway.
+
+## What an embedded type declares
+
+An embedded type has no Lebesgue measure, and the surface measure its storage induces depends on
+the storage: the rotations stored as matrices and as quaternions would have densities that differ
+by a constant, and a type whose basis is not orthonormal, densities that differ by a function of
+the point. The measure an embedded type is given is therefore the one its retraction normalizes.
+On a group whose retraction translates a chart of the identity it is a Haar measure
+([%full](statement:math/chart-volume/group)), and on a sphere with orthonormal bases it is surface
+measure; on any type, it is the same whatever the storage, so long as the bases are, and a
+density on the type means the same whether its points are stored as matrices or as quaternions.
+
+The core cannot compute the chart's volume from a declared type in general (below), and the
+appendix cannot give a measure to a type whose volume it cannot compute. So the chart's volume
+becomes an optional declaration of an embedded type, beside its retraction, its inverse and its
+projection.
+
+<Statement {...declaration} />
+
+The log-volume of the chart at $\mu$ is then the operation read at the base point's storage,
+
+$$
+	\lambda_\mu(\tangent) = \Lambda\bigl(\iota(\mu), \tangent\bigr), @tag(declared)
+$$
+
+a composite of the inclusion and an operation on Euclidean values, whose derivatives with respect
+to $\mu$, in its chart, and to $\tangent$ follow by the chain rule from those of $\iota$
+[](eq:archive/core/math/inclusion) and of $\Lambda$. On a group, $\Lambda$ does not depend on its
+first argument ([%full](statement:math/chart-volume/group)), and neither does it for the
+stereographic chart of a sphere with orthonormal bases, whose volume depends on the length of
+$\tangent$ alone. In general it may, and it does on a type whose bases have a volume
+$\det(B\transpose B)$ that varies from point to point.
+
+Each condition of the definition is there for a use.
+
+- **The inverse on the whole chart.** [%full](statement:archive/core/math/embedded) asks of $Q$
+  only that it invert the retraction near $\tangent = 0$, which is enough for derivatives. A
+  density at a point $\point$ is read at its coordinate $\point \ominus \mu$, which may be anywhere
+  in the chart, so a type that declares a volume asks more: $Q(\mu, \cdot)$ is the inverse of the
+  chart on its whole image. The usual charts have it: the logarithm of the rotations by less than
+  $\pi$, the Cayley inverse [](eq:math/chart-volume/cayley-inverse), and the stereographic inverse
+  [](eq:archive/core/math/sphere) away from $-\mu$.
+- **The domain.** Within $U_\mu$, [%full](statement:math/chart-volume/pushforward) applies to
+  every density of $\varepsilon$ whose mass is in $U_\mu$. A global chart takes every density on
+  $\R^\dimension$, and a sampler that draws $\mu \oplus \varepsilon$ is then exact for the density
+  [](eq:chart-density) below, whatever $\varepsilon$'s law. A chart that is not global, such as an
+  exponential chart, is a diffeomorphism only on its domain, and the law of $\mu \oplus
+  \varepsilon$ for an $\varepsilon$ with mass outside it is within that mass of the law the
+  density describes ([%full](statement:math/chart-volume/local-chart)). Which of the two a type's
+  chart is, and for a chart that is not global its domain, is therefore part of what a distribution
+  must know to say whether its sampler is exact. The domain is declared as a discretization, an
+  operation the core already has, whose output is a boolean and which has no derivatives, so that
+  a test or a sampler can ask of a tangent vector whether it lies in the domain.
+- **Fullness.** The image of a full chart is all of $\manifold$ but a set of measure zero, so a
+  density in the chart is a density on $\manifold$, read correctly at every point that has
+  positive probability. The complement may be where $Q$ is undefined, as $-\mu$ is for the
+  stereographic chart, and is never reached by a draw. A chart that is not full, such as the
+  normalization chart of the sphere, which reaches the open hemisphere around $\mu$ alone, defines
+  a density that is zero outside its image, and its $Q$ computes a coordinate there all the same,
+  at which a log-density is finite and wrong. The definition asks for fullness, so that no type's
+  density can be silently wrong at a point a model can be given.
+- **The log-volume as an operation.** $\Lambda$ is one more operation on Euclidean values, written
+  as a composite or as a fused operation, and tested like one. A term reads it at $\tangent =
+  \point \ominus \mu$, which is $0$ whenever the point is at its mean, as a measurement is when it
+  equals its prediction; so it is asked to be smooth as computed there, as $R$ is
+  ([Smooth as computed](../core/math.svx#quantities)). The exponential chart of the rotations has
+  $\lambda = 2 \log \operatorname{sinc}(\theta / 2)$, with a removable singularity at $\theta = 0$,
+  computed below a cutoff from its series $-\theta^2/12 - \theta^4/1440 + O(\theta^6)$
+  [](eq:math/chart-volume/so3-exp), in a kernel or in a composite with its closed form guarded, as
+  the core says of $R$. Its order is the type's to claim: a term over the type has Hessians only
+  if $\Lambda$ admits Hessian passes.
+
+**The acceptance-test sphere.** The core's acceptance test declares the unit sphere $S^2 \subset
+\R^3$ outside the core, with the stereographic retraction and inverse [](eq:archive/core/math/sphere)
+and a basis $B(\point)$ orthonormal on the sphere. Its normalized measure is surface measure
+$\sigma$, since $\det(B\transpose B) = 1$, and its chart is global and full: the retraction is
+defined for every $\tangent$, $Q$ inverts it on all of $\R^2$ by the computation that accompanies
+[](eq:archive/core/math/sphere), and it reaches every point but $-\mu$. Its log-volume is that of
+[the note's table](../../math/chart-volume/#the-usual-charts),
+
+$$
+	\Lambda_{S^2}(\mu, \tangent) = -2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr), @tag(sphere-volume)
+$$
+
+independent of $\mu$, smooth everywhere as written, and a composite of the core's primitives. Read
+at the coordinate of a point, it has a form in storage too: with $c = \mu\transpose \point$,
+$\lVert B(\mu)\transpose \point \rVert^2 = 1 - c^2$, so $\lVert \point \ominus \mu \rVert^2 / 4 =
+(1 - c)/(1 + c)$ and $\Lambda_{S^2}(\mu, \point \ominus \mu) = 2 \log\bigl((1 + \mu\transpose
+\point) / 2\bigr)$. The sphere is the natural type to test a declaration on: it is curved, already
+written against the core's public interface alone, and its volume is known in closed form.
+
+## Declared, not computed
+
+The volume of an embedded type's chart could be computed from its retraction alone.
+[%full](statement:math/chart-volume/normalized) gives it, and it extends to every type the core has.
+
+<Statement {...area} />
+
+<Proof>
+
+The first part of the proof of [%full](statement:math/chart-volume/normalized) gives the volume of
+the chart with respect to $\sigma$ as $\det(\partial_2 R\transpose \partial_2 R)^{1/2}$, and with
+respect to $h \, \dd \sigma$ it is that times $h(R(\mu, \tangent))$. On the core's Euclidean and
+positive types, stored as $\R^n$ and its open subset $\positive^n$, the measure the storage induces
+is Lebesgue measure, so $h = 1$. On an embedded type, $h$ is that of
+[%full](statement:math/chart-volume/normalized). A product is stored as its factors' storage
+concatenated, the measure that storage induces is the product of the factors', because the
+coordinates of different factors are orthogonal, and its reference measure is the product
+$\prod_i h_i \, \dd \sigma_i$. For the second part, take $g = 1$ in
+[](eq:math/chart-volume/image): $\int_{U_\mu} v_\mu = \nu(V_\mu)$, which is $\nu(\manifold)$ when
+the chart is full.
+
+</Proof>
+
+The core does not compute the volume this way. In a term, the log-volume is a value of the forward
+pass, its gradient enters the term's gradient, and its Hessian the term's Hessian. Computed by the
+area formula, the forward value would contain $\partial_2 R$, a first derivative of the retraction,
+so its gradient would need the second derivatives of $R$ and its Hessian the third, and the core's
+operations have derivative maps of second order at most. Nor can a composite be built from a pass: it is
+built from the values of operations, and a derivative map is what a pass over it computes, not a
+value in the compilation graph. And every evaluation would cost $\dimension$ tangent passes
+over $R$, a Gram matrix and its log-determinant, where the declared formulas of the
+[note's table](../../math/chart-volume/#the-usual-charts) are one scalar function of the tangent
+vector: $2$, $4$ and $6 \log \operatorname{sinc}(\theta / 2)$ for the exponential charts of $SO(3)$,
+$SE(3)$ and $SE_2(3)$, and $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$ for the Cayley chart of the
+rotations and the stereographic chart of the sphere.
+
+A type therefore declares its log-volume, and [%full](statement:area) is what a test checks the
+declaration against. Its right side needs only first derivatives, which a tangent pass over $R$
+gives, $\dimension$ columns at its second input, and the bases $B$ at the moved point, a second
+tangent pass at $\tangent = 0$:
+
+$$
+	\Lambda(\mu, \tangent) = \tfrac12 \log \det\bigl(\partial_2 R(\mu, \tangent)\transpose\, \partial_2 R(\mu, \tangent)\bigr)
+	- \tfrac12 \log \det\bigl(B(\otherPoint)\transpose B(\otherPoint)\bigr), \qquad \otherPoint = R(\mu, \tangent), @tag(area-check)
+$$
+
+at points $\mu$ of the type and tangent vectors $\tangent$ of its domain, near $0$ and far from it.
+Two smooth functions that agree on an open set agree in every derivative there, so a declaration
+that passes this check at enough points has the right derivatives as well, and the derivative maps
+of $\Lambda$ itself are checked as any operation's are. Three further identities are checked with
+it, each cheap and each catching a different mistake:
+
+1. $\Lambda(\mu, 0) = 0$ at every $\mu$, the normalization, which a log-volume computed against
+   surface measure rather than the normalized measure fails by $\tfrac12 \log \det(B\transpose B)$;
+2. $Q(\mu, R(\mu, \tangent)) = \tangent$ for $\tangent$ throughout the domain, not only near $0$,
+   which is the inverse on the whole chart that the definition asks for; and, where the domain is
+   not global, that $\Omega$ is true at the points of the check and false beyond them;
+3. on a compact type with a full chart, the total mass of [%full](statement:area),
+
+$$
+	\int_{U_\mu} e^{\Lambda(\mu, \tangent)} \, \dd \tangent = \nu(\manifold), @tag(total-mass)
+$$
+
+   the same at every $\mu$, which a chart that is not full, or a log-volume wrong by a constant,
+   fails. For the sphere with [](eq:sphere-volume) it is $4 \pi$, for the rotations with either
+   the exponential or the Cayley chart $8 \pi^2$, the same for both because both have the
+   left-translated bases and so normalize the same measure.
+
+The check [](eq:area-check) holds on the core's own types too, with the second term absent: on
+$\positive^n$ its first term is $\sum_i \log(\mu_i e^{\tangent_i})$, which is
+[](eq:core-volumes). On a product it is the sum of the factors' checks, since $\partial_2 R$ is
+block diagonal and the second term has a term for each embedded factor alone.
+
+## Products
+
+A product of continuous types has the product of its factors' reference measures, and by
+[%full](statement:math/chart-volume/product) its chart's log-volume is the sum of its factors'
+over the stacked tangent: with $\mu = (\mu_1, \dots, \mu_k)$ stored as its factors' storage
+concatenated and $\tangent = (\tangent_1; \dots; \tangent_k)$,
+
+$$
+	\Lambda(\mu, \tangent) = \sum_{i=1}^k \Lambda_i(\mu_i, \tangent_i), @tag(product-volume)
+$$
+
+each term read from the slices of $\mu$ and $\tangent$ that belong to its factor. The product's
+chart is global if every factor's is, and its domain is otherwise the product of the factors',
+whose discretization is the conjunction of theirs, a global factor's being always true; it is full
+because every factor's is. A product has a volume exactly when every factor has one. The core's own
+types always do, so a product of them always does, and a product with an embedded factor that
+declares none has none. On the core's runtime products, whose factors and dimensions are known only
+when the quantity is created, [](eq:product-volume) is assembled then, as the product's retraction
+is.
+
+The product's measure is the product of its factors', and not, in general, the measure the product
+retraction normalizes: a positive factor contributes Lebesgue measure. By
+[%full](statement:math/chart-volume/product) the two agree when every factor's measure is its own
+normalized one, which is the case for products of embedded and Euclidean types.
+
+## Densities against the reference measures
+
+With a reference measure on every continuous type that has a volume, the appendix's account of a
+model's probability space reaches the curved types without change, and what the core states
+against base measures is stated against these.
+
+**Densities through a chart.** A distribution that draws a point as $\mu \oplus \varepsilon$, with
+$\varepsilon$ of density $f$ on $\R^\dimension$ and in the domain almost surely, has with respect to
+the type's reference measure the log-density
+
+$$
+	\log \density(\point) = \log f(\point \ominus \mu) - \Lambda\bigl(\iota(\mu), \point \ominus \mu\bigr), @tag(chart-density)
+$$
+
+by [%full](statement:math/chart-volume/pushforward) and [](eq:declared), on every type, the core's
+included: on $\R^n$ the correction vanishes, and on $\positive^n$ it is
+[](eq:archive/core/math/log-chart-density). The same holds of a sampler's log-density
+$\log \proposal_t$, and of a parameter's proposal. This is the general form of the one place the
+core names where base measures are easy to mismatch, a density written in a chart, and the
+importance weight [](eq:archive/core/math/weight) is right on a curved type when its terms and its
+proposals keep to it.
+
+**Importance weights.** [%full](statement:archive/core/math/importance) takes $\dd \point_F$ to be
+the product of the free quantities' base measures. A free quantity's base measure is now its type's
+reference measure: Lebesgue measure on the Euclidean and positive types, the measure its retraction
+normalizes on an embedded type, counting measure on a discrete type, and the product of its
+factors' on a product.
+
+**Retirement.** The integral of [%full](statement:archive/core/math/retirement) over the retired
+free quantities $E_F$ is against the product of their reference measures. The core does not compute
+it, but the replacement it checks stands for it, and whoever approximates it in a chart works with
+[](eq:math/chart-volume/image): for a quantity of $E_F$ whose chart at $\hat \point$ is full,
+
+$$
+	\int_\manifold e^{\ell(\point)} \, \dd \nu(\point)
+	= \int_{U_{\hat \point}} e^{\ell(\hat \point \oplus \tangent) + \lambda_{\hat \point}(\tangent)} \, \dd \tangent, @tag(chart-integral)
+$$
+
+so a Laplace approximation in the chart expands $\ell(\hat \point \oplus \tangent) +
+\lambda_{\hat \point}(\tangent)$, not $\ell(\hat \point \oplus \tangent)$ alone. On an embedded
+type $\lambda_{\hat \point}(0) = 0$ and the log-volume enters through its derivatives only, through
+its Hessian when its gradient at $0$ vanishes, as for every chart of the note's table:
+$-\tfrac16 I$ on the exponential chart of the rotations, $-I$ on the Cayley and stereographic
+charts. On a positive quantity it enters through its value $\sum_i \log \hat \point_i$ and its
+gradient, the vector of ones.
+
+## Types without a volume
+
+An embedded type that declares no volume has no reference measure, and so no densities: there is no
+measure against which a function of its points could be the density of a law. The appendix
+therefore holds for the types that have a volume, and of a quantity of a type that has none, the
+core asks what needs no measure on it and refuses what does.
+
+1. **No term scores it.** A term that scores a quantity is that quantity's conditional density
+   ([the appendix](../core/math.svx#appendix-the-probability-space-of-a-model)), so the core
+   refuses a term that scores a quantity of a type without a volume. Such a quantity is always a
+   parameter.
+2. **It has no proposal.** A proposal is a density with respect to the parameter's base measure,
+   and the core refuses one for a parameter of a type without a volume. A query that leaves such a
+   parameter free can therefore not be generated, which the core already refuses, naming a free
+   quantity that has neither a sampler nor a proposal.
+3. **It is not integrated out.** A retirement that would integrate such a quantity out, with it in
+   $E_F$, is refused: the integral of [%full](statement:archive/core/math/retirement) is not
+   defined. It may be retired with a given value, in $E_O$, since fixing a quantity needs no
+   measure on it.
+
+Everything else is allowed. A term may be conditioned on such a quantity, since a conditional
+density of another quantity given it needs no measure on it; a query may observe it; and a query
+may leave it free, as optimization does: its log-density is then a function of the quantity, whose
+maximum is a likelihood estimate, but not a density of it, so an algorithm that integrates over the
+query's free quantities, a sampler or an evidence, must refuse it. A distribution on a type without
+a volume can therefore only be a *likelihood factor over data*: with the measured value a constant
+$z$, a function such as $-\tfrac12 \lVert W(z \ominus h(\point)) \rVert^2$ of the state scores
+nothing and needs no measure. That is how factor-graph libraries hold every measurement, and it
+remains available on every type; a volume is what makes the measurement a quantity of its own,
+with a law that can be sampled and integrated.
+
+## In skoro's terms
+
+- **Every continuous type has, or declares, a reference measure and a chart log-volume**
+  $\Lambda(\mu, \tangent)$, an operation on the storage of the base point and the tangent vector.
+  The Euclidean types (real, vector, matrix) have Lebesgue measure and $\Lambda = 0$; the positive
+  orthant has Lebesgue measure and $\Lambda = \sum_i (\log \mu_i + \tangent_i)$ [](eq:core-volumes),
+  which is $\sum_i \log \point_i$ at the coordinate of $\point$; both charts are global and full.
+  Discrete types have counting measure and no chart.
+- **An embedded type may declare its chart's volume**, by [%full](statement:declaration): a domain,
+  global or given by a discretization of $(\mu, \tangent)$, on which the chart is a diffeomorphism
+  onto a full image and inverted by the type's $Q$, and a log-volume $\Lambda$, an operation on
+  Euclidean values with derivative maps to the type's order, smooth as computed at $\tangent = 0$.
+  Its reference measure is then the one its retraction normalizes, the same for every storage with
+  the same bases: Haar measure on the groups, surface measure on the sphere.
+- **A product's log-volume** is the sum of its factors' over the stacked tangent
+  [](eq:product-volume), its measure the product of theirs; it has a volume when every factor has.
+- **The log-volume is differentiated** with respect to the tangent vector and, through the
+  inclusion, to the base point in its chart, [](eq:declared), whenever a term contains it, as the
+  densities of [](eq:chart-density) do; its order bounds theirs.
+- **A declaration is tested**, not trusted: against the area formula [](eq:area-check), computed by
+  first-order passes over the retraction, against $\Lambda(\mu, 0) = 0$, against the inverse on the
+  whole domain, and, on a compact type, against the total mass [](eq:total-mass). The core's
+  acceptance-test sphere declares [](eq:sphere-volume) and is checked so.
+- **The appendix** gives every quantity of a type with a volume its reference measure, against
+  which terms, samplers, proposals, importance weights and retirements are stated. A quantity of a
+  type without one is never scored, has no proposal and is never integrated out by a retirement; it
+  is a parameter, observed or free, and a distribution on its type is a likelihood factor over data.
+
+## Open questions
+
+> [!TODO] Charts that are not full
+> [%full](statement:declaration) asks that a declared chart be full, so that a density read through
+> $Q$ is right at every point a model can be given. That excludes, from declaring a volume, a type
+> whose retraction is the normalization chart of the sphere (a hemisphere) or the polar chart of the
+> rotations (the rotations by less than a quarter turn), though the laws those charts push forward
+> are proper laws, supported on the image. The alternative admits them with a second
+> discretization, true on the image $V_\mu$ ($\mu\transpose \point > 0$ for the normalization chart,
+> $\operatorname{tr}(\mu\transpose \point) > 1$ for the polar), at which a term selects a
+> log-density of $-\infty$ outside the image. This draft asks for fullness, as the simpler rule
+> whose cost is felt only by types that choose a chart which no distribution skoro plans needs; the
+> second discretization can be added later without changing a declared type. Is fullness the rule
+> wanted?
