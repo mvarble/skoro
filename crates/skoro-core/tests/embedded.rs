@@ -7,8 +7,8 @@ use skoro_core::primitive::{Include, Neg, Project, Retract};
 use skoro_core::scope::{apply, constant, project, quantity};
 use skoro_core::testing::{check_embedded, lower};
 use skoro_core::{
-    Composite, Declares, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered, Lowering,
-    Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Writer,
+    Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered,
+    Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume, Writer,
 };
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
@@ -533,4 +533,161 @@ fn boundary_orders_follow_the_composites() {
     )
     .unwrap();
     assert_eq!(orders(&rough_p), [Order::Two, Order::Two, Order::One]);
+}
+
+/// A composite of `inputs` whose output is `output`, made from the first input: a stand-in
+/// for a log-volume or a domain of a given signature.
+fn stand_in(name: &'static str, inputs: &[Space], output: &Space) -> Arc<Composite> {
+    let output = output.clone();
+    Composite::define(name, Vec::new(), inputs, move |q| match output {
+        Space::Real => (q[1] * q[1]).sum(),
+        Space::Categorical(2) => (q[1] * q[1]).sum().is_nonnegative(),
+        _ => q[1] * 2.0,
+    })
+    .unwrap()
+}
+
+fn is_invalid(result: Result<Arc<Embedded>, Error>) -> bool {
+    matches!(result, Err(Error::InvalidDeclaration { .. }))
+}
+
+#[test]
+fn with_volume_refuses_a_wrong_signature() {
+    let (n, d) = (Space::Vector(2), Space::Vector(1));
+    let real = stand_in("test.volume.real", &[n.clone(), d.clone()], &Space::Real);
+    let vector = stand_in("test.volume.vector", &[n.clone(), d.clone()], &d);
+    assert!(is_invalid(circle().with_volume(Volume::global(vector))));
+    let wide = stand_in(
+        "test.volume.wide",
+        &[Space::Vector(3), d.clone()],
+        &Space::Real,
+    );
+    assert!(is_invalid(circle().with_volume(Volume::global(wide))));
+    let not_boolean = stand_in("test.domain.real", &[n.clone(), d.clone()], &Space::Real);
+    assert!(is_invalid(
+        circle().with_volume(Volume::within(real.clone(), not_boolean))
+    ));
+    let boolean = stand_in("test.domain.boolean", &[n, d], &Space::BOOLEAN);
+    let declared = circle().with_volume(Volume::within(real, boolean)).unwrap();
+    assert!(matches!(
+        declared.volume().map(|v| v.domain()),
+        Some(Domain::Within(_))
+    ));
+}
+
+#[test]
+fn with_volume_refuses_a_second_volume_and_a_flat_declaration() {
+    let real = stand_in(
+        "test.volume.real",
+        &[Space::Vector(2), Space::Vector(1)],
+        &Space::Real,
+    );
+    let once = circle().with_volume(Volume::global(real.clone())).unwrap();
+    assert!(is_invalid(once.with_volume(Volume::global(real))));
+    let flat = Embedded::declare_flat("test.flat.volume", Vec::new(), 2).unwrap();
+    let zero = stand_in(
+        "test.volume.flat",
+        &[Space::Vector(2), Space::Vector(2)],
+        &Space::Real,
+    );
+    assert!(is_invalid(flat.with_volume(Volume::global(zero))));
+}
+
+#[test]
+fn flat_declaration_has_a_global_zero_volume() {
+    let flat = Embedded::declare_flat("test.flat.measured", Vec::new(), 2).unwrap();
+    let volume = flat.volume().expect("a flat declaration has a volume");
+    assert!(matches!(volume.domain(), Domain::Global));
+    let space = Space::Embedded(flat);
+    assert!(space.has_measure());
+    assert!(matches!(space.domain(), Ok(Domain::Global)));
+    let inputs = [(space.clone(), points(3)), (Space::Vector(2), points(3))];
+    skoro_core::testing::check_agreement(
+        |q| q[0].log_volume(q[1]) + (q[0].include() * 0.0).sum() + (q[1] * 0.0).sum(),
+        |q| (q[0].include() * 0.0).sum() + (q[1] * 0.0).sum(),
+        &inputs,
+        &Target::host(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn declaration_without_volume_has_no_measure() {
+    let space = Space::Embedded(circle());
+    let product = Space::product([Space::Real, space.clone()]).unwrap();
+    for space in [space, product] {
+        assert!(!space.has_measure(), "{space:?}");
+        let no_volume = Error::NoVolume {
+            space: space.clone(),
+            quantity: None,
+        };
+        assert_eq!(space.log_volume().err(), Some(no_volume.clone()));
+        assert!(matches!(space.domain(), Err(e) if e == no_volume));
+    }
+}
+
+/// The circle with a volume of zero and the domain `|t| ≤ radius`, under a name of its own.
+fn ball_circle(name: &'static str, radius: f64) -> Arc<Embedded> {
+    let (n, d) = (Space::Vector(2), Space::Vector(1));
+    let zero = Composite::define(
+        "test.circle.zero_volume",
+        Vec::new(),
+        &[n.clone(), d.clone()],
+        |_| constant(skoro_core::Real, 0.0).untyped(),
+    )
+    .unwrap();
+    let ball = Composite::define(
+        "test.circle.ball",
+        vec![Param::Float(radius)],
+        &[n, d],
+        move |q| (-(q[1] * q[1]).sum() + radius * radius).is_nonnegative(),
+    )
+    .unwrap();
+    Embedded::declare(name, Vec::new(), 2, 1, rotation(name), angle(1.0), None)
+        .unwrap()
+        .with_volume(Volume::within(zero, ball))
+        .unwrap()
+}
+
+#[test]
+fn product_domain_is_the_conjunction_of_its_factors() {
+    let (a, b) = (
+        ball_circle("test.circle.ball.one", 1.0),
+        ball_circle("test.circle.ball.two", 2.0),
+    );
+    let space = Space::product([Space::Embedded(a), Space::Real, Space::Embedded(b)]).unwrap();
+    let Ok(Domain::Within(domain)) = space.domain() else {
+        panic!("a product with bounded factors has a bounded domain");
+    };
+    // Rows of tangents (t₁, s, t₂): inside both balls, outside the first, outside the second,
+    // outside both, and on the boundary of each.
+    let tangents = [
+        [0.5, 9.0, 1.5],
+        [1.5, 0.0, 1.5],
+        [0.5, 0.0, 2.5],
+        [-1.5, 0.0, -2.5],
+        [1.0, -9.0, -2.0],
+    ];
+    let expected = [1.0, 0.0, 0.0, 0.0, 1.0];
+    let rows = tangents.len();
+    let x: Vec<f64> = (0..rows).flat_map(|_| [1.0, 0.0, 0.3, 0.0, 1.0]).collect();
+    let t: Vec<f64> = tangents.iter().flatten().copied().collect();
+    let program = domain.compile(&Target::host()).unwrap();
+    let free = program.free();
+    let load = |data: Vec<f64>, storage| {
+        HostValue::new(Some(rows), storage, HostData::Continuous(data))
+            .unwrap()
+            .load(rows, &Target::host())
+            .unwrap()
+            .unwrap()
+    };
+    let at = Values::new()
+        .with(free[0].node, load(x, 5))
+        .with(free[1].node, load(t, 3));
+    let out = program.forward(&at).unwrap();
+    let Some(Value::Discrete(inside)) = out.get(program.targets()[0]) else {
+        panic!("a domain is a boolean");
+    };
+    let inside: Vec<f64> = inside.to_host().into_iter().map(|i| i as f64).collect();
+    assert_eq!(inside, expected);
 }

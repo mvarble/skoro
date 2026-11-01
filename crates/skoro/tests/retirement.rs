@@ -5,6 +5,7 @@
 mod common;
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common::normal::{exact, log_density, log_normal, proposal};
 use skoro::scope::{constant, propose, quantity, score};
@@ -719,4 +720,63 @@ fn nothing_left_refers_to_a_removed_node() {
     assert!(last.quantities().is_empty());
     assert_eq!(last.terms().len(), 1);
     assert_closed(&last, every);
+}
+
+/// A curved type in name, declared with no volume: storage and dimension 1, moved by addition.
+fn unmeasured() -> Arc<skoro::Embedded> {
+    use skoro::{Composite, Embedded, Space};
+    let pair = [Space::Vector(1), Space::Vector(1)];
+    let r = Composite::define("test.unmeasured.retract", Vec::new(), &pair, |q| {
+        q[0] + q[1]
+    });
+    let q = Composite::define("test.unmeasured.local", Vec::new(), &pair, |q| q[1] - q[0]);
+    Embedded::declare(
+        "test.unmeasured",
+        Vec::new(),
+        1,
+        1,
+        r.unwrap(),
+        q.unwrap(),
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn retire_refuses_to_integrate_a_quantity_without_a_measure() {
+    let space = skoro::Space::Embedded(unmeasured());
+    let mut writer = Writer::new();
+    let (x, y) = writer
+        .build(|| {
+            let x = skoro::scope::quantity_in("tick/0/x", space.clone());
+            let y = quantity("y", Real);
+            let e = y - x.include().sum().narrow::<Real>();
+            skoro::scope::factor(-(e * e));
+            (x, y)
+        })
+        .unwrap();
+    let before = writer.snapshot().quantities();
+    let refused = writer
+        .retire(Addresses::new().under("tick/0"), Observations::new())
+        .err();
+    assert_eq!(
+        refused,
+        Some(Error::NoVolume {
+            space,
+            quantity: Some(x.id())
+        })
+    );
+    assert_eq!(writer.snapshot().quantities(), before);
+    // Retired with a given value, it is conditioned on, which needs no measure.
+    let value = HostValue::new(None, 1, HostData::Continuous(vec![0.5])).unwrap();
+    let given = Observations::new().observe_dyn(x, value);
+    writer
+        .retire(Addresses::new().under("tick/0"), given)
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: -(y - 0.5) * (y - 0.5),
+            proposals: Vec::new(),
+        })
+        .unwrap();
+    assert_eq!(writer.snapshot().quantities(), vec![y.id()]);
 }

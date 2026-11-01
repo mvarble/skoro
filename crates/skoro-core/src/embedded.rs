@@ -21,7 +21,12 @@ use crate::{
     Param, Pass, Program, Pullback, QDyn, SecondOrder, SecondPullback, Space, Values,
 };
 
-/// A curved type of storage `n` and dimension `d`, declared by its retraction and its inverse.
+/// A curved type of storage `n` and dimension `d`, declared by its retraction and its inverse,
+/// and optionally its projection and its chart's volume.
+///
+/// A name and its parameters name the declaration whole: two declarations under one name and the
+/// same parameters are one space, so they must not differ in any part, the volume included.
+#[derive(Clone)]
 pub struct Embedded {
     name: &'static str,
     params: Vec<Param>,
@@ -30,7 +35,56 @@ pub struct Embedded {
     retraction: Arc<Composite>,
     inverse: Arc<Composite>,
     projection: Option<Arc<Composite>>,
+    volume: Option<Volume>,
     flat: bool,
+}
+
+/// A chart's declared volume: its log-volume `Λ` and its domain, against the measure the
+/// type's retraction normalizes. Declaring one says that the chart is full: its image is the
+/// whole type but a set of measure zero.
+#[derive(Clone, Debug)]
+pub struct Volume {
+    log_volume: Arc<Composite>,
+    domain: Domain,
+}
+
+/// Where a chart is a diffeomorphism onto its full image.
+#[derive(Clone, Debug)]
+pub enum Domain {
+    /// `U_μ = ℝ^d` at every point.
+    Global,
+    /// The composite of `t ∈ U_μ`, to `Boolean`. On a declaration it takes `Vector(n)` and
+    /// `Vector(d)`, the point's storage and the tangent; from `Space::domain()`, the point itself
+    /// and the tangent.
+    Within(Arc<Composite>),
+}
+
+impl Volume {
+    /// `Λ`, `Vector(n)` and `Vector(d)` to `Real`, on a global chart.
+    pub fn global(log_volume: Arc<Composite>) -> Volume {
+        Volume {
+            log_volume,
+            domain: Domain::Global,
+        }
+    }
+
+    /// `Λ` on the chart whose domain is where `domain`, `Vector(n)` and `Vector(d)` to
+    /// `Boolean`, is true.
+    pub fn within(log_volume: Arc<Composite>, domain: Arc<Composite>) -> Volume {
+        Volume {
+            log_volume,
+            domain: Domain::Within(domain),
+        }
+    }
+
+    /// `Λ`.
+    pub fn log_volume(&self) -> &Arc<Composite> {
+        &self.log_volume
+    }
+
+    pub fn domain(&self) -> &Domain {
+        &self.domain
+    }
 }
 
 impl Embedded {
@@ -80,6 +134,7 @@ impl Embedded {
             retraction,
             inverse,
             projection,
+            volume: None,
             flat: false,
         }))
     }
@@ -106,6 +161,10 @@ impl Embedded {
         let retraction = define("skoro.flat.retract", &pair, |q| q[0] + q[1])?;
         let inverse = define("skoro.flat.local", &pair, |q| q[1] - q[0])?;
         let projection = define("skoro.flat.project", &[vector], |q| q[0])?;
+        // Lebesgue measure, which `B = I` normalizes: the log-volume is zero.
+        let log_volume = define("skoro.flat.log_volume", &pair, |_| {
+            crate::scope::constant(crate::Real, 0.0).untyped()
+        })?;
         Ok(Arc::new(Embedded {
             name,
             params,
@@ -114,6 +173,7 @@ impl Embedded {
             retraction,
             inverse,
             projection: Some(projection),
+            volume: Some(Volume::global(log_volume)),
             flat: true,
         }))
     }
@@ -152,6 +212,45 @@ impl Embedded {
     /// Whether `skoro.project` maps onto the type.
     pub fn has_projection(&self) -> bool {
         self.projection.is_some()
+    }
+
+    /// This declaration, with its chart's volume against the measure its retraction normalizes.
+    /// Refuses a log-volume not of `Vector(n)` and `Vector(d)` to `Real`, a domain not of the
+    /// same to `Boolean`, a declaration that already has a volume, and a flat one, whose volume
+    /// is the core's (`InvalidDeclaration`).
+    pub fn with_volume(self: Arc<Self>, volume: Volume) -> Result<Arc<Embedded>, Error> {
+        let invalid = |reason: &str| Error::InvalidDeclaration {
+            name: self.name.to_string(),
+            reason: reason.to_string(),
+        };
+        if self.flat {
+            return Err(invalid("a flat type's volume is the core's"));
+        }
+        if self.volume.is_some() {
+            return Err(invalid("it already declares a volume"));
+        }
+        let inputs = [Space::Vector(self.storage), Space::Vector(self.dimension)];
+        let log_volume = &volume.log_volume;
+        if log_volume.inputs() != inputs || *log_volume.output() != Space::Real {
+            return Err(invalid(
+                "its log-volume does not take Vector(n) and Vector(d) to Real",
+            ));
+        }
+        if let Domain::Within(domain) = &volume.domain
+            && (domain.inputs() != inputs || *domain.output() != Space::BOOLEAN)
+        {
+            return Err(invalid(
+                "its domain does not take Vector(n) and Vector(d) to Boolean",
+            ));
+        }
+        let mut declaration = Arc::unwrap_or_clone(self);
+        declaration.volume = Some(volume);
+        Ok(Arc::new(declaration))
+    }
+
+    /// The chart's volume, when the type declares one.
+    pub fn volume(&self) -> Option<&Volume> {
+        self.volume.as_ref()
     }
 }
 

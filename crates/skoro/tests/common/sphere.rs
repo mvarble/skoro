@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, LazyLock};
 
-use skoro::{Composite, Declares, Embedded, QDyn, Space, Typed};
+use skoro::{Composite, Declares, Embedded, QDyn, Space, Typed, Volume};
 
 /// `1 / a`, written `e^{-log a}`, for `a` positive on the domain.
 pub fn reciprocal(a: QDyn) -> QDyn {
@@ -72,9 +72,23 @@ pub fn projection() -> Arc<Composite> {
     .unwrap()
 }
 
+/// `Λ(x, t) = -2 log(1 + |t|² / 4)`, against surface measure, which the orthonormal basis
+/// normalizes: the chart is global and full.
+pub fn log_volume() -> Arc<Composite> {
+    Composite::define(
+        "sphere.log_volume",
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        |q| ((q[1] * q[1]).sum() * 0.25 + 1.0).log() * -2.0,
+    )
+    .unwrap()
+}
+
 pub static SPHERE: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
     let (r, q, p) = (retraction(), inverse(), projection());
-    Embedded::declare("sphere", Vec::new(), 3, 2, r, q, Some(p)).unwrap()
+    Embedded::declare("sphere", Vec::new(), 3, 2, r, q, Some(p))
+        .and_then(|sphere| sphere.with_volume(Volume::global(log_volume())))
+        .unwrap()
 });
 
 /// The sphere's marker.

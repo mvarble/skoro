@@ -44,6 +44,12 @@ pub enum Error {
     InvalidDeclaration { name: String, reason: String },
     /// A projection onto an embedded type that declares none.
     NoProjection { space: Space },
+    /// A quantity whose space has no reference measure, scored by a term, given a proposal or
+    /// integrated out by a retirement; or a log-volume or a domain asked of such a space.
+    NoVolume {
+        space: Space,
+        quantity: Option<NodeId>,
+    },
     /// A name already registered.
     DuplicateName { name: String },
     /// A name the registry lacks.
@@ -139,6 +145,13 @@ impl fmt::Display for Error {
                 "the proposal for {quantity:?} reads {retired:?}, which is retired"
             ),
             Error::NoProjection { space } => write!(f, "{space:?} declares no projection"),
+            Error::NoVolume { space, quantity } => {
+                match quantity {
+                    Some(quantity) => write!(f, "{quantity:?} is of {space:?}, ")?,
+                    None => write!(f, "{space:?} ")?,
+                }
+                f.write_str("which has no reference measure: it declares no chart volume")
+            }
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
             Error::NotALogDensity { id } => {

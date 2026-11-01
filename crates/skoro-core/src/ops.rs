@@ -566,6 +566,13 @@ impl<T: Typed> Q<T> {
         Q::from_id(self.untyped().local(from.untyped()).id())
     }
 
+    /// `λ_self(t)`, the log-volume of the chart at `self`, with `t` in its tangent coordinates
+    /// (`NoVolume` when the space has no measure).
+    #[track_caller]
+    pub fn log_volume(self, t: impl Into<QDyn>) -> Q<Real> {
+        Q::from_id(self.untyped().log_volume(t.into()).id())
+    }
+
     /// An embedded value as the vector of its storage, `ι(self)` (`SpaceMismatch` on a value of
     /// any other space).
     #[track_caller]
@@ -603,6 +610,16 @@ impl QDyn {
         QDyn::from_id(with_spaces(&[self, t], |draft, spaces| {
             let retraction = spaces[0].retraction()?;
             draft.mapped(retraction.operation(), &[self, t])
+        }))
+    }
+
+    /// `λ_self(t)`, the log-volume of the chart at `self` (`NoVolume` when the space has no
+    /// measure).
+    #[track_caller]
+    pub fn log_volume(self, t: QDyn) -> QDyn {
+        QDyn::from_id(with_spaces(&[self, t], |draft, spaces| {
+            let log_volume = spaces[0].log_volume()?;
+            draft.mapped(log_volume.operation(), &[self, t])
         }))
     }
 

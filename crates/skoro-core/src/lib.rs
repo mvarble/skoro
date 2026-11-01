@@ -29,7 +29,7 @@ mod writer;
 
 pub use address::{Address, Segment};
 pub use composite::Composite;
-pub use embedded::Embedded;
+pub use embedded::{Domain, Embedded, Volume};
 pub use error::{Error, Failure};
 pub use generate::Generated;
 pub use id::NodeId;
