@@ -53,7 +53,7 @@ test macro where the companion says `(target)`.
 
 ## Densities and products (`skoro`)
 
-- [ ] The density pushed through the sphere's chart, and the log-volume of the acceptance test's
+- [x] The density pushed through the sphere's chart, and the log-volume of the acceptance test's
       product; `Volume` and `Domain` named in the `public_interface` test. Tests:
       `pushed_density_integrates_to_one_on_the_sphere`,
       `product_log_volume_agrees_with_its_factors`.

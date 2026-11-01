@@ -578,3 +578,66 @@ fn exponential_domain_ends_at_the_antipode() {
         assert_eq!(inside.to_host(), expected, "at the angle {angle}");
     }
 }
+
+#[test]
+fn pushed_density_integrates_to_one_on_the_sphere() {
+    let target = Target::host();
+    let mut writer = Writer::new();
+    // ε standard normal on ℝ², pushed through the chart at μ: log f(x ⊖ μ) - λ_μ(x ⊖ μ).
+    let (mu, x, with, without) = writer
+        .build(|| {
+            let mu = quantity("mu", Sphere);
+            let x = quantity("x", Sphere);
+            let t = x.local(mu).untyped();
+            let gaussian = -(t * t).sum() * 0.5 - (2.0 * std::f64::consts::PI).ln();
+            let with = gaussian - mu.log_volume(t).untyped();
+            (mu, x, with, gaussian)
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([with, without]), &target)
+        .unwrap();
+    // The midpoint rule in the polar angle θ and the azimuth φ, with dσ = sin θ dθ dφ.
+    let (n, m) = (800, 200);
+    let pi = std::f64::consts::PI;
+    let (h_theta, h_phi) = (pi / n as f64, 2.0 * pi / m as f64);
+    let mut grid = Vec::with_capacity(3 * n * m);
+    let mut weights = Vec::with_capacity(n * m);
+    for i in 0..n {
+        let theta = (i as f64 + 0.5) * h_theta;
+        for j in 0..m {
+            let phi = (j as f64 + 0.5) * h_phi;
+            grid.extend([
+                theta.sin() * phi.cos(),
+                theta.sin() * phi.sin(),
+                theta.cos(),
+            ]);
+            weights.push(theta.sin() * h_theta * h_phi);
+        }
+    }
+    let rows = n * m;
+    for centre in points(2) {
+        let centres: Vec<f64> = (0..rows).flat_map(|_| centre).collect();
+        let at = Values::new()
+            .with(mu, value(&centres, rows, &target))
+            .with(x, value(&grid, rows, &target));
+        let out = program.forward(&at).unwrap();
+        let integral = |q: QDyn| -> f64 {
+            host(&out, q)
+                .iter()
+                .zip(&weights)
+                .map(|(l, w)| l.exp() * w)
+                .sum()
+        };
+        let (mass, uncorrected) = (integral(with), integral(without));
+        assert!(
+            (mass - 1.0).abs() < 1e-4,
+            "the pushed density's mass is {mass}"
+        );
+        assert!(
+            (uncorrected - 1.0).abs() > 0.05,
+            "without the log-volume the mass is {uncorrected}"
+        );
+    }
+}

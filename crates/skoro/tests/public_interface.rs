@@ -32,3 +32,12 @@ fn tests_use_the_public_interface_alone() {
         }
     }
 }
+
+#[test]
+fn volumes_are_named_by_the_public_interface() {
+    let real = skoro::Space::Real;
+    assert!(real.has_measure());
+    assert!(matches!(real.domain(), Ok(skoro::Domain::Global)));
+    let volume: Option<&skoro::Volume> = None;
+    assert!(volume.is_none());
+}

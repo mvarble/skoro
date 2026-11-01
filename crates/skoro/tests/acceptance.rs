@@ -170,6 +170,34 @@ fn f(parts: &[QDyn]) -> QDyn {
 }
 
 skoro::precision_tests! {
+    fn product_log_volume_agrees_with_its_factors(target) {
+        let space = product_space();
+        let d = space.dimension().unwrap();
+        let point = HostValue::new(Some(ROWS), space.storage(), HostData::Continuous(product_point()));
+        let tangent = HostValue::new(Some(ROWS), d, HostData::Continuous(entries(11, ROWS * d)));
+        let inputs = [(space.clone(), point.unwrap()), (Space::Vector(d), tangent.unwrap())];
+        // By hand: each factor's log-volume, at its slices of the point and the tangent, summed.
+        let by_hand = |q: &[QDyn]| {
+            space
+                .blocks()
+                .iter()
+                .enumerate()
+                .map(|(i, block)| q[0].factor(i).log_volume(q[1].slice(block.tangent.clone())))
+                .reduce(|a, b| a + b)
+                .unwrap()
+        };
+        let checked = skoro::testing::check_agreement(
+            |q| q[0].log_volume(q[1]),
+            by_hand,
+            &inputs,
+            &target,
+        );
+        if let Err(error) = checked {
+            panic!("{error}");
+        }
+        assert!(matches!(space.domain(), Ok(skoro::Domain::Global)));
+    }
+
     fn product_retraction_agrees_with_its_factors(target) {
         let blocks = product_space().blocks();
         let d = product_space().dimension().unwrap();
