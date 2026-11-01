@@ -7,8 +7,8 @@ use skoro_core::primitive::{Include, Neg, Project, Retract};
 use skoro_core::scope::{apply, constant, project, quantity};
 use skoro_core::testing::{check_embedded, lower};
 use skoro_core::{
-    Composite, Declares, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered, Lowering,
-    Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Writer,
+    Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered,
+    Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume, Writer,
 };
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
@@ -533,4 +533,62 @@ fn boundary_orders_follow_the_composites() {
     )
     .unwrap();
     assert_eq!(orders(&rough_p), [Order::Two, Order::Two, Order::One]);
+}
+
+/// A composite of `inputs` whose output is `output`, made from the first input: a stand-in
+/// for a log-volume or a domain of a given signature.
+fn stand_in(name: &'static str, inputs: &[Space], output: &Space) -> Arc<Composite> {
+    let output = output.clone();
+    Composite::define(name, Vec::new(), inputs, move |q| match output {
+        Space::Real => (q[1] * q[1]).sum(),
+        Space::Categorical(2) => (q[1] * q[1]).sum().is_nonnegative(),
+        _ => q[1] * 2.0,
+    })
+    .unwrap()
+}
+
+fn is_invalid(result: Result<Arc<Embedded>, Error>) -> bool {
+    matches!(result, Err(Error::InvalidDeclaration { .. }))
+}
+
+#[test]
+fn with_volume_refuses_a_wrong_signature() {
+    let (n, d) = (Space::Vector(2), Space::Vector(1));
+    let real = stand_in("test.volume.real", &[n.clone(), d.clone()], &Space::Real);
+    let vector = stand_in("test.volume.vector", &[n.clone(), d.clone()], &d);
+    assert!(is_invalid(circle().with_volume(Volume::global(vector))));
+    let wide = stand_in(
+        "test.volume.wide",
+        &[Space::Vector(3), d.clone()],
+        &Space::Real,
+    );
+    assert!(is_invalid(circle().with_volume(Volume::global(wide))));
+    let not_boolean = stand_in("test.domain.real", &[n.clone(), d.clone()], &Space::Real);
+    assert!(is_invalid(
+        circle().with_volume(Volume::within(real.clone(), not_boolean))
+    ));
+    let boolean = stand_in("test.domain.boolean", &[n, d], &Space::BOOLEAN);
+    let declared = circle().with_volume(Volume::within(real, boolean)).unwrap();
+    assert!(matches!(
+        declared.volume().map(|v| v.domain()),
+        Some(Domain::Within(_))
+    ));
+}
+
+#[test]
+fn with_volume_refuses_a_second_volume_and_a_flat_declaration() {
+    let real = stand_in(
+        "test.volume.real",
+        &[Space::Vector(2), Space::Vector(1)],
+        &Space::Real,
+    );
+    let once = circle().with_volume(Volume::global(real.clone())).unwrap();
+    assert!(is_invalid(once.with_volume(Volume::global(real))));
+    let flat = Embedded::declare_flat("test.flat.volume", Vec::new(), 2).unwrap();
+    let zero = stand_in(
+        "test.volume.flat",
+        &[Space::Vector(2), Space::Vector(2)],
+        &Space::Real,
+    );
+    assert!(is_invalid(flat.with_volume(Volume::global(zero))));
 }

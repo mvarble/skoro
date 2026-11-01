@@ -10,7 +10,7 @@ test macro where the companion says `(target)`.
 
 ## The declaration (`skoro-core`, `embedded` and `error`)
 
-- [ ] `Error::NoVolume { space, quantity }`; `Volume` with `global` and `within`, and `Domain`;
+- [x] `Error::NoVolume { space, quantity }`; `Volume` with `global` and `within`, and `Domain`;
       the `volume` field of `Embedded`, which derives `Clone`; `Embedded::with_volume`, with its
       refusals, and `Embedded::volume`; `declare_flat`'s global zero volume,
       `skoro.flat.log_volume`; the documentation that a name and its parameters name a declaration
