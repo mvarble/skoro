@@ -12,7 +12,7 @@ use skoro::tensor::{Frame, HostData, HostValue, Value};
 use skoro::testing::{check_agreement, check_embedded, check_operation, check_volume};
 use skoro::{
     Composite, Embedded, Frames, Q, QDyn, Query, Real, Space, Target, Values, Vector, VectorDyn,
-    Writer,
+    Volume, Writer,
 };
 
 fn value(data: &[f64], rows: usize, target: &Target) -> Value {
@@ -336,4 +336,245 @@ fn sphere_log_volume_in_storage() {
         &Target::host(),
     )
     .unwrap();
+}
+
+/// The exponential chart's log-volume against surface measure, `log(sin r / r)` with
+/// `r = |t|`: guarded as its retraction is, below the same cutoff, by the series
+/// `-r²/6 - r⁴/180`, or computed as written.
+fn exponential_log_volume(guarded: bool) -> Arc<Composite> {
+    let name = if guarded {
+        "sphere.exp.log_volume"
+    } else {
+        "sphere.exp.log_volume.closed"
+    };
+    Composite::define(
+        name,
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        move |q| {
+            let rr = (q[1] * q[1]).sum();
+            if !guarded {
+                let r = (rr.log() * 0.5).exp();
+                return (r.sin() * reciprocal(r)).log();
+            }
+            let small = (-rr + CUT).is_nonnegative();
+            let one = constant(Real, 1.0).untyped();
+            let r = (select(small, [rr, one]).log() * 0.5).exp();
+            let closed = (r.sin() * reciprocal(r)).log();
+            select(small, [closed, -rr * (1.0 / 6.0) - rr * rr * (1.0 / 180.0)])
+        },
+    )
+    .unwrap()
+}
+
+/// `|t|² ≤ π²`: the ball on which the exponential chart is a diffeomorphism, closed, which
+/// differs from it by a boundary of measure zero.
+fn ball_of_radius_pi() -> Arc<Composite> {
+    Composite::define(
+        "sphere.exp.domain",
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        |q| (-(q[1] * q[1]).sum() + std::f64::consts::PI.powi(2)).is_nonnegative(),
+    )
+    .unwrap()
+}
+
+/// The guarded exponential sphere with a volume: `name` declared with `volume`.
+fn measured_exponential_sphere(name: &'static str, volume: Volume) -> Arc<Embedded> {
+    Embedded::declare(
+        name,
+        Vec::new(),
+        3,
+        2,
+        exponential(Near::Guarded),
+        logarithm(),
+        None,
+    )
+    .and_then(|sphere| sphere.with_volume(volume))
+    .unwrap()
+}
+
+static EXPONENTIAL: std::sync::LazyLock<Arc<Embedded>> = std::sync::LazyLock::new(|| {
+    measured_exponential_sphere(
+        "sphere.exp.measured",
+        Volume::within(exponential_log_volume(true), ball_of_radius_pi()),
+    )
+});
+
+skoro::precision_tests! {
+    fn exponential_sphere_passes_check_volume(target) {
+        if let Err(error) = check_volume(&EXPONENTIAL, &sphere_points(4), &target) {
+            panic!("{error}");
+        }
+    }
+}
+
+/// The sphere's retraction with `log_volume` declared in place of its own.
+fn stereographic_sphere(name: &'static str, log_volume: Arc<Composite>) -> Arc<Embedded> {
+    Embedded::declare(
+        name,
+        Vec::new(),
+        3,
+        2,
+        common::sphere::retraction(),
+        common::sphere::inverse(),
+        None,
+    )
+    .and_then(|sphere| sphere.with_volume(Volume::global(log_volume)))
+    .unwrap()
+}
+
+fn wrong_log_volume(name: &'static str, body: fn(QDyn) -> QDyn) -> Arc<Composite> {
+    Composite::define(
+        name,
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        move |q| body((q[1] * q[1]).sum()),
+    )
+    .unwrap()
+}
+
+#[test]
+fn check_volume_reports_a_wrong_declaration() {
+    let (points, target) = (sphere_points(3), Target::host());
+    let fails = |declaration: Arc<Embedded>, expected: &str| {
+        let error = check_volume(&declaration, &points, &target).unwrap_err();
+        assert!(error.contains(expected), "{}: {error}", declaration.name());
+    };
+    // Off by a constant: the chart's volume at its centre is not 1.
+    let shifted = wrong_log_volume("sphere.log_volume.shifted", |tt| {
+        (tt * 0.25 + 1.0).log() * -2.0 + 0.1
+    });
+    fails(
+        stereographic_sphere("sphere.shifted", shifted),
+        "Λ(x, 0) is not 0",
+    );
+    // The normalization chart's volume, on the stereographic chart.
+    let gnomonic = wrong_log_volume("sphere.log_volume.gnomonic", |tt| (tt + 1.0).log() * -1.5);
+    fails(
+        stereographic_sphere("sphere.gnomonic", gnomonic),
+        "the area formula",
+    );
+    // The exponential chart declared global: its inverse fails beyond π.
+    fails(
+        measured_exponential_sphere(
+            "sphere.exp.global",
+            Volume::global(exponential_log_volume(true)),
+        ),
+        "Q(x, R(x, t)) is not t",
+    );
+    // Its log-volume as written: 0 / 0 at t = 0.
+    fails(
+        measured_exponential_sphere(
+            "sphere.exp.unguarded",
+            Volume::within(exponential_log_volume(false), ball_of_radius_pi()),
+        ),
+        "is not finite",
+    );
+}
+
+/// `Λ(x, r e₁)` of `declaration` at each radius, at the point `x`, on the host.
+fn along_a_ray(declaration: &Embedded, x: [f64; 3], radii: &[f64]) -> Vec<f64> {
+    let target = Target::host();
+    let rows = radii.len();
+    let program = declaration
+        .volume()
+        .unwrap()
+        .log_volume()
+        .compile(&target)
+        .unwrap();
+    let free = program.free();
+    let xs: Vec<f64> = (0..rows).flat_map(|_| x).collect();
+    let ts: Vec<f64> = radii.iter().flat_map(|&r| [r, 0.0]).collect();
+    let at = Values::new()
+        .with(free[0].node, value(&xs, rows, &target))
+        .with(free[1].node, value(&ts, rows, &target));
+    let out = program.forward(&at).unwrap();
+    match out.get(program.targets()[0]).unwrap() {
+        Value::Continuous(points) => points.to_host(),
+        Value::Discrete(_) => panic!("a log-volume is real"),
+    }
+}
+
+/// The trapezoidal rule for `f` on `[a, b]` with `n` intervals.
+fn trapezoid(f: impl Fn(&[f64]) -> Vec<f64>, a: f64, b: f64, n: usize) -> f64 {
+    let h = (b - a) / n as f64;
+    let nodes: Vec<f64> = (0..=n).map(|i| a + h * i as f64).collect();
+    let values = f(&nodes);
+    let ends = 0.5 * (values[0] + values[n]);
+    h * (ends + values[1..n].iter().sum::<f64>())
+}
+
+#[test]
+fn sphere_charts_have_the_mass_of_the_sphere() {
+    let four_pi = 4.0 * std::f64::consts::PI;
+    for x in points(3) {
+        // The stereographic chart over all of ℝ², in u = atan(r / 2): r = 2 tan u, dr = 2 sec²u du.
+        let stereographic = trapezoid(
+            |us| {
+                let u_max = std::f64::consts::FRAC_PI_2;
+                let us: Vec<f64> = us.iter().map(|u| u.min(u_max - 1e-9)).collect();
+                let radii: Vec<f64> = us.iter().map(|u| 2.0 * u.tan()).collect();
+                let lambda = along_a_ray(&SPHERE, x, &radii);
+                us.iter()
+                    .zip(&radii)
+                    .zip(lambda)
+                    .map(|((u, r), l)| {
+                        2.0 * std::f64::consts::PI * r * l.exp() * 2.0 / u.cos().powi(2)
+                    })
+                    .collect()
+            },
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            20_000,
+        );
+        assert!(
+            (stereographic - four_pi).abs() < 1e-6,
+            "the stereographic chart's mass is {stereographic}"
+        );
+        // The exponential chart over the ball of radius π.
+        let exponential = trapezoid(
+            |radii| {
+                let lambda = along_a_ray(&EXPONENTIAL, x, radii);
+                radii
+                    .iter()
+                    .zip(lambda)
+                    .map(|(r, l)| 2.0 * std::f64::consts::PI * r * l.exp())
+                    .collect()
+            },
+            0.0,
+            std::f64::consts::PI,
+            20_000,
+        );
+        assert!(
+            (exponential - four_pi).abs() < 1e-6,
+            "the exponential chart's mass is {exponential}"
+        );
+    }
+}
+
+#[test]
+fn exponential_domain_ends_at_the_antipode() {
+    let target = Target::host();
+    let program = ball_of_radius_pi().compile(&target).unwrap();
+    let free = program.free();
+    let pi = std::f64::consts::PI;
+    let lengths = [0.0, 1.0, pi - 1e-6, pi + 1e-6, 4.0, 10.0];
+    let expected = [1, 1, 1, 0, 0, 0];
+    for (k, angle) in [0.0, 0.7, 2.9].into_iter().enumerate() {
+        let rows = lengths.len();
+        let xs: Vec<f64> = (0..rows).flat_map(|_| points(3)[k]).collect();
+        let ts: Vec<f64> = lengths
+            .iter()
+            .flat_map(|l| [l * f64::cos(angle), l * f64::sin(angle)])
+            .collect();
+        let at = Values::new()
+            .with(free[0].node, value(&xs, rows, &target))
+            .with(free[1].node, value(&ts, rows, &target));
+        let out = program.forward(&at).unwrap();
+        let Some(Value::Discrete(inside)) = out.get(program.targets()[0]) else {
+            panic!("a domain is a boolean");
+        };
+        assert_eq!(inside.to_host(), expected, "at the angle {angle}");
+    }
 }

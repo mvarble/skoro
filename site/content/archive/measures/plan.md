@@ -46,7 +46,7 @@ test macro where the companion says `(target)`.
       acceptance test's sphere declares its log-volume
       [](eq:archive/measures/math/sphere-volume), global, in `tests/common/sphere.rs`. Tests:
       `sphere_passes_check_volume`, `sphere_log_volume_in_storage`.
-- [ ] The guarded exponential sphere of `tests/sphere.rs` declares its log-volume, guarded below
+- [x] The guarded exponential sphere of `tests/sphere.rs` declares its log-volume, guarded below
       its cutoff, and its domain within $\lVert \tangent \rVert \le \pi$. Tests:
       `exponential_sphere_passes_check_volume`, `exponential_domain_ends_at_the_antipode`,
       `sphere_charts_have_the_mass_of_the_sphere`, `check_volume_reports_a_wrong_declaration`.
