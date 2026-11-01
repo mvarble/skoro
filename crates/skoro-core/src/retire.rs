@@ -98,8 +98,9 @@ pub struct Retirement<'w> {
 impl Writer {
     /// Reads the retirement of the quantities at `addresses`, resolved on the latest snapshot,
     /// with `observed` the values of those it fixes rather than integrates; refuses an exact
-    /// address with no quantity (`UnknownAddress`) and an observed quantity outside them
-    /// (`ObservedNotRetired`). Changes nothing.
+    /// address with no quantity (`UnknownAddress`), an observed quantity outside them
+    /// (`ObservedNotRetired`), and a quantity to integrate whose space has no reference measure
+    /// (`NoVolume`). Changes nothing.
     pub fn retire(
         &mut self,
         addresses: Addresses,
@@ -162,6 +163,16 @@ impl Writer {
                 .collect(),
             unproposed: unproposed.iter().map(handle).collect(),
         };
+        // Integrating a quantity out is an integral against its space's measure.
+        for q in &plan.integrated {
+            let space = snapshot.space(q.id()).cloned().unwrap_or(Space::Real);
+            if !space.has_measure() {
+                return Err(Error::NoVolume {
+                    space,
+                    quantity: Some(q.id()),
+                });
+            }
+        }
         Ok(Retirement {
             writer: self,
             snapshot,

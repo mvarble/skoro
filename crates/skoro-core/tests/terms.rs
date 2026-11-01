@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use skoro_core::scope::{constant, factor, propose, quantity, score};
 use skoro_core::{
-    AnyNumber, AtMostOne, Error, ExactlyOne, Key, NodeId, Param, Positive, Proposal, Q, Real, Role,
-    Sample, TermHandle, Vector, Writer,
+    AnyNumber, AtMostOne, Declares, Error, ExactlyOne, Key, NodeId, Param, Positive, Proposal, Q,
+    Real, Role, Sample, TermHandle, Vector, Writer,
 };
 use skoro_tensor::{Target, Value};
 
@@ -277,5 +277,155 @@ fn proposals_are_conditioned_on_earlier_quantities() {
             quantity: sigma.id(),
             later: x1.id()
         }
+    );
+}
+
+/// A curved type in name, declared with no volume: storage and dimension 2, moved by addition.
+fn unmeasured() -> Arc<skoro_core::Embedded> {
+    use skoro_core::{Composite, Embedded, Space};
+    let pair = [Space::Vector(2), Space::Vector(2)];
+    let r = Composite::define("test.unmeasured.retract", Vec::new(), &pair, |q| {
+        q[0] + q[1]
+    });
+    let q = Composite::define("test.unmeasured.local", Vec::new(), &pair, |q| q[1] - q[0]);
+    Embedded::declare(
+        "test.unmeasured",
+        Vec::new(),
+        2,
+        2,
+        r.unwrap(),
+        q.unwrap(),
+        None,
+    )
+    .unwrap()
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Unmeasured;
+
+impl skoro_core::Typed for Unmeasured {
+    fn admits(space: &skoro_core::Space) -> bool {
+        matches!(space, skoro_core::Space::Embedded(e) if **e == *unmeasured())
+    }
+}
+
+impl skoro_core::Declares for Unmeasured {
+    fn space(&self) -> skoro_core::Space {
+        skoro_core::Space::Embedded(unmeasured())
+    }
+}
+
+fn no_volume(quantity: NodeId) -> Error {
+    Error::NoVolume {
+        space: skoro_core::Space::Embedded(unmeasured()),
+        quantity: Some(quantity),
+    }
+}
+
+#[test]
+fn score_refuses_a_quantity_without_a_measure() {
+    let mut writer = Writer::new();
+    let x = writer.build(|| quantity("x", Unmeasured)).unwrap();
+    let failure = writer
+        .build(|| score(x, -(x.include() * x.include()).sum()))
+        .unwrap_err();
+    assert_eq!(failure.error, no_volume(x.id()));
+    // A product with such a factor has no measure either.
+    let space = skoro_core::Space::product([skoro_core::Space::Real, Unmeasured.space()]).unwrap();
+    let failure = writer
+        .build(|| {
+            let p = skoro_core::scope::quantity_in("p", space.clone());
+            score(
+                p.narrow::<skoro_core::ProductDyn>(),
+                (p.factor(0) * 0.0).narrow(),
+            )
+        })
+        .unwrap_err();
+    assert!(
+        matches!(&failure.error, Error::NoVolume { space: s, quantity: Some(_) } if *s == space),
+        "{:?}",
+        failure.error
+    );
+}
+
+#[test]
+fn factor_over_a_quantity_without_a_measure_is_allowed() {
+    use skoro_core::{Observations, Query, Values};
+    use skoro_tensor::{HostData, HostValue};
+    let mut writer = Writer::new();
+    let (x, y) = writer
+        .build(|| {
+            let x = quantity("x", Unmeasured);
+            let s = x.include().sum().narrow::<Real>();
+            factor(-(s * s));
+            let y = quantity("y", Real);
+            let e = y - s;
+            score(y, -(e * e));
+            (x, y)
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let target = Target::host();
+    let point = || HostValue::new(None, 2, HostData::Continuous(vec![0.5, -0.25])).unwrap();
+    let load = |value: HostValue| value.load(1, &target).unwrap().unwrap();
+    // Observed.
+    let given = Observations::new().observe_dyn(x.untyped(), point());
+    let observed = snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap();
+    let at = Values::new().with(
+        y,
+        load(HostValue::new(None, 1, HostData::Continuous(vec![0.1])).unwrap()),
+    );
+    observed.forward(&at).unwrap();
+    // Free, and differentiated.
+    let free = snapshot.compile(&Query::log_density(), &target).unwrap();
+    let at = at.with(x, load(point()));
+    free.forward(&at).unwrap();
+    let frames = skoro_core::Frames::new().with(
+        x,
+        skoro_tensor::Frame::from_host(&[1.0, 0.0], 1, 2, 1, &target),
+    );
+    free.tangent(&at, &frames).unwrap();
+}
+
+#[test]
+fn propose_refuses_a_quantity_without_a_measure() {
+    let mut writer = Writer::new();
+    let x = writer.build(|| quantity("x", Unmeasured)).unwrap();
+    let failure = writer
+        .build(|| {
+            let log_density = (x.include() * 0.0).sum().narrow::<Real>();
+            let proposal = Proposal {
+                sample: Arc::new(Never),
+                inputs: Vec::new(),
+                log_density,
+            };
+            propose(x, proposal)
+        })
+        .unwrap_err();
+    assert_eq!(failure.error, no_volume(x.id()));
+}
+
+#[test]
+fn generation_refuses_a_free_quantity_without_a_measure() {
+    let mut writer = Writer::new();
+    let x = writer
+        .build(|| {
+            let x = quantity("x", Unmeasured);
+            factor(-(x.include() * x.include()).sum().narrow::<Real>());
+            x
+        })
+        .unwrap();
+    let generated = writer.snapshot().generate(
+        &skoro_core::Observations::new(),
+        &Key::from_seed(3),
+        2,
+        &Target::host(),
+    );
+    assert!(
+        matches!(&generated, Err(Error::CannotGenerate { quantity, .. }) if *quantity == x.id()),
+        "{:?}",
+        generated.err()
     );
 }

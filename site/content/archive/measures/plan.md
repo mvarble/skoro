@@ -32,7 +32,7 @@ test macro where the companion says `(target)`.
 
 ## The refusals (`skoro-core`, `term` and `retire`)
 
-- [ ] `NoVolume` from `Draft::add_term` for a scored quantity without a measure, from
+- [x] `NoVolume` from `Draft::add_term` for a scored quantity without a measure, from
       `Draft::add_proposal` for a proposed one, and from `Writer::retire` for an integrated one,
       each where the companion places it. Tests: `score_refuses_a_quantity_without_a_measure`,
       `factor_over_a_quantity_without_a_measure_is_allowed`,

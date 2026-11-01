@@ -272,8 +272,9 @@ impl Term {
 }
 
 /// Adds the term `log_density` that scores `scored`: refusing a log-density that is not a mapped
-/// `Real` (`NotALogDensity`), a quantity already scored (`AlreadyScored`), and a term conditioned
-/// on a quantity made after the one it scores (`ConditionedOnLater`).
+/// `Real` (`NotALogDensity`), a quantity already scored (`AlreadyScored`), a quantity whose space
+/// has no reference measure (`NoVolume`), and a term conditioned on a quantity made after the one
+/// it scores (`ConditionedOnLater`).
 #[track_caller]
 pub fn score<T: Typed>(scored: Q<T>, log_density: Q<Real>) -> TermHandle {
     let location = Location::caller();
@@ -296,7 +297,7 @@ pub fn factor(log_density: Q<Real>) -> TermHandle {
 }
 
 /// Attaches `proposal` to `parameter`, conditioned on quantities made before it alone
-/// (`ConditionedOnLater`).
+/// (`ConditionedOnLater`), refusing a parameter whose space has no reference measure (`NoVolume`).
 #[track_caller]
 pub fn propose<T: Typed>(parameter: Q<T>, proposal: Proposal) -> Q<T> {
     let location = Location::caller();
@@ -342,6 +343,13 @@ impl scope::Draft {
                 if self.model.scoring.contains_key(&q.id()) {
                     return Err(Error::AlreadyScored { quantity: q.id() });
                 }
+                // A term that scores a quantity is its density, against its space's measure.
+                if !quantity.space().has_measure() {
+                    return Err(Error::NoVolume {
+                        space: quantity.space().clone(),
+                        quantity: Some(q.id()),
+                    });
+                }
                 Some(q.id())
             }
             None => None,
@@ -385,6 +393,13 @@ impl scope::Draft {
         let node = self.model.nodes.get(&id).ok_or(Error::UnknownNode { id })?;
         if !node.is_quantity() {
             return Err(Error::NotAQuantity { id });
+        }
+        // A proposal is a density, against the parameter's measure.
+        if !node.space().has_measure() {
+            return Err(Error::NoVolume {
+                space: node.space().clone(),
+                quantity: Some(id),
+            });
         }
         // Its inputs read quantities made before the parameter; its log-density those and the
         // parameter.
