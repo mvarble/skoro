@@ -479,6 +479,248 @@ pub fn check_embedded(
         .map_err(|e| format!("off the manifold: {e}"))
 }
 
+/// The check a crate runs on its declaration's volume, at the points given, one per row, on the
+/// manifold, after `check_embedded`:
+///
+/// - `Λ` admits every pass the retraction admits, and each is finite at `(x, 0)`;
+/// - `Λ(x, 0) = 0`, and `Ω(x, 0)` is true when a domain is declared;
+/// - at tangents `t` of lengths 0.1, 1, 3 and 10 in random directions, those `Ω` admits when a
+///   domain is declared and at least the shortest on every row: `Q(x, R(x, t)) = t`, and
+///   `Λ(x, t)` agrees with the area formula,
+///   `½ log det(∂₂R(x, t)ᵀ ∂₂R(x, t)) - ½ log det(B(y)ᵀ B(y))` with `y = R(x, t)`;
+/// - `check_operation` holds on `Λ`, and on the space's log-volume through the inclusion, at
+///   `t = 0` and away from it.
+///
+/// A failure names the check, the row and the tangent's length.
+pub fn check_volume(
+    declaration: &Arc<Embedded>,
+    points: &HostValue,
+    target: &Target,
+) -> Result<(), String> {
+    let name = declaration.name();
+    let Some(volume) = declaration.volume() else {
+        return Err(format!("{name}: it declares no volume"));
+    };
+    let (n, d) = (declaration.storage(), declaration.dimension());
+    if points.storage() != n {
+        return Err(format!("{name}: the points are not of storage {n}"));
+    }
+    let rows = points.rows().unwrap_or(1);
+    let load = |value: &HostValue| -> Result<Value, String> {
+        value
+            .load(rows, target)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "the points do not fit their batch".to_string())
+    };
+    let tangent = |data: Vec<f64>| -> Result<Value, String> {
+        load(&HostValue::new(Some(rows), d, HostData::Continuous(data)).ok_or("a tangent")?)
+    };
+    let x = load(points)?;
+    let zero = Value::Continuous(skoro_tensor::Points::zeros(rows, d, target));
+    let r = declaration.retraction().compile(target).map_err(describe)?;
+    let q = declaration.inverse().compile(target).map_err(describe)?;
+    let lambda = volume.log_volume().compile(target).map_err(describe)?;
+    let omega = match volume.domain() {
+        crate::Domain::Global => None,
+        crate::Domain::Within(domain) => Some(domain.compile(target).map_err(describe)?),
+    };
+    let relative = Tolerance::of(target.precision()).relative;
+    let at = |program: &Program, a: &Value, b: &Value| {
+        let free = program.free();
+        Values::new()
+            .with(free[0].node, a.clone())
+            .with(free[1].node, b.clone())
+    };
+    let output = |program: &Program, a: &Value, b: &Value| -> Result<Vec<f64>, String> {
+        let out = program.forward(&at(program, a, b)).map_err(describe)?;
+        out.get(program.targets()[0])
+            .map(continuous_or_discrete)
+            .ok_or_else(|| "a program computes its output".to_string())
+    };
+
+    // Λ differentiates as far as R does, and smoothly at t = 0.
+    if order(&lambda) < order(&r) {
+        return Err(format!(
+            "{name}: Λ admits fewer passes than the retraction, {} against {}",
+            order(&lambda),
+            order(&r)
+        ));
+    }
+    finite_passes(
+        &lambda,
+        [&x, &zero],
+        [n, d],
+        target,
+        "the log-volume Λ at (x, 0)",
+    )?;
+
+    // Λ(x, 0) = 0: the chart has volume 1 at its centre, against the normalized measure.
+    close(&output(&lambda, &x, &zero)?, &vec![0.0; rows], relative)
+        .map_err(|e| format!("{name}: Λ(x, 0) is not 0: {e}"))?;
+    if let Some(omega) = &omega
+        && let Some(row) = output(omega, &x, &zero)?.iter().position(|&b| b != 1.0)
+    {
+        return Err(format!("{name}: Ω(x, 0) is false at row {row}"));
+    }
+
+    // The inverse on the whole chart, and the area formula, at tangents near 0 and far from it.
+    let identity: Vec<f64> = (0..rows)
+        .flat_map(|_| (0..d).flat_map(move |i| (0..d).map(move |c| if c == i { 1.0 } else { 0.0 })))
+        .collect();
+    let jacobian = |a: &Value, b: &Value| -> Result<Vec<f64>, String> {
+        let frames = Frames::new().with(
+            r.free()[1].node,
+            Frame::from_host(&identity, rows, d, d, target),
+        );
+        let (_, out) = r.tangent(&at(&r, a, b), &frames).map_err(describe)?;
+        Ok(out
+            .get(r.targets()[0])
+            .map(Frame::to_host)
+            .unwrap_or_default())
+    };
+    // ½ log det(JᵀJ) for the n × d matrix of each row.
+    let half_log_det = |j: &[f64], row: usize| -> Option<f64> {
+        let column = |c: usize| (0..n).map(move |i| (row * n + i) * d + c);
+        let gram: Vec<f64> = (0..d * d)
+            .map(|ij| {
+                column(ij / d)
+                    .zip(column(ij % d))
+                    .map(|(a, c)| j[a] * j[c])
+                    .sum()
+            })
+            .collect();
+        log_det(&gram, d).map(|l| 0.5 * l)
+    };
+    for (k, length) in [0.1, 1.0, 3.0, 10.0].into_iter().enumerate() {
+        let directions = signed(910 + k as u64, rows * d);
+        let data: Vec<f64> = directions
+            .chunks(d)
+            .flat_map(|u| {
+                let norm = u.iter().map(|v| v * v).sum::<f64>().sqrt().max(1e-12);
+                u.iter().map(move |v| length * v / norm)
+            })
+            .collect();
+        let t = tangent(data.clone())?;
+        let admitted: Vec<bool> = match &omega {
+            None => vec![true; rows],
+            Some(omega) => output(omega, &x, &t)?.iter().map(|&b| b == 1.0).collect(),
+        };
+        if k == 0
+            && let Some(row) = admitted.iter().position(|a| !a)
+        {
+            return Err(format!(
+                "{name}: Ω refuses a tangent of length {length} at row {row}"
+            ));
+        }
+        let y = r
+            .forward(&at(&r, &x, &t))
+            .map_err(describe)?
+            .get(r.targets()[0])
+            .cloned()
+            .ok_or("the retraction computes its output")?;
+        let back = output(&q, &x, &y)?;
+        let declared = output(&lambda, &x, &t)?;
+        let (j, b) = (jacobian(&x, &t)?, jacobian(&y, &zero)?);
+        let (mut found, mut expected, mut found_t, mut expected_t) =
+            (vec![], vec![], vec![], vec![]);
+        for row in (0..rows).filter(|&row| admitted[row]) {
+            let area = match (half_log_det(&j, row), half_log_det(&b, row)) {
+                (Some(j), Some(b)) => j - b,
+                _ => {
+                    return Err(format!(
+                        "{name}: ∂₂R or B does not have rank {d} at row {row}, length {length}"
+                    ));
+                }
+            };
+            found.push(declared[row]);
+            expected.push(area);
+            found_t.extend_from_slice(&back[row * d..(row + 1) * d]);
+            expected_t.extend_from_slice(&data[row * d..(row + 1) * d]);
+        }
+        close(&found_t, &expected_t, relative)
+            .map_err(|e| format!("{name}: Q(x, R(x, t)) is not t at length {length}: {e}"))?;
+        close(&found, &expected, relative).map_err(|e| {
+            format!("{name}: Λ does not agree with the area formula at length {length}: {e}")
+        })?;
+    }
+
+    // The derivative maps of Λ, and of the space's log-volume through the inclusion.
+    let zeros = HostValue::new(Some(rows), d, HostData::Continuous(vec![0.0; rows * d]))
+        .ok_or("a tangent")?;
+    let away: Vec<f64> = signed(903, rows * d).iter().map(|t| 0.5 * t).collect();
+    let away = HostValue::new(Some(rows), d, HostData::Continuous(away)).ok_or("a tangent")?;
+    let storage = HostValue::new(
+        Some(rows),
+        n,
+        HostData::Continuous(continuous_or_discrete(&x)),
+    )
+    .ok_or("a vector")?;
+    let space = Space::Embedded(declaration.clone());
+    let through = space.log_volume().map_err(describe)?;
+    for (t, at) in [(&zeros, "at t = 0"), (&away, "away from t = 0")] {
+        check_operation(
+            &*volume.log_volume().operation(),
+            &[
+                (Space::Vector(n), storage.clone()),
+                (Space::Vector(d), t.clone()),
+            ],
+            target,
+        )
+        .map_err(|e| format!("Λ {at}: {e}"))?;
+        check_operation(
+            &*through.operation(),
+            &[
+                (space.clone(), points.clone()),
+                (Space::Vector(d), t.clone()),
+            ],
+            target,
+        )
+        .map_err(|e| format!("the log-volume through ι {at}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// The most a program of two roots admits: 2 for Hessian passes, 1 for first-order ones.
+fn order(program: &Program) -> usize {
+    let roots: Vec<crate::NodeId> = program.free().iter().map(|free| free.node).collect();
+    let targets = program.targets();
+    let admits = |pass: Pass<'_>| program.admits(&pass).is_ok();
+    if admits(Pass::Hessian {
+        seeded: &roots,
+        targets: &targets,
+    }) {
+        2
+    } else if admits(Pass::Tangent { seeded: &roots })
+        && admits(Pass::Cotangent { targets: &targets })
+    {
+        1
+    } else {
+        0
+    }
+}
+
+/// `log det a` of the symmetric `d × d` matrix `a`, by Cholesky; `None` when it is not positive
+/// definite.
+fn log_det(a: &[f64], d: usize) -> Option<f64> {
+    if !positive_definite(a, d) {
+        return None;
+    }
+    let mut l = vec![0.0; d * d];
+    let mut log_det = 0.0;
+    for i in 0..d {
+        for j in 0..=i {
+            let s: f64 = (0..j).map(|k| l[i * d + k] * l[j * d + k]).sum();
+            if i == j {
+                l[i * d + i] = (a[i * d + i] - s).sqrt();
+                log_det += 2.0 * l[i * d + i].ln();
+            } else {
+                l[i * d + j] = (a[i * d + j] - s) / l[j * d + j];
+            }
+        }
+    }
+    Some(log_det)
+}
+
 /// Every pass `program` admits, at `inputs` of dimensions `dims`, at random frames: each output
 /// finite.
 fn finite_passes<const K: usize>(

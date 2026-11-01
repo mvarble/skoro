@@ -9,7 +9,7 @@ use common::sphere::{SPHERE, Sphere, basis, basis_times, basis_transpose, points
 use skoro::primitive::Select;
 use skoro::scope::{apply, constant, project, quantity};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
-use skoro::testing::{check_agreement, check_embedded, check_operation};
+use skoro::testing::{check_agreement, check_embedded, check_operation, check_volume};
 use skoro::{
     Composite, Embedded, Frames, Q, QDyn, Query, Real, Space, Target, Values, Vector, VectorDyn,
     Writer,
@@ -232,6 +232,12 @@ fn midpoint(a: Q<Sphere>, b: Q<Sphere>) -> Q<Sphere> {
 }
 
 skoro::precision_tests! {
+    fn sphere_passes_check_volume(target) {
+        if let Err(error) = check_volume(&SPHERE, &sphere_points(4), &target) {
+            panic!("{error}");
+        }
+    }
+
     fn sphere_passes_check_embedded(target) {
         if let Err(error) = check_embedded(&SPHERE, &sphere_points(4), &target) {
             panic!("{error}");
@@ -305,4 +311,29 @@ fn projection_returns_drift_to_the_sphere() {
             assert!((p - x).abs() < 1e-14, "P(w) = {p:?}, from {x:?}");
         }
     }
+}
+
+/// The points of `points(rows)`, each moved to the next row's: pairs that are never antipodal.
+fn other_points(rows: usize) -> HostValue {
+    let mut others = points(rows);
+    others.rotate_left(1);
+    let others: Vec<f64> = others.into_iter().flatten().collect();
+    HostValue::new(Some(rows), 3, HostData::Continuous(others)).unwrap()
+}
+
+#[test]
+fn sphere_log_volume_in_storage() {
+    let sphere = Space::Embedded(SPHERE.clone());
+    let inputs = [
+        (sphere.clone(), sphere_points(5)),
+        (sphere, other_points(5)),
+    ];
+    // Λ(x, y ⊖ x) = 2 log((1 + xᵀ y) / 2).
+    check_agreement(
+        |q| q[0].log_volume(q[1].local(q[0])),
+        |q| (((q[0].include() * q[1].include()).sum() + 1.0) * 0.5).log() * 2.0,
+        &inputs,
+        &Target::host(),
+    )
+    .unwrap();
 }

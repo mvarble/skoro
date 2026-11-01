@@ -42,7 +42,7 @@ test macro where the companion says `(target)`.
 
 ## The volume check (`skoro-core`, `testing`, and the sphere's tests in `skoro`)
 
-- [ ] `testing::check_volume`, with the log-determinant beside `positive_definite`; the
+- [x] `testing::check_volume`, with the log-determinant beside `positive_definite`; the
       acceptance test's sphere declares its log-volume
       [](eq:archive/measures/math/sphere-volume), global, in `tests/common/sphere.rs`. Tests:
       `sphere_passes_check_volume`, `sphere_log_volume_in_storage`.
