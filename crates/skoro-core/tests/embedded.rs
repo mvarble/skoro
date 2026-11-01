@@ -592,3 +592,102 @@ fn with_volume_refuses_a_second_volume_and_a_flat_declaration() {
     );
     assert!(is_invalid(flat.with_volume(Volume::global(zero))));
 }
+
+#[test]
+fn flat_declaration_has_a_global_zero_volume() {
+    let flat = Embedded::declare_flat("test.flat.measured", Vec::new(), 2).unwrap();
+    let volume = flat.volume().expect("a flat declaration has a volume");
+    assert!(matches!(volume.domain(), Domain::Global));
+    let space = Space::Embedded(flat);
+    assert!(space.has_measure());
+    assert!(matches!(space.domain(), Ok(Domain::Global)));
+    let inputs = [(space.clone(), points(3)), (Space::Vector(2), points(3))];
+    skoro_core::testing::check_agreement(
+        |q| q[0].log_volume(q[1]) + (q[0].include() * 0.0).sum() + (q[1] * 0.0).sum(),
+        |q| (q[0].include() * 0.0).sum() + (q[1] * 0.0).sum(),
+        &inputs,
+        &Target::host(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn declaration_without_volume_has_no_measure() {
+    let space = Space::Embedded(circle());
+    let product = Space::product([Space::Real, space.clone()]).unwrap();
+    for space in [space, product] {
+        assert!(!space.has_measure(), "{space:?}");
+        let no_volume = Error::NoVolume {
+            space: space.clone(),
+            quantity: None,
+        };
+        assert_eq!(space.log_volume().err(), Some(no_volume.clone()));
+        assert!(matches!(space.domain(), Err(e) if e == no_volume));
+    }
+}
+
+/// The circle with a volume of zero and the domain `|t| ≤ radius`, under a name of its own.
+fn ball_circle(name: &'static str, radius: f64) -> Arc<Embedded> {
+    let (n, d) = (Space::Vector(2), Space::Vector(1));
+    let zero = Composite::define(
+        "test.circle.zero_volume",
+        Vec::new(),
+        &[n.clone(), d.clone()],
+        |_| constant(skoro_core::Real, 0.0).untyped(),
+    )
+    .unwrap();
+    let ball = Composite::define(
+        "test.circle.ball",
+        vec![Param::Float(radius)],
+        &[n, d],
+        move |q| (-(q[1] * q[1]).sum() + radius * radius).is_nonnegative(),
+    )
+    .unwrap();
+    Embedded::declare(name, Vec::new(), 2, 1, rotation(name), angle(1.0), None)
+        .unwrap()
+        .with_volume(Volume::within(zero, ball))
+        .unwrap()
+}
+
+#[test]
+fn product_domain_is_the_conjunction_of_its_factors() {
+    let (a, b) = (
+        ball_circle("test.circle.ball.one", 1.0),
+        ball_circle("test.circle.ball.two", 2.0),
+    );
+    let space = Space::product([Space::Embedded(a), Space::Real, Space::Embedded(b)]).unwrap();
+    let Ok(Domain::Within(domain)) = space.domain() else {
+        panic!("a product with bounded factors has a bounded domain");
+    };
+    // Rows of tangents (t₁, s, t₂): inside both balls, outside the first, outside the second,
+    // outside both, and on the boundary of each.
+    let tangents = [
+        [0.5, 9.0, 1.5],
+        [1.5, 0.0, 1.5],
+        [0.5, 0.0, 2.5],
+        [-1.5, 0.0, -2.5],
+        [1.0, -9.0, -2.0],
+    ];
+    let expected = [1.0, 0.0, 0.0, 0.0, 1.0];
+    let rows = tangents.len();
+    let x: Vec<f64> = (0..rows).flat_map(|_| [1.0, 0.0, 0.3, 0.0, 1.0]).collect();
+    let t: Vec<f64> = tangents.iter().flatten().copied().collect();
+    let program = domain.compile(&Target::host()).unwrap();
+    let free = program.free();
+    let load = |data: Vec<f64>, storage| {
+        HostValue::new(Some(rows), storage, HostData::Continuous(data))
+            .unwrap()
+            .load(rows, &Target::host())
+            .unwrap()
+            .unwrap()
+    };
+    let at = Values::new()
+        .with(free[0].node, load(x, 5))
+        .with(free[1].node, load(t, 3));
+    let out = program.forward(&at).unwrap();
+    let Some(Value::Discrete(inside)) = out.get(program.targets()[0]) else {
+        panic!("a domain is a boolean");
+    };
+    let inside: Vec<f64> = inside.to_host().into_iter().map(|i| i as f64).collect();
+    assert_eq!(inside, expected);
+}

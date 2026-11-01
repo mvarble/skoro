@@ -20,7 +20,7 @@ test macro where the companion says `(target)`.
 
 ## The spaces (`skoro-core`, `retraction` and `ops`)
 
-- [ ] `Map::LogVolume` and `Map::Domain` in the cache; `Space::log_volume`, `Space::domain` and
+- [x] `Map::LogVolume` and `Map::Domain` in the cache; `Space::log_volume`, `Space::domain` and
       `Space::has_measure` for every space, as the companion's table gives them, the product's
       domain the conjunction of its factors'; the module documentation's new columns; the handles'
       `Q::log_volume` and `QDyn::log_volume`. Tests: `euclidean_log_volume_is_zero`,
