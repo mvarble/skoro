@@ -1,27 +1,29 @@
 ---
 title: "Reference measures and chart volumes of spaces"
-pages: []
-crates: []
+pages:
+    - concepts/spaces
+    - concepts/terms
+    - reference/crates
+crates: [skoro, skoro-core]
 revises: [core]
 ---
 
-[The core](../core/) fixes a reference measure for each of its own types (Lebesgue measure on the
-flat and positive types, counting measure on the discrete ones, product measures on products) and
-states every density, importance weight and retirement against them, but it leaves the embedded,
-curved types without one. Every distribution with a density on such a type needs that measure, and
-so does the normal entry's tangent normal, the law of μ ⊕ ε for a normal ε on any space whose
-chart's volume is known. This entry gives every continuous space of the core a reference measure
-and the log-volume of its retraction's chart, once and for all types. An embedded type may declare
-the log-volume of its chart, an operation on Euclidean values with derivatives to second order, and
-the chart's domain, global or the set of tangent vectors on which the chart is a diffeomorphism;
-its reference measure is then the one its retraction normalizes, whose charts all have volume 1 at
-their centre: Haar measure on the groups and surface measure on the sphere, whatever the storage.
-The core's own types get theirs (0 on the Euclidean types, the sum of the logarithms of the point's
-coordinates on the positive orthant), a product's is the sum of its factors' over the stacked
-tangent, and a type that declares none has no densities, so that a distribution on it can only be
-a likelihood factor over data. The log-volume is declared rather than computed from the
-retraction, since the area formula would put a Jacobian of the retraction into the forward value
-and third derivatives into the Hessian; the formula is instead what the tests check each
-declaration against, on the core's acceptance-test sphere and its stereographic chart among
-others. The mathematics starts from the note "Densities in tangent charts", written on the `normal`
-branch, and the entry merges into `main` before the normal entry's build.
+Every continuous space of [the core](../core/) now has a reference measure, given through the
+log-volume of its retraction's chart, and the core's appendix no longer leaves curved types without
+one. `Space::log_volume` gives the log-volume as a composite beside the retraction: zero on the
+Euclidean types, the logarithm of the moved point's coordinates on the positive orthant (both
+against Lebesgue measure), and the sum of the factors' on a product. An embedded type may declare
+its chart's volume with `Embedded::with_volume`: a log-volume written as an operation on Euclidean
+values, against the measure its retraction normalizes (Haar measure on a group, surface measure on
+a sphere, whatever the storage), and a domain, global or given by a discretization, on which the
+chart is a diffeomorphism onto all of the type but a set of measure zero. A type that declares none
+has no densities: the core refuses to score, propose or integrate out a quantity of it, and a
+measurement of it is a likelihood factor over data. The volume is declared rather than computed
+from the retraction, which would need third derivatives in a term's Hessian, and
+`testing::check_volume` holds each declaration to the area formula instead. The mathematics rests
+on the note [densities in tangent charts](../../math/chart-volume/), brought from the `normal`
+branch, which this entry corrected and extended with the measure a retraction normalizes in its
+intrinsic form and the volume of a product chart. The acceptance test's sphere declares its
+stereographic chart's volume, and an exponential sphere is the tests' chart with a bounded domain.
+The normal entry's tangent normal builds on this, and its branch drops its own copy of the note
+once this entry is merged.

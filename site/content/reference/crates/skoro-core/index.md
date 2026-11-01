@@ -1,7 +1,10 @@
 `skoro-core` is everything that makes a model a model. It holds the [spaces](../../../concepts/spaces/)
 quantities live in (the Euclidean and positive types, products, the discrete types, and the embedded
 types that later crates declare from a retraction and its inverse) and the typed handles code holds
-them by. It holds [operations](../../../concepts/operations/): the trait every operation implements,
+them by, and gives every continuous space a reference measure through the log-volume of its chart:
+Lebesgue measure on its own types, and on an embedded type that declares its chart's volume, the
+measure its retraction normalizes. A space without one has no densities, and the core refuses to
+score, propose or integrate out a quantity of it. It holds [operations](../../../concepts/operations/): the trait every operation implements,
 the kernels they are lowered to with derivatives up to second order, the primitives, composites, and
 the registry that makes an operation again from its name and parameters.
 
@@ -17,4 +20,4 @@ their Markov blanket, which the caller builds.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the
-`precision_tests!` macro.
+`precision_tests!` macro, and a declared chart volume against the area formula.

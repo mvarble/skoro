@@ -26,13 +26,17 @@ the quantities, and what a snapshot can say about it.
 A term is added in one of two ways:
 
 ```rust
-{../../../../crates/skoro-core/src/term.rs:274..296}
+{../../../../crates/skoro-core/src/term.rs:274..297}
 ```
 
 `score` adds the term of the distribution a quantity was drawn from: its density, as a function of
 the quantity it **scores** and the quantities it is **conditioned on**. `factor` adds a
 **likelihood factor**, which scores nothing: the likelihood of data that is not a quantity of the
-model. Either way, the log-density must be computed by an operation and be a `Real`.
+model. Either way, the log-density must be computed by an operation and be a `Real`. A term that
+scores a quantity is a density against the
+[reference measure](../spaces/#measures-and-chart-volumes) of the quantity's space, so a quantity
+whose space has none cannot be scored, and is a parameter, which likelihood factors may still be
+conditioned on.
 
 Which quantities a term involves is never declared. It is read off the
 [compilation graph](../building/#the-compilation-graph): the quantities among the roots its

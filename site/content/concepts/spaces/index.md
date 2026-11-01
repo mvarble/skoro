@@ -2,14 +2,14 @@
 title: Spaces and quantities
 summary: Every value in a model lives in a space, which fixes how it is stored, how it moves, and the typed handle code holds it by.
 order: 1
-depends_on: [retraction, product-manifold]
+depends_on: [retraction, product-manifold, chart-volume]
 ---
 
 Everything a model holds (its uncertain quantities, its constants, and the values computed from
 them) lives in a **space**. The space says how a value is stored in a tensor, whether it is
 continuous, and, when it is, how it moves: its tangent space and its retraction. This page
-introduces the spaces of `skoro-core`, the retractions they move by, and the typed handles code
-holds them with.
+introduces the spaces of `skoro-core`, the retractions they move by, the typed handles code holds
+them with, and the measures that densities on them are taken against.
 
 ## The spaces
 
@@ -81,3 +81,80 @@ marker, checked against the node's space when it runs, which can.
 A handle can also be **failed**. Building a model never panics on a mistake such as adding a
 vector to a matrix: the operation returns a failed handle, and everything built on it fails in
 turn, as [building a model](../building/) describes.
+
+## Measures and chart volumes
+
+A density is a density with respect to a measure, and every continuous space with one says which,
+through its charts. The chart at $\point$ carries the space's **reference measure** to a density on
+the tangent coordinates, the chart's **volume**, and its logarithm $\lambda_\point(\tangent)$ is
+the **log-volume**. A random tangent vector $\varepsilon$ of density $f$ moves $\point$ to a point
+whose log-density is $\log f(\tangent) - \lambda_\point(\tangent)$ at $\tangent = \otherPoint
+\ominus \point$: the note on [densities in tangent charts](../../math/chart-volume/) has the
+mathematics. The core gives each space its log-volume as a composite, beside its retraction:
+
+```
+{../../../../crates/skoro-core/src/retraction.rs:10..20}
+```
+
+```rust
+{../../../../crates/skoro-core/src/retraction.rs:60..88}
+```
+
+On the Euclidean spaces the chart is a translation and its log-volume is zero. On the positive
+orthant it is $\sum_i (\log \point_i + \tangent_i)$, the logarithm of the moved point's
+coordinates, which is why a density written in the logarithmic chart of a scale carries the
+familiar $-\sum_i \log \otherPoint_i$. On a product it is the sum of the factors'. A discrete
+space has counting measure and no chart. On a handle, `x.log_volume(t)` is $\lambda_x(t)$, so
+that a density through the chart at `mu` is written
+
+```rust
+let t = x.local(mu);
+let log_density = gaussian(t) - mu.log_volume(t);
+```
+
+> [!DECISION] The positive orthant keeps Lebesgue measure
+> Its retraction would normalize $\dd \point / \point$, but the densities of scales in common
+> use, the gamma and the log-normal among them, are against Lebesgue measure, and their modes
+> with them. See [the entry on reference measures](../../archive/measures/math.svx#the-core-s-own-types).
+
+**Embedded types.** A curved type has no Lebesgue measure. It may declare its chart's volume,
+against the measure its retraction normalizes, the one whose charts have volume $1$ at their
+centre: Haar measure on a group, surface measure on a sphere, the same however the type is
+stored.
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:42..60}
+```
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:217..221}
+```
+
+The log-volume $\Lambda(\iota(\point), \tangent)$ is an operation on the point's storage and the
+tangent, written as a composite, smooth as computed at $\tangent = 0$, and its derivatives are its
+parts'. The domain is where the chart is a diffeomorphism: all of $\R^\dimension$, or where a
+composite to `Boolean` says, such as the ball of radius $\pi$ for an exponential chart. A
+declaration asks one more thing of the type's inverse retraction: that it invert the chart on all
+of the chart's image, not only near its centre. The sphere of the core's tests declares its
+stereographic chart's volume so:
+
+```rust
+{../../../../crates/skoro/tests/common/sphere.rs:76..92}
+```
+
+`testing::check_volume` holds a declaration to the area formula of the
+[note](../../math/chart-volume/#the-measure-a-retraction-normalizes), computed from first-order
+passes over the retraction, and checks that the volume is $1$ at the centre and that the inverse
+holds across the domain.
+
+> [!DECISION] A chart's volume is declared, not computed
+> Computing it from the retraction would put a derivative of the retraction into the log-density,
+> so its Hessian would need third derivatives, which no operation has. The area formula is what a
+> test checks the declaration against instead. See
+> [the entry on reference measures](../../archive/measures/math.svx#declared-not-computed).
+
+**A space without a measure.** An embedded type that declares no volume has none, and neither
+does a product with it among its factors; `has_measure` says so. Such a space has no densities: no
+term may score a quantity of it, no proposal may draw it, and no retirement may integrate it out,
+each refused with `NoVolume`. It may still be conditioned on, observed, and estimated by
+optimization, and a measurement of it is held as a likelihood factor over the measured value.
