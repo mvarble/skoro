@@ -18,7 +18,7 @@ device where the companion compares a value.
       and the constant helpers `sd`, `sds`, `covariance` and `precision`, with the host's Cholesky
       and reversed Cholesky factorizations and the refusal of a matrix that is not positive
       definite with `ValueShape`. Tests: `constant_scale_helpers`.
-- [ ] `composites.rs`: the cache keyed by form, dimension and part, and the composites
+- [x] `composites.rs`: the cache keyed by form, dimension and part, and the composites
       `skoro.normal.whiten`, `skoro.normal.normalizer` and `skoro.normal.matrix` for every form,
       the covariance factor's forward substitution among them. Tests: `forward_substitution_solves`.
 - [ ] `normal.rs`: `Normal::on`, `Normal::in_space`, `Parts`, `Normal::log_density` with the
