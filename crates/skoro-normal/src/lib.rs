@@ -13,7 +13,9 @@ mod refuse;
 pub mod roles;
 mod sample;
 mod scale;
+mod stacked;
 
 pub use normal::{Normal, Parts};
 pub use sample::{NormalSample, quantile};
 pub use scale::{Form, Scale, triangular};
+pub use stacked::Stacked;

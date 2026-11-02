@@ -55,7 +55,7 @@ device where the companion compares a value.
 
 ## The stacked tangent (`skoro-normal`, tested in `skoro`)
 
-- [ ] `stacked.rs`: `Stacked` with `block`, `tangent`, `log_density` and `factor`, the anchors made
+- [x] `stacked.rs`: `Stacked` with `block`, `tangent`, `log_density` and `factor`, the anchors made
       as constants from their markers, and the documentation on `log_density` that a replacement
       written with it binds no roles until the core's `Replacement` carries bindings. Tests:
       `normal.rs::stacked_tangent_on_the_sphere`, `retirement.rs::replacements_written_with_stacked`.

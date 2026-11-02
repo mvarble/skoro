@@ -780,3 +780,75 @@ fn retire_refuses_to_integrate_a_quantity_without_a_measure() {
         .unwrap();
     assert_eq!(writer.snapshot().quantities(), vec![y.id()]);
 }
+
+/// The two replacements of these tests, the Kalman update and the joint over the blanket, written
+/// with the normal's stacked tangent, agree with the hand-written ones.
+#[test]
+fn replacements_written_with_stacked() {
+    use skoro_normal::{Scale, Stacked};
+    let target = Target::host();
+    let (evidence, mean, variance) = kalman();
+    let gain = S * S / (S * S + R * R);
+    let blanket = S * S + R * R;
+    let joint_variance = (1.0 - gain) * S * S + QN * QN;
+    // The joint of (z0, x1) about (a, a): z0 ~ N(a, s² + r²), x1 | z0 ~ N(a + K (z0 - a), P + q²).
+    let covariance = [
+        blanket,
+        gain * blanket,
+        gain * blanket,
+        joint_variance + gain * gain * blanket,
+    ];
+    let mut writer = Writer::new();
+    let (z0, x1, nodes) = writer
+        .build(|| {
+            let z0 = quantity("z0", Real);
+            let x1 = quantity("x1", Real);
+            let kalman_by_hand =
+                log_density(x1, constant(Real, mean), variance.sqrt()).untyped() + evidence;
+            let kalman = Stacked::new().block(x1, Real, mean).log_density(
+                &[0.0],
+                Scale::sd(variance.sqrt()),
+                evidence,
+            );
+            let evidence = log_density(z0, constant(Real, A), blanket.sqrt());
+            let predicted = log_density(x1, z0 * gain + A * (1.0 - gain), joint_variance.sqrt());
+            let joint_by_hand = evidence.untyped() + predicted.untyped();
+            let joint = Stacked::new()
+                .block(z0, Real, A)
+                .block(x1, Real, A)
+                .log_density(&[0.0, 0.0], Scale::covariance(&covariance, 2), 0.0);
+            (
+                z0,
+                x1,
+                [
+                    kalman_by_hand,
+                    kalman.untyped(),
+                    joint_by_hand,
+                    joint.untyped(),
+                ],
+            )
+        })
+        .unwrap();
+    let points = [(Z0, -0.8), (Z0, 0.4), (Z0, 1.7), (-0.3, 0.4), (1.2, -0.8)];
+    let given = Observations::new()
+        .observe(z0, skoro::Rows(points.iter().map(|p| p.0).collect()))
+        .observe(x1, skoro::Rows(points.iter().map(|p| p.1).collect()));
+    let program = writer
+        .snapshot()
+        .compile(&Query::of(nodes).given(given), &target)
+        .unwrap();
+    let out = program.forward(&Values::new()).unwrap();
+    let value = |q: QDyn| match out.get(q.id()).unwrap() {
+        Value::Continuous(points) => points.to_host(),
+        Value::Discrete(_) => panic!("a continuous value"),
+    };
+    for pair in nodes.chunks(2) {
+        let (by_hand, stacked) = (value(pair[0]), value(pair[1]));
+        for (a, b) in by_hand.iter().zip(&stacked) {
+            assert!(
+                (a - b).abs() < 1e-12 * a.abs().max(1.0),
+                "{by_hand:?} against {stacked:?}"
+            );
+        }
+    }
+}

@@ -596,3 +596,74 @@ fn refuses_a_type_without_a_volume() {
         );
     }
 }
+
+#[test]
+fn stacked_tangent_on_the_sphere() {
+    use skoro_normal::Stacked;
+    let target = Target::host();
+    let anchor = means()[1];
+    let (point, real) = (retract(anchor, [0.3, -0.2]), 1.1);
+    const SIGMA: [f64; 9] = [0.5, 0.1, 0.0, 0.1, 0.4, 0.05, 0.0, 0.05, 0.3];
+    let m = [0.05, -0.1, 0.2];
+    let mut writer = Writer::new();
+    let (s, r, delta, factor) = writer
+        .build(|| {
+            let s = quantity("s", Sphere);
+            let r = quantity("r", skoro::Real);
+            let stacked = Stacked::new()
+                .block(s, Sphere, anchor)
+                .block(r, skoro::Real, 0.4);
+            let factor = stacked.factor(&m, Scale::covariance(&SIGMA, 3), 0.0);
+            (s, r, stacked.tangent(), factor.id())
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let residual = snapshot.bound(factor, &roles::RESIDUAL).unwrap();
+    let given = Observations::new().observe(s, point).observe(r, real);
+    let values = evaluate(&snapshot, &[delta.untyped(), residual], given, &target);
+
+    // δ is the tangents laid end to end.
+    let t = local(anchor, point);
+    let want = [t[0], t[1], real - 0.4];
+    for (got, want) in values[0].iter().zip(want) {
+        assert!(
+            (got - want).abs() < 1e-12,
+            "{:?} against {want:?}",
+            values[0]
+        );
+    }
+    // Its factor's residual is W (δ - m), W = L⁻¹ for the Cholesky factor L of Σ.
+    let l = [
+        SIGMA[0].sqrt(),
+        SIGMA[3] / SIGMA[0].sqrt(),
+        (SIGMA[4] - SIGMA[3] * SIGMA[3] / SIGMA[0]).sqrt(),
+    ];
+    let l20 = SIGMA[6] / l[0];
+    let l21 = (SIGMA[7] - l20 * l[1]) / l[2];
+    let l22 = (SIGMA[8] - l20 * l20 - l21 * l21).sqrt();
+    let d = [want[0] - m[0], want[1] - m[1], want[2] - m[2]];
+    let z0 = d[0] / l[0];
+    let z1 = (d[1] - l[1] * z0) / l[2];
+    let z2 = (d[2] - l20 * z0 - l21 * z1) / l22;
+    for (got, want) in values[1].iter().zip([z0, z1, z2]) {
+        assert!(
+            (got - want).abs() < 1e-12,
+            "{:?} against {want:?}",
+            values[1]
+        );
+    }
+
+    // A discrete block is refused.
+    let failure = Writer::new()
+        .build(|| {
+            let k = quantity("k", skoro::Categorical::<3>);
+            Stacked::new()
+                .block(k, skoro::Categorical::<3>, 1usize)
+                .tangent();
+        })
+        .unwrap_err();
+    assert!(
+        matches!(failure.error, skoro::Error::NotContinuous { .. }),
+        "{failure:?}"
+    );
+}
