@@ -15,5 +15,8 @@ wgpu = ["skoro-core/wgpu"]
 skoro-tensor.workspace = true
 skoro-core.workspace = true
 
+[dev-dependencies]
+skoro-normal.workspace = true
+
 [lints]
 workspace = true

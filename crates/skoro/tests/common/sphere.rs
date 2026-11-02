@@ -4,7 +4,10 @@
 
 use std::sync::{Arc, LazyLock};
 
-use skoro::{Composite, Declares, Embedded, QDyn, Space, Typed, Volume};
+use skoro::primitive::Select;
+use skoro::scope::{apply, constant};
+use skoro::tensor::{HostData, HostValue};
+use skoro::{Composite, Declares, Embedded, IntoHostValue, QDyn, Real, Space, Typed, Volume};
 
 /// `1 / a`, written `e^{-log a}`, for `a` positive on the domain.
 pub fn reciprocal(a: QDyn) -> QDyn {
@@ -127,4 +130,217 @@ pub fn points(rows: usize) -> Vec<[f64; 3]> {
             [r * phi.cos(), r * phi.sin(), z]
         })
         .collect()
+}
+
+/// How the private sphere computes its exponential map near `t = 0`.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Near {
+    /// The closed form alone: `0 / 0` at `t = 0`.
+    Closed,
+    /// Switched to its series by a selection, the closed form still evaluated at `t = 0`.
+    Selected,
+    /// Switched, and the closed form's input guarded by a second selection.
+    Guarded,
+}
+
+/// The squared radius below which the series is used.
+pub const CUT: f64 = 1e-8;
+
+pub fn select(index: QDyn, values: [QDyn; 2]) -> QDyn {
+    apply(Arc::new(Select), &[index, values[0], values[1]])
+}
+
+/// The exponential map, `R(x, t) = cos|t| x + (sin|t| / |t|) B(x) t`.
+pub fn exponential(near: Near) -> Arc<Composite> {
+    let name = match near {
+        Near::Closed => "sphere.exp.closed",
+        Near::Selected => "sphere.exp.selected",
+        Near::Guarded => "sphere.exp.guarded",
+    };
+    Composite::define(
+        name,
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        move |q| {
+            let (x, t) = (q[0], q[1]);
+            let ss = (t * t).sum();
+            let small = (-ss + CUT).is_nonnegative();
+            let one = constant(Real, 1.0).untyped();
+            let input = if near == Near::Guarded {
+                select(small, [ss, one])
+            } else {
+                ss
+            };
+            let n = (input.log() * 0.5).exp();
+            let (cos, sinc) = (n.cos(), n.sin() * reciprocal(n));
+            let (cos, sinc) = match near {
+                Near::Closed => (cos, sinc),
+                Near::Selected | Near::Guarded => (
+                    select(small, [cos, -ss * 0.5 + 1.0 + ss * ss * (1.0 / 24.0)]),
+                    select(
+                        small,
+                        [sinc, -ss * (1.0 / 6.0) + 1.0 + ss * ss * (1.0 / 120.0)],
+                    ),
+                ),
+            };
+            cos * x + sinc * basis_times(x, t)
+        },
+    )
+    .unwrap()
+}
+
+/// Its inverse, `Q(x, y) = (θ / r) B(x)ᵀ y` with `r = |B(x)ᵀ y|` and `θ = atan2(r, xᵀ y)`, guarded
+/// at `r = 0` as the guarded retraction is.
+pub fn logarithm() -> Arc<Composite> {
+    Composite::define(
+        "sphere.log",
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(3)],
+        |q| {
+            let (x, y) = (q[0], q[1]);
+            let bty = basis_transpose(x, y);
+            let rr = (bty * bty).sum();
+            let small = (-rr + CUT).is_nonnegative();
+            let one = constant(Real, 1.0).untyped();
+            let r = (select(small, [rr, one]).log() * 0.5).exp();
+            let theta = r.atan2((x * y).sum());
+            let ratio = select(small, [theta * reciprocal(r), rr * (1.0 / 6.0) + 1.0]);
+            ratio * bty
+        },
+    )
+    .unwrap()
+}
+
+pub fn exponential_sphere(near: Near) -> Arc<Embedded> {
+    let name = match near {
+        Near::Closed => "sphere.exp.closed",
+        Near::Selected => "sphere.exp.selected",
+        Near::Guarded => "sphere.exp.guarded",
+    };
+    Embedded::declare(name, Vec::new(), 3, 2, exponential(near), logarithm(), None).unwrap()
+}
+
+/// The exponential chart's log-volume against surface measure, `log(sin r / r)` with
+/// `r = |t|`: guarded as its retraction is, below the same cutoff, by the series
+/// `-r²/6 - r⁴/180`, or computed as written.
+pub fn exponential_log_volume(guarded: bool) -> Arc<Composite> {
+    let name = if guarded {
+        "sphere.exp.log_volume"
+    } else {
+        "sphere.exp.log_volume.closed"
+    };
+    Composite::define(
+        name,
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        move |q| {
+            let rr = (q[1] * q[1]).sum();
+            if !guarded {
+                let r = (rr.log() * 0.5).exp();
+                return (r.sin() * reciprocal(r)).log();
+            }
+            let small = (-rr + CUT).is_nonnegative();
+            let one = constant(Real, 1.0).untyped();
+            let r = (select(small, [rr, one]).log() * 0.5).exp();
+            let closed = (r.sin() * reciprocal(r)).log();
+            select(small, [closed, -rr * (1.0 / 6.0) - rr * rr * (1.0 / 180.0)])
+        },
+    )
+    .unwrap()
+}
+
+/// `|t|² ≤ π²`: the ball on which the exponential chart is a diffeomorphism, closed, which
+/// differs from it by a boundary of measure zero.
+pub fn ball_of_radius_pi() -> Arc<Composite> {
+    Composite::define(
+        "sphere.exp.domain",
+        Vec::new(),
+        &[Space::Vector(3), Space::Vector(2)],
+        |q| (-(q[1] * q[1]).sum() + std::f64::consts::PI.powi(2)).is_nonnegative(),
+    )
+    .unwrap()
+}
+
+/// The guarded exponential sphere with a volume: `name` declared with `volume`.
+pub fn measured_exponential_sphere(name: &'static str, volume: Volume) -> Arc<Embedded> {
+    Embedded::declare(
+        name,
+        Vec::new(),
+        3,
+        2,
+        exponential(Near::Guarded),
+        logarithm(),
+        None,
+    )
+    .and_then(|sphere| sphere.with_volume(volume))
+    .unwrap()
+}
+
+pub static EXPONENTIAL: std::sync::LazyLock<Arc<Embedded>> = std::sync::LazyLock::new(|| {
+    measured_exponential_sphere(
+        "sphere.exp.measured",
+        Volume::within(exponential_log_volume(true), ball_of_radius_pi()),
+    )
+});
+
+/// The exponential sphere's marker.
+#[derive(Clone, Copy, Debug)]
+pub struct Exponential;
+
+impl Typed for Exponential {
+    fn admits(space: &Space) -> bool {
+        matches!(space, Space::Embedded(e) if **e == **EXPONENTIAL)
+    }
+}
+
+impl Declares for Exponential {
+    fn space(&self) -> Space {
+        Space::Embedded(EXPONENTIAL.clone())
+    }
+}
+
+/// The acceptance-test sphere under another name, declared without a volume: a type with no
+/// reference measure.
+pub static UNMEASURED: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
+    let (r, q, p) = (retraction(), inverse(), projection());
+    Embedded::declare("sphere.unmeasured", Vec::new(), 3, 2, r, q, Some(p)).unwrap()
+});
+
+/// The unmeasured sphere's marker.
+#[derive(Clone, Copy, Debug)]
+pub struct Unmeasured;
+
+impl Typed for Unmeasured {
+    fn admits(space: &Space) -> bool {
+        matches!(space, Space::Embedded(e) if **e == **UNMEASURED)
+    }
+}
+
+impl Declares for Unmeasured {
+    fn space(&self) -> Space {
+        Space::Embedded(UNMEASURED.clone())
+    }
+}
+
+/// A point of a sphere, shared by every row.
+fn on_the_sphere(point: [f64; 3]) -> Option<HostValue> {
+    HostValue::new(None, 3, HostData::Continuous(point.to_vec()))
+}
+
+impl IntoHostValue<Sphere> for [f64; 3] {
+    fn into_host_value(self) -> Option<HostValue> {
+        on_the_sphere(self)
+    }
+}
+
+impl IntoHostValue<Exponential> for [f64; 3] {
+    fn into_host_value(self) -> Option<HostValue> {
+        on_the_sphere(self)
+    }
+}
+
+impl IntoHostValue<Unmeasured> for [f64; 3] {
+    fn into_host_value(self) -> Option<HostValue> {
+        on_the_sphere(self)
+    }
 }

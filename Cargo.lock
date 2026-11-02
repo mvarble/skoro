@@ -5332,6 +5332,7 @@ name = "skoro"
 version = "0.1.0"
 dependencies = [
  "skoro-core",
+ "skoro-normal",
  "skoro-tensor",
 ]
 

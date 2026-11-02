@@ -37,7 +37,7 @@ device where the companion compares a value.
 
 ## The umbrella's tests (`skoro`)
 
-- [ ] `skoro-normal` as a development dependency of `skoro`; the guarded exponential sphere with
+- [x] `skoro-normal` as a development dependency of `skoro`; the guarded exponential sphere with
       its volume moved, unchanged, from `tests/sphere.rs` to `tests/common/sphere.rs`, which
       `tests/sphere.rs` then uses; in `tests/common/sphere.rs`, the sphere declared under another
       name without a volume, and the host values of the sphere's marker. Tests: the existing
