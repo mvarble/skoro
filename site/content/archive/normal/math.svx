@@ -1,5 +1,5 @@
 ---
-summary: One normal distribution for every space whose chart's volume is known, the tangent normal, the law of a point moved by normal noise through its chart, so that a measurement of a curved quantity is held as what was measured; with its scale, its sampler, its expected information, its roles and its use as a likelihood factor, all exact on the core's flat and positive spaces.
+summary: skoro's one normal distribution, the law of a point moved by normal noise through its chart, defined on every space whose chart is global and whose volume is known, so that flat, positive and curved quantities alike, measurements among them, are drawn and scored exactly; with its scale, its sampler, its properties, its expected information, its roles, and its use as a likelihood factor.
 depends_on: [retraction, product-manifold, derivatives-in-charts, chart-volume, archive/core/math, archive/measures/math]
 ---
 
@@ -8,8 +8,6 @@ depends_on: [retraction, product-manifold, derivatives-in-charts, chart-volume, 
 	import Proof from '$lib/components/Proof.svelte';
 	import * as density from './statements/density.md';
 	import * as information from './statements/information.md';
-	import * as tangentDensity from './statements/tangent-density.md';
-	import * as wrapping from './statements/wrapping.md';
 	import * as invariant from './statements/invariant.md';
 	import * as gaussNewton from './statements/gauss-newton.md';
 </script>
@@ -24,47 +22,55 @@ measurement with Gaussian noise, and the replacement a retirement leaves behind 
 approximation are all normal. It is therefore the first distribution to return from the `archive`
 branch.
 
-The archive's normal was written for any manifold: its term was the Gaussian log-density of the
-tangent $\point \ominus \mu$ at the mean, whitened by a triangular factor of the covariance. That
-form is right on a flat space and on none other without a correction. The archive had no positive
-type, but carried over unchanged to the core's positive orthant, the form would drop the Jacobian
-of the logarithmic chart, so that its density would not be with respect to the base measure the
-core fixes for positive quantities ([](eq:archive/core/math/log-chart-density)), and its sampler,
-drawing exactly from the normal in the chart, would not be exact for its own term. On a curved type
-such as the rotations it omitted the volume factor of the retraction, and its expected information
-held only to second order in the dispersion. This document works out the
-normal on exactly the spaces where it can be stated with respect to the core's base measures
-without approximation, and the parts of it that the rest of skoro will need: how its scale is
-given, how it is drawn, its expected information, and its use as a likelihood factor over values
-that are not quantities.
+The archive's normal was written for any manifold, as the law of the mean moved by normal noise,
+$\mu \oplus \varepsilon$, and that form is the one skoro needs. A measurement of a rotation, of a
+direction or of a pose is most cleanly modelled as what was measured, the predicted quantity moved
+by noise, $h(\point) \oplus \varepsilon$, rather than as the residual of a normal; and a model that
+holds the measurement itself can observe it in one query and simulate it in another. The archive's
+fault was its density, the Gaussian log-density of the tangent $\point \ominus \mu$ alone, which
+omitted the volume of the chart at the mean. On the core's positive orthant that omission is the
+Jacobian of the logarithmic chart, without which the density is not with respect to the base
+measure the core fixes ([](eq:archive/core/math/log-chart-density)); on the rotations it is the
+volume factor of the retraction, without which the density is that of no law the sampler draws.
 
-The archive's form was nonetheless the one a curved space needs. A measurement of a rotation, of a
-direction or of a pose is most cleanly modelled as what was measured, the measured quantity moved
-by normal noise, $h(\point) \oplus \varepsilon$, rather than as the residual of a normal, and a
-model that holds the measurement itself can observe it in one query and simulate it in another. The
-archive's fault was its density, which omitted the volume of the chart at the mean. With that
-volume, which [the note on densities in tangent charts](../../math/chart-volume/) works out for
-the rotations, the rigid motions and the sphere, and which [the core's measures](../measures/math.svx)
-now give every continuous type that declares one, the same form has an exact density on every space
-whose chart is global, and one exact to within a stated tail on the exponential charts of the
-groups. This document therefore works out one distribution, the *tangent normal*, the law of
-$\mu \oplus \varepsilon$ on any space whose chart's volume is known. On the flat-in-disguise
-spaces it is the normal, the log-normal on positive factors, and has there an exact expected
-information that no curved space allows it. The sections up to
-[The expected information](#the-expected-information) work out that case, under the name of the
-normal, $\mathcal N(\mu, \Sigma)$; [The tangent normal](#the-tangent-normal) carries the same
-distribution to curved spaces, and says what a space must supply to carry it.
+The charter fixes what the normal must therefore be. A model is generative and has a true density,
+and its generation carries an importance weight, so the normal's term must be the exact density of
+the law its sampler draws, with respect to the reference measure of the scored quantity's type.
+Models are built forward and conditioned in queries, and curved quantities are both estimated
+states and observables, so the scored quantity may be of any continuous type, and its mean a value
+computed from any other quantities. [The core's measures](../measures/math.svx) give every
+continuous type that declares one a reference measure and the volume of its retraction's chart.
+This document defines the normal once, on every type whose chart is global and whose volume is
+known, shows its density and its sampler exact there, and works out what the rest of skoro will
+need of it: how its scale is given, its properties, its expected information, the roles it binds,
+and its use as a likelihood factor over values that are not quantities.
 
 ## Setting
 
-A *flat-in-disguise* space, in this document, is a space of the core whose inverse retraction at
-any one point is a chart of the whole space: the real line, vectors $\R^n$ and matrices
-$\R^{m \times n}$, read as vectors column by column, the positive orthant $\positive^n$ with its
-retraction [](eq:archive/core/math/positive), and products of these, with the stacked tangent
-[](eq:math/product-manifold/stack). For such a space $\manifold$, of dimension $\dimension$, and
-any $\mu \in \manifold$, the map $\point \mapsto \point \ominus \mu$ is a diffeomorphism of
-$\manifold$ onto $\R^\dimension$ whose inverse is $\tangent \mapsto \mu \oplus \tangent$, and both
-identities
+**The spaces.** The normal lives on a continuous type with a volume, in the sense of
+[the core's measures](../measures/math.svx): a space $\manifold$ of dimension $\dimension$ with a
+reference measure $\nu$, and at every $\mu \in \manifold$ the chart $\tangent \mapsto \mu \oplus
+\tangent$ of its [retraction](../../math/retraction/), with a domain $U_\mu \subseteq
+\R^\dimension$, an image $V_\mu$ whose complement has measure zero, and the log-volume
+$\lambda_\mu(\tangent) = \Lambda(\iota(\mu), \tangent)$ [](eq:archive/measures/math/declared)
+([%full](statement:math/chart-volume/chart-volume)). On $V_\mu$, $\point \ominus \mu$ is the inverse
+of the chart. The chart is *global* when $U_\mu = \R^\dimension$ at every $\mu$, and the normal is
+defined on the types whose chart is global ([Why global charts](#why-global-charts)). They are:
+
+- the core's own continuous types, the real line, vectors $\R^n$, matrices $\R^{m \times n}$ read
+  as vectors column by column, and the positive orthant $\positive^n$ with its retraction
+  [](eq:archive/core/math/positive), all with Lebesgue measure
+  ([%full](statement:archive/measures/math/core-types));
+- the embedded types that declare a volume with a global chart, such as the rotations with the
+  Cayley chart and the sphere with the stereographic chart of
+  [the note's table](../../math/chart-volume/#the-usual-charts);
+- products of these, with the stacked tangent [](eq:math/product-manifold/stack), the product
+  measure and the sum of the factors' log-volumes, such as a pose held as a rotation and a position
+  in a fixed frame of the world.
+
+**The flat-in-disguise spaces.** Among them, the core's own types and their products have a
+property no curved type has. For such a space and any $\mu$, $\point \mapsto \point \ominus \mu$ is
+a diffeomorphism of $\manifold$ onto $\R^\dimension$, and both identities
 
 $$
 	(\point \oplus \tangent) \ominus \mu = (\point \ominus \mu) + \tangent,
@@ -73,36 +79,35 @@ $$
 $$
 
 hold exactly, for every $\tangent$ and $u$: on a Euclidean factor because $\ominus$ is subtraction,
-and on a positive one because it is subtraction of logarithms. Each such space is an open subset of
-$\R^\dimension$ in its storage coordinates, its dimension equals its storage size, and its base
-measure is Lebesgue measure there ([the core's appendix](../core/math.svx#appendix-the-probability-space-of-a-model)).
-Write $P$ for the storage coordinates that belong to positive factors, and
+and on a positive one because it is subtraction of logarithms. This document calls these spaces
+*flat-in-disguise*. Their log-volume is, by [%full](statement:archive/measures/math/core-types),
 
 $$
-	J(\point) = \sum_{i \in P} \log \point_i , @tag(jacobian)
+	\lambda_\mu(\point \ominus \mu) = J(\point) = \sum_{i \in P} \log \point_i , @tag(jacobian)
 $$
 
-which is zero on a space with no positive factor.
+with $P$ the storage coordinates that belong to positive factors, and zero on a space with none.
 
-The normal's *mean* is $\mu \in \manifold$, and its *scale* is a symmetric positive definite
-$\dimension \times \dimension$ matrix, given in one of the forms of [The scale](#the-scale) and
-read, in every one of them, through its *whitening* $W$: the lower-triangular matrix with a
-positive diagonal such that the precision $\Lambda = \Sigma^{-1}$ is $W\transpose W$. Then
-$L = W^{-1}$ is lower triangular with a positive diagonal and $\Sigma = L L\transpose$. Both are
-unique: $L$ is the Cholesky factor of $\Sigma$.
+**The mean and the scale.** The normal's *mean* is $\mu \in \manifold$, and its *scale* is a
+symmetric positive definite $\dimension \times \dimension$ matrix, given in one of the forms of
+[The scale](#the-scale) and read, in every one of them, through its *whitening* $W$: the
+lower-triangular matrix with a positive diagonal such that the precision $\Lambda = \Sigma^{-1}$ is
+$W\transpose W$. Then $L = W^{-1}$ is lower triangular with a positive diagonal and
+$\Sigma = L L\transpose$. Both are unique: $L$ is the Cholesky factor of $\Sigma$.
 
-## The density
+## The definition
 
-The normal $\mathcal N(\mu, \Sigma)$ on a flat-in-disguise space $\manifold$ is the law of
+The normal $\mathcal N(\mu, \Sigma)$ on a space $\manifold$ whose chart is global is the law of
 $\mu \oplus \varepsilon$, where $\varepsilon$ is normal on $\R^\dimension$ with mean zero and
-covariance $\Sigma$. Its term is
+covariance $\Sigma$. Where its construction needs naming, it is the *tangent normal*: a normal in
+the tangent chart at $\mu$, pushed onto the space. Its term is
 
 $$
 	\logterm_{\mathcal N}(\point;\, \mu, W)
 	= -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
 	+ \sum_{i=1}^{\dimension} \log W_{ii}
 	- \tfrac{\dimension}{2} \log 2\pi
-	- J(\point), @tag(term)
+	- \lambda_\mu(\point \ominus \mu) , @tag(term)
 $$
 
 and $r = W (\point \ominus \mu)$ is its *whitened residual*, a standard normal vector when
@@ -112,50 +117,77 @@ $\randomPoint$ is drawn from the normal.
 
 <Proof>
 
-The map $\tangent \mapsto \mu \oplus \tangent$ is a diffeomorphism of $\R^\dimension$ onto
-$\manifold$, with inverse $\point \mapsto \point \ominus \mu$. The vector $\varepsilon = L \zeta$ is
-normal with mean zero and covariance $L L\transpose = \Sigma$, so its density at $\tangent$ is
-$(2\pi)^{-\dimension/2} \det W \exp(-\tfrac12 \lVert W \tangent \rVert^2)$, since
-$(\det \Sigma)^{-1/2} = \det W$ and $\tangent\transpose \Sigma^{-1} \tangent = \lVert W \tangent
-\rVert^2$. By the change of variables $\tangent = \point \ominus \mu$, the
-density of $\randomPoint = \mu \oplus \varepsilon$ with respect to Lebesgue measure on $\manifold$
-is that density at $\point \ominus \mu$ times $\lvert \det \partial (\point \ominus \mu) / \partial
-\point \rvert$, the derivative taken in storage coordinates. The inverse retraction acts factor by
-factor, so that derivative is block diagonal: the identity on a Euclidean factor, and
-$\operatorname{diag}(1 / \point)$ on a positive one, where $\point \ominus \mu = \log \point - \log
-\mu$. Its determinant is $\prod_{i \in P} \point_i^{-1}$, whose logarithm is $-J(\point)$.
+The vector $\varepsilon = W^{-1} \zeta = L \zeta$ is normal with mean zero and covariance
+$L L\transpose = \Sigma$, so its density at $\tangent$ is $(2\pi)^{-\dimension/2} \det W
+\exp(-\tfrac12 \lVert W \tangent \rVert^2)$, since $(\det \Sigma)^{-1/2} = \det W$ and
+$\tangent\transpose \Sigma^{-1} \tangent = \lVert W \tangent \rVert^2$; its logarithm at $\tangent =
+\point \ominus \mu$ is the first three terms of [](eq:term). The chart is global, so $\varepsilon \in
+U_\mu$ always, and [%full](statement:math/chart-volume/pushforward) gives the density, which is
+[](eq:archive/measures/math/chart-density) with that Gaussian as $f$.
 
 </Proof>
 
-The Jacobian $J$ is what keeps the term's base measure the core's. It does not depend on $\mu$ or
-on the scale, so it changes no derivative with respect to them, but it is a function of $\point$
-and it is not a constant of a query that leaves $\point$ free: since $J(\point \oplus \tangent) =
-J(\point) + \sum_{i \in P} \tangent_i$, the term's $-J$ adds $-1$ to its chart gradient at each
-positive coordinate. On a positive factor it moves the mode of the density away from $\mu$, as it
-must, because the density is with respect to Lebesgue measure in storage coordinates and not in the
-chart. Without it, three things the core
-relies on would fail: the sampler below would not be exact for the term, so the importance weight
-[](eq:archive/core/math/weight) would be wrong by $J$ at every draw; a quadrature of the term over
-$\point$, as in the core's tests of retirement, would not integrate to one; and a model mixing the
-normal with another distribution of a positive quantity would compare densities with respect to
-two different measures.
+So the term is the Gaussian log-density of the tangent coordinate, less the chart's log-volume
+there, on every space alike. On a Euclidean space the log-volume is zero, and the normal is the
+familiar one, with mean $\mu$ and covariance $\Sigma$. On a positive factor it is $J$ of
+[](eq:jacobian), and the normal is the log-normal: $\log \randomPoint$ is normal with mean
+$\log \mu$ and covariance $\Sigma$, so $\mu$ is the median of each coordinate rather than its mean,
+which is $\mu_i e^{\Sigma_{ii} / 2}$. It is offered under the normal's name all the same: a model
+that gives a positive quantity a normal has said how its noise acts, multiplicatively, through the
+space's chart, and a second name would describe the same law twice. On a product the factors are
+correlated through $\Sigma$ in their tangent coordinates, which is what a state with a position and
+a positive scale, or a rotation and a position, needs. On a curved type the log-volume is the
+type's declared one: $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$ for the Cayley chart of the
+rotations and the stereographic chart of the sphere [](eq:archive/measures/math/sphere-volume),
+one scalar function of the residual that the Gaussian part already computes.
 
-On a positive factor the normal is the log-normal distribution: $\log \randomPoint$ is normal with
-mean $\log \mu$ and covariance $\Sigma$, so $\mu$ is the median of each coordinate rather than its
-mean, which is $\mu_i e^{\Sigma_{ii} / 2}$. On a Euclidean factor it is the familiar normal, with
-mean $\mu$ and covariance $\Sigma$. On a product the two kinds of factor are correlated through
-$\Sigma$ in their tangent coordinates, which is what a state with a position and a positive scale
-needs. A positive quantity's normal is offered under the one distribution's name all the same,
-rather than as a log-normal of its own: a model that gives a positive quantity a normal has said
-how its noise acts, multiplicatively, through the space's chart, and a second name would describe
-the same law twice.
+The log-volume is what keeps the term's density with respect to the type's reference measure. It
+does not depend on the scale, so it changes no derivative with respect to it, but it is a function
+of $\point$ and of $\mu$, and it is not a constant of a query that leaves either free. Without it,
+three things the core relies on would fail: the sampler would not be exact for the term, so the
+importance weight [](eq:archive/core/math/weight) would be wrong at every draw; the term would not
+integrate to one; and a model mixing the normal with another distribution of the same quantity's
+type would compare densities with respect to two different measures.
 
-**Curved types.** On an embedded type, such as the sphere of the core's acceptance test or the
-rotations of a later entry, the chart at $\mu$ does not satisfy [](eq:translation), may not be a
-diffeomorphism of $\R^\dimension$ onto the type (on the sphere it misses a point, on the rotations
-it may wrap around), and the density of the pushed-forward normal carries the volume of that chart
-in place of $J$. That density is the tangent normal's, in [The tangent normal](#the-tangent-normal),
-of which the normal of this section is the case of the flat-in-disguise spaces.
+A measurement of a curved quantity is a normal with a computed mean:
+
+$$
+	z = h(\point) \oplus \varepsilon, \qquad \varepsilon \sim \mathcal N(0, \Sigma) \text{ on } \R^\dimension, @tag(measurement)
+$$
+
+that is, $z \sim \mathcal N(h(\point), \Sigma)$, scored by [](eq:term) at $\mu = h(\point)$. The
+direction $u \in S^2$ to a landmark $\ell \in \R^3$ seen from a pose $(R, p)$, for one, has
+$h(R, p) = R\transpose (\ell - p) / \lVert \ell - p \rVert$, a map into the sphere written in
+storage and projected as [](eq:archive/core/math/map-into) allows.
+
+### Why global charts
+
+> [!DECISION] The normal requires a global chart
+> On a type whose declared chart is full but not global, such as the exponential chart of the
+> rotations, whose domain is the ball of radius $\pi$, the normal noise has mass $p > 0$ outside
+> the domain, and no closed form makes both the density and the sampler exact. The draw $\mu \oplus
+> \varepsilon$ wraps, and its law is within $p$ in total variation of the law the term
+> describes ([%full](statement:math/chart-volume/local-chart)), but not equal to it. A draw
+> repeated until the domain accepts it is exact for the term's normalized law, but the term then
+> integrates to $1 - p$, whose logarithm has no closed form for a scale that is not isotropic. And
+> the exact density of the wrapped law is a sum over every preimage of a point, an infinite series
+> in every evaluation. The charter asks for a true density and an exact sampler, so the normal is
+> defined on types whose chart is global, where both are exact at every scale, and a quantity of a
+> type whose chart is not global is never scored by it.
+
+The mass $p$ is small for concentrated noise: for an isotropic rotation's noise of standard
+deviation $\sigma$, $p = \operatorname{erfc}(\pi / \sigma \sqrt 2) + \sqrt{2/\pi}\, (\pi / \sigma)\,
+e^{-\pi^2 / 2 \sigma^2}$, the tail of a $\chi$ law with three degrees of freedom, which is
+$1.4 \times 10^{-8}$ at $\sigma = 0.5$ rad and $0.02$ at $1$ rad. It is not zero, and the rule
+costs little. A type that means to carry normals takes a global chart: for the rotations the
+Cayley chart, the normalized first-order quaternion update $\mu \otimes (1, \tangent / 2)$, cheaper
+than the exponential and with an inverse [](eq:math/chart-volume/cayley-inverse) free of
+trigonometry; for the sphere the stereographic chart, which the core's acceptance-test sphere
+already has. A type retracted by its exponential chart holds its measurements as likelihood factors
+over data ([Without a volume or a global chart](#without-a-volume-or-a-global-chart)), as a type
+without a volume does. A rigid motion held as a group, $SE(3)$ or $SE_2(3)$ rather than a rotation
+and a position side by side, needs a global chart of its own, which is that type's entry to work
+out.
 
 ## The scale
 
@@ -192,15 +224,15 @@ once, column by column by the same substitution against the columns of the ident
 as the core folds every value reached only from fixed inputs; when $L$ is free, the residual is
 solved on every evaluation, and its derivatives with respect to $L$ come with it.
 
-**All four forms.** The tangent normal offers all four, because each is the form some model has, and none
+**All four forms.** The normal offers all four, because each is the form some model has, and none
 is reached from another without a computation the model did not ask for. The isotropic and
 diagonal forms need no linear algebra at all. The whitening is what elimination and a retirement's
 replacement produce, and inverting it to a covariance would cost a solve and lose the sparsity
 elimination keeps. The covariance factor is what a user with a full covariance, from a datasheet
 or a calibration, writes; it costs the substitution [](eq:forward-substitution), and a solve on
 every evaluation when it is free, which is the price of not inverting a matrix the user has and
-the term does not need inverted. Every form is a map to the same $W$, so the rest of this document,
-the tangent normal included, holds for each of them alike.
+the term does not need inverted. Every form is a map to the same $W$, so the rest of this document
+holds for each of them alike.
 
 **A triangular factor as a quantity.** When a scale is to be estimated, its factor is a quantity,
 and its type must have exactly as many tangent directions as the factor has free entries,
@@ -215,19 +247,20 @@ which the core does not have. Its chart on the diagonal is logarithmic, so a tan
 the diagonal is a relative change: these are the log-Cholesky coordinates of a covariance. For
 $\dimension = 1$ the strictly lower part is empty and the factor is a positive scalar, the
 isotropic form. The same type serves a covariance factor and a whitening, and a positive vector
-serves a diagonal scale.
+serves a diagonal scale. A scale that is a quantity may have a normal of its own, on that type,
+which is how a hierarchical model puts a prior on a noise.
 
 ## The sampler
 
 The normal draws $\point = \mu \oplus L \zeta$, with $\zeta$ standard normal on
 $\R^\dimension$. By [%full](statement:density), that draw has the density $\exp
-\logterm_{\mathcal N}$, Jacobian included, so the sampler is exact for the term
-[](eq:term) and contributes nothing to the importance weight. The coordinates of $\zeta$ are drawn
-from the quantity's key as the core draws every variate (charter, position 10): $\dimension$
-uniform variates $u_i \in (0, 1)$, in double precision on the host, each turned into
-$\zeta_i = \Phi^{-1}(u_i)$ by the standard normal quantile. A draw is then a deterministic
-function of the key, smooth in $\mu$ and the scale, and the same key gives the same draw at either
-precision, up to the rounding of the final cast.
+\logterm_{\mathcal N}$, log-volume included, on every space the normal is defined on, so the
+sampler is exact for the term [](eq:term) and contributes nothing to the importance weight. The
+coordinates of $\zeta$ are drawn from the quantity's key as the core draws every variate (charter,
+position 10): $\dimension$ uniform variates $u_i \in (0, 1)$, in double precision on the host, each
+turned into $\zeta_i = \Phi^{-1}(u_i)$ by the standard normal quantile. A draw is then a
+deterministic function of the key, smooth in $\mu$ and the scale, and the same key gives the same
+draw at either precision, up to the rounding of the final cast.
 
 Two computations in a draw are approximate, and neither is a matter of the model. The quantile
 $\Phi^{-1}$ has no closed form; Wichura's algorithm AS 241, which the core's tests already use, is
@@ -239,12 +272,68 @@ the solution $y$ of $W y = \zeta$, found on the host, in double precision, by th
 the Box–Muller transform because it spends exactly one uniform variate per coordinate, so that the
 draw of coordinate $i$ depends on $u_i$ alone, and is monotone in it.
 
+## Properties
+
+The definition is short; what follows from it on a curved space is not, and none of it is a matter
+of choice. Each property below holds of any normal pushed through a chart, and is stated here so
+that a model's author knows what the parameters mean.
+
+**The chart is part of the model.** The scale is read in the coordinates of the chart at $\mu$, so
+two retractions of one space make two normals with the same $\mu$ and $\Sigma$, which agree only to
+first order: the exponential and Cayley coordinates of a rotation by $\theta$ have the lengths
+$\theta$ and $2 \tan(\theta/2) = \theta + \theta^3/12 + O(\theta^5)$. A covariance carried over
+from a library that works in exponential coordinates is therefore, in the Cayley chart, a slightly
+different model, indistinguishably so at the dispersions of most measurements. A type's normals are
+part of what its retraction means, and changing the retraction of a type changes every model with
+a normal on it. On a group, the side on which the retraction perturbs the point is part of it too,
+in a way that can be undone exactly: the Cayley map satisfies
+$\varphi(\operatorname{Ad}_g \tangent) = g\, \varphi(\tangent)\, g^{-1}$, so
+$\mu\, \varphi(\tangent) = \varphi(\operatorname{Ad}_\mu \tangent)\, \mu$, and a normal with scale
+$\Sigma$ in the point's own frame is the normal with $\operatorname{Ad}_\mu \Sigma
+\operatorname{Ad}_\mu\transpose$ in a fixed frame of the world, with the same log-volume, which
+depends on the rotation's angle alone.
+
+**The basis on the sphere.** On the sphere the scale depends also on the basis $B(\mu)$ that
+identifies the tangent plane with $\R^2$. No basis is smooth on all of $S^2$, so a field of bases
+turns as $\mu$ moves in a way that the field, not the geometry, decides, and it spins near the
+point where it fails, the south pole of the core's acceptance test. A scale that is not isotropic is
+read along the basis's axes, and so means something different at every $\mu$. An isotropic scale is
+free of the basis: with an orthonormal basis, the stereographic chart's $\lVert \point \ominus \mu
+\rVert = 2 \tan(\alpha/2)$ depends only on the angle $\alpha$ between $\point$ and $\mu$.
+
+**What the mean is.** The point $\mu$ is the centre of the chart in which the noise is normal. It is
+not the expectation, which on an embedded type lies off the space; on the positive orthant it is
+the median; and on a curved space it need not even be a mode. With the Cayley chart of the
+rotations or the stereographic chart of the sphere and an isotropic scale $\sigma$, the density
+along a ray from $\mu$ is proportional to $\exp(-r^2 / 2\sigma^2 + 2 \log(1 + r^2/4))$ in the
+chart's radius $r$, whose logarithm has the second derivative $-1/\sigma^2 + 1$ at $r = 0$, so $\mu$
+is a mode only when $\sigma < 1$ in the chart's coordinates. A broad normal piles its mass near the
+half-turns or the antipode, where the chart compresses most.
+
+**The estimate a measurement gives.** When $z$ is observed and the state $\point$ is free, the term
+[](eq:term) at $\mu = h(\point)$ depends on $\point$ through the whitened residual and through
+$\lambda_{h(\point)}(z \ominus h(\point))$. Near a zero residual, $-\lambda$ is $\lVert \tangent
+\rVert^2 / 2$ to second order for the Cayley and stereographic charts, so the measurement weighs on
+the state as a Gaussian of the residual would with the precision $\Lambda$ replaced by
+$\Lambda - I$ on the rotation's or the direction's block. For a noise of $0.1$ rad that changes the
+measurement's weight by $1\,\%$. Small, but it is the difference between the law [](eq:measurement)
+and the law that least squares of the whitened residual estimates exactly, which
+[Without a volume or a global chart](#without-a-volume-or-a-global-chart) describes.
+
+**Derivatives.** Every step of [](eq:term) is an operation the core differentiates: the inverse
+retraction, through the boundary operations of [%full](statement:archive/core/math/embedded) on an
+embedded type; the whitening, as in [The scale](#the-scale); and the log-volume, as the type's
+declared operation. The term's order is the least of theirs. On the flat-in-disguise spaces every
+step, from the inverse retraction to the logarithms of the diagonal and the substitution
+[](eq:forward-substitution), is a primitive of order two, so the term has order two; on a curved
+type it has order two when the type's inverse retraction and log-volume admit Hessian passes.
+
 ## The expected information
 
 An estimator that uses the expected information of the model in place of its Hessian, Fisher
 scoring or a Riemannian sampler, asks of each term a matrix that is positive semidefinite by
-construction. For the normal it has a closed form, and on flat-in-disguise spaces that form is
-exact.
+construction. For the normal it has a closed form, which is exact on the flat-in-disguise spaces
+and, on a curved space, exact in part and approximate in the rest, with its error stated.
 
 <Statement {...information} />
 
@@ -278,8 +367,8 @@ and the expected negative Hessian equals its covariance, the Fisher information.
 
 The archive's information was a matrix of the same blocks, but with $\pm I$ in place of the
 derivatives of $\point \ominus \mu$, which on a group hold only at $\point = \mu$; it was therefore
-correct to second order in the dispersion there. Here [](eq:translation) makes those derivatives
-exactly $\pm I$, and nothing is approximated.
+correct to second order in the dispersion there. On the flat-in-disguise spaces
+[](eq:translation) makes those derivatives exactly $\pm I$, and nothing is approximated.
 
 **A root.** An estimator assembles the information of a model from roots of its terms', matrices
 $C$ with $C\transpose C = \mathcal I$, composed with the Jacobians of the term's inputs with
@@ -312,267 +401,42 @@ a positive value, $\operatorname{diag}(\point)$. The root of a scale given as a 
 therefore needs both $W$ and $L$, whichever of them the model gives: the other is computed once and
 folded when the scale is fixed, and by a solve [](eq:forward-substitution) on every evaluation when
 it is free. This root is what the normal binds as the root of its expected information, among the
-roles of [The roles](#the-roles).
+roles of [The roles](#the-roles), on every space.
 
-## The tangent normal
+**On a curved space.** The root [](eq:root) is then the same matrix, $\pm W$ in the blocks of
+$\point$ and $\mu$, which are the derivatives of $\point \ominus \mu$ at a zero residual, and
+$C_\theta$ in the scale's, and its accuracy is that of each block.
 
-A measurement of a curved quantity is most naturally written as the quantity measured, moved by
-noise: a rotation measured by a star tracker, a direction to a landmark measured by a camera, a pose
-measured by a scan matcher. With $h$ the map from the state to what is measured,
-
-$$
-	z = h(\point) \oplus \varepsilon, \qquad \varepsilon \sim \mathcal N(0, \Sigma) \text{ on } \R^\dimension, @tag(measurement)
-$$
-
-and a model is cleaner when it holds $z$, observed when the measurement is, than when it holds the
-residual $z \ominus h(\point)$. The direction $u \in S^2$ to a landmark $\ell \in \R^3$ seen from a
-pose $(R, p)$, for one, has $h(R, p) = R\transpose (\ell - p) / \lVert \ell - p \rVert$, a map into
-the sphere written in storage and projected as [](eq:archive/core/math/map-into) allows. The law of
-$z$ is a normal pushed through the chart at $h(\point)$, and its density is the subject of
-[the note on densities in tangent charts](../../math/chart-volume/), on which this section rests.
-
-**The density.** Let $\manifold$ be a space with a reference measure $\nu$ and, at every $\mu$, a
-chart with domain $U_\mu$, image $V_\mu$ and log-volume $\lambda_\mu$
-([%full](statement:math/chart-volume/chart-volume)): a continuous type with a volume, in the sense of
-[the core's measures](../measures/math.svx), whose reference measure is the one its retraction
-normalizes and whose log-volume is $\lambda_\mu(\tangent) = \Lambda(\iota(\mu), \tangent)$
-[](eq:archive/measures/math/declared). The *tangent normal* $\mathcal T(\mu, \Sigma)$
-is the law of $\mu \oplus \varepsilon$, with $\varepsilon$ normal on $\R^\dimension$ with mean zero
-and covariance $\Sigma$, and its term is
-
-$$
-	\logterm_{\mathcal T}(\point;\, \mu, W)
-	= -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
-	+ \sum_{i=1}^{\dimension} \log W_{ii}
-	- \tfrac{\dimension}{2} \log 2\pi
-	- \lambda_\mu(\point \ominus \mu) , @tag(tangent-term)
-$$
-
-with the scale given in any of the forms of [The scale](#the-scale) and read through its whitening
-$W$, as the normal's is.
-
-<Statement {...tangentDensity} />
-
-<Proof>
-
-The vector $W^{-1} \zeta$ is normal with mean zero and covariance $\Sigma$, and the logarithm of its
-density at $\tangent$ is the first three terms of [](eq:tangent-term) at $\tangent = \point \ominus
-\mu$, as in the proof of [%full](statement:density). The chart is global, so $W^{-1} \zeta \in
-U_\mu$ always, and [%full](statement:math/chart-volume/pushforward) gives the density, which is
-[](eq:archive/measures/math/chart-density) with $f$ the normal's. On a product of Euclidean and positive
-factors, [%full](statement:archive/measures/math/core-types) gives $\lambda_\mu(\point \ominus \mu) =
-\sum_{i \in P} \log \point_i = J(\point)$, and [](eq:tangent-term) is [](eq:term).
-
-</Proof>
-
-So the normal of the previous sections is the tangent normal on the flat-in-disguise spaces, and
-the two terms are one formula: the Gaussian log-density of the tangent coordinate, less the chart's
-log-volume there. skoro therefore has one distribution, the tangent normal, and not a normal beside
-it. What the flat-in-disguise spaces add is not a different law but a property of their charts, the
-identity [](eq:translation), on which the exactness of [%full](statement:information) rests, and
-which no curved space has: on those spaces the one distribution's information is exact, and on the
-others it is stated with its error below.
-
-**What a space supplies.** The term reads three things of the space of $\point$ beyond its
-retraction and its inverse, all of which [the core's measures](../measures/math.svx) define, once,
-for every continuous type: a reference measure; the log-volume of the chart, as an operation on
-Euclidean values of the base point's storage and the tangent coordinate; and the chart's domain,
-global or given by a discretization that says of a tangent vector whether it lies in it
-([%full](statement:archive/measures/math/declaration)). The core's own types have them, Lebesgue
-measure and the log-volumes $0$ and $J$, and a product has the sum of its factors'
-([%full](statement:archive/measures/math/core-types)). An embedded type has them when it declares a
-volume: its measure is then the one its retraction normalizes, Haar measure on the groups and
-surface measure on the sphere, whatever the storage; its inverse retraction inverts its chart on
-the whole image, not only near $\mu$, so that the term can be read at any coordinate a point has;
-and its chart is full, reaching all of the type but a set of measure zero. The log-volume is
-declared rather than computed from the retraction, whose area formula would need third derivatives
-of $R$ in the term's Hessian, and a test holds the declaration to that formula instead.
-
-For the spaces skoro means to support, the log-volumes are short, and are those of
-[the note's table](../../math/chart-volume/#the-usual-charts): $2$, $4$ and $6 \log
-\operatorname{sinc}(\theta / 2)$ of the rotation's angle for $SO(3)$, $SE(3)$ and $SE_2(3)$ with
-their exponential charts, [](eq:math/chart-volume/so3-exp); $-2 \log(1 + \lVert \tangent \rVert^2 /
-4)$ for the Cayley chart of the rotations and the stereographic chart of the sphere,
-[](eq:archive/measures/math/sphere-volume); and, for a product of a rotation with positions and
-velocities in a fixed frame of the world, the rotation's alone. Each is one scalar function of the
-residual that the Gaussian part already computes. The normalization chart of the sphere and the
-polar chart of the rotations are not full, and declare no volume: a type retracted by one of them
-carries no tangent normal, and holds its measurements as likelihood factors over data, as the
-paragraph *Without a volume* below describes.
-
-**Exponential charts.** The exponential charts of the groups are not global, and the term
-[](eq:tangent-term) on them is the density of the noise's part within a half-turn: by
-[%full](statement:math/chart-volume/local-chart), $\exp \logterm_{\mathcal T}$ integrates to
-$1 - p$, where $p$ is the mass of the noise beyond a half-turn, and the law of $\mu \oplus
-\varepsilon$, which wraps, is within $p$ in total variation of the law the term describes.
-
-<Statement {...wrapping} />
-
-<Proof>
-
-The rotation's coordinates $\varepsilon_\phi$ are normal with covariance $\Sigma_{\phi\phi} = S^2$,
-$S$ its symmetric square root, so they have the law of $S \zeta'$ with $\zeta'$ standard normal on
-$\R^3$, and $\lVert S \zeta' \rVert \le \sigma \lVert \zeta' \rVert$, with equality when
-$S = \sigma I$. So $p \le \Pr(\lVert \zeta' \rVert \ge \pi / \sigma)$. The norm $\lVert \zeta'
-\rVert$ has the $\chi$ distribution with three degrees of freedom, of density
-$\sqrt{2/\pi}\, s^2 e^{-s^2/2}$, and integration by parts gives
-$\int_r^\infty s^2 e^{-s^2/2} \, \dd s = r e^{-r^2/2} + \sqrt{\pi/2}\, \operatorname{erfc}(r /
-\sqrt 2)$, which at $r = \pi / \sigma$ is the claim.
-
-</Proof>
-
-At a few scales of the rotation's noise:
-
-| $\sigma$ (rad) | $0.25$ | $0.5$ | $0.75$ | $1$ | $1.5$ |
-| --- | --- | --- | --- | --- | --- |
-| bound on $p$ | $5 \times 10^{-34}$ | $1.4 \times 10^{-8}$ | $5.5 \times 10^{-4}$ | $0.020$ | $0.22$ |
-
-For a measurement or a motion whose rotation is known to a few tenths of a radian, the wrapped mass
-is far below anything an estimate could detect, and the exponential chart's term is exact in all
-but name. For a rotation known to a radian or worse, such as the prior on the heading of a platform
-that has not yet been aligned, it is not: the term's normalizer is off by $\log(1 - p)$, a function
-of $\Sigma$ that matters when $\Sigma$ is estimated, and a fraction $p$ of the draws comes from
-outside the law the term describes. A space with a global chart, the Cayley chart of the rotations,
-has no such defect at any scale. The exact density of the wrapped law, a sum over the preimages
-$(\theta + 2\pi k)\, a$, $k \in \mathbb Z$, of a rotation by $\theta$ about $a$, is another way
-out, at the cost of a truncated series in every evaluation.
-
-The chart's declared domain offers a third. A sampler that draws $\varepsilon$ again until the
-domain's discretization accepts it draws exactly from the law $Q$ of
-[%full](statement:math/chart-volume/local-chart), whose density is $\exp \logterm_{\mathcal T} /
-(1 - p)$. Its log-density then differs from the term by the constant $-\log(1 - p)$, a function of
-the scale alone, which cancels from self-normalized importance weights when the scale is fixed and
-remains in an evidence or when the scale is free. It costs two properties of the sampler of
-[The sampler](#the-sampler): the number of variates a draw spends is no longer fixed, and a draw is
-no longer smooth in $\mu$ and the scale, since a small change in either can move a rejected draw
-into the domain.
-
-**The chart is part of the model.** The scale is read in the coordinates of the chart at $\mu$, so
-two retractions of one space make two tangent normals with the same $\mu$ and $\Sigma$, which
-agree only to first order: the exponential and Cayley coordinates of a rotation by $\theta$ have
-the lengths $\theta$ and $2 \tan(\theta/2) = \theta + \theta^3/12 + O(\theta^5)$. A space's
-tangent normals are therefore part of what its retraction means, and changing the retraction of a
-type changes every model with a tangent normal on it, a little at small dispersion and much at
-large. On a group, the side on which the retraction perturbs the point is part of it too, in a way
-that can be undone exactly. The exponential and Cayley maps satisfy
-$\varphi(\operatorname{Ad}_g \tangent) = g\, \varphi(\tangent)\, g^{-1}$, so
-$\mu\, \varphi(\tangent) = \varphi(\operatorname{Ad}_\mu \tangent)\, \mu$, and a tangent normal
-with scale $\Sigma$ in the point's own frame is the tangent normal with
-$\operatorname{Ad}_\mu \Sigma \operatorname{Ad}_\mu\transpose$ in a fixed frame of the world. Its
-log-volume is the same function in both, since it depends on the rotation's angle alone, which
-$\operatorname{Ad}_\mu$ preserves.
-
-On the sphere there is a further dependence, on the basis $B(\mu)$ that identifies the tangent plane
-with $\R^2$. No basis is smooth on all of $S^2$, so a field of bases turns as $\mu$ moves in a way
-that the field, not the geometry, decides, and it spins near the point where it fails, the south
-pole of the core's acceptance test. A scale that is not isotropic is read along the basis's axes,
-and so means something different at every $\mu$. An isotropic scale is free of the basis: with an
-orthonormal basis, the stereographic chart's $\lVert \point \ominus \mu \rVert = 2 \tan(\alpha/2)$
-depends only on the angle $\alpha$ between $\point$ and $\mu$, as does the normalization chart's
-$\tan \alpha$, for the likelihood factors of a type without a volume.
-
-**What the mean is.** The point $\mu$ is the centre of the chart in which the noise is normal. It is
-not the expectation, which on an embedded type lies off the space; on the positive orthant it is
-the median, as [The density](#the-density) says; and on a curved space it need not even be a mode.
-On $SO(3)$ with the exponential chart and an isotropic scale $\sigma$, the density along a ray from
-$\mu$ is proportional to $\exp(-\theta^2 / 2\sigma^2 - \lambda(\theta))$, whose logarithm has the
-second derivative $-1/\sigma^2 + 1/6$ at $\theta = 0$ by [](eq:math/chart-volume/so3-exp), so
-$\mu$ is a mode only when $\sigma^2 < 6$. With the Cayley chart, $-\lambda = 2 \log(1 + \lVert
-\tangent \rVert^2 / 4)$ has the second derivative $1$ at $0$, and $\mu$ is a mode only when
-$\sigma < 1$ in its coordinates: a broad normal in Cayley coordinates piles its mass near the
-half-turns, where the chart compresses most.
-
-**The estimate a measurement gives.** When $z$ is observed and the state $\point$ is free, the term
-[](eq:tangent-term) at $\mu = h(\point)$ depends on $\point$ through the whitened residual and
-through $\lambda_{h(\point)}(z \ominus h(\point))$. Near a zero residual, $-\lambda$ is
-$\lVert \tangent \rVert^2 / 12$ for the exponential chart of the rotations and
-$\lVert \tangent \rVert^2 / 2$ for the Cayley and stereographic charts, to second order, so the
-measurement weighs on the state as a Gaussian of the residual would with the precision $\Lambda$
-replaced by $\Lambda - \tfrac16 I$ or $\Lambda - I$ on the rotation's block. For a rotation's
-noise of $0.1$ rad that changes the measurement's weight by $0.17\,\%$ and $1\,\%$. Small, but it is
-the difference between the law [](eq:measurement) and the law that least squares of the whitened
-residual estimates exactly, which the paragraph *Without a volume* below describes.
-
-**Derivatives.** Every step of [](eq:tangent-term) is an operation the core differentiates: the
-inverse retraction through the boundary operations of [%full](statement:archive/core/math/embedded),
-the whitening as in [The scale](#the-scale), and the log-volume as the type's declared operation.
-The term's order is the least of theirs, two when the type's inverse retraction and log-volume
-admit Hessian passes.
-
-**The sampler.** The tangent normal draws $\mu \oplus L \zeta$ from the variates of the quantity's
-key, as the normal does ([The sampler](#the-sampler)). On a global chart the draw is exact for the
-term by [%full](statement:tangent-density), and contributes nothing to the importance weight. On an
-exponential chart it draws the wrapped law, within $p$ of the term's in total variation, so an
-expectation of a function bounded by $1$ that importance weighting estimates is off by at most
-$2p$.
-
-**The expected information.** Of [%full](statement:information), only the scale's block survives
-exactly, and only on a global chart. There the residual of a draw is exactly its noise,
-$(\mu \oplus \varepsilon) \ominus \mu = \varepsilon$ for every $\varepsilon$, of covariance
-$\Sigma$; neither $\mu$ nor $\lambda$ depends on the scale's coordinates $\theta$; and the
-computation of $F$ in that proof holds unchanged. The blocks in $\point$ and $\mu$ involve the
-second derivatives of $\ominus$ and of $\lambda$, which [](eq:translation) made constant and which
-no curved space has constant. The mixed blocks between $\mu$ and $\theta$ need not vanish either.
-On $SO(3)$ with the exponential chart, the derivative of $\varepsilon = \point \ominus \mu$ along
-$\mu \operatorname{Exp}(s u)$ is $-J_l(\varepsilon)^{-1} u = (-I + \tfrac12 [\varepsilon]_\times -
-c(\theta) [\varepsilon]_\times^2)\, u$, with $c$ even in $\varepsilon$, so the expected mixed second
-derivative of $-\logterm_{\mathcal T}$ along $u$ and $\theta_i$ is
-$-\tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda\, [u]_\times)$, up to the wrapped mass. It
-is zero for every $u$ only when $\Sigma\, \partial_i \Lambda$ is symmetric, as for an isotropic or a
-diagonal scale.
-
-The tangent normal's root, which [The roles](#the-roles) binds on every space, is
-therefore [](eq:root) unchanged: $\pm W$ in the blocks of $\point$ and $\mu$, which are the
-derivatives of $\point \ominus \mu$ at a zero residual, and $C_\theta$ in the scale's. On a
-curved space its accuracy is that of each block. In the scale's block it is exact on a global
-chart. In the blocks of $\point$ and $\mu$ it is exact at a zero residual, and its relative error
-is of second order in the dispersion: the derivatives of $\ominus$ differ from $\pm I$ by terms
-of first order in $\varepsilon$, whose expectation in a quadratic form is of second order since
-$\varepsilon$ is symmetric; the second derivatives of $\ominus$ meet the residual $\Lambda
-\varepsilon$, whose expectation is zero; and the Hessian of $\lambda$, $\tfrac16 I$ on the
-rotations with the exponential chart, is of order $\Sigma$ against $\Lambda$. The mixed block,
-which the root sets to zero, is of first order, the correlation it omits between the mean and the
-scale being of the order of the dispersion; on $SO(3)$ with the exponential chart it is zero for
-the isotropic and diagonal forms. This is the archive's information, with its error now stated.
-
-**Without a volume.** A type that declares no volume has no densities, and the core refuses a term
-that scores one of its quantities, which can only be parameters
-([Types without a volume](../measures/math.svx#types-without-a-volume)). Such a type can still carry
-a measurement, as a likelihood factor. With $z$ a constant, the measured value, the Gaussian part
-$-\tfrac12 \lVert W (z \ominus h(\point)) \rVert^2$ is a function of $\point$ that scores nothing,
-and as a likelihood factor it needs no measure. It is not the log-likelihood of the law
-[](eq:measurement), from which it lacks $\lambda$, a function of $\point$. It is, exactly, the
-log-likelihood of another law.
-
-<Statement {...invariant} />
-
-<Proof>
-
-Substitute $z = \mu g$. The measure $\nu$ is invariant under left translation, $V_\mu = \mu V_e$,
-and $z \ominus \mu = \varphi^{-1}(\mu^{-1} z) = g \ominus e$, so $Z(\mu) = Z(e)$. The second form
-is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lVert W \tangent
-\rVert^2)$.
-
-</Proof>
-
-So on a group whose chart translates one of the identity, $\exp(-\tfrac12 \lVert W (z \ominus \mu)
-\rVert^2) / Z$ is a density of $z$ with respect to Haar measure for every $\mu$, its log-likelihood
-in $\mu$ is the Gaussian part up to a constant, and least squares of the whitened residual is
-exact maximum likelihood for it. This is the model that factor-graph libraries estimate. Its $z$ is
-not $\mu \oplus \varepsilon$ for a normal $\varepsilon$, so it has no sampler of that form, and $Z$
-has no closed form, so the factor is a likelihood only for a fixed scale. On the sphere the same
-holds for an isotropic scale with the stereographic or the normalization chart, whose residual's
-length depends only on the angle to $\mu$; the latter declares no volume, so on a type retracted by
-it this factor is the only form a measurement takes. A space without a volume therefore carries a measurement
-as a likelihood factor over data, for estimating a state with a known scale, and a space with one
-carries the tangent normal, whose measurement is a quantity like any other.
+- *The scale's block is exact.* The chart is global, so the residual of a draw is exactly its
+  noise, $(\mu \oplus \varepsilon) \ominus \mu = \varepsilon$ for every $\varepsilon$, of
+  covariance $\Sigma$; neither $\mu$ nor $\lambda$ depends on the scale's coordinates $\theta$; and
+  the computation of $F$ in the proof above holds unchanged.
+- *The blocks of $\point$ and $\mu$ are exact at a zero residual, and of second order otherwise.*
+  The derivatives of $\ominus$ differ from $\pm I$ by terms of first order in $\varepsilon$, whose
+  expectation in a quadratic form is of second order since $\varepsilon$ is symmetric; the second
+  derivatives of $\ominus$ meet the residual $\Lambda \varepsilon$, whose expectation is zero; and
+  the Hessian of $\lambda$, $-I$ for the Cayley and stereographic charts, is of order $\Sigma$
+  against $\Lambda$.
+- *The mixed blocks, which the root sets to zero, are of first order.* On the rotations with the
+  Cayley chart, the derivative of $\varepsilon = \point \ominus \mu$ along $\mu\, \varphi(s u)$ is
+  $(-I + \tfrac12 [\varepsilon]_\times - \tfrac14 \varepsilon \varepsilon\transpose)\, u$, whose
+  odd part is $\tfrac12 [\varepsilon]_\times u$, so the expected mixed second derivative of
+  $-\logterm_{\mathcal N}$ along $u$ and $\theta_i$ is exactly
+  $-\tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda\, [u]_\times)$. It is zero for every
+  $u$ only when $\Sigma\, \partial_i \Lambda$ is symmetric, as for an isotropic or a diagonal
+  scale, and otherwise it is a correlation between the mean and the scale of the order of the
+  dispersion.
 
 ## As a likelihood factor
 
-A retirement's replacement is a likelihood factor over the quantities of its blanket $B$, scoring
-none of them ([the core's retirement](../core/math.svx#retirement)). Under a Laplace approximation,
-and exactly for linear-Gaussian terms, it is a Gaussian function of their tangent coordinates at an
-anchor: with constants $p_i$ for the blanket's quantities, the stacked tangent
+A likelihood factor scores no quantity, and so needs no measure: it is a function of the
+quantities it is conditioned on. The normal's Gaussian part serves as one in two places.
+
+**A retirement's replacement.** A retirement's replacement is a likelihood factor over the
+quantities of its blanket $B$, scoring none of them ([the core's retirement](../core/math.svx#retirement)).
+Under a Laplace approximation, and exactly for linear-Gaussian terms, it is a Gaussian function of
+their tangent coordinates at an anchor: with constants $p_i$ for the blanket's quantities, the
+stacked tangent
 
 $$
 	\delta(\point_B) = (\point_1 \ominus p_1;\ \dots;\ \point_k \ominus p_k) \in \R^D,
@@ -585,21 +449,19 @@ $$
 	\logterm_B(\point_B) = \logterm_{\mathcal N}\bigl(\delta(\point_B);\, m, W\bigr) + c , @tag(joint)
 $$
 
-the normal's term on $\R^D$, where $J$ vanishes, at the mapped value $\delta$, with mean $m$,
-whitening $W$ and a constant $c$. No new distribution is needed for it: it is the normal on a
-Euclidean space evaluated at a value that is not a quantity, which scores nothing and so has no
-sampler. The archive wrote its residual as $W\delta - b$, an offset form; that is [](eq:joint) with
-$b = W m$, which the core folds when both are constants. The anchors must be constants, so that
-the factor does not move with the quantities it summarizes. On a positive blanket quantity $\delta$
-reads its logarithm, and no Jacobian is added: a likelihood factor is a function of the quantities,
-not a density over them, and whatever measure the approximated integral was taken in is already in
-its values. The same holds of a curved blanket quantity: $\delta$ reads its tangent coordinate at
-its anchor, and no log-volume is added. The log-volume enters where the replacement is computed: a
-Laplace approximation of the integral over a retired quantity in its chart at $\hat \point$ expands
-$\ell(\hat \point \oplus \tangent) + \lambda_{\hat \point}(\tangent)$
+the normal's term on $\R^D$, where the log-volume vanishes, at the mapped value $\delta$, with
+mean $m$, whitening $W$ and a constant $c$. No new distribution is needed for it: it is the normal
+on a Euclidean space evaluated at a value that is not a quantity, which scores nothing and so has
+no sampler. The archive wrote its residual as $W\delta - b$, an offset form; that is [](eq:joint)
+with $b = W m$, which the core folds when both are constants. The anchors must be constants, so
+that the factor does not move with the quantities it summarizes. On a positive or a curved blanket
+quantity $\delta$ reads its tangent coordinate at the anchor, and no log-volume is added: the
+factor is a function of the quantities, not a density over them, and whatever measure the
+approximated integral was taken in is already in its values. The log-volume enters where the
+replacement is computed: a Laplace approximation of the integral over a retired quantity in its
+chart at $\hat \point$ expands $\ell(\hat \point \oplus \tangent) + \lambda_{\hat \point}(\tangent)$
 [](eq:archive/measures/math/chart-integral), so that the $W$ of a replacement over a curved blanket
-quantity carries the log-volume's Hessian, $-\tfrac16 I$ on the rotations with the exponential
-chart and $-I$ with the Cayley chart, before the factor is written.
+quantity carries the log-volume's Hessian, $-I$ with the Cayley chart, before the factor is written.
 
 The core's tests of retirement are of this form. The replacement
 [](eq:archive/core/math/kalman) is [](eq:joint) with $k = 1$, the anchor $p_1 = a + K(\hat z_0 -
@@ -609,14 +471,45 @@ $W = (P + q^2)^{-1/2}$ and $c = \log \mathcal N(a, s^2 + r^2)(\hat z_0)$, and
 $c = 0$, and $W$ the whitening of its $2 \times 2$ covariance. With the normal in the library,
 both can be written with it rather than by hand.
 
+### Without a volume or a global chart
+
+A type that declares no volume has no densities, and the core refuses a term that scores one of its
+quantities ([Types without a volume](../measures/math.svx#types-without-a-volume)); a type whose
+chart is not global has densities, but no normal. Either can still carry a measurement, as a
+likelihood factor over data: with $z$ a constant, the measured value, the Gaussian part
+$-\tfrac12 \lVert W (z \ominus h(\point)) \rVert^2$ is a function of $\point$ that scores nothing.
+It is not the log-likelihood of the law [](eq:measurement), from which it lacks $\lambda$, a
+function of $\point$. It is, exactly, the log-likelihood of another law.
+
+<Statement {...invariant} />
+
+<Proof>
+
+Substitute $z = \mu g$. The measure $\nu$ is invariant under left translation, $V_\mu = \mu V_e$,
+and $z \ominus \mu = \varphi^{-1}(\mu^{-1} z) = g \ominus e$, so $Z(\mu) = Z(e)$. The second form
+is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lVert W \tangent
+\rVert^2)$.
+
+</Proof>
+
+So on a group whose chart translates one of the identity, the exponential chart of the rotations
+among them, $\exp(-\tfrac12 \lVert W (z \ominus \mu) \rVert^2) / Z$ is a density of $z$ with respect
+to Haar measure for every $\mu$, its log-likelihood in $\mu$ is the Gaussian part up to a constant,
+and least squares of the whitened residual is exact maximum likelihood for it. This is the model
+that factor-graph libraries estimate. Its $z$ is not $\mu \oplus \varepsilon$ for a normal
+$\varepsilon$, so it has no sampler of that form, and $Z$ has no closed form, so the factor is a
+likelihood only for a fixed scale. On the sphere the same holds for an isotropic scale with a chart
+whose residual's length depends only on the angle to $\mu$. Such a measurement is a constant, not
+a quantity: it can be conditioned on but not simulated, and a query cannot leave it free.
+
 ## The roles
 
 The charter has a distribution declare, as its term is added, the nodes that readers other than the
 model's density need, each under a *role*, and has each role arrive with the distribution or reader
 that gives it meaning ([position 8](../charter/writeup.md)). No reader of the normal's roles exists
-yet: the least-squares readers and Fisher scoring are entries of their own. The tangent normal
-binds them all the same, so that those readers find them waiting rather than revising this entry,
-and so that the mathematics of each binding, which is the distribution's to settle, is settled here.
+yet: the least-squares readers and Fisher scoring are entries of their own. The normal binds them
+all the same, so that those readers find them waiting rather than revising this entry, and so that
+the mathematics of each binding, which is the distribution's to settle, is settled here.
 
 | role | multiplicity | the node it binds |
 | --- | --- | --- |
@@ -639,14 +532,12 @@ positive factor it is $J(\point)$, constant when $\point$ is observed, and not w
 free, where ignoring it finds the mode in the logarithmic chart rather than with respect to Lebesgue
 measure. On a curved space it is $\lambda_\mu(\point \ominus \mu)$, which moves with the mean, so
 that a measurement's estimate of the state differs by the precision change of
-[The tangent normal](#the-tangent-normal). The log-volume's role is what lets a reader add its
-gradient and Hessian, and so estimate the tangent normal's own mode; a reader that ignores it
-estimates, on a group, the law of [%full](statement:invariant), the model of factor-graph
-libraries, and should say so.
+[Properties](#properties). The log-volume's role is what lets a reader add its gradient and
+Hessian, and so estimate the normal's own mode; a reader that ignores it estimates, on a group, the
+law of [%full](statement:invariant), the model of factor-graph libraries, and should say so.
 
-**Gauss–Newton with a log-volume.** A model of tangent normals with fixed scales, every free
-quantity $q$ taken together as a point of the product of their types, has the negative
-log-density
+**Gauss–Newton with a log-volume.** A model of normals with fixed scales, every free quantity $q$
+taken together as a point of the product of their types, has the negative log-density
 
 $$
 	f(q) = \tfrac12 \sum_i \lVert r_i(q) \rVert^2 + s(q), \qquad s(q) = \sum_i \lambda_{\mu_i}(t_i), \quad t_i = \point_i \ominus \mu_i , @tag(gn-objective)
@@ -654,10 +545,9 @@ $$
 
 up to a constant, the sums over the terms, each with its residual $r_i = W_i t_i$. The log-volumes
 are not squares, and cannot be made into squares: near $t = 0$ they are concave, $-\lVert t
-\rVert^2 / 12$ on the rotations with the exponential chart and $-\lVert t \rVert^2 / 2$ with the
-Cayley and stereographic charts, since the chart compresses volume away from its centre. A reader
-that accepts only residuals has nothing to do with them. A Gauss–Newton reader that takes the
-log-volume's role as well loses nothing by it.
+\rVert^2 / 2$ for the Cayley and stereographic charts, since the chart compresses volume away from
+its centre. A reader that accepts only residuals has nothing to do with them. A Gauss–Newton reader
+that takes the log-volume's role as well loses nothing by it.
 
 <Statement {...gaussNewton} />
 
@@ -685,29 +575,25 @@ Three consequences follow for a reader of the roles.
 - **Leaving its Hessian out costs little.** In $E$ the log-volumes contribute $\D^2 s = \sum_i
   A_i\transpose \nabla^2 \lambda_i\, A_i$, with $A_i = \D t_i$, besides terms in $\nabla
   \lambda_i$ that vanish at $t_i = 0$ and are of the order of the residual-curvature terms below,
-  while $J\transpose J = \sum_i
-  A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq \nabla^2 \lambda_i \preceq \kappa
-  \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq \D^2 s \preceq \kappa J\transpose
-  J$, and the log-volumes add at most $\kappa$ to $\rho$, with
+  while $J\transpose J = \sum_i A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq
+  \nabla^2 \lambda_i \preceq \kappa \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq
+  \D^2 s \preceq \kappa J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with
   $\kappa = \max_i \lVert \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rVert$. Near
-  $t = 0$ that is $\sigma^2 / 6$ for the exponential chart of the rotations and $\sigma^2$ for the
-  Cayley and stereographic charts, $\sigma^2$ the largest variance of a rotation's or a
-  direction's noise: $0.0017$ and $0.01$ per iteration at $\sigma = 0.1$ rad. The rest of $E$ is
-  $\sum_i \sum_k (r_i)_k \nabla^2 (r_i)_k$, which every Gauss–Newton method omits, and which on a
-  curved space includes the second derivatives of $\ominus$, of the same relative order
-  $\sigma^2$: the log-volume does not change the order of the approximation. A free positive
+  $t = 0$ that is $\sigma^2$ for the Cayley and stereographic charts, $\sigma^2$ the largest
+  variance of a rotation's or a direction's noise: $0.01$ per iteration at $\sigma = 0.1$ rad. The
+  rest of $E$ is $\sum_i \sum_k (r_i)_k \nabla^2 (r_i)_k$, which every Gauss–Newton method omits,
+  and which on a curved space includes the second derivatives of $\ominus$, of the same relative
+  order $\sigma^2$: the log-volume does not change the order of the approximation. A free positive
   quantity adds nothing at all to $E$, its log-volume $J(\point)$ being linear in its chart.
 - **Adding its Hessian is safe where a Gaussian approximation is.** When $\kappa < 1$,
   $J\transpose J + \D^2 s \succeq (1 - \kappa)\, J\transpose J$ is positive definite, so a reader
   may use it as the matrix, and converge faster. The condition $\kappa < 1$ is, term by term, the
-  one under which the paragraph *What the mean is* of [The tangent normal](#the-tangent-normal)
-  found $\mu$ a mode at all: $\sigma^2 < 6$
-  for the exponential chart and $\sigma < 1$ for the Cayley chart. Where it fails, the posterior is
-  not concentrated around one mode, and no method of this kind fits it. The covariance
-  $(J\transpose J)^{-1}$ that a Laplace approximation reads off the Gauss–Newton matrix is then
-  smaller than $(J\transpose J + \D^2 s)^{-1}$, by a relative $\kappa$ at most, since $\D^2 s
-  \preceq 0$ for the charts above: the volume makes the posterior a little broader than the squares
-  alone say.
+  one under which [Properties](#properties) found $\mu$ a mode at all, $\sigma < 1$ in the chart's
+  coordinates. Where it fails, the posterior is not concentrated around one mode, and no method of
+  this kind fits it. The covariance $(J\transpose J)^{-1}$ that a Laplace approximation reads off
+  the Gauss–Newton matrix is then smaller than $(J\transpose J + \D^2 s)^{-1}$, by a relative
+  $\kappa$ at most, since $\D^2 s \preceq 0$ for these charts: the volume makes the posterior a
+  little broader than the squares alone say.
 
 **The information root.** The role binds the matrix $C$ of [](eq:root), of
 $\dimension + \dimension(\dimension+1)/2$ rows, whose three block columns a reader composes with
@@ -715,83 +601,65 @@ the Jacobians, with respect to the free quantities, of $\point$, of $\mu$ and of
 coordinates $\theta$. When the scale is a constant there is no $\theta$, and the root is its first
 block row, $(W \;\, -W)$. On the flat-in-disguise spaces the root is exact by
 [%full](statement:information); on a curved space its accuracy, block by block, is the one
-[The tangent normal](#the-tangent-normal) states.
+[On a curved space](#the-expected-information) states.
 
 **Likelihood factors.** A likelihood factor in the forms of this document, a retirement's
-replacement [](eq:joint) or a measurement over data on a space without a volume, binds the whitened
-residual, the mean and the scale, and binds no information root: the expected information is an
-expectation over the quantity a term scores, and a likelihood factor scores none. A reader that needs
-a positive semidefinite matrix from one has it in the Gauss–Newton product of its residual's
-Jacobian, which the residual's role gives, and which for the replacement [](eq:joint), a Gaussian
-of $\delta$, is its negative Hessian in $\delta$.
+replacement [](eq:joint) or a measurement over data, binds the whitened residual, the mean and the
+scale, and binds no information root: the expected information is an expectation over the quantity
+a term scores, and a likelihood factor scores none. A reader that needs a positive semidefinite
+matrix from one has it in the Gauss–Newton product of its residual's Jacobian, which the residual's
+role gives, and which for the replacement [](eq:joint), a Gaussian of $\delta$, is its negative
+Hessian in $\delta$.
 
 ## In skoro's terms
 
-- **One distribution, the tangent normal, scores one quantity** $\point$, of any continuous type
-  with a volume in the sense of [the core's measures](../measures/math.svx): the core's own types,
-  products of types with volumes, and embedded types that declare one. The flat-in-disguise types
-  (real, vector, matrix, positive, and products of them) have Lebesgue measure, global charts and
-  the log-volume $J$ [](eq:jacobian): on them the distribution is the normal, and on a positive
-  factor the log-normal, under the same name. A quantity of a type without a volume is never
-  scored by it, and its measurements are likelihood factors over data.
-- **Its term** [](eq:tangent-term), which is [](eq:term) on the flat-in-disguise types, is a
-  composite of the core's operations and the type's log-volume, conditioned on the quantities its
-  mean and scale are reached from, which may be constants, quantities or mapped values of any kind
-  the core allows. Its mean is any value of the scored quantity's type, a mapped value $h(\point)$
-  of the state among them. Its log-density is with respect to the type's reference measure.
+- **The normal scores one quantity** $\point$, of any continuous type with a volume whose chart is
+  global: the core's own types, embedded types that declare a global chart, and products of these.
+  On the core's types it is the familiar normal, and on a positive factor the log-normal, under the
+  same name. A quantity of a type without a volume, or whose chart is not global, is never scored
+  by it.
+- **Its term** [](eq:term) is a composite of the core's operations and the type's log-volume,
+  conditioned on the quantities its mean and scale are reached from, which may be constants,
+  quantities or mapped values of any kind the core allows. Its mean is any value of the scored
+  quantity's type, a mapped value $h(\point)$ of the state among them. Its log-density is with
+  respect to the type's reference measure, exactly.
 - **A measurement** [](eq:measurement) is such a quantity, held as what was measured rather than as
   a residual: observed in a query that has the measurement, and free, to be drawn, in one that
-  simulates it.
+  simulates it. States, measurements and scales alike may be quantities with normals, which is how
+  a hierarchical model is built forward.
 - **Its derivatives** with respect to $\point$, to $\mu$ and to the scale, of first and second
-  order, are those of the composite. On the flat-in-disguise types every step, from the inverse
-  retraction to the logarithms of the diagonal and the substitution [](eq:forward-substitution),
-  is a primitive of order two, so the term has order two; on a curved type its order is the least
-  of the type's inverse retraction's and log-volume's.
+  order, are those of the composite, of order two on the core's types and on a curved type whose
+  inverse retraction and log-volume admit Hessian passes.
 - **Its scale** is given in any of the four forms of [The scale](#the-scale), all of which it
   offers: positive values for the isotropic and diagonal forms, and the product
   $\positive^\dimension \times \R^{\dimension(\dimension-1)/2}$ for a triangular factor when it is a
   quantity. A fixed scale's whitening and normalizer are folded, in the model when it is a constant
   and in a compiled query when it is observed.
-- **Its sampler** draws $\mu \oplus L \Phi^{-1}(u)$ from the variates of the quantity's key, on the
-  host in double precision. It is exact on every global chart, the flat-in-disguise types' among
-  them, and within the wrapped mass of [%full](statement:wrapping) on an exponential chart.
-- **Its expected information** over $(\point, \mu, \theta)$ has the root [](eq:root). On the
-  flat-in-disguise types it is exact; on a curved type it is exact in the scale's block on a global
-  chart, of second order in the blocks of $\point$ and $\mu$, and of first order in the mixed block
-  it omits.
+- **Its sampler is exact**, drawing $\mu \oplus L \Phi^{-1}(u)$ from the variates of the
+  quantity's key, on the host in double precision, smooth in $\mu$ and the scale.
+- **Its expected information** over $(\point, \mu, \theta)$ has the root [](eq:root): exact on the
+  core's types, and on a curved type exact in the scale's block, of second order in the blocks of
+  $\point$ and $\mu$, and of first order in the mixed block it omits.
 - **Its roles**, bound as its term is added though no reader uses them yet, are its whitened
   residual, its mean, its scale with its form, its log-volume where it is not zero, and the root
   [](eq:root) of its expected information ([The roles](#the-roles)).
-- **As a likelihood factor**, the distribution's Gaussian part on $\R^D$ evaluated at the stacked
-  tangent [](eq:stacked) of a blanket at constant anchors is the form of a retirement's Gaussian
-  replacement, and at a constant measured value it carries a measurement on a space without a
-  volume, which with a fixed scale is the exact log-likelihood of the law of
+- **As a likelihood factor**, its Gaussian part on $\R^D$ evaluated at the stacked tangent
+  [](eq:stacked) of a blanket at constant anchors is the form of a retirement's Gaussian
+  replacement; and at a constant measured value it carries a measurement on a type without a
+  volume or a global chart, which with a fixed scale is the exact log-likelihood of the law of
   [%full](statement:invariant).
 
 ## Open questions
 
-> [!TODO] Exponential charts
-> On a type whose declared domain is not global, the term is exact for the noise within the domain.
-> Which sampler does the tangent normal have there: the draw $\mu \oplus L\zeta$ of
-> [The sampler](#the-sampler), smooth and spending a fixed number of variates, which draws the
-> wrapped law within the bound of [%full](statement:wrapping); or a draw repeated until the
-> domain's discretization accepts it, exact for the term's normalized law but neither smooth nor of
-> a fixed cost? Or is the tangent normal to require a global chart, so that $SO(3)$, $SE(3)$ and
-> $SE_2(3)$ carry it only with a Cayley chart on their rotation? Since the core's measures tie the
-> volume to the chart of the type's own retraction, a separate chart for distributions is no longer
-> among the choices without revising them.
-
 > [!TODO] A curved space to test on
-> The library has no curved type yet, but the core's tests now have two spheres with declared
-> volumes: the acceptance test's, with the stereographic chart, global and full, of log-volume
-> [](eq:archive/measures/math/sphere-volume); and an exponential sphere whose domain is the open ball of
-> radius $\pi$, a chart that is full but not global. Between them they exercise
-> [%full](statement:tangent-density) and [%full](statement:math/chart-volume/local-chart), the
-> latter with the sphere's tail in place of [%full](statement:wrapping)'s, $p = e^{-\pi^2 / 2
-> \sigma^2}$ for an isotropic scale, $\lVert \varepsilon \rVert$ having a Rayleigh law. That suggests
-> testing the tangent normal on both, beside the flat spaces, and leaving a rotation group to its own
-> entry. Is that the coverage wanted? Those spheres are written in the core's tests, written against
-> its public interface alone; how this entry's tests reach them is the implementation's question.
+> The library has no curved type yet, but the core's tests have the acceptance-test sphere, whose
+> stereographic chart is global and full, of log-volume [](eq:archive/measures/math/sphere-volume),
+> and an exponential sphere whose chart is full but not global. That suggests testing the normal on
+> the flat spaces and on the stereographic sphere, its density and sampler exact there, with the
+> exponential sphere showing that a type whose chart is not global is refused, and leaving a
+> rotation group to its own entry. Is that the coverage wanted? The spheres are written in the
+> core's tests, against its public interface alone; how this entry's tests reach them is the
+> implementation's question.
 
 > [!TODO] The joint form
 > The draft takes a retirement's Gaussian replacement to be the normal on $\R^D$ at the stacked
