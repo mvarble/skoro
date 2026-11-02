@@ -87,6 +87,7 @@ fn replacement(x1: Q<Real>) -> Replacement {
     Replacement {
         log_density: (predicted.untyped() + evidence).narrow::<Real>(),
         proposals: Vec::new(),
+        bindings: Vec::new(),
     }
 }
 
@@ -211,6 +212,7 @@ fn replacement_outside_the_blanket_is_refused_and_changes_nothing() {
             .replace(|_| Replacement {
                 log_density: log_density(x1, read, 1.0),
                 proposals: Vec::new(),
+                bindings: Vec::new(),
             })
             .unwrap_err();
         assert_eq!(
@@ -486,6 +488,7 @@ fn part_of_a_tick_matches_the_joint_normal() {
             Replacement {
                 log_density: (evidence.untyped() + predicted.untyped()).narrow::<Real>(),
                 proposals: Vec::new(),
+                bindings: Vec::new(),
             }
         })
         .unwrap();
@@ -545,6 +548,7 @@ fn blanket_quantity_becomes_a_parameter_drawn_from_its_proposal() {
             let proposed = proposal(x1, constant(Real, mean), variance.sqrt());
             Replacement {
                 proposals: vec![(x1.untyped(), proposed)],
+                bindings: Vec::new(),
                 ..replacement(x1)
             }
         })
@@ -613,6 +617,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
     retirement
         .replace(|_| Replacement {
             proposals: vec![x1_proposal(x1)],
+            bindings: Vec::new(),
             ..replacement(x1)
         })
         .unwrap();
@@ -655,6 +660,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
         .unwrap()
         .replace(|_| Replacement {
             proposals: vec![(theta.untyped(), proposal(theta, x0, 2.0))],
+            bindings: Vec::new(),
             ..replacement(x1)
         })
         .unwrap_err();
@@ -673,6 +679,7 @@ fn proposal_reading_a_retired_quantity_is_removed_and_reported() {
         .unwrap()
         .replace(|_| Replacement {
             proposals: vec![(z1.untyped(), proposal(z1, constant(Real, 0.0), 1.0))],
+            bindings: Vec::new(),
             ..replacement(x1)
         })
         .unwrap_err();
@@ -714,6 +721,7 @@ fn nothing_left_refers_to_a_removed_node() {
         .replace(|_| Replacement {
             log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),
             proposals: Vec::new(),
+            bindings: Vec::new(),
         })
         .unwrap();
     let last = chain.writer.snapshot();
@@ -776,6 +784,7 @@ fn retire_refuses_to_integrate_a_quantity_without_a_measure() {
         .replace(|_| Replacement {
             log_density: -(y - 0.5) * (y - 0.5),
             proposals: Vec::new(),
+            bindings: Vec::new(),
         })
         .unwrap();
     assert_eq!(writer.snapshot().quantities(), vec![y.id()]);
@@ -851,4 +860,76 @@ fn replacements_written_with_stacked() {
             );
         }
     }
+}
+
+/// A role of these tests, standing for a reader's.
+const RESIDUAL: skoro::Role<skoro::ExactlyOne> = skoro::Role::new("test.residual");
+
+#[test]
+fn replacement_binds_its_roles() {
+    let mut chain = chain();
+    let x1 = chain.x1;
+    let (_, mean, variance) = kalman();
+    let mut bound = None;
+    let observed = observed_z0(&chain);
+    let factor = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed)
+        .unwrap()
+        .replace(|_| {
+            let residual = (x1.untyped() - mean) * (1.0 / variance.sqrt());
+            bound = Some(residual);
+            replacement(x1).bind(&RESIDUAL, residual)
+        })
+        .unwrap()
+        .expect("a retirement of something adds a factor");
+    let snapshot = chain.writer.snapshot();
+    let term = snapshot.term(factor.id()).unwrap();
+    assert_eq!(term.scores, None);
+    assert_eq!(
+        snapshot.bound(factor.id(), &RESIDUAL).unwrap(),
+        bound.unwrap()
+    );
+}
+
+#[test]
+fn replacement_binding_outside_its_factor_is_refused() {
+    let mut chain = chain();
+    let (x1, z1) = (chain.x1, chain.z1);
+    let before = chain.writer.snapshot();
+    let mut outside = None;
+    let observed = observed_z0(&chain);
+    let failure = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed)
+        .unwrap()
+        .replace(|_| {
+            // z1 is a quantity the replacement, over x1 alone, does not involve.
+            let node = z1.untyped() * 2.0;
+            outside = Some(node);
+            replacement(x1).bind(&RESIDUAL, node)
+        })
+        .unwrap_err();
+    assert_eq!(
+        failure.error,
+        Error::BindingOutsideTerm {
+            role: "test.residual",
+            node: outside.unwrap().id()
+        }
+    );
+    assert_eq!(chain.writer.snapshot(), before);
+}
+
+#[test]
+fn retirement_of_nothing_adds_no_factor() {
+    let mut chain = chain();
+    let before = chain.writer.snapshot();
+    let factor = chain
+        .writer
+        .retire(Addresses::new().under("tick/2"), Observations::new())
+        .unwrap()
+        .replace(|_| panic!("an empty retirement calls no body"))
+        .unwrap();
+    assert!(factor.is_none());
+    assert_eq!(chain.writer.snapshot(), before);
 }

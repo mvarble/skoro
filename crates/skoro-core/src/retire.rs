@@ -12,7 +12,8 @@ use crate::model::Model;
 use crate::scope::{self, Draft, Frame};
 use crate::term::{Proposal, Term, roots};
 use crate::{
-    Address, Error, Failure, NodeId, Observations, Q, QDyn, Real, Snapshot, Space, Writer,
+    Address, Error, Failure, Multiplicity, NodeId, Observations, Q, QDyn, Real, Role, Snapshot,
+    Space, TermHandle, Writer,
 };
 
 /// The addresses a retirement retires: some named one by one, and every address under some
@@ -81,11 +82,23 @@ pub struct Plan {
     pub unproposed: Vec<QDyn>,
 }
 
-/// What the caller builds: the replacement `ℓ_B`, a likelihood factor over the blanket, and
-/// proposals for the quantities the retirement leaves to be drawn by one.
+/// What the caller builds: the replacement `ℓ_B`, a likelihood factor over the blanket,
+/// proposals for the quantities the retirement leaves to be drawn by one, and the nodes the
+/// factor binds to roles, as `TermHandle::bind` binds them on a term.
 pub struct Replacement {
     pub log_density: Q<Real>,
     pub proposals: Vec<(QDyn, Proposal)>,
+    /// Each a role's name and the node bound to it.
+    pub bindings: Vec<(&'static str, QDyn)>,
+}
+
+impl Replacement {
+    /// Binds `node` to `role` on the factor the retirement adds: a node reached from no quantity
+    /// outside the factor's, which `Retirement::replace` checks (`BindingOutsideTerm`).
+    pub fn bind<M: Multiplicity>(mut self, role: &Role<M>, node: impl Into<QDyn>) -> Replacement {
+        self.bindings.push((role.name(), node.into()));
+        self
+    }
 }
 
 /// A retirement read and not yet applied: the writer, borrowed, the snapshot it read, and the plan.
@@ -209,13 +222,19 @@ impl Retirement<'_> {
     /// Builds the replacement in a scope, checks it, and applies the change: the replacement
     /// must be reached from blanket quantities alone (`ReplacementOutsideBlanket`), and each
     /// proposal be for a blanket quantity the retirement leaves unscored or a parameter of
-    /// `unproposed` (`ProposalNotNeeded`), reading no retired quantity (`ProposalReadsRetired`).
-    /// Then `E`, the terms of `𝒯_E`, the proposals of `E` and of `unproposed`, and every mapped
-    /// node reached from `E` are removed, the replacement is added as a likelihood factor and
-    /// the proposals attached, and one snapshot is published. A failure at any point leaves the
-    /// model as it was. A retirement of nothing changes nothing, and does not call `body`.
+    /// `unproposed` (`ProposalNotNeeded`), reading no retired quantity (`ProposalReadsRetired`),
+    /// and each binding be of a node reached from no quantity outside the replacement's
+    /// (`BindingOutsideTerm`). Then `E`, the terms of `𝒯_E`, the proposals of `E` and of
+    /// `unproposed`, and every mapped node reached from `E` are removed, the replacement is added
+    /// as a likelihood factor with its bindings and the proposals attached, and one snapshot is
+    /// published; the factor's handle is given back. A failure at any point leaves the model as
+    /// it was. A retirement of nothing changes nothing, does not call `body`, and gives back no
+    /// factor.
     #[track_caller]
-    pub fn replace(self, body: impl FnOnce(&Plan) -> Replacement) -> Result<(), Failure> {
+    pub fn replace(
+        self,
+        body: impl FnOnce(&Plan) -> Replacement,
+    ) -> Result<Option<TermHandle>, Failure> {
         let location = Location::caller();
         let fail = |error: Error| Failure { error, location };
         let Retirement {
@@ -224,7 +243,7 @@ impl Retirement<'_> {
             plan,
         } = self;
         if plan.retired.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
         let draft = Draft::new(snapshot.0.as_ref().clone());
         let (replacement, frame) = scope::open(Frame::Scope(draft), || body(&plan));
@@ -242,11 +261,21 @@ impl Retirement<'_> {
         let unproposed: HashSet<NodeId> = plan.unproposed.iter().map(QDyn::id).collect();
         let log_density = replacement.log_density.untyped();
         draft.spaces(&[log_density]).map_err(fail)?;
-        if let Some(quantity) = roots(&draft.model, log_density.id())
-            .into_iter()
-            .find(|q| !blanket.contains(q))
-        {
+        let involves = roots(&draft.model, log_density.id());
+        if let Some(&quantity) = involves.iter().find(|q| !blanket.contains(q)) {
             return Err(fail(Error::ReplacementOutsideBlanket { quantity }));
+        }
+        for &(role, node) in &replacement.bindings {
+            draft.spaces(&[node]).map_err(fail)?;
+            if roots(&draft.model, node.id())
+                .iter()
+                .any(|q| !involves.contains(q))
+            {
+                return Err(fail(Error::BindingOutsideTerm {
+                    role,
+                    node: node.id(),
+                }));
+            }
         }
         for (q, proposal) in &replacement.proposals {
             let id = q.id();
@@ -268,13 +297,23 @@ impl Retirement<'_> {
         // 2. The removal.
         remove(&mut draft.model, &plan, &retired, &unproposed);
 
-        // 3. The replacement, and its proposals.
-        draft.add_term(None, log_density).map_err(fail)?;
+        // 3. The replacement, its bindings, and its proposals.
+        let factor = draft.add_term(None, log_density).map_err(fail)?;
+        if let Some(term) = draft.model.terms.get(&factor) {
+            let mut term = (**term).clone();
+            term.bindings.extend(
+                replacement
+                    .bindings
+                    .iter()
+                    .map(|&(role, node)| (role, node.id())),
+            );
+            draft.model.terms.insert_mut(factor, Arc::new(term));
+        }
         for (q, proposal) in replacement.proposals {
             draft.add_proposal(q, proposal).map_err(fail)?;
         }
         writer.publish(draft.model);
-        Ok(())
+        Ok(Some(TermHandle::from_id(factor)))
     }
 }
 

@@ -115,6 +115,7 @@ fn dropping_the_last_snapshot_frees_retired_nodes() {
         .replace(|_| Replacement {
             log_density: (constant(Real, 0.0).untyped() * 2.0).narrow::<Real>(),
             proposals: Vec::new(),
+            bindings: Vec::new(),
         })
         .unwrap();
     assert!(

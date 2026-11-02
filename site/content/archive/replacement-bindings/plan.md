@@ -23,7 +23,7 @@ reader of the first would find none.
 
 ## The core (`skoro-core`, `retire`)
 
-- [ ] `Replacement::bindings` and `Replacement::bind`; the bindings' check and binding in
+- [x] `Replacement::bindings` and `Replacement::bind`; the bindings' check and binding in
       `Retirement::replace`, and its return of the factor's handle; its documentation; every
       replacement written in the core's and the umbrella's tests given its bindings, empty.
       Tests: `replacement_binds_its_roles`, `replacement_binding_outside_its_factor_is_refused`,
