@@ -1,13 +1,25 @@
 {
     "kind": "chore",
-    "stage": "plan",
+    "stage": "build",
     "started": "2026-11-02",
     "events": [
         {
             "date": "2026-11-02",
             "action": "start",
             "stage": "plan"
+        },
+        {
+            "date": "2026-11-02",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "8fa6ca0"
         }
     ],
-    "approvals": {}
+    "approvals": {
+        "plan": {
+            "date": "2026-11-02",
+            "commit": "8fa6ca0",
+            "hash": "56fc08264f83d654afed474f17024e8de35437c9f8873b4f272e4490533de2fa"
+        }
+    }
 }
