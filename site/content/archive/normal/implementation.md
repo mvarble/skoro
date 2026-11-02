@@ -241,8 +241,8 @@ pub struct Replacement {
 ```
 
 - The core adds a replacement as a likelihood factor itself, and gives back no handle on it. A
-  replacement built with the stacked tangent can therefore bind no roles (see
-  [Open questions](#open-questions)); built outside a retirement, through `factor`, it can.
+  replacement built with the stacked tangent can therefore bind no roles; built outside a
+  retirement, through `factor`, it can (see [The stacked tangent](#the-stacked-tangent)).
 
 ### Tests of the umbrella
 
@@ -619,6 +619,17 @@ host value with its marker, which is how the builder keeps the condition
 quantity of a product type is given factor by factor, `x.factor(i)` with each factor's marker, since
 the product's inverse retraction is its factors' stacked.
 
+> [!DECISION] A replacement binds no roles, until the core lets it
+> `Retirement::replace` adds the replacement's factor itself and gives back no handle on it, so a
+> replacement written with `Stacked::log_density` binds no roles, while the same factor added with
+> `Stacked::factor` binds the residual, the mean and the scale. A least-squares or Fisher-scoring
+> reader of a model with retirements therefore finds no residual on its replacements. This entry
+> leaves that gap as it is, and documents it on `Stacked::log_density` and on the crate's
+> description, rather than revising the core for a reader that does not exist yet. Before the rest
+> of the replacement machinery is written, an entry revising the core gives `Replacement` the
+> bindings its factor carries, at which point `Stacked` returns them with the log-density and a
+> replacement binds the same roles as the factor.
+
 ## Tests
 
 In `crates/skoro-normal/tests/`, on the flat-in-disguise spaces, at both precisions of the Flex
@@ -713,11 +724,4 @@ declared without a volume is the acceptance test's, declared under another name 
 
 ## Open questions
 
-> [!TODO] Roles of a replacement
-> `Retirement::replace` adds the replacement's factor itself and gives back no handle, so a
-> replacement written with `Stacked` binds no roles, while the same factor added with `factor`
-> does. A least-squares or Fisher-scoring reader of a model with retirements would then find no
-> residual on the replacements. Either the core's `Replacement` gains bindings, which is a
-> revision of the core and an entry of its own, or the replacement's roles wait for the elimination
-> entry that computes replacements, which revises the core then. This design takes the second and
-> documents the gap; is that acceptable?
+None remain.
