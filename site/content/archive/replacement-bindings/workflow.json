@@ -1,6 +1,6 @@
 {
     "kind": "chore",
-    "stage": "build",
+    "stage": "publish",
     "started": "2026-11-02",
     "events": [
         {
@@ -13,6 +13,12 @@
             "action": "approve",
             "stage": "plan",
             "commit": "8fa6ca0"
+        },
+        {
+            "date": "2026-11-02",
+            "action": "approve",
+            "stage": "build",
+            "commit": "b98a73d"
         }
     ],
     "approvals": {
@@ -20,6 +26,10 @@
             "date": "2026-11-02",
             "commit": "8fa6ca0",
             "hash": "56fc08264f83d654afed474f17024e8de35437c9f8873b4f272e4490533de2fa"
+        },
+        "build": {
+            "date": "2026-11-02",
+            "commit": "b98a73d"
         }
     }
 }
