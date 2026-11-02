@@ -30,7 +30,7 @@ device where the companion compares a value.
       Tests: `draws_are_functions_of_key_and_address`, `draws_have_the_normal_moments`,
       `exact_sampler_leaves_the_weight_to_the_likelihoods`, `same_key_same_draw_at_both_precisions`,
       `refuses_spaces_it_does_not_take`.
-- [ ] The composite `skoro.normal.root` for every form, its rows and columns in the companion's
+- [x] The composite `skoro.normal.root` for every form, its rows and columns in the companion's
       order, and its binding to `INFORMATION_ROOT` by `score`. Tests:
       `composites_pass_check_operation`, `root_squares_to_the_information`, `roles_are_bound`,
       `four_forms_agree`.

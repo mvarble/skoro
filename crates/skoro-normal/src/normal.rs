@@ -7,7 +7,7 @@ use skoro_core::{
     Declares, Domain, Error, Q, QDyn, Real, Sampler, Space, TermHandle, Typed, VectorDyn,
 };
 
-use crate::composites::{normalizer, whiten};
+use crate::composites::{normalizer, root, whiten};
 use crate::refuse::refuse;
 use crate::sample::NormalSample;
 use crate::{Scale, roles};
@@ -76,19 +76,19 @@ impl Normal {
     #[track_caller]
     pub fn score(&self, x: impl Into<QDyn>) -> TermHandle {
         let x = x.into();
+        let form = self.scale.form();
+        let d = self.space.dimension().unwrap_or(0);
         let sample = match self.space.domain() {
-            Ok(Domain::Global) => {
-                let d = self.space.dimension().unwrap_or(0);
-                NormalSample::new(self.space.clone(), self.scale.form(), d)
-            }
+            Ok(Domain::Global) => NormalSample::new(self.space.clone(), form, d)
+                .and_then(|sample| Ok((sample, root(form, d)?))),
             Ok(Domain::Within(_)) => Err(Error::SpaceMismatch {
                 operation: "skoro.normal",
                 inputs: vec![self.space.clone()],
             }),
             Err(error) => Err(error),
         };
-        let sample = match sample {
-            Ok(sample) => sample,
+        let (sample, root) = match sample {
+            Ok(parts) => parts,
             Err(error) => {
                 let failed = refuse(error, &[x]);
                 return score(failed.narrow::<Scored>(), failed.narrow());
@@ -104,7 +104,8 @@ impl Normal {
             })
             .bind(&roles::RESIDUAL, parts.residual)
             .bind(&roles::MEAN, self.mean)
-            .bind(roles::scale(self.scale.form()), scale);
+            .bind(roles::scale(form), scale)
+            .bind(&roles::INFORMATION_ROOT, root.call(&[scale]));
         if let Some(log_volume) = parts.log_volume {
             term = term.bind(&roles::LOG_VOLUME, log_volume);
         }
