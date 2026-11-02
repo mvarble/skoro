@@ -21,7 +21,7 @@ device where the companion compares a value.
 - [x] `composites.rs`: the cache keyed by form, dimension and part, and the composites
       `skoro.normal.whiten`, `skoro.normal.normalizer` and `skoro.normal.matrix` for every form,
       the covariance factor's forward substitution among them. Tests: `forward_substitution_solves`.
-- [ ] `normal.rs`: `Normal::on`, `Normal::in_space`, `Parts`, `Normal::log_density` with the
+- [x] `normal.rs`: `Normal::on`, `Normal::in_space`, `Parts`, `Normal::log_density` with the
       log-volume left out on the Euclidean spaces, and `Normal::factor_at` with its residual, mean
       and scale bound. Tests: `term_is_the_closed_form`, `density_integrates_to_one`.
 - [ ] `NormalSample`, compiling the space's retraction for the host when made and drawing

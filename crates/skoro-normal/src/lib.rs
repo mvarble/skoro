@@ -7,13 +7,14 @@
 //! forms, less the chart's log-volume; its sampler draws `μ ⊕ L Φ⁻¹(u)` exactly; and it binds the
 //! roles of [`roles`] for the readers that look for them.
 
-#[allow(dead_code)] // the term builds from them
 mod composites;
+mod normal;
 #[allow(dead_code)] // `score` refuses through it
 mod refuse;
 pub mod roles;
 mod sample;
 mod scale;
 
+pub use normal::{Normal, Parts};
 pub use sample::quantile;
 pub use scale::{Form, Scale, triangular};
