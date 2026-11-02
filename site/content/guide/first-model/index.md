@@ -10,8 +10,9 @@ its gradient. Each step quotes the core's own tests, so every line shown compile
 [concepts](../../concepts/) explain each piece from the ground up; the links below go there when a
 step needs more than it shows.
 
-skoro ships no distributions yet, so the densities here are written out by hand, from the core's
-arithmetic.
+The first densities here are written out by hand, from the core's arithmetic, to show what a term
+is; the last section writes the same kind of model with [the normal](../../concepts/the-normal/),
+from the crate `skoro-normal`.
 
 ## Build a model
 
@@ -69,3 +70,31 @@ With some quantities observed, by `Query::log_density().given(observations)`, th
 the density of the others: the posterior of the vehicle's positions and the landmark given the
 measurements, up to a constant. Its gradient is taken just as above, in the
 [tangent charts](../../concepts/queries/#passes) of the free quantities.
+
+## A model with the normal
+
+The crate `skoro-normal` gives skoro its normal distribution. `Normal::on(marker, mean, scale)`
+names the space, the mean and the scale, and `score` adds the term that scores a quantity, with a
+sampler that draws it exactly. A chain of two states and a measurement is three lines:
+
+```rust
+{../../../../crates/skoro-normal/tests/sampler.rs:191..202}
+```
+
+With the measurement observed, generating the model draws the states from their normals, one row
+per key, and weighs each row by the measurement's likelihood alone, since the samplers are exact:
+
+```rust
+{../../../../crates/skoro-normal/tests/sampler.rs:203..215}
+```
+
+A measurement of a curved quantity is written the same way, as what was measured. Here two
+directions on a sphere measure an unknown direction $x$, each with its own scale; a query observes
+them and estimates $x$, or leaves them free and simulates them:
+
+```rust
+{../../../../crates/skoro/tests/normal.rs:435..448}
+```
+
+The [concepts page on the normal](../../concepts/the-normal/) says how its term, sampler and scale
+are made, and which spaces it takes.

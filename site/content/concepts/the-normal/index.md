@@ -25,8 +25,8 @@ $$
 	+ \sum_{i} \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi - \lambda_\mu(\point \ominus \mu) ,
 $$
 
-where $W$, the *whitening*, is the lower-triangular factor with $W\transpose W = \Sigma^{-1}$, and
-$W (\point \ominus \mu)$ is the *whitened residual*. The note on
+where $W$, the _whitening_, is the lower-triangular factor with $W\transpose W = \Sigma^{-1}$, and
+$W (\point \ominus \mu)$ is the _whitened residual_. The note on
 [densities in tangent charts](../../math/chart-volume/) proves that this is the density of
 $\mu \oplus \varepsilon$. A normal is made from its space, its mean and its scale:
 
