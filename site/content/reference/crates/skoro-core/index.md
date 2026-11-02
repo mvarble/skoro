@@ -16,7 +16,8 @@ give values, tangents, gradients and Hessian-vector products in tangent charts, 
 generation, which draws a model's free quantities from explicit random keys and weighs the draw, and
 retirement, which removes the quantities at a collection of addresses, named one by one or as
 the namespaces they lie under, and keeps what they said about the rest as a likelihood factor over
-their Markov blanket, which the caller builds.
+their Markov blanket, which the caller builds with the roles it binds, and whose handle the
+retirement gives back.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the

@@ -152,3 +152,12 @@ normal on $\R^D$ at the tangents of the blanket's quantities at constant anchors
 ```rust
 {../../../../crates/skoro-normal/src/stacked.rs:50..59}
 ```
+
+A retirement adds its replacement as a likelihood factor itself, and the replacement carries the
+roles that factor binds, as a term in a scope does. A caller that builds a replacement with the
+stacked tangent binds its residual, mean and scale there, and the retirement checks each node and
+binds it to the factor it adds, in the snapshot it publishes:
+
+```rust
+{../../../../crates/skoro-core/src/retire.rs:85..102}
+```
