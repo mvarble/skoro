@@ -14,4 +14,4 @@ mod sample;
 mod scale;
 
 pub use sample::quantile;
-pub use scale::Form;
+pub use scale::{Form, Scale, triangular};

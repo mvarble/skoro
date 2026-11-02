@@ -14,7 +14,7 @@ device where the companion compares a value.
       `skoro-tensor` alone, with the workspace's lints; `lib.rs` and its re-exports; `roles.rs` with
       every role key and `roles::scale`; `refuse.rs` with `Refused`; `sample.rs` with `quantile`,
       Wichura's AS 241. Tests: `quantile_matches_reference`.
-- [ ] `scale.rs`: `Form` and its name, `Scale` from quantities in the four forms, `triangular(d)`,
+- [x] `scale.rs`: `Form` and its name, `Scale` from quantities in the four forms, `triangular(d)`,
       and the constant helpers `sd`, `sds`, `covariance` and `precision`, with the host's Cholesky
       and reversed Cholesky factorizations and the refusal of a matrix that is not positive
       definite with `ValueShape`. Tests: `constant_scale_helpers`.
