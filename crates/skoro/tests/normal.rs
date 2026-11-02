@@ -351,3 +351,163 @@ fn sphere_information() {
         }
     }
 }
+
+/// One Gauss–Newton step's ingredients at `x`: the stacked residuals, their Jacobian (rows of
+/// residual entries, two columns), and the gradient of the log-volumes.
+struct Linearized {
+    residual: Vec<f64>,
+    jacobian: Vec<[f64; 2]>,
+    log_volume_gradient: [f64; 2],
+}
+
+/// Gauss–Newton on `x`, from `start`, with or without the log-volumes' gradient: the iterates.
+fn gauss_newton(
+    program: &skoro::Program,
+    x: QDyn,
+    residuals: &[QDyn],
+    log_volumes: &[QDyn],
+    start: [f64; 3],
+    with_log_volume: bool,
+) -> Vec<[f64; 3]> {
+    let target = Target::host();
+    let linearize = |at: [f64; 3]| -> Linearized {
+        let values =
+            Values::new().with(x, Value::Continuous(Points::from_host(&at, 1, 3, &target)));
+        let identity = Frame::from_host(&[1.0, 0.0, 0.0, 1.0], 1, 2, 2, &target);
+        let (out, frames) = program
+            .tangent(&values, &Frames::new().with(x, identity))
+            .unwrap();
+        let mut residual = Vec::new();
+        let mut jacobian = Vec::new();
+        for r in residuals {
+            residual.extend(host(&out, r.id()));
+            let frame = frames.get(r.id()).unwrap().to_host();
+            jacobian.extend(frame.chunks(2).map(|row| [row[0], row[1]]));
+        }
+        let mut log_volume_gradient = [0.0; 2];
+        for l in log_volumes {
+            let frame = frames.get(l.id()).unwrap().to_host();
+            log_volume_gradient[0] += frame[0];
+            log_volume_gradient[1] += frame[1];
+        }
+        Linearized {
+            residual,
+            jacobian,
+            log_volume_gradient,
+        }
+    };
+    let mut iterates = vec![start];
+    let mut at = start;
+    for _ in 0..12 {
+        let step = linearize(at);
+        // f = ½|r|² + Σ λ: the gradient Jᵀr + ∇λ, and the matrix JᵀJ.
+        let mut g = [0.0; 2];
+        let mut h = [0.0; 4];
+        for (row, r) in step.jacobian.iter().zip(&step.residual) {
+            g[0] += row[0] * r;
+            g[1] += row[1] * r;
+            h[0] += row[0] * row[0];
+            h[1] += row[0] * row[1];
+            h[3] += row[1] * row[1];
+        }
+        h[2] = h[1];
+        if with_log_volume {
+            g[0] += step.log_volume_gradient[0];
+            g[1] += step.log_volume_gradient[1];
+        }
+        let det = h[0] * h[3] - h[1] * h[2];
+        let delta = [
+            -(h[3] * g[0] - h[1] * g[1]) / det,
+            -(h[0] * g[1] - h[2] * g[0]) / det,
+        ];
+        at = retract(at, delta);
+        iterates.push(at);
+    }
+    iterates
+}
+
+#[test]
+fn gauss_newton_reaches_the_model_mode() {
+    let target = Target::host();
+    let (sd1, sd2) = (0.2, 0.4);
+    let z1 = normalize([0.1, 0.2, 0.97]);
+    let z2 = retract(z1, [0.5, 0.1]);
+    let mut writer = Writer::new();
+    let (x, z, terms) = writer
+        .build(|| {
+            let x = quantity("x", Sphere);
+            let z = [quantity("z1", Sphere), quantity("z2", Sphere)];
+            let terms = [
+                Normal::on(Sphere, x, Scale::sd(sd1)).score(z[0]).id(),
+                Normal::on(Sphere, x, Scale::sd(sd2)).score(z[1]).id(),
+            ];
+            (x, z, terms)
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let given = Observations::new().observe(z[0], z1).observe(z[1], z2);
+    let residuals: Vec<QDyn> = terms
+        .iter()
+        .map(|t| snapshot.bound(*t, &roles::RESIDUAL).unwrap())
+        .collect();
+    let log_volumes: Vec<QDyn> = terms
+        .iter()
+        .map(|t| snapshot.bound(*t, &roles::LOG_VOLUME).unwrap().unwrap())
+        .collect();
+    let nodes: Vec<QDyn> = residuals.iter().chain(&log_volumes).copied().collect();
+    let program = snapshot
+        .compile(&Query::of(nodes).given(given.clone()), &target)
+        .unwrap();
+
+    let model = gauss_newton(&program, x.untyped(), &residuals, &log_volumes, z1, true);
+    let squares = gauss_newton(&program, x.untyped(), &residuals, &log_volumes, z1, false);
+    let (mode, residual_mode) = (model[model.len() - 1], squares[squares.len() - 1]);
+
+    // The model's mode by a dense search of the full log-density, in the chart at the iterate.
+    let density = snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap();
+    let (half, n) = (0.01, 201);
+    let spacing = 2.0 * half / (n - 1) as f64;
+    let grid: Vec<[f64; 2]> = (0..n * n)
+        .map(|k| {
+            [
+                -half + spacing * (k / n) as f64,
+                -half + spacing * (k % n) as f64,
+            ]
+        })
+        .collect();
+    let points: Vec<f64> = grid.iter().flat_map(|t| retract(mode, *t)).collect();
+    let values = Values::new().with(
+        x,
+        Value::Continuous(Points::from_host(&points, grid.len(), 3, &target)),
+    );
+    let densities = host(&density.forward(&values).unwrap(), NodeId::DENSITY);
+    let best = (0..grid.len())
+        .max_by(|&a, &b| densities[a].total_cmp(&densities[b]))
+        .unwrap();
+    let norm = |t: [f64; 2]| (t[0] * t[0] + t[1] * t[1]).sqrt();
+    assert!(
+        norm(grid[best]) <= spacing,
+        "the dense search's mode is {:?} from the iterate",
+        grid[best]
+    );
+
+    // The residuals' own mode is another point.
+    let apart = norm(local(mode, residual_mode));
+    assert!(apart > 10.0 * spacing, "the modes are {apart} apart");
+
+    // The rates: the log-volume adds at most κ = σ² to the residuals' own.
+    let rate = |iterates: &[[f64; 3]], limit: [f64; 3]| {
+        let errors: Vec<f64> = iterates.iter().map(|x| norm(local(limit, *x))).collect();
+        (1..4)
+            .map(|k| errors[k + 1] / errors[k])
+            .fold(0.0, f64::max)
+    };
+    let (with, without) = (rate(&model, mode), rate(&squares, residual_mode));
+    let kappa = sd2 * sd2;
+    assert!(
+        with <= without + kappa,
+        "rates {with} with the log-volume and {without} without"
+    );
+}

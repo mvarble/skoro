@@ -46,7 +46,7 @@ device where the companion compares a value.
       sampler and its information. Tests: `normal.rs::sphere_density_integrates_to_one`,
       `normal.rs::sphere_term_reads_the_declared_volume`,
       `normal.rs::sphere_sampler_matches_the_density`, `normal.rs::sphere_information`.
-- [ ] The Gauss–Newton iteration of the companion's test, with and without the log-volume's
+- [x] The Gauss–Newton iteration of the companion's test, with and without the log-volume's
       gradient, against the mode found by a dense search. Tests:
       `normal.rs::gauss_newton_reaches_the_model_mode`.
 - [ ] The refusals on curved types, and the factor accepted where the term is refused. Tests:
