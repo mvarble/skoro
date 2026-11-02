@@ -635,6 +635,46 @@ matrix from one has it in the Gauss–Newton product of its residual's Jacobian,
 role gives, and which for the replacement [](eq:joint), a Gaussian of $\delta$, is its negative
 Hessian in $\delta$.
 
+## What the tests check
+
+The mathematics above is checked on the spaces the library has. It has no curved type yet, but the
+core's tests have two spheres with declared volumes, written against its public interface alone:
+the acceptance-test sphere, whose stereographic chart is global and full, of log-volume
+[](eq:archive/measures/math/sphere-volume) against surface measure, and an exponential sphere whose
+chart is full but not global. The normal is tested on the flat-in-disguise spaces and on the
+stereographic sphere, where its density and sampler are exact, and the exponential sphere serves
+only to show that a type whose chart is not global is refused. A rotation group, and the Cayley
+chart's figures of [Properties](#properties) and [On a curved space](#the-expected-information),
+are left to the entry that brings it.
+
+- **The density integrates to one**, against the reference measure: by quadrature in the tangent
+  coordinate on $\R$ and $\positive$, and on the sphere through its chart,
+  $\int_{\R^2} \exp\bigl(\logterm_{\mathcal N}(\mu \oplus \tangent;\, \mu, W) + \lambda_\mu(\tangent)
+  \bigr)\, \dd \tangent = 1$ by [](eq:math/chart-volume/image), for an isotropic and an anisotropic
+  scale, and at a $\mu$ near the basis's failure as well as far from it.
+- **The sampler is exact for the term**: the empirical law of $\mu \oplus L \zeta$ over many keys
+  agrees with expectations computed by quadrature against $\exp \logterm_{\mathcal N}$, on each of
+  those spaces and in each form of the scale, and on the positive orthant $\log \randomPoint$ has
+  mean $\log \mu$ and covariance $\Sigma$.
+- **The term is [](eq:term) on the flat-in-disguise spaces**, with $J$ of [](eq:jacobian) on a
+  positive factor, and on the sphere its log-volume is the declared one.
+- **The forms of the scale agree**: the four forms of one $\Sigma$ give one term, one residual, one
+  sampler and one root, the covariance factor's residual by [](eq:forward-substitution).
+- **The information is as stated**: on the flat-in-disguise spaces the root [](eq:root) satisfies
+  $C\transpose C = \mathcal I$ against the expected negative chart Hessian, estimated over draws,
+  of [%full](statement:information); on the sphere the scale's block agrees with $F$ and the
+  blocks of $\point$ and $\mu$ agree with $\pm \Lambda$ to second order in the scale.
+- **The roles are bound** as [The roles](#the-roles) lists them, the log-volume only where it is
+  not zero, and a Gauss–Newton iteration with the log-volume's gradient converges to the mode of
+  [](eq:gn-objective), and without it to the mode of the residuals alone, as
+  [%full](statement:gauss-newton) says.
+- **The stacked tangent** reproduces the core's replacements [](eq:archive/core/math/kalman) and
+  [](eq:archive/core/math/joint-blanket), refuses an anchor that is not a constant and a discrete
+  quantity, and works on the sphere, which a likelihood factor needs no volume for.
+- **What the normal refuses**: a quantity of the exponential sphere, whose chart is not global, and
+  of a type without a volume; such a quantity's measurement is accepted as a likelihood factor over
+  data.
+
 ## In skoro's terms
 
 - **The normal scores one quantity** $\point$, of any continuous type with a volume whose chart is
@@ -676,12 +716,4 @@ Hessian in $\delta$.
 
 ## Open questions
 
-> [!TODO] A curved space to test on
-> The library has no curved type yet, but the core's tests have the acceptance-test sphere, whose
-> stereographic chart is global and full, of log-volume [](eq:archive/measures/math/sphere-volume),
-> and an exponential sphere whose chart is full but not global. That suggests testing the normal on
-> the flat spaces and on the stereographic sphere, its density and sampler exact there, with the
-> exponential sphere showing that a type whose chart is not global is refused, and leaving a
-> rotation group to its own entry. Is that the coverage wanted? The spheres are written in the
-> core's tests, against its public interface alone; how this entry's tests reach them is the
-> implementation's question.
+None remain.
