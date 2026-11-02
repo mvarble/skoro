@@ -31,7 +31,7 @@ reader of the first would find none.
 
 ## The normal (`skoro-normal`, `stacked`)
 
-- [ ] The documentation of `Stacked::log_density`, which says a replacement written with it binds
+- [x] The documentation of `Stacked::log_density`, which says a replacement written with it binds
       no roles until the core's `Replacement` carries bindings: it now says that the replacement it
       gives binds none, and that a caller binds them with `Replacement::bind`. Tests: none; the
       crate's tests pass unchanged.
