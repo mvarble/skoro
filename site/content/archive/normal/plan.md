@@ -24,7 +24,7 @@ device where the companion compares a value.
 - [x] `normal.rs`: `Normal::on`, `Normal::in_space`, `Parts`, `Normal::log_density` with the
       log-volume left out on the Euclidean spaces, and `Normal::factor_at` with its residual, mean
       and scale bound. Tests: `term_is_the_closed_form`, `density_integrates_to_one`.
-- [ ] `NormalSample`, compiling the space's retraction for the host when made and drawing
+- [x] `NormalSample`, compiling the space's retraction for the host when made and drawing
       $\mu \oplus L \Phi^{-1}(u)$ in each form; `Normal::score`, with the check of the space's
       domain and the refusals through `Refused`, the exact sampler, and the roles but the root.
       Tests: `draws_are_functions_of_key_and_address`, `draws_have_the_normal_moments`,

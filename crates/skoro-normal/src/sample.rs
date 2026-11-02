@@ -1,6 +1,126 @@
 //! The normal's sampler, and the standard normal quantile it draws through.
 #![allow(clippy::excessive_precision)] // AS 241's coefficients, as published
 
+use std::sync::Arc;
+
+use skoro_core::{Error, Key, Param, Program, Sample, Space, Values};
+use skoro_tensor::{Points, Target, Value};
+
+use crate::Form;
+use crate::composites::lower;
+
+/// Draws `μ ⊕ L Φ⁻¹(u)` on the host, from `d` variates of each row's key.
+#[derive(Debug)]
+pub struct NormalSample {
+    space: Space,
+    form: Form,
+    dimension: usize,
+    /// The space's retraction, compiled for the host when the sampler is made.
+    retraction: Arc<Program>,
+}
+
+impl NormalSample {
+    /// The sampler of a normal of `form` on `space`, of dimension `dimension`; refuses a space
+    /// whose retraction does not compile for the host.
+    pub(crate) fn new(space: Space, form: Form, dimension: usize) -> Result<NormalSample, Error> {
+        let retraction = space.retraction()?.compile(&Target::host())?;
+        Ok(NormalSample {
+            space,
+            form,
+            dimension,
+            retraction: Arc::new(retraction),
+        })
+    }
+
+    /// `t = L ζ` for the scale's `L`, from one row of the scale's storage.
+    fn tangent(&self, scale: &[f64], zeta: &[f64]) -> Vec<f64> {
+        let d = self.dimension;
+        // The entry L_ij, or W_ij, i > j, of a triangular scale.
+        let below = |i: usize, j: usize| scale[d + lower(d, j).start + (i - j - 1)];
+        match self.form {
+            Form::Isotropic => zeta.iter().map(|z| scale[0] * z).collect(),
+            Form::Diagonal => zeta.iter().zip(scale).map(|(z, s)| s * z).collect(),
+            Form::CovarianceFactor => (0..d)
+                .map(|i| scale[i] * zeta[i] + (0..i).map(|j| below(i, j) * zeta[j]).sum::<f64>())
+                .collect(),
+            // The solution of W t = ζ, by forward substitution.
+            Form::Whitening => {
+                let mut t = vec![0.0; d];
+                for i in 0..d {
+                    let rest: f64 = (0..i).map(|j| below(i, j) * t[j]).sum();
+                    t[i] = (zeta[i] - rest) / scale[i];
+                }
+                t
+            }
+        }
+    }
+}
+
+/// The host values of a continuous input, row by row, `rows` of them: one shared row is repeated.
+fn rows_of(value: &Value, rows: usize) -> Vec<f64> {
+    let Value::Continuous(points) = value else {
+        unreachable!("the normal's mean and scale are continuous")
+    };
+    let data = points.to_host();
+    if points.rows() == rows {
+        data
+    } else {
+        data.iter()
+            .copied()
+            .cycle()
+            .take(rows * points.storage())
+            .collect()
+    }
+}
+
+impl Sample for NormalSample {
+    fn name(&self) -> &'static str {
+        "skoro.normal"
+    }
+
+    fn params(&self) -> Vec<Param> {
+        vec![
+            Param::Space(self.space.clone()),
+            Param::Text(self.form.name().into()),
+        ]
+    }
+
+    fn draw(&self, inputs: &[Value], keys: &[Key], target: &Target) -> Value {
+        let (rows, d, n) = (keys.len(), self.dimension, self.space.storage());
+        let mean = rows_of(&inputs[0], rows);
+        let scale = rows_of(&inputs[1], rows);
+        let width = scale.len() / rows.max(1);
+        let tangents: Vec<f64> = keys
+            .iter()
+            .enumerate()
+            .flat_map(|(row, key)| {
+                let zeta: Vec<f64> = key.uniforms(d).into_iter().map(quantile).collect();
+                self.tangent(&scale[row * width..(row + 1) * width], &zeta)
+            })
+            .collect();
+        let host = Target::host();
+        let free = self.retraction.free();
+        let at = Values::new()
+            .with(
+                free[0].node,
+                Value::Continuous(Points::from_host(&mean, rows, n, &host)),
+            )
+            .with(
+                free[1].node,
+                Value::Continuous(Points::from_host(&tangents, rows, d, &host)),
+            );
+        let moved = self
+            .retraction
+            .forward(&at)
+            .ok()
+            .and_then(|out| out.get(self.retraction.targets()[0]).cloned());
+        let Some(Value::Continuous(moved)) = moved else {
+            unreachable!("the retraction compiled for the host runs on host values of its spaces")
+        };
+        Value::Continuous(Points::from_host(&moved.to_host(), rows, n, target))
+    }
+}
+
 /// The standard normal quantile `Φ⁻¹(p)` for `p` in the open interval (0, 1), by Wichura's
 /// algorithm AS 241 (PPND16), to about 1e-16 relative error.
 pub fn quantile(p: f64) -> f64 {

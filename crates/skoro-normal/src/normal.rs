@@ -1,11 +1,26 @@
 //! The normal: a term scoring a quantity, or its Gaussian part as a likelihood factor.
 
-use skoro_core::scope::factor;
-use skoro_core::{Declares, Error, Q, QDyn, Real, Space, TermHandle, VectorDyn};
+use std::sync::Arc;
+
+use skoro_core::scope::{factor, score};
+use skoro_core::{
+    Declares, Domain, Error, Q, QDyn, Real, Sampler, Space, TermHandle, Typed, VectorDyn,
+};
 
 use crate::composites::{normalizer, whiten};
 use crate::refuse::refuse;
+use crate::sample::NormalSample;
 use crate::{Scale, roles};
+
+/// The marker of a scored quantity of any space: the normal reads the space from `Normal` itself.
+#[derive(Clone, Copy, Debug)]
+struct Scored;
+
+impl Typed for Scored {
+    fn admits(_: &Space) -> bool {
+        true
+    }
+}
 
 /// The normal `𝒩(μ, Σ)` on a space, by its mean and scale: a term to add, or a factor.
 #[derive(Clone, Debug)]
@@ -53,6 +68,47 @@ impl Normal {
 
     pub fn scale(&self) -> Scale {
         self.scale
+    }
+
+    /// Scores `x`: the term, its exact sampler and its roles. Refuses a space without a measure
+    /// (`NoVolume`), a discrete one (`NotContinuous`) and one whose chart is not global
+    /// (`SpaceMismatch` of `skoro.normal`), recording the refusal at the caller's line.
+    #[track_caller]
+    pub fn score(&self, x: impl Into<QDyn>) -> TermHandle {
+        let x = x.into();
+        let sample = match self.space.domain() {
+            Ok(Domain::Global) => {
+                let d = self.space.dimension().unwrap_or(0);
+                NormalSample::new(self.space.clone(), self.scale.form(), d)
+            }
+            Ok(Domain::Within(_)) => Err(Error::SpaceMismatch {
+                operation: "skoro.normal",
+                inputs: vec![self.space.clone()],
+            }),
+            Err(error) => Err(error),
+        };
+        let sample = match sample {
+            Ok(sample) => sample,
+            Err(error) => {
+                let failed = refuse(error, &[x]);
+                return score(failed.narrow::<Scored>(), failed.narrow());
+            }
+        };
+        let parts = self.log_density(x);
+        let scale = self.scale.value();
+        let mut term = score(x.narrow::<Scored>(), parts.log_density)
+            .sampler(Sampler {
+                sample: Arc::new(sample),
+                inputs: vec![self.mean, scale],
+                log_density: None,
+            })
+            .bind(&roles::RESIDUAL, parts.residual)
+            .bind(&roles::MEAN, self.mean)
+            .bind(roles::scale(self.scale.form()), scale);
+        if let Some(log_volume) = parts.log_volume {
+            term = term.bind(&roles::LOG_VOLUME, log_volume);
+        }
+        term
     }
 
     /// The term's nodes at `x`, added to the model with no term: what `score` scores.

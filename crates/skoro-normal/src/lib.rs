@@ -9,12 +9,11 @@
 
 mod composites;
 mod normal;
-#[allow(dead_code)] // `score` refuses through it
 mod refuse;
 pub mod roles;
 mod sample;
 mod scale;
 
 pub use normal::{Normal, Parts};
-pub use sample::quantile;
+pub use sample::{NormalSample, quantile};
 pub use scale::{Form, Scale, triangular};
