@@ -1,0 +1,16 @@
+[package]
+name = "skoro-normal"
+description = "The normal distribution of skoro, on every space whose chart is global and whose volume is known."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+skoro-tensor.workspace = true
+skoro-core.workspace = true
+
+[lints]
+workspace = true

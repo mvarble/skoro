@@ -10,7 +10,7 @@ device where the companion compares a value.
 
 ## The crate (`skoro-normal`)
 
-- [ ] The crate `crates/skoro-normal`, a member of the workspace depending on `skoro-core` and
+- [x] The crate `crates/skoro-normal`, a member of the workspace depending on `skoro-core` and
       `skoro-tensor` alone, with the workspace's lints; `lib.rs` and its re-exports; `roles.rs` with
       every role key and `roles::scale`; `refuse.rs` with `Refused`; `sample.rs` with `quantile`,
       Wichura's AS 241. Tests: `quantile_matches_reference`.

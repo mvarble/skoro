@@ -5345,6 +5345,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-normal"
+version = "0.1.0"
+dependencies = [
+ "skoro-core",
+ "skoro-tensor",
+]
+
+[[package]]
 name = "skoro-tensor"
 version = "0.1.0"
 dependencies = [
