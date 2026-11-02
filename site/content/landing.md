@@ -20,8 +20,9 @@ tangent spaces.
 > Skoro is being rebuilt from its foundations. Its purpose and design are settled in
 > [the charter](archive/charter/), and the library returns one piece at a time, each with a
 > written record of its mathematics and design in the [archive](archive/). [The core](archive/core/)
-> is back: models can be built, queried and differentiated to second order, but no distribution
-> ships yet. Nothing is published on crates.io.
+> is back: models can be built, queried and differentiated to second order. Its first
+> distribution, [the normal](concepts/the-normal/), is back too, on flat, positive and curved
+> spaces alike. Nothing is published on crates.io.
 
 Start with [what skoro is](start/what-is-skoro/), and who it is for, or with
 [a first model](guide/first-model/).

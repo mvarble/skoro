@@ -21,6 +21,11 @@ export const CRATES: Crate[] = [
         deps: ['skoro-tensor'],
     },
     {
+        name: 'skoro-normal',
+        purpose: 'The normal distribution, on every space whose chart is global',
+        deps: ['skoro-core'],
+    },
+    {
         name: 'skoro',
         purpose: 'The umbrella: re-exports the core and the tensor layer',
         deps: ['skoro-core'],

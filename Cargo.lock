@@ -5332,6 +5332,7 @@ name = "skoro"
 version = "0.1.0"
 dependencies = [
  "skoro-core",
+ "skoro-normal",
  "skoro-tensor",
 ]
 
@@ -5341,6 +5342,14 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "rpds",
+ "skoro-tensor",
+]
+
+[[package]]
+name = "skoro-normal"
+version = "0.1.0"
+dependencies = [
+ "skoro-core",
  "skoro-tensor",
 ]
 
