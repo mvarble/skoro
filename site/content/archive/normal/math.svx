@@ -471,6 +471,30 @@ $W = (P + q^2)^{-1/2}$ and $c = \log \mathcal N(a, s^2 + r^2)(\hat z_0)$, and
 $c = 0$, and $W$ the whitening of its $2 \times 2$ covariance. With the normal in the library,
 both can be written with it rather than by hand.
 
+**The stacked tangent.** This entry provides the replacement's form as a convenience, so that
+neither a test nor the elimination entry that will compute replacements writes it by hand. It is
+given the blanket's continuous quantities in an order, an anchor for each, a mean $m \in \R^D$, a
+scale in any of the forms of [The scale](#the-scale) of dimension $D$, and a constant $c$, and it
+adds the likelihood factor [](eq:joint) at the mapped value $\delta$ of [](eq:stacked), its blocks
+in the order given. Three conditions make that factor the one a replacement means.
+
+- *The anchors are constants*, of the types of their quantities, since a replacement summarizes
+  the retired terms at fixed points and must not move with the quantities it is a function of; an
+  anchor reached from a quantity is refused.
+- *The quantities are continuous*, since $\delta$ is made of tangent coordinates; a discrete
+  quantity of a blanket is summarized, if at all, by a factor of another form.
+- *$\point_i \ominus p_i$ is defined* where the factor is evaluated: on the chart's image
+  $V_{p_i}$, which for a full chart is all of the type but a set of measure zero, so that a
+  replacement over a curved quantity is read in the chart in which it was computed. The type need not have a volume, nor a global chart,
+  since the factor scores nothing.
+
+Its derivatives are those of its parts: the block of $\delta$ for the quantity $\point_i$ has the
+derivative $\D(\point_i \ominus p_i)$ in the chart at $\point_i$, which is the identity at
+$\point_i = p_i$ and everywhere on a flat-in-disguise type by [](eq:translation), and on a curved
+type moves with $\point_i$ as the core's inverse retraction does. It binds the roles of a
+likelihood factor ([The roles](#the-roles)): its whitened residual $W(\delta - m)$, its mean $m$ and
+its scale.
+
 ### Without a volume or a global chart
 
 A type that declares no volume has no densities, and the core refuses a term that scores one of its
@@ -644,9 +668,10 @@ Hessian in $\delta$.
   residual, its mean, its scale with its form, its log-volume where it is not zero, and the root
   [](eq:root) of its expected information ([The roles](#the-roles)).
 - **As a likelihood factor**, its Gaussian part on $\R^D$ evaluated at the stacked tangent
-  [](eq:stacked) of a blanket at constant anchors is the form of a retirement's Gaussian
-  replacement; and at a constant measured value it carries a measurement on a type without a
-  volume or a global chart, which with a fixed scale is the exact log-likelihood of the law of
+  [](eq:stacked) of a blanket's continuous quantities at constant anchors is the form of a
+  retirement's Gaussian replacement, which this entry provides as a convenience
+  ([The stacked tangent](#as-a-likelihood-factor)); and at a constant measured value it carries a
+  measurement on a type without a volume or a global chart, which with a fixed scale is the exact log-likelihood of the law of
   [%full](statement:invariant).
 
 ## Open questions
@@ -660,9 +685,3 @@ Hessian in $\delta$.
 > rotation group to its own entry. Is that the coverage wanted? The spheres are written in the
 > core's tests, against its public interface alone; how this entry's tests reach them is the
 > implementation's question.
-
-> [!TODO] The joint form
-> The draft takes a retirement's Gaussian replacement to be the normal on $\R^D$ at the stacked
-> tangent [](eq:stacked), rather than a distribution of its own as the archive's `JointNormal`
-> was. Is that the right reading, and does this entry provide the stacked tangent at constant
-> anchors as a convenience, or leave it to the elimination entry that will compute replacements?
