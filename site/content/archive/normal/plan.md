@@ -42,7 +42,7 @@ device where the companion compares a value.
       `tests/sphere.rs` then uses; in `tests/common/sphere.rs`, the sphere declared under another
       name without a volume, and the host values of the sphere's marker. Tests: the existing
       tests of `tests/sphere.rs`, unchanged and passing.
-- [ ] `tests/normal.rs`, the normal on the acceptance-test sphere: its density, its term, its
+- [x] `tests/normal.rs`, the normal on the acceptance-test sphere: its density, its term, its
       sampler and its information. Tests: `normal.rs::sphere_density_integrates_to_one`,
       `normal.rs::sphere_term_reads_the_declared_volume`,
       `normal.rs::sphere_sampler_matches_the_density`, `normal.rs::sphere_information`.
