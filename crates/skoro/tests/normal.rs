@@ -10,8 +10,8 @@ use common::sphere::{Sphere, basis};
 use skoro::scope::{constant, quantity, quantity_in};
 use skoro::tensor::{Frame, HostData, HostValue, Points, Value};
 use skoro::{
-    Frames, Key, NodeId, Observations, Positive, Precision, QDyn, Query, Rows, Snapshot, Target,
-    Values, Writer,
+    Declares, Frames, Key, NodeId, Observations, Positive, Precision, QDyn, Query, Rows, Snapshot,
+    Target, Values, Writer,
 };
 use skoro_normal::{Normal, Scale, roles, triangular};
 
@@ -510,4 +510,89 @@ fn gauss_newton_reaches_the_model_mode() {
         with <= without + kappa,
         "rates {with} with the log-volume and {without} without"
     );
+}
+
+#[test]
+fn refuses_a_chart_that_is_not_global() {
+    use common::sphere::Exponential;
+    let failure = Writer::new()
+        .build(|| {
+            let x = quantity("x", Exponential);
+            let mean = constant(Exponential, means()[1]);
+            Normal::on(Exponential, mean, Scale::sd(0.3)).score(x);
+        })
+        .unwrap_err();
+    assert_eq!(
+        failure.error,
+        skoro::Error::SpaceMismatch {
+            operation: "skoro.normal",
+            inputs: vec![Exponential.space()]
+        }
+    );
+    // The Gaussian part at a measured value is a likelihood factor, and is accepted.
+    let mut writer = Writer::new();
+    writer
+        .build(|| {
+            let x = quantity("x", Exponential);
+            let z = constant(Exponential, means()[1]);
+            Normal::on(Exponential, x, Scale::sd(0.3)).factor_at(z);
+        })
+        .unwrap();
+}
+
+#[test]
+fn refuses_a_type_without_a_volume() {
+    use common::sphere::Unmeasured;
+    let failure = Writer::new()
+        .build(|| {
+            let x = quantity("x", Unmeasured);
+            let mean = constant(Unmeasured, means()[1]);
+            Normal::on(Unmeasured, mean, Scale::sd(0.3)).score(x);
+        })
+        .unwrap_err();
+    assert!(
+        matches!(&failure.error, skoro::Error::NoVolume { space, .. } if *space == Unmeasured.space()),
+        "{failure:?}"
+    );
+
+    // A measurement over data: the factor's gradient in the mean is that of -½|W (z ⊖ μ)|².
+    let (z, sd) = (means()[1], 0.3);
+    let mut writer = Writer::new();
+    let (mu, factor) = writer
+        .build(|| {
+            let mu = quantity("mu", Unmeasured);
+            let factor =
+                Normal::on(Unmeasured, mu, Scale::sd(sd)).factor_at(constant(Unmeasured, z));
+            (mu, factor.id())
+        })
+        .unwrap();
+    let target = Target::host();
+    let program = writer
+        .snapshot()
+        .compile(&Query::log_density_of([factor]), &target)
+        .unwrap();
+    let at_point = retract(z, [0.2, -0.15]);
+    let at = Values::new().with(
+        mu,
+        Value::Continuous(Points::from_host(&at_point, 1, 3, &target)),
+    );
+    let (_, frames) = program.gradient(&at).unwrap();
+    let gradient = frames.get(mu).unwrap().to_host();
+    let f = |m: [f64; 3]| {
+        let t = local(m, z);
+        -0.5 * (t[0] * t[0] + t[1] * t[1]) / (sd * sd)
+    };
+    let h = 1e-6;
+    for i in 0..2 {
+        let mut e = [0.0; 2];
+        e[i] = h;
+        let plus = f(retract(at_point, e));
+        e[i] = -h;
+        let minus = f(retract(at_point, e));
+        let want = (plus - minus) / (2.0 * h);
+        assert!(
+            (gradient[i] - want).abs() < 1e-7 * want.abs().max(1.0),
+            "{gradient:?} against {want}"
+        );
+    }
 }

@@ -49,7 +49,7 @@ device where the companion compares a value.
 - [x] The Gauss–Newton iteration of the companion's test, with and without the log-volume's
       gradient, against the mode found by a dense search. Tests:
       `normal.rs::gauss_newton_reaches_the_model_mode`.
-- [ ] The refusals on curved types, and the factor accepted where the term is refused. Tests:
+- [x] The refusals on curved types, and the factor accepted where the term is refused. Tests:
       `normal.rs::refuses_a_chart_that_is_not_global`,
       `normal.rs::refuses_a_type_without_a_volume`.
 
