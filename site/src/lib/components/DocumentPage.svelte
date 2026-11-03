@@ -19,6 +19,9 @@
     const date = (d: Date) => d.toISOString().slice(0, 10);
     const tex = (text: string) => renderMixed(text, doc.katexMacros as Record<string, string>);
     const any = (...lists: DocumentLink[][]) => lists.some((list) => list.length);
+    // How much of an entry's summary "How this came to be" shows: an entry without one has its
+    // whole first paragraph, which is more than a list needs.
+    const EXCERPT = 200;
 </script>
 
 <svelte:head>
@@ -126,7 +129,7 @@
                 {#if data.entries.length}
                     <h2>How this came to be</h2>
                     <p>The development behind this page, newest first:</p>
-                    <LinkList links={data.entries} />
+                    <LinkList links={data.entries} excerpt={EXCERPT} />
                 {/if}
                 {#if data.dependents.length}
                     <h2>Built on by</h2>
