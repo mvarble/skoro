@@ -302,11 +302,16 @@ fn matrix(q: QDyn) -> QDyn;
 fn hat(omega: QDyn) -> QDyn;
 /// `1 / a = e^{-log a}`, for `a` positive on the domain.
 fn reciprocal(a: QDyn) -> QDyn;
-/// `|x| = e^{½ log Σ xᵢ²}` and `x / |x|`, for `x ≠ 0`.
+/// `√a = e^{½ log a}`, for `a > 0`.
+fn sqrt(a: QDyn) -> QDyn;
+/// `|x| = √(Σ xᵢ²)` and `x / |x|`, for `x ≠ 0`.
 fn norm(x: QDyn) -> QDyn;
 fn normalize(x: QDyn) -> QDyn;
 /// `select` on two `QDyn`s by a `Boolean`: `if_true` where it is true.
 fn choose(condition: QDyn, if_false: QDyn, if_true: QDyn) -> QDyn;
+/// Both conditions: `1[a b - ½ ≥ 0]` of their embeddings as reals, since `select` takes
+/// continuous values only and cannot choose between Booleans.
+fn both(a: QDyn, b: QDyn) -> QDyn;
 /// `δ(t) = ((1 - s), t/2) / (1 + s)`, `s = |t|²/16`: the chart at the identity.
 fn delta(t: QDyn) -> QDyn;
 /// The chart's inverse at the identity, `4 vec(d) / (1 + w(d))`.
@@ -420,7 +425,7 @@ enum Coefficient { A0, B0, A, B, C, D, E }      // a, b of eq:exp; A, B; C; D, E
 
 /// The coefficient at `θ² = theta2`, a `Real`: the series below `CUTOFF`, the closed form above.
 fn coefficient(c: Coefficient, theta2: QDyn) -> QDyn {
-    let small = (CUTOFF - theta2).is_nonnegative();
+    let small = (-theta2 + CUTOFF).is_nonnegative();
     let safe = choose(small, theta2, one());               // the closed form's argument
     let theta = (safe.log() * 0.5).exp();
     choose(small, closed(c, theta), horner(series(c), theta2))
@@ -429,7 +434,7 @@ fn coefficient(c: Coefficient, theta2: QDyn) -> QDyn {
 /// `L = 2 atan2(n, w) / n` of eq:log from `n²` and `w`: its series in `x = n²/w²` where
 /// `n² < LOG_CUTOFF w²` and `w > 0`, the closed form elsewhere.
 fn log_ratio(n2: QDyn, w: QDyn) -> QDyn {
-    let small = and(w.is_nonnegative(), (w * w * LOG_CUTOFF - n2).is_nonnegative());
+    let small = both(w.is_nonnegative(), (w * w * LOG_CUTOFF - n2).is_nonnegative());
     let n = (choose(small, n2, one()).log() * 0.5).exp();
     let w_safe = choose(small, one(), w);                   // the series' 1/w where it is unused
     let x = n2 * reciprocal(w_safe * w_safe);
@@ -437,25 +442,32 @@ fn log_ratio(n2: QDyn, w: QDyn) -> QDyn {
 }
 ```
 
-`and` of two Booleans is the selection of the second by the first, with false where the first is
-false. On a row with $w = 0$ exactly, $n^2 \ge 0 = c\, w^2$, so the series is never chosen there, and
+`both` multiplies the two Booleans' embeddings as reals, `to_real`, which carries no derivative,
+and compares the product with $\tfrac12$: a selection cannot combine them, since `Select` refuses
+values that are not continuous. On a row with $w = 0$ exactly, $n^2 \ge 0 = c\, w^2$, so the series is never chosen there, and
 its guard keeps its $1/w$ finite.
 
 One cutoff serves both precisions. A composite cannot see its target's precision, and the
 measurements below show that no second one is needed, so the alternative, an operation of the
 crate's own lowering to a composite per precision through `Lowering::target`, with registry entries
-for each, lost. The two conditions, measured in double precision against the series summed to
-convergence, and in single precision against double, at the cutoff:
+for each, lost. Two conditions decide each cutoff: in double precision, the series' truncation at
+the cutoff is below rounding, against the series summed to convergence; in single precision, the
+closed form just above it, its value and its first and second derivatives, agrees with double
+precision within `Tolerance::AGREEMENT`. The second was measured on the closed forms and their
+derivatives in $\theta$ (in $n$ for $L$) written as the passes chain them, in numpy, not on the
+core's passes themselves; `series_meet_closed_forms` and `check_operation` at $1.1$ times each
+cutoff are the check on the code.
 
-| coefficient | argument | cutoff | series kept | f64 truncation at the cutoff | f32 closed form above it: value, first, second derivative in $\theta$ |
+| coefficient | argument | cutoff | series kept | f64 truncation at the cutoff | f32 closed form above it: value, first, second derivative |
 | --- | --- | --- | --- | --- | --- |
-| $a$, $b$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $b$: $9 \cdot 10^{-9}$, $2 \cdot 10^{-7}$, $4 \cdot 10^{-7}$ |
+| $a$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $3 \cdot 10^{-8}$, $2 \cdot 10^{-9}$, $6 \cdot 10^{-9}$ |
+| $b$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $9 \cdot 10^{-9}$, $2 \cdot 10^{-7}$, $4 \cdot 10^{-7}$ |
 | $A$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $3 \cdot 10^{-7}$, $2 \cdot 10^{-6}$, $2 \cdot 10^{-5}$ |
 | $B$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $1 \cdot 10^{-7}$, $3 \cdot 10^{-7}$, $6 \cdot 10^{-7}$ |
-| $C$ | $\theta^2$ | $0.1$ | through $\theta^{12}$ | below $2^{-53}$ | no cancellation worse than $A$'s |
+| $C$ | $\theta^2$ | $0.1$ | through $\theta^{12}$ | below $2^{-53}$ | $1 \cdot 10^{-6}$, $2 \cdot 10^{-6}$, $4 \cdot 10^{-5}$ |
 | $D$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $2 \cdot 10^{-7}$, $3 \cdot 10^{-6}$, $4 \cdot 10^{-5}$ |
 | $E$ | $\theta^2$ | $0.1$ | through $\theta^{10}$ | below $2^{-53}$ | $2 \cdot 10^{-7}$, $5 \cdot 10^{-6}$, $2 \cdot 10^{-4}$ |
-| $L$ | $x = n^2/w^2$ | $0.01$ | through $x^7$ | below $2^{-53}$ | $9 \cdot 10^{-8}$, $3 \cdot 10^{-7}$ |
+| $L$ | $x = n^2/w^2$ | $0.01$ | through $x^7$ | below $2^{-53}$ | $2 \cdot 10^{-8}$, $6 \cdot 10^{-7}$, $3 \cdot 10^{-5}$ |
 
 The single-precision errors are absolute, as `Tolerance::AGREEMENT` holds them, and each
 coefficient reaches a map's value multiplied by powers of $\theta$ ($E$ by $\Phi \Psi \Phi^2$, of
@@ -608,14 +620,15 @@ let (na, nb) = (w * w + ui * ui, uj * uj + ul * ul);
 let total = na + nb;
 let low = (total * LOCK - nb).is_nonnegative();          // β at 0 (proper) or -π/2 (Tait–Bryan)
 let high = (total * LOCK - na).is_nonnegative();         // β at π or π/2
-let beta = choose(low, choose(high, two_atan2(norm(nb), norm(na)), pi()), zero());
+let beta = choose(low, choose(high, sqrt(nb).atan2(sqrt(na)) * 2.0, pi()), zero());
 let sigma = ui.atan2(choose(high, w, one()));             // guarded where (w, ui) vanishes
 let delta = (ul * eps).atan2(choose(low, uj, one()));     // guarded where (uj, ul) vanishes
 let alpha = choose(low, choose(high, sigma + delta, delta * 2.0), sigma * 2.0);
 let gamma = choose(low, choose(high, sigma - delta, zero()), zero());
 ```
 
-with the norms' arguments guarded as `log_ratio`'s are on the rows they are not used, $\beta$
+with the arguments of the two square roots guarded as `log_ratio`'s are on the rows where they
+vanish, $\beta$
 shifted by $-\tfrac\pi2$ and $\gamma$ multiplied by $-\epsilon$ for a Tait–Bryan sequence, and
 $\alpha$ and $\gamma$ wrapped to $(-\pi, \pi]$ as $\operatorname{atan2}(\sin \cdot, \cos \cdot)$.
 `LOCK` is $10^{-30}$: the lock is taken only where one norm vanishes to within rounding of nothing,
@@ -746,6 +759,7 @@ their domain; *removable* ones are smooth, with their singularity at the identit
 | exponentials, logarithms | `pose::exp`, `log`, `log_shorter` | `pose.exp`, `pose.log`, … | motion-exp, motion-log | removable, discrete | `motion_exp_and_log` |
 | Jacobians | `pose::jl`, …, `extended_pose::jl`, … | `motion_q`, `pose.jl`, … | motion-jacobians, motion-q | removable | `jacobians_are_the_passes` |
 | interpolations | `interpolate`, `interpolate_parts`, … | `pose.interpolate`, … | motion-slerp | removable, discrete | `interpolations` |
+| every discretization | the discrete maps above | | | discrete | `discretizations_jump_cleanly` |
 
 ### Host helpers
 
@@ -785,9 +799,15 @@ values and the derivatives of the selected formula finite on both sides of every
 
 In `crates/skoro-rotations/tests/`, at both precisions of the Flex device through
 `precision_tests!` wherever a pass is compared, with `testing::Tolerance`, at points drawn by
-`testing::random` and normalized, together with fixed rows: the identity, a half-turn about each
-axis, rotations whose angles sit at $0.9$ and $1.1$ times each cutoff, and for the logarithm a row
-with $w < 0$.
+`testing::random` and normalized, together with fixed rows: the identity, rotations whose angles sit
+at $0.9$ and $1.1$ times each cutoff, and for the logarithm a row with $w < 0$. A smooth or
+removable map is checked at all of them, and at a half-turn about each axis. A discrete map is
+checked by central differences only at rows at least ten single-precision steps, $0.1$, from its
+jumps, which `discretizations_jump_cleanly` checks instead: `log_shorter`, the shorter
+interpolations and the motions' `log_shorter` away from $w = 0$; `angle_to` away from $r = \pm 1$;
+`axis_angle` away from the identity; `euler` away from its lock, which for a proper sequence
+includes the identity; `from_matrix` at rows whose largest coordinate beats the next by more than
+the step; `aligned_with` away from $\langle q, r \rangle = 0$.
 
 - `types_are_declared`: the three declarations and every composite are defined without error, and
   `register` adds three names to a `Registry::core()` and refuses them a second time. Shows the
@@ -842,7 +862,8 @@ with $w < 0$.
 - `euler_round_trips`: for all twelve sequences, intrinsic and extrinsic, `euler(from_euler(θ))` is
   $\theta$ modulo $2\pi$ for random angles away from the lock, the same for $q$ and $-q$; the
   extrinsic rotation equals the product of the fixed axes' matrices; at an exact lock the angles are
-  finite, $\gamma = 0$, and reproduce the rotation; `Euler::YAW_PITCH_ROLL` against a textbook
+  finite, $\gamma = 0$, and reproduce the rotation, at the exact locks of
+  `discretizations_jump_cleanly`; `Euler::YAW_PITCH_ROLL` against a textbook
   example of yaw, pitch and roll. Shows [%full](statement:archive/rotations/math/euler).
 - `from_matrix_branches`: at quaternions whose largest coordinate is each of the four in turn,
   `from_matrix(matrix(q))` is $\pm q$ with that coordinate positive, both through the model and
@@ -850,6 +871,14 @@ with $w < 0$.
   Shows [](eq:archive/rotations/math/from-matrix) and catches a transposed index.
 - `alignment`: `aligned_with` and `host::align` return $z$ or $-z$, whichever is on the side of the
   reference, and the same rotation.
+- `discretizations_jump_cleanly`: for each discrete map, at rows on either side of each of its jumps,
+  closer than a central difference's step and farther than rounding, the values are those of the
+  formula the side selects, and the tangent, cotangent and second-order passes are finite and equal
+  to the selected formula's, computed by the same passes over that formula alone. At an exact lock
+  of `euler`, built in storage so that the vanishing norm is zero exactly, $(1, 0, 1, 0)/\sqrt 2$
+  for the sequence $(x, y, z)$, where $w - u_y = 0$, and quaternions with exact zeros for proper
+  sequences, the angles and every pass are finite. Shows [The discretizations](math.svx#what-the-tests-check)
+  of the mathematics: values on both sides, derivatives those of the selected formula.
 - `motion_group_laws`: the composition, inverse, relative motion and actions of `Pose` and
   `ExtendedPose` against their homogeneous matrices on the host, and `matrix` a homomorphism.
 - `parts_and_products`: `from_parts` and `rotation`, `position` (and `velocity`, `pose`) invert each
@@ -876,7 +905,8 @@ The core's acceptance test is not touched, as the mathematics settles.
 
 > [!TODO] The names
 > The design names the crate `skoro-rotations`, its markers `Rotation`, `Pose` and `ExtendedPose`,
-> its extension traits `RotationMaps`, `PoseMaps` and `ExtendedPoseMaps`, and its declarations and
-> composites under `skoro.rotations.`. `Rotation` for a unit quaternion hides the double cover in
+> its extension traits `RotationMaps`, `PoseMaps` and `ExtendedPoseMaps`, its Euler conventions
+> `Euler`, `Sequence` and `Frame` (which a glob import would collide with `skoro::tensor::Frame`;
+> `EulerFrame` avoids it), and its declarations and composites under `skoro.rotations.`. `Rotation` for a unit quaternion hides the double cover in
 > its name, where `UnitQuaternion` would show it; `Pose` is the robotics name for a rigid motion.
 > Are these the names wanted?
