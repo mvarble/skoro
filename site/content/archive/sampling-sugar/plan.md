@@ -85,3 +85,11 @@ cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 
 No task changes `skoro-tensor`, a primitive's kernel or a fused operation, so the local run with
 `--features wgpu` is not required before pushing.
+
+## Revisions
+
+**2026-11-03.** The guide's page "A first model" is to be restructured top-down. It will open on a
+hierarchical normal written with `sample`, generated from the joint and queried with its range
+observed, and only then go down to small programs, to the same model written with `quantity` and
+`score`, and to a model with likelihood factors. A page quotes only code that exists, and no test
+builds that model, so this revision adds a task of tests for the guide to quote.
