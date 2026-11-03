@@ -17,7 +17,7 @@ and its name would no longer say what it gives.
 
 ## The normal (`skoro-normal`, `stacked`)
 
-- [ ] `Stacked::replacement`, and the bindings it and `Stacked::factor` share; the documentation of
+- [x] `Stacked::replacement`, and the bindings it and `Stacked::factor` share; the documentation of
       both and of `Stacked::log_density`. Tests: `stacked_replacement_binds_the_normal_roles`, in
       the umbrella's retirement tests: a retirement replaced by `Stacked::replacement` adds a factor
       whose residual, mean and scale are bound under the normal's roles, the residual equal to
