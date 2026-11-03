@@ -1,0 +1,46 @@
+{
+    "kind": "chore",
+    "stage": "done",
+    "started": "2026-11-03",
+    "events": [
+        {
+            "date": "2026-11-03",
+            "action": "start",
+            "stage": "plan"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "00d70af"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "build",
+            "commit": "81f2405"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "1d5bdab"
+        }
+    ],
+    "approvals": {
+        "plan": {
+            "date": "2026-11-03",
+            "commit": "00d70af",
+            "hash": "4453718ccf99bd9d48a3f62bb4babcc863a8e8c6c2e6d636065244ec6ffb05c1"
+        },
+        "build": {
+            "date": "2026-11-03",
+            "commit": "81f2405"
+        },
+        "publish": {
+            "date": "2026-11-03",
+            "commit": "1d5bdab"
+        }
+    },
+    "finished": "2026-11-03"
+}

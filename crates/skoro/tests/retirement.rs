@@ -933,3 +933,61 @@ fn retirement_of_nothing_adds_no_factor() {
     assert!(factor.is_none());
     assert_eq!(chain.writer.snapshot(), before);
 }
+
+#[test]
+fn stacked_replacement_binds_the_normal_roles() {
+    use skoro_normal::{Scale, Stacked, roles};
+    let mut chain = chain();
+    let x1 = chain.x1;
+    let (evidence, mean, variance) = kalman();
+    let observed = observed_z0(&chain);
+    let factor = chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed)
+        .unwrap()
+        .replace(|_| {
+            Stacked::new().block(x1, Real, mean).replacement(
+                &[0.0],
+                Scale::sd(variance.sqrt()),
+                evidence,
+            )
+        })
+        .unwrap()
+        .expect("a retirement of something adds a factor");
+    let snapshot = chain.writer.snapshot();
+    let residual = snapshot.bound(factor.id(), &roles::RESIDUAL).unwrap();
+    snapshot.bound(factor.id(), &roles::MEAN).unwrap();
+    assert!(
+        snapshot
+            .bound(factor.id(), &roles::ISOTROPIC)
+            .unwrap()
+            .is_some()
+    );
+
+    // The residual is W (δ - m), and the factor's log-density that of Stacked::log_density, the
+    // Kalman update's exact replacement.
+    let target = Target::host();
+    let points = [-0.8, 0.4, 1.7];
+    let given = Observations::new().observe(x1, skoro::Rows(points.to_vec()));
+    let program = snapshot
+        .compile(
+            &Query::of([residual, QDyn::from(factor)]).given(given),
+            &target,
+        )
+        .unwrap();
+    let out = program.forward(&Values::new()).unwrap();
+    let value = |q: QDyn| match out.get(q.id()).unwrap() {
+        Value::Continuous(points) => points.to_host(),
+        Value::Discrete(_) => panic!("a continuous value"),
+    };
+    let (residuals, densities) = (value(residual), value(QDyn::from(factor)));
+    for (k, x) in points.iter().enumerate() {
+        let want = (x - mean) / variance.sqrt();
+        assert!((residuals[k] - want).abs() < 1e-12, "{residuals:?}");
+        let want = log_normal(*x, mean, variance.sqrt()) + evidence;
+        assert!(
+            (densities[k] - want).abs() < 1e-12 * want.abs().max(1.0),
+            "{densities:?}"
+        );
+    }
+}
