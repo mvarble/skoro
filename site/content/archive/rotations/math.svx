@@ -1,6 +1,11 @@
 ---
-summary: The rotations as unit quaternions with the stereographic chart, global and full with a declared volume so that they carry the normal, and the rigid motions SE(3) and SE₂(3) as their semidirect products with the left-translated chart, all written as composites of the core's operations.
-depends_on: [retraction, product-manifold, chart-volume, archive/core/math, archive/measures/math, archive/normal/math]
+summary: The rotations as unit quaternions with the stereographic chart, global and full with a declared volume so that they carry the normal, the rigid motions SE(3) and SE₂(3) as their semidirect products with the left-translated chart, and the usual maps of all three, each a composite of the core's operations.
+depends_on: [retraction, product-manifold, chart-volume, derivatives-in-charts, archive/core/math, archive/measures/math, archive/normal/math]
+katex_macros:
+    '\Exp': '\operatorname{Exp}'
+    '\Log': '\operatorname{Log}'
+    '\rv': '\operatorname{rv}'
+    '\atantwo': '\operatorname{atan2}'
 ---
 
 <script>
@@ -11,6 +16,8 @@ depends_on: [retraction, product-manifold, chart-volume, archive/core/math, arch
 	import * as volume from './statements/volume.md';
 	import * as cover from './statements/cover.md';
 	import * as motions from './statements/motions.md';
+	import * as firstOrder from './statements/first-order.md';
+	import * as euler from './statements/euler.md';
 </script>
 
 ## The problem
@@ -103,8 +110,8 @@ unit quaternions need none: storage, chart, projection and composition are all c
 > action are composites of the core's primitives, and on which the normal is exact. What it costs
 > is the double cover itself, which [The double cover](#the-double-cover) works out: a law on $S^3$
 > is a law on the rotations through $\pi$, and an observed quaternion must be given on the side of
-> its prediction. The matrices remain a possible type of their own, with fused composition, should
-> a model need them.
+> its prediction. Neither is a burden in practice: a concentrated law on $S^3$ is a law on the
+> rotations to within a negligible mass, and a sensor's quaternion is aligned once, on the host.
 
 ## The unit quaternions
 
@@ -143,7 +150,19 @@ The chart's coordinate of a rotation by $\theta$ has the length $4 \tan(\theta /
 chart's $2 \tan(\theta/2) = \theta + \theta^3 / 12 + \cdots$. These are the *modified Rodrigues
 parameters* of attitude estimation, scaled by $4$ so that they agree with the rotation vector to
 first order. The chart is the left translation of the chart at the identity,
-$q \oplus \tangent = q \otimes (1 \oplus \tangent)$.
+$q \oplus \tangent = q \otimes (1 \oplus \tangent)$, and since $q \otimes (w, u) \otimes \bar q =
+(w, \pi(q)\, u)$ for a unit $q$, and $\delta$ depends on $\tangent$ only through its direction and
+$\lVert \tangent \rVert$, which $\pi(q)$ preserves,
+
+$$
+	q \oplus \tangent = (1 \oplus \pi(q)\, \tangent) \otimes q @tag(conjugation)
+$$
+
+exactly, not only to first order: a perturbation $\tangent$ in the frame of the point is the
+perturbation $\pi(q)\, \tangent$ in the frame the point is expressed in. So the stereographic chart
+on the left, $\tangent \mapsto (1 \oplus \tangent) \otimes q$, is the same chart as this one, its
+coordinates rotated by $\pi(q)$, and a law given with its noise on the left is a law on the right
+with the covariance $\pi(q)\transpose \Sigma\, \pi(q)$.
 
 <Statement {...volume} />
 
@@ -216,28 +235,320 @@ Three consequences follow for a model.
 
 ## Maps of the rotations
 
-Each map is a composite of the core's primitives, and its derivatives are those of its parts.
+A model computes with rotations as well as estimating them: it composes them, rotates vectors by
+them, integrates rates into them, reads angles off them, and builds them from the forms in which
+sensors and people give them. Each map below is a composite of the core's primitives and
+[selection](../core/math.svx#selection), and its derivatives in charts are those of its parts. The
+primitives have no square root, absolute value or inverse sine, and divide only through
+logarithms, so the composites write a norm as $\lVert x \rVert = e^{\frac12 \log \sum_i x_i^2}$,
+defined for $x \ne 0$, a reciprocal as $1/a = e^{-\log a}$, for $a > 0$, every inverse
+trigonometric function through $\atantwo$, and an absolute value or a sign as a selection. Each
+map is of one of three kinds, and the kind says what a model may ask of its derivatives:
 
-| map | of | to | as |
+- **smooth as written**: products, sums, sines and cosines of the storage, and reciprocals and norms
+  of quantities positive on the map's domain, with derivatives of every order the core takes;
+- **smooth, with a removable singularity**: smooth on its domain, but its closed form divides by an
+  angle that vanishes at the identity; computed as the core's
+  [smooth as computed](../core/math.svx#quantities) asks, by a series below a cutoff, with
+  derivatives of every order the core takes, at the identity too;
+- **a discretization and a selection**: where no continuous map exists, by
+  [%full](statement:no-section) or by the jump of a rotation vector at a half-turn, the composite
+  selects between smooth formulas by a discretization of its input; its derivatives are those of the
+  selected formula, and the jump has none.
+
+### The group
+
+| map | of | to | as | kind |
+| --- | --- | --- | --- | --- |
+| identity | | $S^3$ | the constant $(1, 0)$ | smooth |
+| composition | $S^3 \times S^3$ | $S^3$ | $P(q_1 \otimes q_2)$, [](eq:product) | smooth |
+| inverse | $S^3$ | $S^3$ | $P(\bar q)$ | smooth |
+| relative rotation | $S^3 \times S^3$ | $S^3$ | $P(\bar q_1 \otimes q_2)$ | smooth |
+| action | $S^3 \times \R^3$ | $\R^3$ | $x + 2 w\, (u \times x) + 2\, u \times (u \times x)$ | smooth |
+| inverse action | $S^3 \times \R^3$ | $\R^3$ | $x - 2 w\, (u \times x) + 2\, u \times (u \times x)$ | smooth |
+| matrix | $S^3$ | $\R^{3 \times 3}$ | $\pi(q)$, [](eq:rotation) | smooth |
+| adjoint | $S^3$ | $\R^{3 \times 3}$ | $\pi(q)$ | smooth |
+| hat | $\R^3$ | $\R^{3 \times 3}$ | $[\omega]_\times$ | smooth |
+| vee | $\R^{3 \times 3}$ | $\R^3$ | $\tfrac12 (A_{32} - A_{23},\ A_{13} - A_{31},\ A_{21} - A_{12})$ | smooth |
+
+The composition, the inverse and the relative rotation are maps into the type, written in storage
+and projected ([](eq:archive/core/math/map-into)); the product of two unit quaternions, and the
+conjugate of one, are unit quaternions already, and the projection only returns what rounding
+carried off the sphere. The relative rotation $\bar q_1 \otimes q_2$ is the rotation that carries
+the frame of $q_1$ to that of $q_2$, expressed in the frame of $q_1$, so that $q_1 \otimes (\bar q_1
+\otimes q_2) = q_2$. The inverse action is the action of $\bar q$, the transpose $\pi(q)\transpose
+x$, which takes a vector given in the outer frame into the frame of $q$; both actions apply column
+by column to a $3 \times n$ matrix of vectors, and a covariance is carried by $\pi(q)\, \Sigma\,
+\pi(q)\transpose$, a product of the matrix with itself. The adjoint is the matrix itself on the
+rotations, and its meaning is [](eq:conjugation): it carries a perturbation in the frame of the
+point to the outer frame. The hat is the skew matrix with $[\omega]_\times x = \omega \times x$, and
+the vee is its inverse on skew matrices and, on any other, the vector of its skew part.
+
+### The exponential and the logarithm
+
+The exponential takes a rotation vector to the rotation about it by its length:
+
+$$
+	\Exp(\omega) = \Bigl(\cos \tfrac\theta2,\ \frac{\sin(\theta/2)}{\theta}\, \omega\Bigr),
+	\qquad \theta = \lVert \omega \rVert . @tag(exp)
+$$
+
+It is a diffeomorphism of the open ball of radius $2\pi$ onto $S^3 \setminus \{-1\}$, and every
+$\omega$ is a rotation by $\theta$ modulo $2\pi$. It is how a rate becomes a rotation: an attitude
+turning at the constant body rate $\omega$ for a time $\Delta t$ moves from $q_k$ to $q_{k+1} = q_k
+\otimes \Exp(\omega\, \Delta t)$, exactly. Its inverse on $S^3 \setminus \{-1\}$ is the
+logarithm,
+
+$$
+	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lVert u \rVert, @tag(log)
+$$
+
+whose rotation vector has the length $2 \atantwo(n, w) \in [0, 2\pi)$, smooth on $S^3 \setminus
+\{-1\}$ and undefined at $-1$, the one point the exponential's ball does not reach. The logarithm
+is a map of the unit quaternions, and $\Log(-q) \ne \Log(q)$. The rotation's own logarithm, the
+rotation vector of the shorter turn,
+
+$$
+	\rv(q) = \Log\bigl(s(q)\, q\bigr), \qquad s(q) = \begin{cases} 1 & w \ge 0, \\ -1 & w < 0, \end{cases} @tag(rotation-vector)
+$$
+
+is a map of the rotation, $\rv(-q) = \rv(q)$, with length in $[0, \pi]$, and a discretization: at a
+half-turn, $w = 0$, it jumps from $\pi a$ to $-\pi a$, two rotation vectors of one rotation. The
+logarithm is what inverts the exponential, and the derivative of either is the other's inverse; the
+rotation vector is what a model reports as the error of an attitude, or reads as the rate between two
+attitudes, $\omega \approx \rv(\bar q_k \otimes q_{k+1}) / \Delta t$.
+
+The left and right Jacobians of the exponential are the matrices with $\Exp(\omega + \varepsilon) =
+\Exp(J_l(\omega)\, \varepsilon) \otimes \Exp(\omega) = \Exp(\omega) \otimes \Exp(J_r(\omega)\,
+\varepsilon)$ to first order in $\varepsilon$. They are
+
+$$
+	J_l(\omega) = I + A\, [\omega]_\times + B\, [\omega]_\times^2, \quad
+	J_r(\omega) = J_l(-\omega) = I - A\, [\omega]_\times + B\, [\omega]_\times^2, \quad
+	A = \frac{1 - \cos \theta}{\theta^2}, \quad B = \frac{\theta - \sin \theta}{\theta^3}, @tag(jacobians)
+$$
+
+and their inverses, for $\theta < 2\pi$,
+
+$$
+	J_l(\omega)^{-1} = I - \tfrac12 [\omega]_\times + C\, [\omega]_\times^2, \quad
+	J_r(\omega)^{-1} = I + \tfrac12 [\omega]_\times + C\, [\omega]_\times^2, \quad
+	C = \frac{1}{\theta^2}\Bigl(1 - \frac\theta2 \cot \frac\theta2\Bigr). @tag(jacobian-inverses)
+$$
+
+Each is a polynomial in $[\omega]_\times$, so the inverses are checked by multiplying out with
+$[\omega]_\times^3 = -\theta^2 [\omega]_\times$, and $J_r(\omega) = J_l(\omega)\transpose$, since
+$[\omega]_\times$ is skew. skoro does not need them to differentiate: a model's derivatives are
+computed by passes, in the charts of the types, and those are the Jacobians of the textbooks.
+
+<Statement {...firstOrder} />
+
+<Proof>
+
+The derivative in charts of $\map$ at $\point$ is the Jacobian at $0$ of $\tangent \mapsto
+Q_\otherPoint(\map(R_\point(\tangent)))$, with $R_\point$ the chart at $\point$ and $Q_\otherPoint$
+its inverse at $\otherPoint = \map(\point)$, and by the chain rule it depends on $R_\point$ only
+through its differential at $0$ and on $Q_\otherPoint$ only through its differential at
+$\otherPoint$, which is the inverse of $R_\otherPoint$'s at $0$. On $S^3$, $1 \oplus \tangent =
+\bigl(1 - \tfrac18 \lVert \tangent \rVert^2,\ \tfrac12 \tangent\bigr) + O(\lVert \tangent
+\rVert^3)$ from $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$, and $\Exp(\tangent)$ has the same expansion from
+$\cos \tfrac\theta2 = 1 - \tfrac18 \theta^2 + O(\theta^4)$ and $\sin(\theta/2)/\theta = \tfrac12 +
+O(\theta^2)$; both charts are left translations of these, so they agree at every point to second
+order, and so do their inverses. The local representatives of $\map$ in the two charts then agree
+to second order at $0$, and so do their first and second derivatives there. On the rigid motions
+the chart is $(q \oplus \phi,\ p + \pi(q)\, \rho)$ and the exponential coordinates are $(q \Exp
+\phi,\ p + \pi(q)\, J_l(\phi)\, \rho)$, by [](eq:motion-exp) below, and $J_l(\phi)\, \rho = \rho +
+\tfrac12 \phi \times \rho + O(\lVert \phi \rVert^2 \lVert \rho \rVert)$: they agree to first order,
+and differ at second order by the term $\tfrac12 \phi \times \rho$. Last, $\Exp(\omega + \varepsilon)
+\ominus \Exp(\omega)$ is the chart coordinate at $1$ of $\Exp(\omega)^{-1} \otimes \Exp(\omega +
+\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lVert \varepsilon \rVert^2)$, which is
+$J_r(\omega)\, \varepsilon + O(\lVert \varepsilon \rVert^2)$; and $\Log$ is the inverse of $\Exp$.
+
+</Proof>
+
+The right Jacobian is still a map of its own, for the values a model computes with it rather than
+for its derivatives: the left Jacobian is the $V$ of the rigid motions' exponential below, and a
+model that propagates a covariance through a rate by hand, as the preintegration of an inertial
+unit's samples does, writes $J_r$ into its formula.
+
+### Removable singularities
+
+The exponential, the logarithm, the Jacobians and their inverses are smooth at the identity, and
+their closed forms divide by $\theta$ there, or by $n$. Each is computed as the core's
+[smooth as computed](../core/math.svx#quantities) asks of a composite: a discretization of the
+argument below a cutoff selects a truncated series of each coefficient, and a second selection
+gives the closed form a harmless argument on the rows where the series is chosen, so that no
+derivative of a formula that is not selected is ever undefined. The coefficients, each a function
+of $\theta^2$, or for the logarithm of $n^2$ and $w$, are:
+
+| coefficient | closed form | series | used by |
 | --- | --- | --- | --- |
-| identity | | $S^3$ | the constant $(1, 0)$ |
-| composition | $S^3 \times S^3$ | $S^3$ | $P(q_1 \otimes q_2)$, [](eq:product) |
-| inverse | $S^3$ | $S^3$ | $P(\bar q)$ |
-| action | $S^3 \times \R^3$ | $\R^3$ | $x + 2 w\, (u \times x) + 2\, u \times (u \times x)$ |
-| matrix | $S^3$ | $\R^{3 \times 3}$ | [](eq:rotation) |
-| exponential | $\R^3$ | $S^3$ | $P\bigl(\cos \tfrac{\lVert \omega \rVert}2,\ \tfrac12 \operatorname{sinc} \tfrac{\lVert \omega \rVert}2\, \omega\bigr)$ |
+| $a$ | $\cos \tfrac\theta2$ | $\sum_k \frac{(-1)^k \theta^{2k}}{4^k (2k)!} = 1 - \frac{\theta^2}{8} + \frac{\theta^4}{384} - \cdots$ | [](eq:exp) |
+| $b$ | $\sin(\theta/2)/\theta$ | $\sum_k \frac{(-1)^k \theta^{2k}}{2^{2k+1} (2k+1)!} = \frac12 - \frac{\theta^2}{48} + \frac{\theta^4}{3840} - \cdots$ | [](eq:exp) |
+| $A$ | $(1 - \cos \theta)/\theta^2$ | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+2)!} = \frac12 - \frac{\theta^2}{24} + \frac{\theta^4}{720} - \cdots$ | [](eq:jacobians) |
+| $B$ | $(\theta - \sin \theta)/\theta^3$ | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+3)!} = \frac16 - \frac{\theta^2}{120} + \frac{\theta^4}{5040} - \cdots$ | [](eq:jacobians) |
+| $C$ | $\bigl(1 - \frac\theta2 \cot \frac\theta2\bigr)/\theta^2$ | $\frac1{12} + \frac{\theta^2}{720} + \frac{\theta^4}{30240} + \cdots$ | [](eq:jacobian-inverses) |
+| $L$ | $2 \atantwo(n, w)/n$ | $\frac2w \sum_k \frac{(-1)^k x^k}{2k+1} = \frac2w \bigl(1 - \frac x3 + \frac{x^2}5 - \cdots\bigr)$, $x = n^2/w^2$ | [](eq:log) |
 
-The composition and the inverse are maps into the type, written in storage and projected
-([](eq:archive/core/math/map-into)); the product of two unit quaternions, and the conjugate of
-one, are unit quaternions already, and the projection only returns what rounding carried off the
-sphere. The exponential, the rotation by the vector $\omega$, is how an angular rate integrated
-over a step becomes a rotation, $q_{k+1} = q_k \otimes \operatorname{Exp}(\omega\, \Delta t)$; its
-$\operatorname{sinc}$ has a removable singularity at $\omega = 0$, where it is computed from its
-series in $\lVert \omega \rVert^2$, as the core asks of a formula smooth as computed. The matrix is
-the rotation's, the same for $q$ and $-q$; there is no map back from matrices to the type,
-[%full](statement:no-section), and a rotation given as a matrix enters a model as a quaternion the
-caller chooses on the host, aligned as [The double cover](#the-double-cover) says when it is a
-measurement.
+The series of $C$ is that of $\tfrac\theta2 \cot \tfrac\theta2 = 1 - \tfrac{\theta^2}{12} -
+\tfrac{\theta^4}{720} - \tfrac{\theta^6}{30240} - \cdots$, and that of $L$ is $\atantwo(n, w) / n =
+\arctan(n/w)/n$ for $w > 0$, expanded in $x$. The logarithm's series holds near the identity only,
+so its discretization is $n^2 < c\, w^2$ and $w > 0$, which needs no division; near $-1$ the closed
+form is selected, and it is the logarithm's cut, not a removable singularity. Its argument keeps
+$w$: on the sphere $w = (1 - n^2)^{1/2}$, but a series in $n^2$ alone would have no derivative in
+$w$, and the second derivatives along the sphere, which move $w$ at second order, would be wrong.
+The closed forms' own arguments are $\theta = e^{\frac12 \log \theta^2}$ and $n = e^{\frac12 \log
+n^2}$, and $\cot \tfrac\theta2 = \cos \tfrac\theta2\, e^{-\log \sin(\theta/2)}$, positive in its
+logarithm for $0 < \theta < 2\pi$.
+
+Each series keeps at least the terms through $\theta^2$, so that the derivatives of second order at
+the identity are exact, and in practice as many as make its truncation error at the cutoff smaller
+than the closed form's rounding there. Where to put each cutoff and how many terms to keep, at
+either precision, is settled by the implementation against measured errors on both sides of the
+cutoff; the archive's exponential, with its terms through $\theta^8$ and its cutoffs at $\theta^2
+\approx 1.37$ in single precision and $0.025$ in double, is where that starts.
+
+### Interpolation and distance
+
+The geodesic from $q_1$ to $q_2$, at the parameter $t \in \R$, is
+
+$$
+	q_1 \otimes \Exp\bigl(t \Log(\bar q_1 \otimes q_2)\bigr), @tag(slerp)
+$$
+
+which runs at a constant rate along the great circle of $S^3$ through $q_1$ and $q_2$, reaching
+$q_2$ at $t = 1$ by the arc that avoids $-q_1$, and is smooth wherever $q_2 \ne -q_1$. With $\rv$ in
+place of $\Log$ it is the rotation's interpolation, along the shorter of the two turns from one
+attitude to the other, and a discretization where the relative rotation is a half-turn and the two
+turns are equally short. A model interpolating an attitude between two estimates means the second;
+the first is the curve of the unit quaternions, and the two agree whenever $\langle q_1, q_2 \rangle
+\ge 0$.
+
+The angle between two rotations, the length of the shorter turn from one to the other and the
+distance between them on the rotations, is
+
+$$
+	\angle(q_1, q_2) = \lVert \rv(\bar q_1 \otimes q_2) \rVert = 2 \atantwo\bigl(\lVert
+	\operatorname{vec}(r) \rVert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
+	q_2 . @tag(angle)
+$$
+
+It is the same at $\pm q_1$ and $\pm q_2$, and smooth where $0 < \angle < \pi$: at $0$ it is a norm,
+with no derivative, and at $\pi$ a maximum, where $\lvert w(r) \rvert$ turns. Its square,
+$\lVert \rv(r) \rVert^2$, is smooth at $0$, and is what a cost on an attitude's error is written
+with.
+
+### Constructions and conversions
+
+Rotations reach a model as an axis and an angle, as a pair of directions, as Euler angles and as
+matrices, and leave it in the same forms.
+
+**Elementary rotations and axis–angle.** The rotation by $\theta$ about the coordinate axis $e$ is
+$q_e(\theta) = (\cos \tfrac\theta2,\ \sin \tfrac\theta2\, e)$, and about any axis $a \ne 0$ it is
+$(\cos \tfrac\theta2,\ \sin \tfrac\theta2\, a / \lVert a \rVert)$, smooth in both. The way back is
+the logarithm split into its length and its direction, $\theta = 2 \atantwo(n, w)$ and $a = u / n$;
+the direction is undefined at the identity, where the composite selects a fixed axis, and is a
+discretization there. A model differentiating through an axis and an angle is better served by the
+rotation vector, which has no such point.
+
+**From two directions.** The rotation of least angle carrying the direction of $a$ to that of $b$ is
+
+$$
+	P\bigl(\lVert a \rVert \lVert b \rVert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
+$$
+
+since for unit vectors at the angle $\theta$ about the axis $n$ the argument is $(1 + \cos \theta,
+\sin \theta\, n) = 2 \cos \tfrac\theta2 \bigl(\cos \tfrac\theta2, \sin \tfrac\theta2\, n\bigr)$.
+It is smooth for $a, b \ne 0$ except where $b$ is opposite to $a$: there the argument vanishes, every
+half-turn about an axis perpendicular to $a$ is a rotation of least angle, and the map is undefined.
+It is how a measured direction, of gravity or of a magnetic field, is turned into an attitude that
+explains it.
+
+**Euler angles.** A sequence of axes $(i, j, k)$ with $i \ne j \ne k$ is *proper* when $k = i$ and
+of *Tait–Bryan* type when the three are distinct, six sequences of each. The rotation by the angles
+$(\alpha, \beta, \gamma)$ about them, each about the axis as the previous rotations left it
+(*intrinsic*), is
+
+$$
+	q = q_i(\alpha) \otimes q_j(\beta) \otimes q_k(\gamma), @tag(euler)
+$$
+
+smooth in the angles, and its rotation about the fixed axes in the same order (*extrinsic*) is
+$q_k(\gamma) \otimes q_j(\beta) \otimes q_i(\alpha)$, the intrinsic rotation of the reversed sequence.
+Roll, pitch and yaw $(\phi, \vartheta, \psi)$ in the usual aerospace convention are the intrinsic
+$(z, y, x)$ angles $(\psi, \vartheta, \phi)$. The way back is a composite for every sequence:
+
+<Statement {...euler} />
+
+<Proof>
+
+With $c_\theta = \cos \tfrac\theta2$ and $s_\theta = \sin \tfrac\theta2$, and $e_j \times e_i =
+-\epsilon\, e_l$, $e_l \times e_i = \epsilon\, e_j$, the product [](eq:product) gives $q_i(\alpha)
+\otimes q_j(\beta) = (c_\alpha c_\beta,\ s_\alpha c_\beta\, e_i + c_\alpha s_\beta\, e_j + \epsilon
+s_\alpha s_\beta\, e_l)$, and its product with $q_i(\gamma)$ has
+
+$$
+	w = c_\beta (c_\alpha c_\gamma - s_\alpha s_\gamma), \quad
+	u_i = c_\beta (c_\alpha s_\gamma + s_\alpha c_\gamma), \quad
+	u_j = s_\beta (c_\alpha c_\gamma + s_\alpha s_\gamma), \quad
+	u_l = \epsilon\, s_\beta (s_\alpha c_\gamma - c_\alpha s_\gamma),
+$$
+
+which are the stated forms by the addition formulas. For $\beta \in (0, \pi)$ both $c_\beta$ and
+$s_\beta$ are positive, so $\lVert (w, u_i) \rVert = \lambda c_\beta$ and $\lVert (u_j, u_l) \rVert
+= \lambda s_\beta$ for $q$ scaled by $\lambda > 0$, and the $\atantwo$s return $\beta / 2$, and
+$\sigma$ and $\delta$ modulo $2\pi$; for $-q$ they return $\sigma + \pi$ and $\delta + \pi$ modulo
+$2\pi$, which change $\alpha$ and $\gamma$ by multiples of $2\pi$. For the second claim, let $r =
+q_j(\tfrac\pi2)$. Since $\pi(r)$ turns $e_i$ about $e_j$ to $e_j \times e_i = -\epsilon e_k$,
+$q_k(\gamma) = r \otimes q_i(-\epsilon \gamma) \otimes \bar r$, and so $q \otimes r = q_i(\alpha)
+\otimes q_j(\beta + \tfrac\pi2) \otimes q_i(-\epsilon\gamma)$, with $\beta + \tfrac\pi2 \in [0, \pi]$.
+Last, $q \otimes (1, e_j) = (w - u_j,\ u + w\, e_j + u \times e_j)$ is $\sqrt 2\, q \otimes r$, and
+$u \times e_j = \epsilon u_i\, e_k - \epsilon u_k\, e_i$.
+
+</Proof>
+
+So the Euler angles of a unit quaternion are, for a proper sequence, those of [%full](statement:euler)
+read off $q$, and for a Tait–Bryan sequence those read off the linear rearrangement of $q$ it
+gives, with $\beta$ lowered by $\tfrac\pi2$ and $\gamma$ multiplied by $-\epsilon$; for an extrinsic
+sequence, those of the reversed sequence, in reverse order. $\alpha$ and $\gamma$ are returned to
+$(-\pi, \pi]$ as $\atantwo(\sin \alpha, \cos \alpha)$, so that $q$ and $-q$ give the same angles.
+The angles are smooth away from *gimbal lock*, $\beta \in \{0, \pi\}$ for a proper sequence and
+$\beta = \pm \tfrac\pi2$ for a Tait–Bryan one, where one of the two norms vanishes and only $\alpha +
+\gamma$ or $\alpha - \gamma$ is determined. There the composite selects, by a discretization of the
+smaller norm against a threshold, the convention $\gamma = 0$, and gives the $\atantwo$ it does not
+use a harmless argument. The derivatives of $\alpha$ and $\gamma$ grow without bound as $\beta$
+approaches the lock, which is why Euler angles are a way into and out of a model, and its noise is
+put in the charts instead.
+
+**From a matrix.** By [%full](statement:no-section) no continuous map reads a quaternion off every
+rotation matrix, and the usual reading is a selection between four, each a linear map of the matrix
+$X$ projected:
+
+$$
+	\begin{aligned}
+	c_0(X) &= (1 + X_{11} + X_{22} + X_{33},\ X_{32} - X_{23},\ X_{13} - X_{31},\ X_{21} - X_{12}), \\
+	c_1(X) &= (X_{32} - X_{23},\ 1 + X_{11} - X_{22} - X_{33},\ X_{12} + X_{21},\ X_{13} + X_{31}), \\
+	c_2(X) &= (X_{13} - X_{31},\ X_{12} + X_{21},\ 1 - X_{11} + X_{22} - X_{33},\ X_{23} + X_{32}), \\
+	c_3(X) &= (X_{21} - X_{12},\ X_{13} + X_{31},\ X_{23} + X_{32},\ 1 - X_{11} - X_{22} + X_{33}),
+	\end{aligned}
+	\qquad
+	q = P\bigl(c_m(X)\bigr), @tag(from-matrix)
+$$
+
+with $m$ the index of the largest of the four diagonal entries $c_m(X)_m$. At $X = \pi(q)$,
+[](eq:rotation) gives $c_m(X) = 4 q_m\, q$, writing $q = (q_0, q_1, q_2, q_3)$, so $P(c_m(X)) =
+\operatorname{sign}(q_m)\, q$: the quaternion over $X$ whose $m$-th coordinate is positive. Since
+$c_m(X)_m = 4 q_m^2$ and the largest of the $q_m^2$ is at least $\tfrac14$, the selected argument has
+norm at least $2$. The composite selects the argument before it projects, so that the projection
+never meets one of the small arguments it did not choose. Within each choice of $m$ the map is
+smooth; where the choice changes, the result may change sign. A matrix that is only near a rotation
+gives a nearby unit quaternion, though not that of the nearest rotation. A quaternion read off a
+measured matrix this way is aligned with its prediction like any other.
+
+**Alignment.** The alignment of $z$ with $r$, $\operatorname{sign}\langle z, r \rangle\, z$ by
+selection, is the point over $z$'s rotation on the side of $r$, and with $r = 1$ the one with $w \ge
+0$. It is a discretization, applied on the host to an observed quaternion before it is observed, as
+[The double cover](#the-double-cover) says, or to a quaternion before it is reported.
 
 ## The rigid motions
 
@@ -262,11 +573,11 @@ rotation's chart's volume and $\lvert \det \pi(1) \rvert = 1$.
 
 </Proof>
 
-The chart is not the groups' exponential, which couples the translation to the rotation through
-the left Jacobian, $p = V(\phi) \rho$; the two agree to first order. Its translation coordinates
-are in the frame of the point: the noise $\rho$ of a pose's normal moves the position along the
-pose's own axes, as the noise of an odometer, an inertial unit or a scan matcher is given. Since
-the chart is a left translation, the normal's
+The chart is not the groups' exponential [](eq:motion-exp), which couples the translation to the
+rotation through the left Jacobian; the two agree to first order, by [%full](statement:first-order).
+Its translation coordinates are in the frame of the point: the noise $\rho$ of a pose's normal moves
+the position along the pose's own axes, as the noise of an odometer, an inertial unit or a scan
+matcher is given. Since the chart is a left translation, the normal's
 [law of a translated chart](../normal/math.svx#without-a-volume-or-a-global-chart) holds on these
 groups, as on the rotations.
 
@@ -275,17 +586,98 @@ $\R^3$, whose chart moves the rotation and the position independently. The core 
 already: $S^3 \times \R^3$ is a product of spaces, global and full when its factors are, with the
 log-volume of its rotation alone, and needs no type of its own.
 
-The maps of the rigid motions are their group's, each a composite projecting its rotation:
+> [!DECISION] Two charts for a pose, one of them a type
+> A pose whose noise is given in its own frame is a rigid motion, $S^3 \ltimes \R^3$, with the
+> left-translated chart of [%full](statement:motions); a pose whose position's noise is given in a
+> fixed frame is the product $S^3 \times \R^3$ the core already has. The motions' types offer the
+> first chart alone, and a model moves a value between the two by the maps below, which are the
+> identity on storage.
 
-| map | of | to | as |
-| --- | --- | --- | --- |
-| composition | $SE(3) \times SE(3)$ | $SE(3)$ | $(P(q_1 \otimes q_2),\ p_1 + \pi(q_1)\, p_2)$ |
-| inverse | $SE(3)$ | $SE(3)$ | $(P(\bar q),\ -\pi(\bar q)\, p)$ |
-| action | $SE(3) \times \R^3$ | $\R^3$ | $\pi(q)\, x + p$ |
-| rotation, position | $SE(3)$ | $S^3$, $\R^3$ | $P(q)$, $p$ |
-| from parts | $S^3 \times \R^3$ | $SE(3)$ | $(P(q), p)$ |
+### Maps of the rigid motions
 
-and the extended pose's likewise, with its velocity carried as its position is.
+The maps of the rigid motions are their group's, each a composite projecting its rotation, with
+$R = \pi(q)$ and tangent coordinates ordered rotation first, $(\phi, \rho)$:
+
+| map | of | to | as | kind |
+| --- | --- | --- | --- | --- |
+| identity | | $SE(3)$ | $(1, 0)$ | smooth |
+| composition | $SE(3) \times SE(3)$ | $SE(3)$ | $(P(q_1 \otimes q_2),\ p_1 + R_1 p_2)$ | smooth |
+| inverse | $SE(3)$ | $SE(3)$ | $(P(\bar q),\ -R\transpose p)$ | smooth |
+| relative motion | $SE(3) \times SE(3)$ | $SE(3)$ | $(P(\bar q_1 \otimes q_2),\ R_1\transpose (p_2 - p_1))$ | smooth |
+| action on a point | $SE(3) \times \R^3$ | $\R^3$ | $R x + p$ | smooth |
+| action on a direction | $SE(3) \times \R^3$ | $\R^3$ | $R x$ | smooth |
+| inverse action | $SE(3) \times \R^3$ | $\R^3$ | $R\transpose (x - p)$ | smooth |
+| rotation, position | $SE(3)$ | $S^3$, $\R^3$ | $P(q)$, $p$ | smooth |
+| from parts | $S^3 \times \R^3$ | $SE(3)$ | $(P(q), p)$ | smooth |
+| matrix | $SE(3)$ | $\R^{4 \times 4}$ | $\begin{pmatrix} R & p \\ 0 & 1 \end{pmatrix}$ | smooth |
+| adjoint | $SE(3)$ | $\R^{6 \times 6}$ | [](eq:motion-adjoint) | smooth |
+| exponential | $\R^6$ | $SE(3)$ | [](eq:motion-exp) | removable |
+| logarithm | $SE(3)$ | $\R^6$ | [](eq:motion-log) | removable |
+| interpolation | $SE(3) \times SE(3) \times \R$ | $SE(3)$ | [](eq:motion-slerp) | removable |
+
+*From parts* is a map from the product $S^3 \times \R^3$ to the motion, and *rotation, position*
+the way back: they are the identity on storage, and a change of chart, whose derivative is
+$\operatorname{diag}(I, R)$ from the product's chart to the motion's. The matrix is the homogeneous
+one, so that composition is its product and the action on a point is its product with $(x, 1)$.
+
+The adjoint is the conjugation of the group's Lie algebra, $T \Exp(\xi)\, T^{-1} = \Exp(\operatorname{Ad}(T)\,
+\xi)$, and carries a perturbation in the frame of the motion to the outer frame, $T \oplus \xi = (1
+\oplus \operatorname{Ad}(T)\, \xi)\, T + O(\lVert \xi \rVert^2)$; in the order $(\phi, \rho)$ it
+is
+
+$$
+	\operatorname{Ad}(q, p) = \begin{pmatrix} R & 0 \\ [p]_\times R & R \end{pmatrix}, @tag(motion-adjoint)
+$$
+
+which many references write with the blocks the other way about, their translation first. Unlike
+[](eq:conjugation) on the rotations, the relation holds to first order only, since the chart is not
+the exponential.
+
+The exponential is the motion at a constant body twist $(\phi, \rho)$, rotating at the rate $\phi$
+while translating at the body velocity $\rho$, for unit time, and the logarithm its inverse:
+
+$$
+	\Exp(\phi, \rho) = \bigl(\Exp \phi,\ J_l(\phi)\, \rho\bigr), @tag(motion-exp)
+$$
+
+$$
+	\Log(q, p) = \bigl(\phi,\ J_l(\phi)^{-1} p\bigr), \qquad \phi = \Log q, @tag(motion-log)
+$$
+
+the logarithm defined for $q \ne -1$, with $J_l$ and its inverse of [](eq:jacobians) and
+[](eq:jacobian-inverses), whose series serve here too. A pose moving at constant body rates
+$(\omega, v)$ for a time $\Delta t$ moves from $T_k$ to $T_{k+1} = T_k\, \Exp(\omega\, \Delta t,\ v\,
+\Delta t)$, exactly. With $\rv$ in place of $\Log$, the logarithm is the motion's along the shorter
+turn, a discretization at half-turns as on the rotations.
+
+Two interpolations are in use, and both are offered:
+
+$$
+	T_1\, \Exp\bigl(t \Log(T_1^{-1} T_2)\bigr)
+	\qquad\text{and}\qquad
+	\bigl(q_1 \otimes \Exp(t \Log(\bar q_1 \otimes q_2)),\ (1 - t)\, p_1 + t\, p_2\bigr) . @tag(motion-slerp)
+$$
+
+The first is the screw motion at a constant twist, the one-parameter subgroup through $T_1^{-1}
+T_2$ carried to $T_1$, and the second
+interpolates the rotation along its geodesic and the position along a straight line, the geodesic
+of the product. Each comes, like [](eq:slerp), with $\rv$ in place of $\Log$ for the shorter turn.
+
+The extended poses have the same maps with the velocity carried as the position is: the composition
+$(P(q_1 \otimes q_2),\ v_1 + R_1 v_2,\ p_1 + R_1 p_2)$, the inverse $(P(\bar q),\ -R\transpose v,\
+-R\transpose p)$, the relative motion likewise, the parts and the pose $(q, p)$ among them, the
+$5 \times 5$ matrix with the columns $(R, v, p)$ over $\begin{pmatrix} 0 & 1 & 0 \\ 0 & 0 & 1
+\end{pmatrix}$, the exponential $(\Exp \phi,\ J_l(\phi)\, \eta,\ J_l(\phi)\, \rho)$ and its logarithm,
+and in the order $(\phi, \eta, \rho)$ the adjoint
+
+$$
+	\operatorname{Ad}(q, v, p) = \begin{pmatrix} R & 0 & 0 \\ [v]_\times R & R & 0 \\ [p]_\times R & 0 & R \end{pmatrix} . @tag(extended-adjoint)
+$$
+
+Their action on points is that of their pose. An
+inertial unit's step, which turns the attitude by its rate, adds the rotated specific force and a
+gravity to the velocity, and the velocity to the position, is a composite of these maps that the
+model writes with its own gravity, since no frame of the earth is assumed.
 
 ## The normal on these types
 
@@ -311,14 +703,33 @@ the blocks of the point and the mean, as on any curved type.
 - **The types' boundaries**: the core's check of an embedded type on $S^3$, $SE(3)$ and $SE_2(3)$,
   with each declared volume checked against the area formula.
 - **The chart**: [%full](statement:chart)'s inverse on the whole image, the angle $4
-  \arctan(\lVert \tangent \rVert / 4)$, and the first-order rotation vector, against
-  [](eq:rotation).
-- **The groups**: associativity, identities and inverses of the compositions; $\pi$ a homomorphism,
-  the same at $q$ and $-q$; the actions homomorphisms; the exponential against the closed form and
-  its series at $0$.
+  \arctan(\lVert \tangent \rVert / 4)$, the first-order rotation vector against [](eq:rotation), and
+  [](eq:conjugation).
+- **The groups**: associativity, identities and inverses of the compositions, and the relative
+  rotations and motions against them; $\pi$ a homomorphism, the same at $q$ and $-q$; the actions
+  homomorphisms, the inverse actions their inverses; the homogeneous matrices homomorphisms; hat and
+  vee inverse on skew matrices; the adjoints against $T \Exp(\xi)\, T^{-1} = \Exp(\operatorname{Ad}(T)\,
+  \xi)$, and [](eq:motion-adjoint) against the first-order relation with the chart.
+- **The exponentials and logarithms**: each logarithm the inverse of its exponential on the ball of
+  radius $2\pi$, and $\rv$ against $\Log$ on either side of a half-turn; the Jacobians against
+  [%full](statement:first-order), as the derivative of $\Exp$ computed by a pass, and their inverses
+  by multiplication; every coefficient of [Removable singularities](#removable-singularities)
+  against its closed form, in extended precision, on both sides of its cutoff, at both precisions,
+  with first and second derivatives at the identity checked against the series'.
+- **The constructions**: [](eq:two-vectors) carrying $a$ to $b$; [%full](statement:euler) by round
+  trips through [](eq:euler) for all twelve sequences, intrinsic and extrinsic, away from the lock,
+  and at the lock the convention $\gamma = 0$ reproducing the rotation; [](eq:from-matrix) returning
+  $\pm q$ from $\pi(q)$ in each of its four branches; alignment and the interpolations at their
+  endpoints and at a constant rate.
+- **The discretizations**: each one's value on both sides of its jump, and its derivatives those of
+  the formula selected, finite where the core's passes are taken.
 - **The normal**: its density integrating to one through the chart of $S^3$ and of $SE(3)$, its
   draws agreeing with quadratures, and [%full](statement:cover)'s law on the rotations, by
   quadrature over $SO(3)$ of $\density(q) + \density(-q)$.
+
+The core's acceptance test stays where it is, on the sphere its tests declare. That sphere is to be
+replaced by the library's own spheres when an entry brings them; this entry does not revise the
+core.
 
 ## In skoro's terms
 
@@ -327,33 +738,22 @@ the blocks of the point and the mean, as on any curved type.
   Each declares its retraction, inverse and projection as composites, and a global volume, the
   log-volume of its rotation's chart.
 - **Their tangent coordinates** are the rotation vector in the body frame, then the translation,
-  and for the extended pose the velocity, in the body frame.
-- **Their maps** are composites: compositions and inverses into the types by projection, actions
-  and matrices into Euclidean values, the exponential of a rate into the rotations.
+  and for the extended pose the velocity before the position, in the body frame; every adjoint and
+  Jacobian is written in that order.
+- **Their maps** are composites of the core's primitives and selection: the groups' operations,
+  with compositions and inverses into the types by projection; actions, matrices, adjoints and
+  Jacobians into Euclidean values; exponentials into the types and logarithms out of them; the
+  interpolations and the angle; and the constructions from and to axes and angles, pairs of
+  directions, Euler angles and matrices. Each is smooth, smooth with a removable singularity
+  computed by series, or a stated discretization.
+- **Their derivatives** are the passes' over those composites, and are the textbooks' Jacobians,
+  by [%full](statement:first-order); no Jacobian is written by hand.
 - **A quantity of these types** may be scored by the normal, observed and simulated; an observed
-  quaternion is aligned with its prediction by its caller.
-- **No earth frame** is assumed: a frame is a rotation or a motion the user composes.
+  quaternion is aligned with its prediction by its caller. A pose with its noise in a fixed frame
+  is a quantity of the product $S^3 \times \R^3$.
+- **No earth frame** is assumed: a frame is a rotation or a motion the user composes, and a gravity
+  a constant the user's model holds.
 
 ## Open questions
 
-> [!TODO] Quaternions or matrices
-> The draft stores the rotations as unit quaternions, a double cover whose every operation is a
-> composite, at the cost of [The double cover](#the-double-cover). The alternative stores them as
-> matrices, exact on the rotations, with the composition, or the projection, as a fused operation.
-> Is the double cover, with its alignment of observed quaternions, the representation wanted?
-
-> [!TODO] The frame of a motion's translation
-> The draft gives the rigid motions the left-translated chart, their translation's noise in the
-> frame of the pose, and leaves a translation with its noise in a fixed frame to the product
-> $S^3 \times \R^3$ the core has. Is that the division wanted, or should the motions' types offer
-> the fixed-frame chart too?
-
-> [!TODO] Which maps
-> The draft brings the identity, composition, inverse, action, matrix and the exponential of a
-> rotation vector, and no logarithm, which the normal does not need and the chart's inverse stands
-> in for. Is that the set wanted for this entry?
-
-> [!TODO] The acceptance test
-> The core's acceptance test runs on a sphere declared in its tests, to be replaced by a curved type
-> of the library. Does this entry move it onto $S^3$, which revises the core, or leave the sphere
-> to the entry that brings the spheres?
+None remain.
