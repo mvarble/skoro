@@ -1,17 +1,18 @@
 ---
 title: "Bindings of the stacked tangent's replacement"
-pages: []
-crates: []
+pages:
+    - concepts/the-normal
+    - reference/crates
+crates: [skoro, skoro-normal]
 revises: [normal]
 ---
 
-The normal's `Stacked` writes a retirement's Gaussian replacement, the normal on $\R^D$ at the
-stacked tangent of the blanket's quantities at constant anchors. Added as a factor with
-`Stacked::factor`, it binds its whitened residual, its mean and its scale, as the normal's roles
-ask; written for a retirement with `Stacked::log_density`, it gives the log-density alone, and
-binds nothing. Since [the core's replacement bindings](../replacement-bindings/), a
-`Replacement` carries the roles its factor binds, checked and bound by the retirement in the
-snapshot it publishes. This chore has `Stacked` supply those bindings for the replacements it
-writes, so that a replacement built with it binds the same roles as the factor `Stacked::factor`
-adds, and a least-squares or Fisher-scoring reader finds the residual of a retired window as it
-finds any other. It needs no new mathematics.
+`Stacked` now gives a retirement its Gaussian replacement whole. `Stacked::replacement` returns a
+`Replacement` holding $\ell_{\mathcal N}(\delta; m, W) + c$, no proposals, and the whitened
+residual, the mean and the scale bound under the normal's roles, which the retirement checks and
+binds to the factor it adds, as [the core's replacement bindings](../replacement-bindings/) allow.
+`Stacked::factor` and `Stacked::replacement` bind through one helper, so that a replacement binds
+exactly the roles the same factor added in a scope binds, and a least-squares or Fisher-scoring
+reader finds the residual of a retired window as it finds any other. `Stacked::log_density` stays,
+for a caller that wants the log-density alone; changing it to return a `Replacement` was set aside,
+since it would break its callers and its name would no longer say what it gives.

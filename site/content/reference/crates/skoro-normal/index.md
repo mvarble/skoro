@@ -10,6 +10,6 @@ is global and whose volume is known, and refuses the others with the core's own 
 The scale is given in four forms, a standard deviation, a vector of them, a covariance factor or a
 whitening, from quantities or from constants that the crate factors on the host; the composites
 that read it are defined once per form and dimension. `Stacked` builds the stacked tangent of a
-retirement's blanket at constant anchors, and the Gaussian replacement on it: added as a factor,
-it binds its residual, mean and scale, and written as a retirement's replacement, it binds the
-roles its caller binds with the core's `Replacement::bind`.
+retirement's blanket at constant anchors, and the Gaussian replacement on it, which binds its
+residual, mean and scale under the normal's roles whether it is added as a factor or given to a
+retirement as its `Replacement`.

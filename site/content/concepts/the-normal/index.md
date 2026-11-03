@@ -146,18 +146,25 @@ without either. The stacked tangent builds the form of a retirement's Gaussian r
 normal on $\R^D$ at the tangents of the blanket's quantities at constant anchors:
 
 ```rust
-{../../../../crates/skoro-normal/src/stacked.rs:22..37}
-```
-
-```rust
-{../../../../crates/skoro-normal/src/stacked.rs:50..59}
+{../../../../crates/skoro-normal/src/stacked.rs:25..40}
 ```
 
 A retirement adds its replacement as a likelihood factor itself, and the replacement carries the
-roles that factor binds, as a term in a scope does. A caller that builds a replacement with the
-stacked tangent binds its residual, mean and scale there, and the retirement checks each node and
-binds it to the factor it adds, in the snapshot it publishes:
+roles that factor binds, as a term in a scope does:
 
 ```rust
 {../../../../crates/skoro-core/src/retire.rs:85..102}
+```
+
+`Stacked::replacement` gives a retirement that replacement whole, its residual, mean and scale
+bound under the normal's roles exactly as `Stacked::factor` binds them on a factor, through one
+helper; the retirement checks each node and binds it to the factor it adds, in the snapshot it
+publishes, so that a reader finds the residual of a retired window as it finds any other:
+
+```rust
+{../../../../crates/skoro-normal/src/stacked.rs:60..72}
+```
+
+```rust
+{../../../../crates/skoro-normal/src/stacked.rs:111..119}
 ```
