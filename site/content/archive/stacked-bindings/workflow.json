@@ -1,0 +1,13 @@
+{
+    "kind": "chore",
+    "stage": "plan",
+    "started": "2026-11-03",
+    "events": [
+        {
+            "date": "2026-11-03",
+            "action": "start",
+            "stage": "plan"
+        }
+    ],
+    "approvals": {}
+}
