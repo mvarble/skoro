@@ -3,10 +3,12 @@
 
 use std::sync::Arc;
 
-use skoro_core::scope::{constant, factor, propose, quantity, score};
+use skoro_core::scope::{
+    constant, factor, namespace, propose, quantity, quantity_in, sample, sample_in, score,
+};
 use skoro_core::{
-    AnyNumber, AtMostOne, Declares, Error, ExactlyOne, Key, NodeId, Param, Positive, Proposal, Q,
-    Real, Role, Sample, TermHandle, Vector, Writer,
+    AnyNumber, AtMostOne, Declares, Distribution, Error, ExactlyOne, Key, NodeId, Param, Positive,
+    Proposal, Q, QDyn, Real, Role, Sample, Space, TermHandle, Typed, Vector, Writer,
 };
 use skoro_tensor::{Target, Value};
 
@@ -428,4 +430,89 @@ fn generation_refuses_a_free_quantity_without_a_measure() {
         "{:?}",
         generated.err()
     );
+}
+
+/// The marker of a quantity of any space, for a distribution that reads the space from `x`.
+#[derive(Clone, Copy, Debug)]
+struct Any;
+
+impl Typed for Any {
+    fn admits(_: &Space) -> bool {
+        true
+    }
+}
+
+/// `-½|x ⊖ m|²`, a distribution written for the tests, binding its mean.
+struct Tether {
+    mean: QDyn,
+}
+
+impl Distribution for Tether {
+    #[track_caller]
+    fn score(&self, x: QDyn) -> TermHandle {
+        let t = x.local(self.mean);
+        score(x.narrow::<Any>(), ((t * t).sum() * -0.5).narrow()).bind(&MEAN, self.mean)
+    }
+}
+
+/// The term scoring `q`: conditioned on `m` alone, with `m` bound as its mean.
+fn assert_tethered(snapshot: &skoro_core::Snapshot, q: NodeId, m: NodeId) {
+    let term = snapshot.scored_by(q).unwrap();
+    assert_eq!(term.conditioned_on().collect::<Vec<_>>(), [m]);
+    assert_eq!(snapshot.bound(term.log_density, &MEAN).unwrap().id(), m);
+}
+
+#[test]
+fn sample_declares_and_scores() {
+    let mut writer = Writer::new();
+    let (m, x, y) = writer
+        .build(|| {
+            let m = quantity("m", Vector::<2>);
+            let tether = Tether { mean: m.untyped() };
+            namespace("tick", || {
+                let x = sample("x", Vector::<2>, &tether);
+                let y = sample("y", Vector::<2>, tether);
+                (m, x, y)
+            })
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    for (q, address) in [(x, "tick/x"), (y, "tick/y")] {
+        assert_eq!(snapshot.lookup(&address.into()), Some(q.id()));
+        assert_eq!(snapshot.space(q), Some(&Vector::<2>.space()));
+        assert_tethered(&snapshot, q.id(), m.id());
+    }
+}
+
+#[test]
+fn sample_in_declares_a_quantity_of_its_space() {
+    let mut writer = Writer::new();
+    let (m, x) = writer
+        .build(|| {
+            let m = quantity_in("m", Space::Vector(3));
+            (m, sample_in("x", Space::Vector(3), Tether { mean: m }))
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    assert_eq!(snapshot.lookup(&"x".into()), Some(x.id()));
+    assert_eq!(snapshot.space(x), Some(&Space::Vector(3)));
+    assert_tethered(&snapshot, x.id(), m.id());
+}
+
+#[test]
+fn sample_records_a_refusal_at_its_line() {
+    let line = line!() + 5;
+    let failure = Writer::new()
+        .build(|| {
+            let m = quantity("m", Unmeasured);
+            let tether = Tether { mean: m.untyped() };
+            sample("x", Unmeasured, &tether);
+        })
+        .unwrap_err();
+    assert!(
+        matches!(failure.error, Error::NoVolume { .. }),
+        "{:?}",
+        failure.error
+    );
+    assert_eq!(failure.location.line(), line);
 }

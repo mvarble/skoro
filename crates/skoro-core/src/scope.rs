@@ -21,8 +21,8 @@ pub use crate::term::{factor, propose, score};
 
 use crate::model::{Model, Node, NodeKind};
 use crate::{
-    Address, Declares, Error, Failure, IntoHostValue, Lowered, Lowering, NodeId, Operation, Q,
-    QDyn, Space, Typed, Values,
+    Address, Declares, Distribution, Error, Failure, IntoHostValue, Lowered, Lowering, NodeId,
+    Operation, Q, QDyn, Space, Typed, Values,
 };
 
 /// A frame of the thread's stack.
@@ -336,6 +336,32 @@ pub fn quantity_in(address: impl Into<Address>, space: Space) -> QDyn {
     QDyn::from_id(build(location, |draft, prefix| {
         draft.quantity(prefix.join(&address), space)
     }))
+}
+
+/// A quantity of `marker`'s space at `address`, scored by `distribution`: what `quantity` and the
+/// distribution's `score` build, with a refusal by either recorded at the caller's line.
+#[track_caller]
+pub fn sample<T: Declares>(
+    address: impl Into<Address>,
+    marker: T,
+    distribution: impl Distribution,
+) -> Q<T> {
+    let x = quantity(address, marker);
+    distribution.score(x.untyped());
+    x
+}
+
+/// A quantity of `space` at `address`, scored by `distribution`: what `quantity_in` and the
+/// distribution's `score` build, with a refusal by either recorded at the caller's line.
+#[track_caller]
+pub fn sample_in(
+    address: impl Into<Address>,
+    space: Space,
+    distribution: impl Distribution,
+) -> QDyn {
+    let x = quantity_in(address, space);
+    distribution.score(x);
+    x
 }
 
 /// A constant of `marker`'s space (`ValueShape` when the value does not fit it).

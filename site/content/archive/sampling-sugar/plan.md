@@ -56,7 +56,7 @@ marker is what types the handle, and a `Normal` does not know its marker.
 
 ## The core (`skoro-core`, `term` and `scope`)
 
-- [ ] `Distribution`, its implementation for references, and its re-export; `scope::sample` and
+- [x] `Distribution`, its implementation for references, and its re-export; `scope::sample` and
       `scope::sample_in`; their documentation. Tests, in the core's term tests, with a
       distribution written in the test: `sample_declares_and_scores`, a sample under a namespace
       is a quantity at the namespaced address, of the marker's space, scored by the term the
