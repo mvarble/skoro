@@ -1,0 +1,359 @@
+---
+summary: The rotations as unit quaternions with the stereographic chart, global and full with a declared volume so that they carry the normal, and the rigid motions SE(3) and SE₂(3) as their semidirect products with the left-translated chart, all written as composites of the core's operations.
+depends_on: [retraction, product-manifold, chart-volume, archive/core/math, archive/measures/math, archive/normal/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as noSection from './statements/no-section.md';
+	import * as chart from './statements/chart.md';
+	import * as volume from './statements/volume.md';
+	import * as cover from './statements/cover.md';
+	import * as motions from './statements/motions.md';
+</script>
+
+## The problem
+
+skoro is meant for models whose states are attitudes, poses and extended poses, a pose with a
+velocity, and whose measurements are of them. The only curved type it has is the sphere of the
+core's tests. This entry brings back the rotations $SO(3)$ and the rigid motions $SE(3)$ and
+$SE_2(3)$, as embedded types declared on the core's public interface, so that each may be an
+estimated state or an observable, and carry [the normal](../normal/math.svx).
+
+Three earlier positions shape them. A type that carries the normal has a declared volume
+([the core's measures](../measures/math.svx)) and a global chart
+([why global charts](../normal/math.svx#why-global-charts)). A type's operations are composites of
+the core's primitives wherever they can be, and fused operations, with kernels of their own,
+only where they must (charter, position 11). And a type's chart is part of the meaning of every
+normal on it, so it is chosen once, here. The `archive` branch held the rotations as $3 \times 3$
+matrices with the exponential chart, and gave their exponential, logarithm and composition fused
+kernels for each backend; its rigid motions were a rotation matrix and a position. This document
+works out which representation, which chart and which measure each type takes now, and the maps
+between them. It assumes no frame of the earth: frames are the user's to compose from these.
+
+## Setting
+
+A quaternion is $q = (w, u)$ with $w \in \R$ and $u \in \R^3$, stored as the vector $(w, u)$ of
+$\R^4$. The product is
+
+$$
+	(w_1, u_1) \otimes (w_2, u_2) = \bigl(w_1 w_2 - u_1 \cdot u_2,\ w_1 u_2 + w_2 u_1 + u_1 \times u_2\bigr), @tag(product)
+$$
+
+the conjugate $\bar q = (w, -u)$, and $\operatorname{vec}(q) = u$, $w(q) = w$. The unit quaternions
+$S^3 = \{q : \lVert q \rVert = 1\}$ are a group under $\otimes$, with identity $1 = (1, 0)$ and
+inverse $\bar q$, and a compact Lie group of dimension $3$, whose Haar measure is invariant under
+translation on either side. Each unit quaternion is a rotation,
+
+$$
+	\pi(q) = (w^2 - \lVert u \rVert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
+$$
+
+the rotation by the angle $\theta$ about $a$ when $q = (\cos \tfrac\theta2, \sin \tfrac\theta2\,
+a)$, and $\pi : S^3 \to SO(3)$ is a homomorphism, two to one, with $\pi(q) = \pi(-q)$. Its action
+on a vector is $\pi(q)\, x = x + 2 w\, (u \times x) + 2\, u \times (u \times x)$.
+
+The rotations' tangent coordinates in this document are the rotation vector in the frame of the
+point, $\pi(q \oplus \tangent) = \pi(q) (I + [\tangent]_\times) + O(\lVert \tangent \rVert^2)$:
+a perturbation on the right, in the body frame.
+
+## Matrices or quaternions
+
+The rotations can be stored as the matrices $SO(3) \subset \R^{3 \times 3}$ or as the unit
+quaternions $S^3 \subset \R^4$, and the core asks two different things of either.
+
+**A chart.** For the normal, the chart at each point must be global and full. On the matrices the
+Cayley chart is, with log-volume $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$
+([the note's table](../../math/chart-volume/#the-usual-charts)). On the unit quaternions the
+stereographic chart is ([%full](statement:chart), below). Either serves the normal exactly.
+
+**A way into the type.** A model computes rotations as well as holding them: a composition, an
+inverse, a rotation built from a rate. The core reaches an embedded type from Euclidean values in
+two ways: the retraction from a base point, valid in that point's chart, and the type's projection
+$P$, a smooth map onto the type that is the identity on it
+([%full](statement:archive/core/math/embedded)). A composition of two rotations written as a
+retraction from one of them, $R_1 R_2 = R_1 \oplus (R_2 \ominus I)$, fails wherever $R_2$ is a
+half-turn, which a model meets whenever a sensor is mounted upside down. A composition needs the
+projection. On the unit quaternions it is the normalization $P(w) = w / \lVert w \rVert$, a
+composite smooth away from $0$, and a composition is $P(q_1 \otimes q_2)$. On the matrices it is the
+polar factor $X (X\transpose X)^{-1/2}$, which has no closed form in the core's primitives that is
+smooth at the rotations themselves: the eigenvalues of $X\transpose X$ coincide there, and a
+formula through them divides by their differences. Nor can it pass through the quaternions:
+
+<Statement {...noSection} />
+
+<Proof>
+
+Suppose $s$ is one. Its image $s(SO(3))$ is compact, and so is $-s(SO(3))$, since $q \mapsto -q$ is
+continuous. They are disjoint, since $s(R) = -s(R')$ gives $R = \pi(s(R)) = \pi(-s(R')) = R'$ and
+then $s(R) = -s(R)$, which no unit quaternion is. And they cover $S^3$, since a $q$ with
+$\pi(q) = R$ is $s(R)$ or $-s(R)$. So $S^3$ is the union of two disjoint nonempty closed sets, which
+contradicts its connectedness.
+
+</Proof>
+
+Every formula that reads a quaternion off a matrix is therefore discontinuous somewhere, and a
+projection of matrices through one is too. The matrices would need the composition, or the
+projection, as a fused operation, with kernels for each backend and their tests on an adapter. The
+unit quaternions need none: storage, chart, projection and composition are all composites.
+
+> [!DECISION] The rotations are stored as unit quaternions
+> The type is $S^3$, a double cover of the rotations, whose chart, projection, composition and
+> action are composites of the core's primitives, and on which the normal is exact. What it costs
+> is the double cover itself, which [The double cover](#the-double-cover) works out: a law on $S^3$
+> is a law on the rotations through $\pi$, and an observed quaternion must be given on the side of
+> its prediction. The matrices remain a possible type of their own, with fused composition, should
+> a model need them.
+
+## The unit quaternions
+
+The type $S^3$ has storage $4$, dimension $3$, and the retraction, inverse and projection
+
+$$
+	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lVert \tangent \rVert^2;
+	\qquad
+	p \ominus q = \frac{4\, \operatorname{vec}(\bar q \otimes p)}{1 + w(\bar q \otimes p)};
+	\qquad
+	P(x) = \frac{x}{\lVert x \rVert} . @tag(quaternion-chart)
+$$
+
+<Statement {...chart} />
+
+<Proof>
+
+Write $\delta = \delta(\tangent)$. Its norm is $((1 - s)^2 + 4s)^{1/2} / (1 + s) = 1$, so
+$q \otimes \delta$ is a unit quaternion. With $w(\delta) = (1 - s)/(1 + s)$ and
+$\lVert \operatorname{vec}(\delta) \rVert = (\lVert \tangent \rVert / 2)/(1 + s)$, $\delta$ is the
+rotation by $\theta$ about $\tangent$ with $\cos \tfrac\theta2 = (1-s)/(1+s)$ and $\sin
+\tfrac\theta2 = (\lVert \tangent \rVert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
+(1 + \cos \tfrac\theta2) = \lVert \tangent \rVert / 4$. As $\lVert \tangent \rVert$ runs over
+$[0, \infty)$, $\theta$ runs over $[0, 2\pi)$, so $\delta$ runs over every unit quaternion but $-1$,
+once each; $\delta$ is the inverse of the stereographic projection of $S^3$ from $-1$ onto the
+hyperplane $w = 0$, at $\tangent / 4$. Left multiplication by $q$ carries $S^3 \setminus \{-1\}$ to
+$S^3 \setminus \{-q\}$. The inverse follows from $\delta = \bar q \otimes p$ and $\operatorname{vec}(
+\delta) / (1 + w(\delta)) = \tangent / 4$, which $s$ cancels from. Last, $\delta(\tangent) = (1,
+\tangent / 2) + O(\lVert \tangent \rVert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
+O(\lVert \tangent \rVert^2)$; $\pi$ is a homomorphism.
+
+</Proof>
+
+The chart's coordinate of a rotation by $\theta$ has the length $4 \tan(\theta / 4) = \theta +
+\theta^3 / 48 + O(\theta^5)$, closer to the exponential coordinate $\theta$ than the Cayley
+chart's $2 \tan(\theta/2) = \theta + \theta^3 / 12 + \cdots$. These are the *modified Rodrigues
+parameters* of attitude estimation, scaled by $4$ so that they agree with the rotation vector to
+first order. The chart is the left translation of the chart at the identity,
+$q \oplus \tangent = q \otimes (1 \oplus \tangent)$.
+
+<Statement {...volume} />
+
+<Proof>
+
+The chart at $q$ is the left translation of the chart at $1$, and $\nu$ is invariant under left
+translation, so the volume is that of the chart at $1$
+([%full](statement:math/chart-volume/group)). In polar coordinates, with $\theta$ the angle of a
+rotation and $a$ its axis, Haar measure on $S^3$ is $4 \sin^2(\theta/2)\, \dd \theta\, \dd a$ for
+$\theta \in [0, 2\pi)$, normalized as the exponential chart, whose volume at $\tangent$ is
+$\operatorname{sinc}^2(\lVert \tangent \rVert / 2)$
+([](eq:math/chart-volume/so3-exp)) and which on $S^3$ is a diffeomorphism of the ball of radius
+$2\pi$. With $r = 4 \tan(\theta/4)$, $\dd \theta = \dd r / (1 + r^2/16)$ and $\sin(\theta/2) =
+(r/2)/(1 + r^2/16)$, so the measure is $r^2\, \dd r\, \dd a / (1 + r^2/16)^3$, while Lebesgue
+measure in $\tangent$ is $r^2\, \dd r\, \dd a$. The chart's derivative at $0$ is $\tangent \mapsto q
+\otimes (0, \tangent/2)$, whose columns have length $\tfrac12$, so its volume at $0$ against surface
+measure is $\tfrac18$, and $\nu$ is $8$ times surface measure
+([%full](statement:math/chart-volume/normalized)). The chart is global by [%full](statement:chart)
+and full since it misses one point.
+
+</Proof>
+
+The log-volume is rational in $\lVert \tangent \rVert^2$, smooth as computed everywhere, and needs
+no guard at $\tangent = 0$. The total mass of $\nu$ is $8 \cdot 2\pi^2 = 16\pi^2$.
+
+## The double cover
+
+A normal on $S^3$ is a law on the unit quaternions, and through $\pi$ a law on the rotations.
+
+<Statement {...cover} />
+
+<Proof>
+
+The map $q \mapsto -q$ is the translation by $-1$, which preserves $\nu$, and $\pi^{-1}(A) = B \cup
+(-B)$ for a measurable $B$ meeting each fibre once, such as the quaternions over $A$ with
+$w > 0$, or $w = 0$ and a first nonzero coordinate of $u$ positive. So
+$\Pr(\pi(\randomPoint) \in A) = \int_B (\density(q) + \density(-q))\, \dd \nu(q)$, and $\pi$
+carries $\nu$ on $B$ to $\tfrac12 \pi_* \nu = \nu_{SO(3)}$ on $A$. For the second claim,
+$\langle \mu \oplus \varepsilon, \mu \rangle = w(\delta(\varepsilon)) = (1 - s)/(1 + s)$, negative
+exactly when $s > 1$. For the third, the coordinates of $q$ and $-q$ at $\mu$ have the angles
+$\theta$ and $2\pi - \theta$, and $4 \tan(\theta/4) \cdot 4 \tan((2\pi - \theta)/4) = 16$.
+
+</Proof>
+
+So the normal on $S^3$ puts the mass $\Pr(\lVert \varepsilon \rVert > 4)$ on the far side of its
+mean, at most $\Pr(\chi_3 > 4/\sigma)$ for $\sigma^2$ the largest eigenvalue of $\Sigma$: below
+$10^{-13}$ at $\sigma = 0.5$ rad, about $10^{-3}$ at $1$ rad. As a law on the rotations it has the
+density $\density(q) + \density(-q)$, in which the second term is negligible for a concentrated
+noise and the first is the normal's term. For a broad one, such as a prior on an attitude about
+which little is known, it is the sum that is the law on the rotations, and the term on $S^3$ is the
+law on its double cover.
+
+Three consequences follow for a model.
+
+- **Generation is unaffected.** A draw $\mu \oplus \varepsilon$ is a unit quaternion near $\mu$,
+  and every value computed from it through $\pi$, a rotated vector or a matrix, is the rotation's.
+- **An observed quaternion must be given on the side of its prediction.** A sensor's quaternion
+  has an arbitrary sign: $z$ and $-z$ are one rotation, but two points of $S^3$, and by the third
+  claim one of them has a chart coordinate at the prediction of length at least $4$, where the
+  normal's density is negligible. A measurement $z$ predicted by $h(\point)$ is aligned before it is
+  observed, $z \leftarrow \operatorname{sign}\langle z, \hat h \rangle\, z$, at a value $\hat h$ of
+  the prediction near the estimate: the point of $S^3$ that is the measured rotation on the
+  prediction's side. Likelihoods that read the rotation only through $\pi$, a measured direction
+  $\pi(q)\, x$ for one, need no alignment.
+- **A posterior on $S^3$ has a mirror.** Every term that reads its quaternion through $\pi$ alone
+  takes the same value at $q$ and at $-q$; a normal on $S^3$ does not, and breaks the symmetry. A
+  model whose attitude enters through $\pi$ alone has a posterior with two mirrored modes, one for
+  each sign, and an estimator converges to the one on the side it starts from, which is the same
+  rotation.
+
+## Maps of the rotations
+
+Each map is a composite of the core's primitives, and its derivatives are those of its parts.
+
+| map | of | to | as |
+| --- | --- | --- | --- |
+| identity | | $S^3$ | the constant $(1, 0)$ |
+| composition | $S^3 \times S^3$ | $S^3$ | $P(q_1 \otimes q_2)$, [](eq:product) |
+| inverse | $S^3$ | $S^3$ | $P(\bar q)$ |
+| action | $S^3 \times \R^3$ | $\R^3$ | $x + 2 w\, (u \times x) + 2\, u \times (u \times x)$ |
+| matrix | $S^3$ | $\R^{3 \times 3}$ | [](eq:rotation) |
+| exponential | $\R^3$ | $S^3$ | $P\bigl(\cos \tfrac{\lVert \omega \rVert}2,\ \tfrac12 \operatorname{sinc} \tfrac{\lVert \omega \rVert}2\, \omega\bigr)$ |
+
+The composition and the inverse are maps into the type, written in storage and projected
+([](eq:archive/core/math/map-into)); the product of two unit quaternions, and the conjugate of
+one, are unit quaternions already, and the projection only returns what rounding carried off the
+sphere. The exponential, the rotation by the vector $\omega$, is how an angular rate integrated
+over a step becomes a rotation, $q_{k+1} = q_k \otimes \operatorname{Exp}(\omega\, \Delta t)$; its
+$\operatorname{sinc}$ has a removable singularity at $\omega = 0$, where it is computed from its
+series in $\lVert \omega \rVert^2$, as the core asks of a formula smooth as computed. The matrix is
+the rotation's, the same for $q$ and $-q$; there is no map back from matrices to the type,
+[%full](statement:no-section), and a rotation given as a matrix enters a model as a quaternion the
+caller chooses on the host, aligned as [The double cover](#the-double-cover) says when it is a
+measurement.
+
+## The rigid motions
+
+A rigid motion is a rotation and a translation, and an extended pose a rotation, a velocity and a
+position. As groups, with the unit quaternions in place of the rotations, they are the semidirect
+products $S^3 \ltimes \R^3$, a double cover of $SE(3)$, and $S^3 \ltimes (\R^3 \times \R^3)$, a
+double cover of $SE_2(3)$, with the products of [%full](statement:motions), stored as $(q, p)$, of
+storage $7$ and dimension $6$, and $(q, v, p)$, of storage $10$ and dimension $9$.
+
+<Statement {...motions} />
+
+<Proof>
+
+The product of $(q, p)$ and $(1 \oplus \phi, \rho)$ is $(q \otimes (1 \oplus \phi), p + \pi(q)
+\rho)$, the chart, and likewise for the extended pose. For fixed $(q, p)$ the chart is the product
+of the rotation's chart, a diffeomorphism of $\R^3$ onto $S^3 \setminus \{-q\}$, and the affine map
+$\rho \mapsto p + \pi(q) \rho$ of $\R^3$ onto itself, so it is global, full, and inverted as
+stated. Since $\pi(q)$ is a rotation, $\nu \times$ Lebesgue measure is invariant under the group's
+left and right translations, so it is a Haar measure and the volume of the chart is the same at
+every point ([%full](statement:math/chart-volume/group)); at the identity it is the product of the
+rotation's chart's volume and $\lvert \det \pi(1) \rvert = 1$.
+
+</Proof>
+
+The chart is not the groups' exponential, which couples the translation to the rotation through
+the left Jacobian, $p = V(\phi) \rho$; the two agree to first order. Its translation coordinates
+are in the frame of the point: the noise $\rho$ of a pose's normal moves the position along the
+pose's own axes, as the noise of an odometer, an inertial unit or a scan matcher is given. Since
+the chart is a left translation, the normal's
+[law of a translated chart](../normal/math.svx#without-a-volume-or-a-global-chart) holds on these
+groups, as on the rotations.
+
+A translation with its noise in a fixed frame is a different model, the product of $S^3$ with
+$\R^3$, whose chart moves the rotation and the position independently. The core has products
+already: $S^3 \times \R^3$ is a product of spaces, global and full when its factors are, with the
+log-volume of its rotation alone, and needs no type of its own.
+
+The maps of the rigid motions are their group's, each a composite projecting its rotation:
+
+| map | of | to | as |
+| --- | --- | --- | --- |
+| composition | $SE(3) \times SE(3)$ | $SE(3)$ | $(P(q_1 \otimes q_2),\ p_1 + \pi(q_1)\, p_2)$ |
+| inverse | $SE(3)$ | $SE(3)$ | $(P(\bar q),\ -\pi(\bar q)\, p)$ |
+| action | $SE(3) \times \R^3$ | $\R^3$ | $\pi(q)\, x + p$ |
+| rotation, position | $SE(3)$ | $S^3$, $\R^3$ | $P(q)$, $p$ |
+| from parts | $S^3 \times \R^3$ | $SE(3)$ | $(P(q), p)$ |
+
+and the extended pose's likewise, with its velocity carried as its position is.
+
+## The normal on these types
+
+Every chart of this document is global and full with a declared volume, so the normal applies as
+[its mathematics](../normal/math.svx) defines it, its density and its sampler exact. The figures its
+[Properties](../normal/math.svx#properties) state for a chart follow from the log-volume, whose
+negative is $\tfrac{3}{16} \lVert \tangent \rVert^2 + O(\lVert \tangent \rVert^4)$, with the
+Hessian $\tfrac38 I$:
+
+- a measurement of a rotation weighs on the state as a Gaussian of its residual would with the
+  precision $\Lambda - \tfrac38 I$ on the rotation's block, a change of $0.4\,\%$ for a noise of
+  $0.1$ rad;
+- the mean is a mode of the density when $\sigma^2 < \tfrac83$, a standard deviation under
+  $1.6$ rad;
+- Gauss–Newton with the log-volume's gradient converges at a rate within
+  $\kappa = \tfrac38 \sigma^2$ of the residuals' own.
+
+The expected information of the normal's root is exact in the scale's block and of second order in
+the blocks of the point and the mean, as on any curved type.
+
+## What the tests check
+
+- **The types' boundaries**: the core's check of an embedded type on $S^3$, $SE(3)$ and $SE_2(3)$,
+  with each declared volume checked against the area formula.
+- **The chart**: [%full](statement:chart)'s inverse on the whole image, the angle $4
+  \arctan(\lVert \tangent \rVert / 4)$, and the first-order rotation vector, against
+  [](eq:rotation).
+- **The groups**: associativity, identities and inverses of the compositions; $\pi$ a homomorphism,
+  the same at $q$ and $-q$; the actions homomorphisms; the exponential against the closed form and
+  its series at $0$.
+- **The normal**: its density integrating to one through the chart of $S^3$ and of $SE(3)$, its
+  draws agreeing with quadratures, and [%full](statement:cover)'s law on the rotations, by
+  quadrature over $SO(3)$ of $\density(q) + \density(-q)$.
+
+## In skoro's terms
+
+- **Three embedded types**, declared from the core's public interface: the unit quaternions, of
+  storage $4$ and dimension $3$; the rigid motions, $7$ and $6$; the extended poses, $10$ and $9$.
+  Each declares its retraction, inverse and projection as composites, and a global volume, the
+  log-volume of its rotation's chart.
+- **Their tangent coordinates** are the rotation vector in the body frame, then the translation,
+  and for the extended pose the velocity, in the body frame.
+- **Their maps** are composites: compositions and inverses into the types by projection, actions
+  and matrices into Euclidean values, the exponential of a rate into the rotations.
+- **A quantity of these types** may be scored by the normal, observed and simulated; an observed
+  quaternion is aligned with its prediction by its caller.
+- **No earth frame** is assumed: a frame is a rotation or a motion the user composes.
+
+## Open questions
+
+> [!TODO] Quaternions or matrices
+> The draft stores the rotations as unit quaternions, a double cover whose every operation is a
+> composite, at the cost of [The double cover](#the-double-cover). The alternative stores them as
+> matrices, exact on the rotations, with the composition, or the projection, as a fused operation.
+> Is the double cover, with its alignment of observed quaternions, the representation wanted?
+
+> [!TODO] The frame of a motion's translation
+> The draft gives the rigid motions the left-translated chart, their translation's noise in the
+> frame of the pose, and leaves a translation with its noise in a fixed frame to the product
+> $S^3 \times \R^3$ the core has. Is that the division wanted, or should the motions' types offer
+> the fixed-frame chart too?
+
+> [!TODO] Which maps
+> The draft brings the identity, composition, inverse, action, matrix and the exponential of a
+> rotation vector, and no logarithm, which the normal does not need and the chart's inverse stands
+> in for. Is that the set wanted for this entry?
+
+> [!TODO] The acceptance test
+> The core's acceptance test runs on a sphere declared in its tests, to be replaced by a curved type
+> of the library. Does this entry move it onto $S^3$, which revises the core, or leave the sphere
+> to the entry that brings the spheres?
