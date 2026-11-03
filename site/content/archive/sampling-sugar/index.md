@@ -1,14 +1,22 @@
 ---
 title: "Sampling a quantity from a distribution"
-pages: []
-crates: []
+pages:
+    - concepts/building
+    - concepts/terms
+    - concepts/the-normal
+    - guide/first-model
+    - reference/crates
+crates: [skoro-core, skoro-normal]
 revises: [normal]
 ---
 
-A model declares a quantity and scores it in two statements, `let x = quantity("x", T);` and
-`normal.score(x);`, and nearly every quantity drawn from a distribution is written that way. This
-entry adds `sample("x", T, distribution)`, which declares the quantity at the address, scores it by
-the distribution and returns it, so that the pair reads as the one act it is. `Normal` is the only
-distribution so far and its `score` is its own method, so `sample` needs a trait that a
-distribution implements to be scored; `Normal` is its first implementation. The sugar adds no
-mathematics: what `sample` builds is exactly what the two statements build.
+`sample("x", T, distribution)` makes a quantity at an address, scores it by a distribution and
+returns it, in place of `quantity("x", T)` followed by the distribution's `score`, and `sample_in`
+does the same for a space given as a value. The core gained the `Distribution` trait for it, whose
+one method adds a distribution's term at a quantity, with an implementation for references so that
+a distribution is passed by value or borrowed; `Normal` implements it by its own `score`, which
+stays, so that a caller scoring by a normal it names imports nothing. A refusal by either step is
+recorded at the line that called `sample`. It returns the quantity and not the term: the term is
+found from the quantity, which is scored at most once, and a model that needs the term's handle
+writes the two statements. The sugar adds no mathematics: `sample` builds exactly what those two
+statements build.

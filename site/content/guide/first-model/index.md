@@ -88,6 +88,14 @@ per key, and weighs each row by the measurement's likelihood alone, since the sa
 {../../../../crates/skoro-normal/tests/sampler.rs:203..215}
 ```
 
+Making a quantity and scoring it are usually one act, and [`sample`](../../concepts/terms/#a-term) writes them as one: it makes the
+quantity at an address, scores it by the distribution, and returns it. Below, `x` and `y` are made
+the two ways, and have the same term:
+
+```rust
+{../../../../crates/skoro-normal/tests/sample.rs:49..56}
+```
+
 A measurement of a curved quantity is written the same way, as what was measured. Here two
 directions on a sphere measure an unknown direction $x$, each with its own scale; a query observes
 them and estimates $x$, or leaves them free and simulates them:
