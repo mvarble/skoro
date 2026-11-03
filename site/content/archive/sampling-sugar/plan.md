@@ -46,8 +46,10 @@ any distribution rather than by `Normal` alone. It builds nothing the two statem
 - **The normal.** `Normal` implements `Distribution` by its own `score`, which stays: a caller that
   scores by a `Normal` it names does not import the trait.
 
-`sample` gives back the quantity and not the term. A caller that wants the term, to bind a role of
-its own or to look it up, writes the two statements, which `sample` leaves as they are. A macro was
+`sample` gives back the quantity and not the term. A quantity is scored at most once, so its term
+is found from it, with `Snapshot::scored_by`. A caller that wants the handle, to bind a role of its
+own or to give the term another sampler, writes the two statements, which `sample` leaves as they
+are. A macro was
 the alternative to a function: a function suffices, and with `#[track_caller]` it records refusals
 where a macro would. So was taking the space from the distribution, `sample("x", normal)`: the
 marker is what types the handle, and a `Normal` does not know its marker.
