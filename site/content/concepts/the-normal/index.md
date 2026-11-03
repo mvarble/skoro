@@ -31,11 +31,11 @@ $W (\point \ominus \mu)$ is the _whitened residual_. The note on
 $\mu \oplus \varepsilon$. A normal is made from its space, its mean and its scale:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:25..31}
+{../../../../crates/skoro-normal/src/normal.rs:26..32}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:46..59}
+{../../../../crates/skoro-normal/src/normal.rs:47..60}
 ```
 
 `Normal::on` reads the space from the marker a quantity was made with; `Normal::in_space` takes the
@@ -44,11 +44,11 @@ operations, as any value of a model is: the tangent by the space's inverse retra
 and the normalizer by composites of the scale's form, and the log-volume by the core's:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:147..173}
+{../../../../crates/skoro-normal/src/normal.rs:150..176}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:115..131}
+{../../../../crates/skoro-normal/src/normal.rs:118..134}
 ```
 
 On a Euclidean space the log-volume is identically zero and left out. On the positive orthant it is
@@ -65,11 +65,19 @@ query and drawn in another.
 `score` adds the term, an exact sampler, and the roles:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:73..113}
+{../../../../crates/skoro-normal/src/normal.rs:74..116}
 ```
 
 It refuses what it cannot be exact on, at the caller's line, with the core's own errors: a discrete
 space, a space without a reference measure, and a space whose chart is not global.
+
+A normal is a [`Distribution`](../terms/#a-term) by this `score`, so the core's `sample` makes a
+quantity and scores it by a normal in one call, `sample("x", Real, normal)`, building what
+`quantity("x", Real)` and `normal.score(x)` build:
+
+```rust
+{../../../../crates/skoro-normal/src/normal.rs:179..185}
+```
 
 > [!DECISION] The normal requires a global chart
 > On a chart that is a diffeomorphism only on part of the tangent space, such as the exponential

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasTex, renderMixed, renderTex } from './tex';
+import { excerpt, hasTex, renderMixed, renderTex } from './tex';
 
 describe('renderMixed', () => {
     it('escapes plain text', () => {
@@ -32,5 +32,29 @@ describe('renderMixed', () => {
         renderTex('\\gdef\\leak{z}');
         // KaTeX draws an undefined control sequence in its error colour.
         expect(renderTex('\\leak')).toContain('#cc0000');
+    });
+});
+
+describe('excerpt', () => {
+    it('leaves text no longer than the limit whole', () => {
+        expect(excerpt('a short summary.', 16)).toBe('a short summary.');
+    });
+
+    it('cuts at the last space before the limit, with an ellipsis', () => {
+        expect(excerpt('one two three four', 10)).toBe('one two…');
+    });
+
+    it('drops the punctuation before the ellipsis', () => {
+        expect(excerpt('one, two; three four', 9)).toBe('one, two…');
+    });
+
+    it('never cuts inside inline math', () => {
+        expect(excerpt('take $a + b + c$ and more', 10)).toBe('take…');
+        expect(excerpt('costs \\$5 and $x + y$ more', 18)).toBe('costs \\$5 and…');
+    });
+
+    it('cuts at the first space after the limit when there is none before it', () => {
+        expect(excerpt('$a + b$ c d', 3)).toBe('$a + b$…');
+        expect(excerpt('unbroken', 3)).toBe('unbroken');
     });
 });

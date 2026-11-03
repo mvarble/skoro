@@ -1,14 +1,18 @@
 <script lang="ts">
     import type { DocumentLink } from '$lib/documents';
     import { STATUS_LABELS } from '$lib/site';
-    import { renderMixed } from '$lib/tex';
+    import { excerpt, renderMixed } from '$lib/tex';
 
-    // Links to documents: a list with summaries, a row of chips (`inline`), or a grid of cards.
+    // Links to documents: a list with summaries, a row of chips (`inline`), or a grid of cards. A
+    // list given `excerpt` shows at most about that many characters of each summary.
     let {
         links,
         inline = false,
         cards = false,
-    }: { links: DocumentLink[]; inline?: boolean; cards?: boolean } = $props();
+        excerpt: limit,
+    }: { links: DocumentLink[]; inline?: boolean; cards?: boolean; excerpt?: number } = $props();
+
+    const summary = (text: string) => renderMixed(limit ? excerpt(text, limit) : text);
 </script>
 
 {#if inline}
@@ -35,8 +39,7 @@
                 {#if link.status}
                     <span class="chip status-{link.status}">{STATUS_LABELS[link.status]}</span>
                 {/if}
-                {#if link.summary}<span class="summary">{@html renderMixed(link.summary)}</span
-                    >{/if}
+                {#if link.summary}<span class="summary">{@html summary(link.summary)}</span>{/if}
             </li>
         {/each}
     </ul>

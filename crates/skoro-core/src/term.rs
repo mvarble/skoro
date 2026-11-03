@@ -275,6 +275,21 @@ impl Term {
     }
 }
 
+/// What scores a quantity: a distribution, whose term draws the quantity it scores.
+pub trait Distribution {
+    /// Adds the term that scores `x`, with its sampler and roles, in the open scope, recording a
+    /// refusal at the caller's line.
+    #[track_caller]
+    fn score(&self, x: QDyn) -> TermHandle;
+}
+
+impl<D: Distribution + ?Sized> Distribution for &D {
+    #[track_caller]
+    fn score(&self, x: QDyn) -> TermHandle {
+        (**self).score(x)
+    }
+}
+
 /// Adds the term `log_density` that scores `scored`: refusing a log-density that is not a mapped
 /// `Real` (`NotALogDensity`), a quantity already scored (`AlreadyScored`), a quantity whose space
 /// has no reference measure (`NoVolume`), and a term conditioned on a quantity made after the one
