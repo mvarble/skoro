@@ -1,5 +1,5 @@
 ---
-summary: A trait for what scores a quantity, implemented by the normal, and `sample`, which declares a quantity and scores it by one in a single call.
+summary: A trait for what scores a quantity, implemented by the normal, `sample`, which declares a quantity and scores it by one in a single call, and the hierarchical normal the guide opens on.
 depends_on: [archive/core/implementation, archive/normal/implementation]
 ---
 
@@ -49,10 +49,22 @@ any distribution rather than by `Normal` alone. It builds nothing the two statem
 `sample` gives back the quantity and not the term. A quantity is scored at most once, so its term
 is found from it, with `Snapshot::scored_by`. A caller that wants the handle, to bind a role of its
 own or to give the term another sampler, writes the two statements, which `sample` leaves as they
-are. A macro was
-the alternative to a function: a function suffices, and with `#[track_caller]` it records refusals
-where a macro would. So was taking the space from the distribution, `sample("x", normal)`: the
-marker is what types the handle, and a `Normal` does not know its marker.
+are. A macro was the alternative to a function: a function suffices, and with `#[track_caller]` it
+records refusals where a macro would. So was taking the space from the distribution,
+`sample("x", normal)`: the marker is what types the handle, and a `Normal` does not know its marker.
+
+The guide's first page opens on a model written with `sample`, and goes down from it to what the
+sugar is made of. Its model is a hierarchical normal: a point of the plane and its squared range,
+
+$$
+x \sim \mathcal N(0, \sigma_0^2 I_2), \qquad \rho \mid x \sim \mathcal N(|x|^2, \sigma_1^2),
+$$
+
+whose joint log-density with $\rho$ observed is, up to a constant,
+$-|x|^2 / 2\sigma_0^2 - (\rho - |x|^2)^2 / 2\sigma_1^2$, with gradient in $x$
+$-x / \sigma_0^2 + 2x(\rho - |x|^2) / \sigma_1^2$. Its tests are written in the umbrella crate,
+whose tests use the public interface alone, as a user's code would, so that what the guide quotes
+is what a user writes.
 
 ## The core (`skoro-core`, `term` and `scope`)
 
@@ -71,6 +83,20 @@ marker is what types the handle, and a `Normal` does not know its marker.
       that `quantity` and `Normal::score` do, and its log-density agrees at points;
       `sample_of_a_normal_refuses_at_its_line`, a normal sampled on a discrete space fails with
       `NotContinuous` at the line of the `sample` call.
+
+## The guide's model (`skoro`, tests)
+
+- [ ] The hierarchical normal, written once with `sample` and once with `quantity` and
+      `Normal::score`, in a test file of its own, at both precisions. Tests:
+      `hierarchical_normal_generates_the_joint`, the model generated with nothing observed, its
+      draws of $x$ and of $\rho - |x|^2$ of mean zero and variances $\sigma_0^2$ and
+      $\sigma_1^2$ within their sampling error, at a fixed key;
+      `hierarchical_normal_density_and_gradient`, the joint log-density with $\rho$ observed,
+      compiled and run at points of $x$, equal to the closed form above with its constants, and
+      its gradient in $x$ equal to the closed form's;
+      `hierarchical_normal_by_quantity_and_score`, the model written with `quantity` and
+      `Normal::score`, whose log-density with $\rho$ observed equals that of the model written
+      with `sample` at the same points.
 
 ## Done when
 
@@ -92,4 +118,7 @@ No task changes `skoro-tensor`, a primitive's kernel or a fused operation, so th
 hierarchical normal written with `sample`, generated from the joint and queried with its range
 observed, and only then go down to small programs, to the same model written with `quantity` and
 `score`, and to a model with likelihood factors. A page quotes only code that exists, and no test
-builds that model, so this revision adds a task of tests for the guide to quote.
+builds that model, so this revision adds a task of tests for the guide to quote: the hierarchical
+normal of the section on the guide's model, its generation, its density and gradient with the range
+observed, and the same model without the sugar, in the umbrella crate's tests. The summary says so,
+and a sentence of the prose that had been wrapped short is rewrapped.
