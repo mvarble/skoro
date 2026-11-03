@@ -3,7 +3,8 @@ the core's public interface alone. A `Normal` is a space, a mean and a scale; `s
 that scores a quantity, the Gaussian log-density of its tangent at the mean less the chart's
 log-volume, with a sampler that draws it exactly by the space's own retraction, and binds the roles
 an estimator reads: the whitened residual, the mean, the scale under the role of its form, the
-log-volume, and the root of the expected information. It takes every continuous space whose chart
+log-volume, and the root of the expected information. A `Normal` is a `Distribution` by that
+`score`, so the core's `sample` makes a quantity and scores it by one in a single call. It takes every continuous space whose chart
 is global and whose volume is known, and refuses the others with the core's own errors; on those,
 `factor_at` holds a measurement as a likelihood factor over data.
 

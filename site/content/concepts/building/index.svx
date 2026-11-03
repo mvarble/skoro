@@ -32,7 +32,11 @@ The scope's own functions make the roots of a model, its quantities and constant
 quantities at addresses:
 
 ```rust
-{../../../../crates/skoro-core/src/scope.rs:319..351}
+{../../../../crates/skoro-core/src/scope.rs:321..339}
+```
+
+```rust
+{../../../../crates/skoro-core/src/scope.rs:367..378}
 ```
 
 A **quantity** is an uncertain value of the model, made at an **address**: a path of names and

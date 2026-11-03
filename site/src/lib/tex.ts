@@ -75,3 +75,25 @@ function findDollar(text: string, from: number): number {
 }
 
 const unescapeDollars = (text: string) => text.replaceAll('\\$', '$');
+
+/**
+ * The opening of text with inline math, at most about `max` characters of its source: cut at the
+ * last space before `max` that is outside a `$…$` span, with an ellipsis. Text no longer than
+ * `max` is returned whole; text with no such space is cut at the first one after it.
+ */
+export function excerpt(text: string, max: number): string {
+    if (text.length <= max) return text;
+    let math = false;
+    let cut = -1;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c == '\\') i++;
+        else if (c == '$') math = !math;
+        else if (!math && /\s/.test(c)) {
+            if (i <= max || cut < 0) cut = i;
+            if (i > max) break;
+        }
+    }
+    if (cut < 0) return text;
+    return text.slice(0, cut).replace(/[\s,;:.—–-]+$/, '') + '…';
+}

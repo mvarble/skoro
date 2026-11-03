@@ -1,0 +1,65 @@
+{
+    "kind": "chore",
+    "stage": "done",
+    "started": "2026-11-03",
+    "events": [
+        {
+            "date": "2026-11-03",
+            "action": "start",
+            "stage": "plan"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "fc450e0"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "build",
+            "commit": "92713ad"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "reopen",
+            "stage": "plan",
+            "reason": "The guide's restructure needs tests that build a hierarchical normal with sample, and the same model with quantity and score.",
+            "commit": "b14029f"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "a20cfc6"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "build",
+            "commit": "353ef48"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "988614f"
+        }
+    ],
+    "approvals": {
+        "plan": {
+            "date": "2026-11-03",
+            "commit": "a20cfc6",
+            "hash": "f2d64bfbbc1c45f185f94ef681730bfd9ee7d480b650ec491e6ce3fc58c0c60d"
+        },
+        "build": {
+            "date": "2026-11-03",
+            "commit": "353ef48"
+        },
+        "publish": {
+            "date": "2026-11-03",
+            "commit": "988614f"
+        }
+    },
+    "finished": "2026-11-03"
+}
