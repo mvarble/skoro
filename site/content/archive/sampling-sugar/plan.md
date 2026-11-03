@@ -66,7 +66,7 @@ marker is what types the handle, and a `Normal` does not know its marker.
 
 ## The normal (`skoro-normal`, `normal`)
 
-- [ ] `Distribution` for `Normal`; the documentation of `Normal::score`, which points to `sample`.
+- [x] `Distribution` for `Normal`; the documentation of `Normal::score`, which points to `sample`.
       Tests: `sample_scores_as_score_does`, a normal's sample binds the roles and adds the sampler
       that `quantity` and `Normal::score` do, and its log-density agrees at points;
       `sample_of_a_normal_refuses_at_its_line`, a normal sampled on a discrete space fails with
