@@ -1,5 +1,5 @@
 ---
-summary: A crate `skoro-rotations` declaring the unit quaternions, the rigid motions and the extended poses as embedded types with their volumes, and every map of the mathematics as a composite of the core's operations, typed by markers, reached through operators and extension traits, with host helpers for the values a model is given.
+summary: A crate `skoro-spatial` declaring the unit quaternions, the rigid motions and the extended poses as embedded types with their volumes, and every map of the mathematics as a composite of the core's operations, typed by markers, reached through operators and extension traits, with host helpers for the values a model is given.
 depends_on: [archive/rotations/math, archive/core/implementation, archive/measures/implementation, archive/normal/implementation]
 katex_macros:
     '\Exp': '\operatorname{Exp}'
@@ -8,7 +8,7 @@ katex_macros:
 
 ## Overview
 
-When this is built, a crate `skoro-rotations` gives skoro its rotations and rigid motions as the
+When this is built, a crate `skoro-spatial` gives skoro its rotations and rigid motions as the
 mathematics settles them ([The unit quaternions](math.svx#the-unit-quaternions),
 [The rigid motions](math.svx#the-rigid-motions)). Three markers, `Rotation`, `Pose` and
 `ExtendedPose`, declare the types $S^3$, $S^3 \ltimes \R^3$ and $S^3 \ltimes (\R^3 \times \R^3)$,
@@ -24,7 +24,7 @@ corrected by a measured direction reads:
 use skoro::scope::{constant, quantity};
 use skoro::{Real, Vector};
 use skoro_normal::{Normal, Scale};
-use skoro_rotations::{Rotation, RotationMaps, rotation};
+use skoro_spatial::{Rotation, RotationMaps, rotation};
 
 writer.build(|| {
     // The attitude at the last tick, and the body rate integrated over the step.
@@ -46,7 +46,7 @@ writer.build(|| {
 and a pose graph, with odometry in the frame of the pose and a GPS position in a fixed one:
 
 ```rust
-use skoro_rotations::{Pose, PoseMaps, pose};
+use skoro_spatial::{Pose, PoseMaps, pose};
 
 writer.build(|| {
     let t0 = quantity("t0", Pose);
@@ -244,13 +244,14 @@ pub type MakeEmbedded = fn(&[Param]) -> Result<Arc<Embedded>, Error>;
 
 ### The crate
 
-`crates/skoro-rotations`, a member of the workspace, depending on `skoro-core` and `skoro-tensor`
+`crates/skoro-spatial`, a member of the workspace, named for what it holds, the rotations and
+rigid motions of space, rather than for one of its types, depending on `skoro-core` and `skoro-tensor`
 and on nothing else, with `skoro-normal` as a development dependency for the tests that score these
 types. The umbrella does not re-export it, as it does not re-export the normal. It has no kernel,
 so the rule that a change to a kernel is pushed only after the wgpu tests pass does not apply.
 
 ```
-crates/skoro-rotations/src/
+crates/skoro-spatial/src/
     lib.rs          pub use of the items below; register()
     algebra.rs      the quaternion arithmetic on storage handles (private)
     series.rs       the coefficients of the removable singularities, guarded (private)
@@ -327,9 +328,9 @@ of a type hand them its inclusion, which is unit up to rounding.
 
 | type | name | storage, dimension | $R(x, t)$ | $Q(x, y)$ | $P(x)$ | $\Lambda(x, t)$ |
 | --- | --- | --- | --- | --- | --- | --- |
-| $S^3$ | `skoro.rotations.rotation` | 4, 3 | $\hat x \otimes \delta(t)$ | $\delta^{-1}(\bar x \otimes y)$ | $\hat x$ | $-3 \log(1 + \tfrac1{16} \lVert t \rVert^2)$ |
-| $S^3 \ltimes \R^3$ | `skoro.rotations.pose` | 7, 6 | $(\hat q \otimes \delta(\phi),\ p + \pi(\hat q) \rho)$ | $(\delta^{-1}(\bar q \otimes q'),\ \pi(q)\transpose (p' - p))$ | $(\hat q, p)$ | the same, of $\phi$ |
-| $S^3 \ltimes (\R^3)^2$ | `skoro.rotations.extended_pose` | 10, 9 | $(\hat q \otimes \delta(\phi),\ v + \pi(\hat q) \eta,\ p + \pi(\hat q) \rho)$ | likewise | $(\hat q, v, p)$ | the same, of $\phi$ |
+| $S^3$ | `skoro.spatial.rotation` | 4, 3 | $\hat x \otimes \delta(t)$ | $\delta^{-1}(\bar x \otimes y)$ | $\hat x$ | $-3 \log(1 + \tfrac1{16} \lVert t \rVert^2)$ |
+| $S^3 \ltimes \R^3$ | `skoro.spatial.pose` | 7, 6 | $(\hat q \otimes \delta(\phi),\ p + \pi(\hat q) \rho)$ | $(\delta^{-1}(\bar q \otimes q'),\ \pi(q)\transpose (p' - p))$ | $(\hat q, p)$ | the same, of $\phi$ |
+| $S^3 \ltimes (\R^3)^2$ | `skoro.spatial.extended_pose` | 10, 9 | $(\hat q \otimes \delta(\phi),\ v + \pi(\hat q) \eta,\ p + \pi(\hat q) \rho)$ | likewise | $(\hat q, v, p)$ | the same, of $\phi$ |
 
 with $\hat x = x / \lVert x \rVert$. These are [%full](statement:archive/rotations/math/chart),
 [%full](statement:archive/rotations/math/volume) and [%full](statement:archive/rotations/math/motions),
@@ -359,14 +360,14 @@ fn declare_rotation() -> Result<Arc<Embedded>, Error> {
     let define = |name, inputs: &[Space], body: fn(&[QDyn]) -> QDyn| {
         Composite::define(name, Vec::new(), inputs, body).map_err(|f| f.error)
     };
-    let r = define("skoro.rotations.rotation.retract", &[n.clone(), d.clone()],
+    let r = define("skoro.spatial.rotation.retract", &[n.clone(), d.clone()],
                    |q| mul(normalize(q[0]), delta(q[1])))?;
-    let q = define("skoro.rotations.rotation.local", &[n.clone(), n.clone()],
+    let q = define("skoro.spatial.rotation.local", &[n.clone(), n.clone()],
                    |q| delta_inverse(mul(conjugate(q[0]), q[1])))?;
-    let p = define("skoro.rotations.rotation.project", &[n.clone()], |q| normalize(q[0]))?;
-    let lambda = define("skoro.rotations.rotation.log_volume", &[n.clone(), d],
+    let p = define("skoro.spatial.rotation.project", &[n.clone()], |q| normalize(q[0]))?;
+    let lambda = define("skoro.spatial.rotation.log_volume", &[n.clone(), d],
                         |q| ((q[1] * q[1]).sum() * (1.0 / 16.0) + 1.0).log() * -3.0)?;
-    Embedded::declare("skoro.rotations.rotation", Vec::new(), 4, 3, r, q, Some(p))?
+    Embedded::declare("skoro.spatial.rotation", Vec::new(), 4, 3, r, q, Some(p))?
         .with_volume(Volume::global(lambda))
 }
 ```
@@ -479,7 +480,7 @@ precision ($\theta^2 \approx 1.37$ and $0.025$, series through $\theta^8$) are n
 
 ### The maps of the rotations
 
-`rotation.rs`. Each map with more than a few nodes is a composite named `skoro.rotations.<map>`,
+`rotation.rs`. Each map with more than a few nodes is a composite named `skoro.spatial.<map>`,
 defined once in a `LazyLock` as the types are; the operators and methods call it.
 
 ```rust
@@ -603,9 +604,10 @@ impl Euler {
 }
 ```
 
-The enum makes a sequence with two equal neighbouring axes unrepresentable. The angles' vector holds
+The enum makes a sequence with two equal neighbouring axes unrepresentable. `Frame` shares its
+name with `skoro::tensor::Frame`; a crate that glob-imports both names one of them by its path. The angles' vector holds
 them in the order of the sequence's axes. Both directions are composites per intrinsic sequence,
-`skoro.rotations.from_euler` and `skoro.rotations.euler` with the parameter `Text("zyx")`, cached by
+`skoro.spatial.from_euler` and `skoro.spatial.euler` with the parameter `Text("zyx")`, cached by
 sequence as the normal caches its composites; an extrinsic convention calls the composite of the
 reversed sequence with the angles reversed, by slices and a concatenation outside it.
 
@@ -712,7 +714,7 @@ and `from_parts` concatenates the inclusions and projects onto the motion; `as_p
 `scope::product` and read back by `factor`. The matrices are concatenated column by column, the
 adjoints and Jacobians block by block from $\pi(q)$, $[p]_\times$, $J_l$ and $Q$, with the blocks in
 the order $(\phi, \rho)$ and $(\phi, \eta, \rho)$. $Q(\phi, \rho)$ of
-[](eq:archive/rotations/math/motion-q) is a composite, `skoro.rotations.motion_q`, of two
+[](eq:archive/rotations/math/motion-q) is a composite, `skoro.spatial.motion_q`, of two
 `Vector(3)`s, with $B$, $D$ and $E$ from `series.rs`; the inverses are the block forms of
 [](eq:archive/rotations/math/motion-jacobians), with $J_l^{-1}$ of the rotations.
 
@@ -728,7 +730,7 @@ equation, its kind, and the test that checks it. *Smooth* maps have derivatives 
 their domain; *removable* ones are smooth, with their singularity at the identity computed by
 `series.rs`; *discrete* ones select between smooth formulas, and have no derivative across the jump.
 
-| map | item | composite `skoro.rotations.` | equation | kind | test |
+| map | item | composite `skoro.spatial.` | equation | kind | test |
 | --- | --- | --- | --- | --- | --- |
 | the rotation's chart and volume | `Rotation` | `rotation.*` | quaternion-chart | smooth | `types_pass_the_core_checks` |
 | identity | `rotation::identity` | (a constant) | | smooth | `group_laws` |
@@ -797,7 +799,7 @@ values and the derivatives of the selected formula finite on both sides of every
 
 ## Tests
 
-In `crates/skoro-rotations/tests/`, at both precisions of the Flex device through
+In `crates/skoro-spatial/tests/`, at both precisions of the Flex device through
 `precision_tests!` wherever a pass is compared, with `testing::Tolerance`, at points drawn by
 `testing::random` and normalized, together with fixed rows: the identity, rotations whose angles sit
 at $0.9$ and $1.1$ times each cutoff, and for the logarithm a row with $w < 0$. A smooth or
@@ -903,10 +905,4 @@ The core's acceptance test is not touched, as the mathematics settles.
 
 ## Open questions
 
-> [!TODO] The names
-> The design names the crate `skoro-rotations`, its markers `Rotation`, `Pose` and `ExtendedPose`,
-> its extension traits `RotationMaps`, `PoseMaps` and `ExtendedPoseMaps`, its Euler conventions
-> `Euler`, `Sequence` and `Frame` (which a glob import would collide with `skoro::tensor::Frame`;
-> `EulerFrame` avoids it), and its declarations and composites under `skoro.rotations.`. `Rotation` for a unit quaternion hides the double cover in
-> its name, where `UnitQuaternion` would show it; `Pose` is the robotics name for a rigid motion.
-> Are these the names wanted?
+None remain.
