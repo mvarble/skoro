@@ -1,6 +1,6 @@
 {
     "kind": "chore",
-    "stage": "publish",
+    "stage": "done",
     "started": "2026-11-03",
     "events": [
         {
@@ -38,6 +38,12 @@
             "action": "approve",
             "stage": "build",
             "commit": "353ef48"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "988614f"
         }
     ],
     "approvals": {
@@ -49,6 +55,11 @@
         "build": {
             "date": "2026-11-03",
             "commit": "353ef48"
+        },
+        "publish": {
+            "date": "2026-11-03",
+            "commit": "988614f"
         }
-    }
+    },
+    "finished": "2026-11-03"
 }
