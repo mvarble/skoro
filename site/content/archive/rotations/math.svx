@@ -376,9 +376,10 @@ unit's samples does, writes $J_r$ into its formula.
 The exponential, the logarithm, the Jacobians and their inverses are smooth at the identity, and
 their closed forms divide by $\theta$ there, or by $n$. Each is computed as the core's
 [smooth as computed](../core/math.svx#quantities) asks of a composite: a discretization of the
-argument below a cutoff selects a truncated series of each coefficient, and a second selection
-gives the closed form a harmless argument on the rows where the series is chosen, so that no
-derivative of a formula that is not selected is ever undefined. The coefficients, each a function
+argument below a cutoff selects a truncated series of each coefficient, and further selections give
+each formula a harmless argument on the rows where the other is chosen (the closed form where the
+series is, and the series, if it can be undefined, where the closed form is), so that no derivative
+of a formula that is not selected is ever undefined. The coefficients, each a function
 of $\theta^2$, or for the logarithm of $n^2$ and $w$, are:
 
 | coefficient | closed form | series | used by |
@@ -393,8 +394,9 @@ of $\theta^2$, or for the logarithm of $n^2$ and $w$, are:
 The series of $C$ is that of $\tfrac\theta2 \cot \tfrac\theta2 = 1 - \tfrac{\theta^2}{12} -
 \tfrac{\theta^4}{720} - \tfrac{\theta^6}{30240} - \cdots$, and that of $L$ is $\atantwo(n, w) / n =
 \arctan(n/w)/n$ for $w > 0$, expanded in $x$. The logarithm's series holds near the identity only,
-so its discretization is $n^2 < c\, w^2$ and $w > 0$, which needs no division; near $-1$ the closed
-form is selected, and it is the logarithm's cut, not a removable singularity. Its argument keeps
+so its discretization is $n^2 < c\, w^2$ and $w > 0$, which needs no division, and the series is
+given $w = 1$ on the rows where it is not chosen, since its $1/w$ is undefined at $w \le 0$; near
+$-1$ the closed form is selected, and it is the logarithm's cut, not a removable singularity. Its argument keeps
 $w$: on the sphere $w = (1 - n^2)^{1/2}$, but a series in $n^2$ alone would have no derivative in
 $w$, and the second derivatives along the sphere, which move $w$ at second order, would be wrong.
 The closed forms' own arguments are $\theta = e^{\frac12 \log \theta^2}$ and $n = e^{\frac12 \log
@@ -515,8 +517,10 @@ $(-\pi, \pi]$ as $\atantwo(\sin \alpha, \cos \alpha)$, so that $q$ and $-q$ give
 The angles are smooth away from *gimbal lock*, $\beta \in \{0, \pi\}$ for a proper sequence and
 $\beta = \pm \tfrac\pi2$ for a Tait–Bryan one, where one of the two norms vanishes and only $\alpha +
 \gamma$ or $\alpha - \gamma$ is determined. There the composite selects, by a discretization of the
-smaller norm against a threshold, the convention $\gamma = 0$, and gives the $\atantwo$ it does not
-use a harmless argument. The derivatives of $\alpha$ and $\gamma$ grow without bound as $\beta$
+smaller norm against a threshold, the convention $\gamma = 0$: $\beta$ at the lock, $\alpha =
+2\sigma$ when $\lVert (u_j, u_l) \rVert$ vanishes and $\alpha = 2\delta$ when $\lVert (w, u_i) \rVert$
+does. The vanishing norm and the $\atantwo$ it feeds are given a harmless argument on those rows,
+since a norm has no derivative at $0$, and $\beta$ is selected rather than computed there. The derivatives of $\alpha$ and $\gamma$ grow without bound as $\beta$
 approaches the lock, which is why Euler angles are a way into and out of a model, and its noise is
 put in the charts instead.
 
@@ -612,12 +616,15 @@ $R = \pi(q)$ and tangent coordinates ordered rotation first, $(\phi, \rho)$:
 | matrix | $SE(3)$ | $\R^{4 \times 4}$ | $\begin{pmatrix} R & p \\ 0 & 1 \end{pmatrix}$ | smooth |
 | adjoint | $SE(3)$ | $\R^{6 \times 6}$ | [](eq:motion-adjoint) | smooth |
 | exponential | $\R^6$ | $SE(3)$ | [](eq:motion-exp) | removable |
+| Jacobians | $\R^6$ | $\R^{6 \times 6}$ | [](eq:motion-jacobians) | removable |
 | logarithm | $SE(3)$ | $\R^6$ | [](eq:motion-log) | removable |
 | interpolation | $SE(3) \times SE(3) \times \R$ | $SE(3)$ | [](eq:motion-slerp) | removable |
 
 *From parts* is a map from the product $S^3 \times \R^3$ to the motion, and *rotation, position*
 the way back: they are the identity on storage, and a change of chart, whose derivative is
-$\operatorname{diag}(I, R)$ from the product's chart to the motion's. The matrix is the homogeneous
+$\operatorname{diag}(I, R\transpose)$ from the product's chart to the motion's, since the product's
+coordinates $(\phi, \rho)$ reach $(q \oplus \phi,\ p + \rho)$, whose coordinates in the motion's
+chart are $(\phi,\ R\transpose \rho)$. The matrix is the homogeneous
 one, so that composition is its product and the action on a point is its product with $(x, 1)$.
 
 The adjoint is the conjugation of the group's Lie algebra, $T \Exp(\xi)\, T^{-1} = \Exp(\operatorname{Ad}(T)\,
@@ -645,7 +652,41 @@ $$
 $$
 
 the logarithm defined for $q \ne -1$, with $J_l$ and its inverse of [](eq:jacobians) and
-[](eq:jacobian-inverses), whose series serve here too. A pose moving at constant body rates
+[](eq:jacobian-inverses), whose series serve here too. The motions' Jacobians, with $\Exp(\xi +
+\varepsilon) = \Exp(\mathcal J_l(\xi)\, \varepsilon)\, \Exp(\xi) = \Exp(\xi)\, \Exp(\mathcal
+J_r(\xi)\, \varepsilon)$ to first order, are in the order $(\phi, \rho)$
+
+$$
+	\mathcal J_l(\phi, \rho) = \begin{pmatrix} J_l(\phi) & 0 \\ Q(\phi, \rho) & J_l(\phi) \end{pmatrix},
+	\qquad
+	\mathcal J_r(\phi, \rho) = \mathcal J_l(-\phi, -\rho),
+	\qquad
+	\mathcal J_l^{-1} = \begin{pmatrix} J_l^{-1} & 0 \\ -J_l^{-1} Q\, J_l^{-1} & J_l^{-1} \end{pmatrix}, @tag(motion-jacobians)
+$$
+
+with $\Phi = [\phi]_\times$, $\Psi = [\rho]_\times$ and
+
+$$
+	Q(\phi, \rho) = \tfrac12 \Psi + B\, (\Phi \Psi + \Psi \Phi + \Phi \Psi \Phi)
+	+ D\, (\Phi^2 \Psi + \Psi \Phi^2 - 3\, \Phi \Psi \Phi)
+	+ E\, (\Phi \Psi \Phi^2 + \Phi^2 \Psi \Phi),
+	\quad D = \frac{\theta^2 + 2 \cos \theta - 2}{2 \theta^4},
+	\quad E = \frac{2\theta - 3 \sin \theta + \theta \cos \theta}{2 \theta^5}, @tag(motion-q)
+$$
+
+$B$ the coefficient of [](eq:jacobians). This is the block of the textbooks written translation first,
+moved below the diagonal by the order of the coordinates here. Its coefficients are smooth with
+removable singularities at $\theta = 0$, with the series
+
+$$
+	D = \sum_k \frac{(-1)^k \theta^{2k}}{(2k+4)!} = \frac1{24} - \frac{\theta^2}{720} + \cdots,
+	\qquad
+	E = \sum_k \frac{(-1)^k (k+1)\, \theta^{2k}}{(2k+5)!} = \frac1{120} - \frac{\theta^2}{2520} + \cdots,
+$$
+
+computed as the rotations' are. By [%full](statement:first-order), $\mathcal J_r$ is the derivative
+of [](eq:motion-exp) that a pass computes, and like the rotations' it is a map for the values a
+model computes with it. A pose moving at constant body rates
 $(\omega, v)$ for a time $\Delta t$ moves from $T_k$ to $T_{k+1} = T_k\, \Exp(\omega\, \Delta t,\ v\,
 \Delta t)$, exactly. With $\rv$ in place of $\Log$, the logarithm is the motion's along the shorter
 turn, a discretization at half-turns as on the rotations.
@@ -668,7 +709,8 @@ $(P(q_1 \otimes q_2),\ v_1 + R_1 v_2,\ p_1 + R_1 p_2)$, the inverse $(P(\bar q),
 -R\transpose p)$, the relative motion likewise, the parts and the pose $(q, p)$ among them, the
 $5 \times 5$ matrix with the columns $(R, v, p)$ over $\begin{pmatrix} 0 & 1 & 0 \\ 0 & 0 & 1
 \end{pmatrix}$, the exponential $(\Exp \phi,\ J_l(\phi)\, \eta,\ J_l(\phi)\, \rho)$ and its logarithm,
-and in the order $(\phi, \eta, \rho)$ the adjoint
+the left Jacobian with the blocks $J_l(\phi)$ on its diagonal and $Q(\phi, \eta)$ and $Q(\phi, \rho)$
+below it in its first column, and in the order $(\phi, \eta, \rho)$ the adjoint
 
 $$
 	\operatorname{Ad}(q, v, p) = \begin{pmatrix} R & 0 & 0 \\ [v]_\times R & R & 0 \\ [p]_\times R & 0 & R \end{pmatrix} . @tag(extended-adjoint)
@@ -712,9 +754,9 @@ the blocks of the point and the mean, as on any curved type.
   \xi)$, and [](eq:motion-adjoint) against the first-order relation with the chart.
 - **The exponentials and logarithms**: each logarithm the inverse of its exponential on the ball of
   radius $2\pi$, and $\rv$ against $\Log$ on either side of a half-turn; the Jacobians against
-  [%full](statement:first-order), as the derivative of $\Exp$ computed by a pass, and their inverses
-  by multiplication; every coefficient of [Removable singularities](#removable-singularities)
-  against its closed form, in extended precision, on both sides of its cutoff, at both precisions,
+  [%full](statement:first-order), as the derivative of $\Exp$ computed by a pass, on the rotations and on both
+  motions, and their inverses by multiplication; every coefficient of [Removable singularities](#removable-singularities),
+  and $D$ and $E$, against its closed form, in extended precision, on both sides of its cutoff, at both precisions,
   with first and second derivatives at the identity checked against the series'.
 - **The constructions**: [](eq:two-vectors) carrying $a$ to $b$; [%full](statement:euler) by round
   trips through [](eq:euler) for all twelve sequences, intrinsic and extrinsic, away from the lock,
@@ -742,12 +784,12 @@ core.
   Jacobian is written in that order.
 - **Their maps** are composites of the core's primitives and selection: the groups' operations,
   with compositions and inverses into the types by projection; actions, matrices, adjoints and
-  Jacobians into Euclidean values; exponentials into the types and logarithms out of them; the
+  the rotations' and the motions' Jacobians into Euclidean values; exponentials into the types and logarithms out of them; the
   interpolations and the angle; and the constructions from and to axes and angles, pairs of
   directions, Euler angles and matrices. Each is smooth, smooth with a removable singularity
   computed by series, or a stated discretization.
 - **Their derivatives** are the passes' over those composites, and are the textbooks' Jacobians,
-  by [%full](statement:first-order); no Jacobian is written by hand.
+  by [%full](statement:first-order); no derivative is written by hand.
 - **A quantity of these types** may be scored by the normal, observed and simulated; an observed
   quaternion is aligned with its prediction by its caller. A pose with its noise in a fixed frame
   is a quantity of the product $S^3 \times \R^3$.
