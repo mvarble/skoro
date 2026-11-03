@@ -49,10 +49,10 @@ impl Stacked {
 
     /// `ℓ_N(δ; m, W) + c`, as a log-density with no term: what a `Replacement` holds.
     ///
-    /// The core adds a replacement's factor itself and gives back no handle on it, so a
-    /// replacement written with this binds no roles; the same factor added with
-    /// [`factor`](Stacked::factor) binds its residual, mean and scale. Until the core's
-    /// `Replacement` carries bindings, a reader of the roles finds none on a replacement.
+    /// A replacement written with this binds no roles by itself, while the same factor added with
+    /// [`factor`](Stacked::factor) binds its residual, mean and scale. A caller binds them on the
+    /// replacement with `Replacement::bind`, which the core checks and binds to the factor it
+    /// adds.
     #[track_caller]
     pub fn log_density(&self, mean: &[f64], scale: Scale, constant: f64) -> Q<Real> {
         self.gaussian(mean, scale, constant).0

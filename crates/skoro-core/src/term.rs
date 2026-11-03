@@ -23,7 +23,7 @@ pub struct Term {
     /// `V_t`, sorted: the quantities the log-density is reached from, with the one it scores.
     pub involves: Box<[NodeId]>,
     pub sampler: Option<Sampler>,
-    bindings: Vec<(&'static str, NodeId)>,
+    pub(crate) bindings: Vec<(&'static str, NodeId)>,
 }
 
 impl Term {
@@ -82,6 +82,10 @@ impl From<TermHandle> for QDyn {
 }
 
 impl TermHandle {
+    pub(crate) fn from_id(id: NodeId) -> TermHandle {
+        TermHandle { id }
+    }
+
     /// The term's log-density.
     pub fn log_density(&self) -> Q<Real> {
         Q::from_id(self.id)

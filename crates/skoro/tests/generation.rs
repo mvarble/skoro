@@ -345,6 +345,7 @@ fn draw_depends_on_key_and_address_alone() {
         .replace(|_| Replacement {
             log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),
             proposals: Vec::new(),
+            bindings: Vec::new(),
         })
         .unwrap();
     assert_ne!(NodeId::from(x), NodeId::from(x_after));
