@@ -1,6 +1,6 @@
 {
     "kind": "chore",
-    "stage": "plan",
+    "stage": "build",
     "started": "2026-11-03",
     "events": [
         {
@@ -26,14 +26,19 @@
             "stage": "plan",
             "reason": "The guide's restructure needs tests that build a hierarchical normal with sample, and the same model with quantity and score.",
             "commit": "b14029f"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "a20cfc6"
         }
     ],
     "approvals": {
         "plan": {
             "date": "2026-11-03",
-            "commit": "fc450e0",
-            "hash": "e6fb2af9a65966da2731a5fc162b9f476990f30f785b0caa092d2cd93e1d11f9",
-            "stale": true
+            "commit": "a20cfc6",
+            "hash": "f2d64bfbbc1c45f185f94ef681730bfd9ee7d480b650ec491e6ce3fc58c0c60d"
         },
         "build": {
             "date": "2026-11-03",
