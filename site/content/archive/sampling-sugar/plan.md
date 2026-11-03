@@ -86,7 +86,7 @@ is what a user writes.
 
 ## The guide's model (`skoro`, tests)
 
-- [ ] The hierarchical normal, written once with `sample` and once with `quantity` and
+- [x] The hierarchical normal, written once with `sample` and once with `quantity` and
       `Normal::score`, in a test file of its own, at both precisions. Tests:
       `hierarchical_normal_generates_the_joint`, the model generated with nothing observed, its
       draws of $x$ and of $\rho - |x|^2$ of mean zero and variances $\sigma_0^2$ and
