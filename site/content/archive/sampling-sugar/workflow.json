@@ -1,6 +1,6 @@
 {
     "kind": "chore",
-    "stage": "build",
+    "stage": "publish",
     "started": "2026-11-03",
     "events": [
         {
@@ -13,6 +13,12 @@
             "action": "approve",
             "stage": "plan",
             "commit": "fc450e0"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "build",
+            "commit": "92713ad"
         }
     ],
     "approvals": {
@@ -20,6 +26,10 @@
             "date": "2026-11-03",
             "commit": "fc450e0",
             "hash": "e6fb2af9a65966da2731a5fc162b9f476990f30f785b0caa092d2cd93e1d11f9"
+        },
+        "build": {
+            "date": "2026-11-03",
+            "commit": "92713ad"
         }
     }
 }
