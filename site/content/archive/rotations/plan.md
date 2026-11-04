@@ -64,7 +64,7 @@ section prescribes.
 
 ## The checks over every composite
 
-- [ ] `testing::check_operation` over every composite of the crate at the fixed and random rows,
+- [x] `testing::check_operation` over every composite of the crate at the fixed and random rows,
       the discrete maps at rows away from their jumps; and the jumps themselves, the exact locks of
       the Euler angles built in storage among them. Tests: `composites_pass_check_operation`,
       `discretizations_jump_cleanly`.
