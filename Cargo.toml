@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/skoro-tensor", "crates/skoro-core", "crates/skoro-normal", "crates/skoro"]
+members = ["crates/skoro-tensor", "crates/skoro-core", "crates/skoro-normal", "crates/skoro-spatial", "crates/skoro"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,6 +18,7 @@ rpds = "1"
 skoro-tensor = { path = "crates/skoro-tensor", version = "0.1.0" }
 skoro-core = { path = "crates/skoro-core", version = "0.1.0" }
 skoro-normal = { path = "crates/skoro-normal", version = "0.1.0" }
+skoro-spatial = { path = "crates/skoro-spatial", version = "0.1.0" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

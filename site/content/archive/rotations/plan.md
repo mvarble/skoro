@@ -11,7 +11,7 @@ section prescribes.
 
 ## The crate and its types (`skoro-spatial`)
 
-- [ ] The crate `crates/skoro-spatial`, a member of the workspace and of `workspace.dependencies`,
+- [x] The crate `crates/skoro-spatial`, a member of the workspace and of `workspace.dependencies`,
       depending on `skoro-core` and `skoro-tensor` alone, with `skoro-normal` as a development
       dependency and the workspace's lints; `lib.rs` and its re-exports; `algebra.rs` with the
       storage arithmetic of the companion, `both` among it. Tests: none of the companion's; the
