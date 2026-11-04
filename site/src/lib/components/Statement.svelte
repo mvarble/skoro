@@ -12,7 +12,7 @@
 -->
 <script lang="ts">
     import type { Component } from 'svelte';
-    import type { StatementInjection } from '@mvarble/mesearch-cms/presets/skoro/runtime';
+    import type { StatementInjection } from '@mvarble/mesearch-cms/runtime';
 
     let {
         default: Body,

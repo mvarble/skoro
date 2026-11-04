@@ -9,5 +9,6 @@ generation and retirement, and a normal distribution private to the core's tests
 [`skoro-normal`](../skoro-normal/) on those spheres live here too, with the crate as a development
 dependency: its density, sampler and information on a curved type, Gauss–Newton with the
 log-volume, its refusals, and the core's retirement replacements written with its stacked
-tangent. One of its tests checks that none of
-the others names `skoro-core` or `skoro-tensor` directly.
+tangent; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
+with `sample` and without it, generated, and queried with its range observed. One of its tests
+checks that none of the others names `skoro-core` or `skoro-tensor` directly.

@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use skoro_core::scope::{factor, score};
 use skoro_core::{
-    Declares, Domain, Error, Q, QDyn, Real, Sampler, Space, TermHandle, Typed, VectorDyn,
+    Declares, Distribution, Domain, Error, Q, QDyn, Real, Sampler, Space, TermHandle, Typed,
+    VectorDyn,
 };
 
 use crate::composites::{normalizer, root, whiten};
@@ -73,6 +74,8 @@ impl Normal {
     /// Scores `x`: the term, its exact sampler and its roles. Refuses a space without a measure
     /// (`NoVolume`), a discrete one (`NotContinuous`) and one whose chart is not global
     /// (`SpaceMismatch` of `skoro.normal`), recording the refusal at the caller's line.
+    /// [`sample`](skoro_core::scope::sample) declares a quantity and scores it by a normal in one
+    /// call.
     #[track_caller]
     pub fn score(&self, x: impl Into<QDyn>) -> TermHandle {
         let x = x.into();
@@ -170,6 +173,14 @@ impl Normal {
         let residual = whiten.call(&[tangent, scale]);
         let gaussian = (residual * residual).sum() * -0.5 + normalizer.call(&[scale]);
         (tangent, residual, gaussian)
+    }
+}
+
+/// The normal's term, by [`Normal::score`].
+impl Distribution for Normal {
+    #[track_caller]
+    fn score(&self, x: QDyn) -> TermHandle {
+        Normal::score(self, x)
     }
 }
 
