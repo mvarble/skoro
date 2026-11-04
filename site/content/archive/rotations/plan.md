@@ -71,7 +71,7 @@ section prescribes.
 
 ## The normal on these types
 
-- [ ] With `skoro-normal`, the normal scored on `Rotation` and `Pose`: its density through the
+- [x] With `skoro-normal`, the normal scored on `Rotation` and `Pose`: its density through the
       chart, its term against the Gaussian of the chart coordinate, and its draws through $\pi$.
       Tests: `normal_density_on_rotations`, `normal_density_on_poses`,
       `normal_draws_on_rotations`.
