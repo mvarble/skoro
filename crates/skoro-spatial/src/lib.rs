@@ -10,6 +10,6 @@ mod series;
 pub mod so3;
 mod types;
 
-pub use euler::Axis;
+pub use euler::{Axis, Euler, Frame, Sequence};
 pub use rotation::RotationMaps;
 pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, register};

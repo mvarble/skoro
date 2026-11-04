@@ -7,13 +7,15 @@
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::{concatenate, constant, project};
-use skoro_core::{Composite, Declares, Matrix, Q, QDyn, QMul, Real, Space, Vector, VectorDyn};
+use skoro_core::{
+    Composite, Declares, Matrix, Param, Q, QDyn, QMul, Real, Space, Vector, VectorDyn,
+};
 
 use crate::algebra::{
     self, choose, cross, dot, norm, normalize, parts, quaternion, reciprocal, sqrt,
 };
 use crate::series::{Coefficient, coefficient, log_ratio};
-use crate::{Axis, Rotation};
+use crate::{Axis, Euler, Rotation};
 
 /// A composite of the crate, defined once; `composites_pass_check_operation` defines every one.
 pub(crate) fn composite(
@@ -21,7 +23,17 @@ pub(crate) fn composite(
     inputs: &[Space],
     body: impl FnOnce(&[QDyn]) -> QDyn,
 ) -> Arc<Composite> {
-    match Composite::define(name, Vec::new(), inputs, body) {
+    composite_with(name, Vec::new(), inputs, body)
+}
+
+/// A composite of the crate with parameters, defined once.
+pub(crate) fn composite_with(
+    name: &'static str,
+    params: Vec<Param>,
+    inputs: &[Space],
+    body: impl FnOnce(&[QDyn]) -> QDyn,
+) -> Arc<Composite> {
+    match Composite::define(name, params, inputs, body) {
         Ok(composite) => composite,
         Err(_) => unreachable!("the crate's composites are checked by `types_are_declared`"),
     }
@@ -236,6 +248,10 @@ pub trait RotationMaps: Sized {
     /// `sign⟨q, r⟩ q`: the point over this rotation on the side of `reference`, a discretization
     /// where the two are orthogonal.
     fn aligned_with(self, reference: Q<Rotation>) -> Q<Rotation>;
+    /// The angles of `convention`, in the order of its axes: `α` and `γ` in (-π, π], `β` in
+    /// [0, π] for a proper sequence and in [-π/2, π/2] for a Tait–Bryan one. At gimbal lock, `γ`
+    /// is 0, a discretization.
+    fn euler(self, convention: Euler) -> Q<Vector<3>>;
 }
 
 impl RotationMaps for Q<Rotation> {
@@ -287,6 +303,11 @@ impl RotationMaps for Q<Rotation> {
     fn aligned_with(self, reference: Q<Rotation>) -> Q<Rotation> {
         ALIGN.call(&[self.untyped(), reference.untyped()]).narrow()
     }
+
+    #[track_caller]
+    fn euler(self, convention: Euler) -> Q<Vector<3>> {
+        crate::euler::euler(self, convention)
+    }
 }
 
 /// The identity rotation, `(1, 0, 0, 0)`.
@@ -318,4 +339,12 @@ pub fn elementary(axis: Axis, angle: Q<Real>) -> Q<Rotation> {
 #[track_caller]
 pub fn from_two_vectors(a: Q<Vector<3>>, b: Q<Vector<3>>) -> Q<Rotation> {
     FROM_TWO_VECTORS.call(&[a.untyped(), b.untyped()]).narrow()
+}
+
+/// The rotation of the Euler angles `angles` of `convention`, listed in the order of its axes:
+/// `q_i(α) ⊗ q_j(β) ⊗ q_k(γ)` for an intrinsic sequence `(i, j, k)`, `q_k(γ) ⊗ q_j(β) ⊗ q_i(α)`
+/// for an extrinsic one.
+#[track_caller]
+pub fn from_euler(angles: Q<Vector<3>>, convention: Euler) -> Q<Rotation> {
+    crate::euler::from_euler(angles, convention)
 }

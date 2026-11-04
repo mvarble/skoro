@@ -36,7 +36,7 @@ section prescribes.
 - [x] The constructions: `rotation::elementary`, `about` and `from_two_vectors`,
       `RotationMaps::axis_angle` with its guarded axis, and `aligned_with`; in `host.rs`, `align`.
       Tests: `constructions`, `alignment`.
-- [ ] `euler.rs`: `Axis`, `Sequence`, `Frame`, `Euler` with `YAW_PITCH_ROLL` and `axes`; the
+- [x] `euler.rs`: `Axis`, `Sequence`, `Frame`, `Euler` with `YAW_PITCH_ROLL` and `axes`; the
       composites `skoro.spatial.from_euler` and `skoro.spatial.euler`, cached by intrinsic
       sequence, with the Tait–Bryan rearrangement, `LOCK` and its guards, and the extrinsic
       conventions by reversal; `rotation::from_euler` and `RotationMaps::euler`; `host::from_euler`
