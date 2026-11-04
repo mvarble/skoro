@@ -175,6 +175,28 @@ and the inherent methods of the Euclidean markers: `exp`, `log`, `sin`, `cos`, `
   selections.
 - A matrix is stored column by column: $X_{ij}$ is at index $i + 3j$ of a `Matrix(3, 3)`.
 
+### The angle of a point
+
+`crates/skoro-core/src/primitive/euclidean.rs`, last changed at `d47119d` and read at `fe6f57e`:
+
+```rust
+plain!(
+    /// `atan2(a, b)`, elementwise: the angle in `(-π, π]` of the point `(b, a)`, defined where
+    /// `a² + b²` is positive and smooth off the half-line `a = 0, b < 0`.
+    Atan2, "skoro.atan2", two_euclidean, Angle
+);
+```
+
+with the derivatives $(b, -a)/(a^2 + b^2)$ of [](eq:archive/core/math/atan2), and their own, on
+both sides of the half-line.
+
+- An angle read off a rotation by `atan2` is cut where it is $\pi$: its value jumps by $2\pi$ there
+  and its derivatives do not, which is the wrap of
+  [the Euler angles](math.svx#constructions-and-conversions). The design takes the cut as it is and
+  places it with `atan2(sin θ, cos θ)`, whose derivatives in $\theta$ are $1$ and $0$ everywhere.
+- `atan2(0, 0)` is undefined, and so are its derivatives: an argument that can vanish on some
+  rows is replaced on them by a harmless one, as a norm's is.
+
 ### Composites
 
 `crates/skoro-core/src/composite.rs`:
@@ -345,7 +367,8 @@ retraction does not normalize: its inputs are points of the type.
 Each composite is written on storage with `algebra.rs`, so the motions' declarations do not depend
 on the rotation's statics. The denominators are positive on the domain: $1 + s \ge 1$,
 $\lVert x \rVert > 0$, and $1 + w(\bar x \otimes y) > 0$ for $y \ne -x$, where the inverse is
-undefined and gives non-finite rows, as the chart's cut.
+undefined, as the chart's cut: non-finite at a row exactly on it, and growing without bound near it,
+as [Errors and domains](#errors-and-domains) says of every singular row.
 
 ```rust
 pub static ROTATION: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
@@ -512,7 +535,8 @@ pub trait RotationMaps: Sized {
     /// eq:slerp, and with `log_shorter` in place of `log`.
     fn slerp(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
     fn slerp_shorter(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
-    /// The statement euler: the angles of `convention`, `α` and `γ` in (-π, π].
+    /// The statement euler: the angles of `convention`, `α` and `γ` in (-π, π], cut at π, where
+    /// their values jump by 2π and their derivatives do not; compare them by `angle_residual`.
     fn euler(self, convention: Euler) -> Q<Vector<3>>;
     /// The axis and the angle of `log`; the axis `(1, 0, 0)` at the identity.
     fn axis_angle(self) -> (Q<Vector<3>>, Q<Real>);
@@ -529,7 +553,9 @@ pub mod rotation {
     pub fn about(axis: Q<Vector<3>>, angle: Q<Real>) -> Q<Rotation>;
     /// `q_e(θ)` about a coordinate axis.
     pub fn elementary(axis: Axis, angle: Q<Real>) -> Q<Rotation>;
-    /// eq:two-vectors; non-finite where `b` is opposite to `a`, or either is zero.
+    /// eq:two-vectors; undefined where `b` is opposite to `a`, or either is zero: non-finite
+    /// where the argument vanishes exactly, and ill-conditioned near it, its error the rounding
+    /// over the angle by which `b` falls short of `-a`.
     pub fn from_two_vectors(a: Q<Vector<3>>, b: Q<Vector<3>>) -> Q<Rotation>;
     /// eq:euler.
     pub fn from_euler(angles: Q<Vector<3>>, convention: Euler) -> Q<Rotation>;
@@ -602,6 +628,14 @@ impl Euler {
     pub const YAW_PITCH_ROLL: Euler = Euler { sequence: Sequence::Zyx, frame: Frame::Intrinsic };
     pub fn axes(self) -> [Axis; 3];
 }
+
+/// eq:angle-residual, elementwise: `a ⊖ b = atan2(sin(a - b), cos(a - b))`, in (-π, π], cut where
+/// `a - b` is an odd multiple of π. `b + angle_residual(a, b)` is `a` brought within a half-turn of
+/// `b`.
+pub fn angle_residual<M: Angles>(a: Q<M>, b: Q<M>) -> Q<M>;
+
+/// The markers whose values may be angles: `Real`, `Vector<N>` and `VectorDyn`. Sealed.
+pub trait Angles: Typed + sealed::Sealed {}
 ```
 
 The enum makes a sequence with two equal neighbouring axes unrepresentable. `Frame` shares its
@@ -633,11 +667,43 @@ with the arguments of the two square roots guarded as `log_ratio`'s are on the r
 vanish, $\beta$
 shifted by $-\tfrac\pi2$ and $\gamma$ multiplied by $-\epsilon$ for a Tait–Bryan sequence, and
 $\alpha$ and $\gamma$ wrapped to $(-\pi, \pi]$ as $\operatorname{atan2}(\sin \cdot, \cos \cdot)$.
-`LOCK` is $10^{-30}$: the lock is taken only where one norm vanishes to within rounding of nothing,
-so that on every other row the angles are the statement's, however ill-conditioned; at an exact
-lock, as at the identity of a proper sequence, the convention $\gamma = 0$ gives finite angles and
-finite derivatives. A larger threshold would replace the angles by the convention on a band of
-rotations that it does not reproduce, by up to the band's $\beta$.
+
+**The lock.** `LOCK` is the fraction $c$ of [The lock](math.svx#constructions-and-conversions), and
+is $10^{-34}$. On a selected row the convention's rotation is within $2 \arcsin \sqrt c = 2 \cdot
+10^{-17}$ of $q$, below the rounding of a unit quaternion's coordinates in double precision, $2^{-53}
+\approx 1.1 \cdot 10^{-16}$, which moves its rotation by angles of that order, and so below either
+precision's, as the mathematics requires. The bound leaves $c \lesssim 3 \cdot 10^{-33}$; $10^{-34}$
+sits under it with room, and stays usable in single precision, where `total * LOCK`, with `total`
+at most $2$ for the Tait–Bryan rearrangement, is a normal number, far above the smallest,
+$1.2 \cdot 10^{-38}$, and a vanishing norm's square of $10^{-36}$ is still representable, so that the
+band selected is the same at both precisions. The earlier $10^{-30}$, chosen as "rounding of
+nothing", gave $2 \cdot 10^{-15}$, some twenty roundings, and is replaced. A larger threshold would
+replace the angles by the convention on a band of rotations that it reproduces only to the band's
+$\beta$; a smaller one would bring the band below single precision's smallest normal numbers.
+
+The threshold matters for finiteness, not for the round trip. A rotation at the lock only up to
+rounding, as [](eq:archive/rotations/math/euler) computes one at $\beta = \pm\tfrac\pi2$, whose
+rearrangement leaves the vanishing norm at the size of rounding rather than zero, is not selected,
+and is read by the statement: its $\alpha$ and $\gamma$ are individually ill-conditioned, with first
+derivatives of order $1 / \sin \tfrac\beta2$, at most $10^{17}$ on any row not selected, and second
+of its square, both finite in single precision, while $\alpha \pm \gamma$ and $\beta$ are accurate,
+and the undetermined combination enters the rotation weighted by $\sin \tfrac\beta2$, so the round
+trip reproduces the rotation within rounding. The selection is what keeps an exact zero, as at the
+identity of a proper sequence, from reaching `atan2(0, 0)` and a norm at zero.
+
+**The wrap.** $\operatorname{atan2}(\sin \alpha, \cos \alpha)$ has derivative $1$ in $\alpha$ on both
+sides of its cut, and second derivative $0$, so the angles' passes are continuous across the wrap
+and only their values jump, as the mathematics says. Nothing in the composite treats the wrap; the
+tests check it, and keep central differences away from it.
+
+**The residual.** `angle_residual` is [](eq:archive/rotations/math/angle-residual), inline rather than
+a composite, since it is four nodes, $d = a - b$ and $\operatorname{atan2}(\sin d, \cos d)$, on the
+untyped handles, narrowed back to `M`. It is generic over a sealed trait because the core gives
+`sin`, `cos` and `atan2` as inherent methods of each Euclidean marker, with no trait to bound by, and
+an angle is a `Real` (a heading), a `Vector<3>` (the angles of `euler`), or a vector of any length.
+The alternative, leaving the expression to the caller, lost because a residual of angles written as
+`a - b` is the natural mistake, and the function names the right one where a user looks for it.
+It has no host twin: a host angle is compared by the same three lines of `f64`.
 
 ### The maps of the rigid motions
 
@@ -749,6 +815,7 @@ their domain; *removable* ones are smooth, with their singularity at the identit
 | elementary, axis–angle | `rotation::elementary`, `about`, `axis_angle` | `about`, `axis_angle` | | smooth, discrete | `constructions` |
 | two directions | `rotation::from_two_vectors` | `from_two_vectors` | two-vectors | smooth | `constructions` |
 | Euler angles | `rotation::from_euler`, `euler` | `from_euler`, `euler` | euler, statement euler | smooth, discrete | `euler_round_trips` |
+| angle residual | `angle_residual` | (inline) | angle-residual | discrete | `angle_residual_is_on_the_circle` |
 | from a matrix | `rotation::from_matrix` | `from_matrix` | from-matrix | discrete | `from_matrix_branches` |
 | alignment | `aligned_with`, `host::align` | `align` | | discrete | `alignment` |
 | the motions' charts and volumes | `Pose`, `ExtendedPose` | `pose.*`, `extended_pose.*` | statement motions | smooth | `types_pass_the_core_checks` |
@@ -790,12 +857,26 @@ observed; `aligned_with` exists as well for a quaternion a model computes.
 ### Errors and domains
 
 A wrong input is refused when the map is applied, by the composite's call, with `SpaceMismatch`
-naming the composite, at the caller's line; nothing else is refused at build time. A row outside a
-map's domain gives non-finite values, as the core's own logarithm does outside its: the inverse
-retraction at $y = -x$, `log` at $-1$, `jl_inv` and the motions' logarithms at an angle of $2\pi$,
-`from_two_vectors` for opposite or zero directions, `angle_to`'s derivatives where the angle is $0$
-or $\pi$. Each is said in the item's documentation. The selections of the discrete maps keep their
-values and the derivatives of the selected formula finite on both sides of every jump.
+naming the composite, at the caller's line; nothing else is refused at build time.
+
+A map is undefined at the singular rows the mathematics names: the inverse retraction at $y = -x$,
+`log` at $-1$, `jl_inv` and the motions' logarithms at an angle of $2\pi$, `from_two_vectors` at
+opposite or zero directions, and `angle_to`'s derivatives where the angle is $0$ or $\pi$. These rows
+are not detected. At a row exactly on one, the composite takes a logarithm of zero, a norm of zero or
+an `atan2(0, 0)`, and its values or its passes are non-finite. At a row within rounding of one, which
+is how such a row usually arrives, the composite computes finite values: large ones where the map
+grows without bound toward the row (the inverse retraction, `jl_inv`), and where only its
+conditioning does (the direction of `from_two_vectors`, of `log` near $-1$), values whose error is
+the rounding times that conditioning, meaningless at the row itself. Each item's documentation
+says which. The alternative, a guard that makes a band around each singular row non-finite, lost
+for two reasons. A composite cannot see its precision, so one band is either wide enough for single
+precision, refusing rows that double precision computes well, or narrow enough for double, leaving
+single precision's meaningless rows finite. And the mathematics leaves the maps undefined there,
+not refused: a model that may meet such a row must keep away from it, as from the Euler angles'
+lock, and no band tells it more than the documentation does.
+
+The selections of the discrete maps keep their values and the derivatives of the selected formula
+finite on both sides of every jump.
 
 ## Tests
 
@@ -808,7 +889,8 @@ checked by central differences only at rows at least ten single-precision steps,
 jumps, which `discretizations_jump_cleanly` checks instead: `log_shorter`, the shorter
 interpolations and the motions' `log_shorter` away from $w = 0$; `angle_to` away from $r = \pm 1$;
 `axis_angle` away from the identity; `euler` away from its lock, which for a proper sequence
-includes the identity; `from_matrix` at rows whose largest coordinate beats the next by more than
+includes the identity, and from its wrap, $\alpha$ and $\gamma$ at least $0.1$ from $\pm\pi$;
+`angle_residual` at differences at least $0.1$ from an odd multiple of $\pi$; `from_matrix` at rows whose largest coordinate beats the next by more than
 the step; `aligned_with` away from $\langle q, r \rangle = 0$.
 
 - `types_are_declared`: the three declarations and every composite are defined without error, and
@@ -860,13 +942,28 @@ the step; `aligned_with` away from $\langle q, r \rangle = 0$.
   endpoints, the screw's twist constant in $t$ and the parts' position linear.
 - `constructions`: `elementary` and `about` against the host's matrices; `axis_angle` inverts
   `about` and is finite at the identity; `from_two_vectors` carries $a$ to $b$ for random pairs, and is
-  non-finite for opposite ones.
+  non-finite for opposite pairs whose norms are exact, so that the argument vanishes exactly. Its
+  behaviour at pairs opposite only up to rounding is the ill-conditioning its documentation states,
+  and is not checked.
 - `euler_round_trips`: for all twelve sequences, intrinsic and extrinsic, `euler(from_euler(θ))` is
-  $\theta$ modulo $2\pi$ for random angles away from the lock, the same for $q$ and $-q$; the
-  extrinsic rotation equals the product of the fixed axes' matrices; at an exact lock the angles are
-  finite, $\gamma = 0$, and reproduce the rotation, at the exact locks of
-  `discretizations_jump_cleanly`; `Euler::YAW_PITCH_ROLL` against a textbook
+  $\theta$ modulo $2\pi$ for random angles away from the lock and the wrap, the same for $q$ and
+  $-q$; the extrinsic rotation equals the product of the fixed axes' matrices; at an exact lock the
+  angles are finite, $\gamma = 0$, and reproduce the rotation, at the exact locks of
+  `discretizations_jump_cleanly`; for the proper sequences, whose rearrangement is the quaternion
+  itself, at rows within the threshold of the lock, with the vanishing coordinates of size
+  $10^{-18}$, the convention $\gamma = 0$, reproducing the rotation within tolerance, and at rows
+  just outside it, of size $10^{-16}$, the statement's angles, reproducing it too; for the
+  Tait–Bryan sequences, `from_euler` at $\beta = \pm\tfrac\pi2$ read back as angles with $\beta$ and
+  $\alpha \pm \gamma$ accurate and the rotation reproduced, whether or not the row is selected; `Euler::YAW_PITCH_ROLL` against a textbook
   example of yaw, pitch and roll. Shows [%full](statement:archive/rotations/math/euler).
+- `angle_residual_is_on_the_circle`: at random pairs, `angle_residual(a, b)` equals $a - b$ brought
+  into $(-\pi, \pi]$ on the host, on `Real` and on `Vector<3>`; `b + angle_residual(a, b)` lies in
+  $(b - \pi, b + \pi]$ and is $a$ modulo $2\pi$; across the wrap of either angle, $a$ at $\pi -
+  10^{-5}$ and $-\pi + 10^{-5}$ with $b = 3$, the residual is continuous, changing by $2 \cdot
+  10^{-5}$, and its passes are the same on both sides; and along rotations about $z$ through the
+  half-turn, at angles $\pi \mp 10^{-5}$, the residual of the yaw of `euler` with
+  `Euler::YAW_PITCH_ROLL` against a reference yaw of $3$ is continuous where the yaw itself jumps.
+  Shows [](eq:archive/rotations/math/angle-residual) and the use of it the mathematics gives.
 - `from_matrix_branches`: at quaternions whose largest coordinate is each of the four in turn,
   `from_matrix(matrix(q))` is $\pm q$ with that coordinate positive, both through the model and
   through `host::from_matrix`; the matrix's storage order is checked by a rotation about $z$ alone.
@@ -879,7 +976,11 @@ the step; `aligned_with` away from $\langle q, r \rangle = 0$.
   to the selected formula's, computed by the same passes over that formula alone. At an exact lock
   of `euler`, built in storage so that the vanishing norm is zero exactly, $(1, 0, 1, 0)/\sqrt 2$
   for the sequence $(x, y, z)$, where $w - u_y = 0$, and quaternions with exact zeros for proper
-  sequences, the angles and every pass are finite. Shows [The discretizations](math.svx#what-the-tests-check)
+  sequences, the angles and every pass are finite. At the wrap of `euler`, for every sequence, at
+  rows built by `host::from_euler` with $\alpha$, and then $\gamma$, at $\pi - 10^{-5}$ and $-\pi +
+  10^{-5}$ and the other angles away from the lock, the wrapped angle is near $\pi$ on one side and
+  near $-\pi$ on the other, values $2\pi - 2 \cdot 10^{-5}$ apart, the other two angles agree, and
+  the tangent, cotangent and second-order passes agree across the cut within tolerance. Shows [The discretizations](math.svx#what-the-tests-check)
   of the mathematics: values on both sides, derivatives those of the selected formula.
 - `motion_group_laws`: the composition, inverse, relative motion and actions of `Pose` and
   `ExtendedPose` against their homogeneous matrices on the host, and `matrix` a homomorphism.
@@ -906,3 +1007,19 @@ The core's acceptance test is not touched, as the mathematics settles.
 ## Open questions
 
 None remain.
+
+## Revisions
+
+**2026-11-03.** Reopened with the mathematics, which now treats the Euler angles at the wrap as
+well as at the lock and gives the residual on the circle. `LOCK` is $10^{-34}$, chosen by the
+mathematics' bound $2 \arcsin \sqrt c$ below double precision's rounding, which the earlier
+$10^{-30}$ did not meet; [Euler angles](#euler-angles) says why, and that the threshold decides
+finiteness rather than the round trip. The wrap is taken as `atan2`'s cut, with the core's
+`atan2` added to the constraints. `angle_residual` implements the residual, over a sealed trait of
+the markers whose values may be angles. [Errors and domains](#errors-and-domains) no longer
+promises non-finite values at singular rows: the build found `from_two_vectors` finite and
+meaningless at opposite directions that rounding leaves slightly apart, and the same holds near
+every singular row; a band of refused rows is considered and set aside. The tests add the wrap,
+the lock within its threshold, the Tait–Bryan lock under rounding, and
+`angle_residual_is_on_the_circle`, and `constructions` checks the non-finite case only where the
+argument vanishes exactly.
