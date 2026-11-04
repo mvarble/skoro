@@ -57,7 +57,53 @@ fn rotation_vectors(seed: u64) -> Vec<[f64; 3]> {
         .collect()
 }
 
+/// Unit quaternions whose largest coordinate in magnitude is the `m`-th, with either sign.
+fn led_by(m: usize) -> Vec<[f64; 4]> {
+    let mut rows = Vec::new();
+    for (k, q) in random_quaternions(6, 100 + m as u64)
+        .into_iter()
+        .enumerate()
+    {
+        let mut q = q.map(|v| 0.4 * v);
+        q[m] = if k % 2 == 0 { 1.0 } else { -1.0 };
+        rows.push(common::unit(q));
+    }
+    rows
+}
+
 skoro_core::precision_tests! {
+    fn from_matrix_branches(target) {
+        let tol = tolerance(&target);
+        for m in 0..4 {
+            let qs = led_by(m);
+            let out = common::evaluate(
+                |q| rotation::from_matrix(r(q[0]).matrix()).untyped(),
+                &[rotations(&qs)],
+                &target,
+            );
+            // ±q, with the m-th coordinate positive.
+            let want: Vec<[f64; 4]> = qs
+                .iter()
+                .map(|q| if q[m] > 0.0 { *q } else { q.map(|v| -v) })
+                .collect();
+            close(&out, &want.concat(), tol);
+            let on_host: Vec<f64> = qs.iter().flat_map(|q| host::from_matrix(host::matrix(*q))).collect();
+            close(&on_host, &want.concat(), 1e-14);
+        }
+        // The storage order: a turn about z alone, given by rows.
+        let theta = 0.7f64;
+        let (s, c) = theta.sin_cos();
+        let rz = [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]];
+        let out = common::evaluate(
+            |q| rotation::from_matrix(q[0].narrow::<Matrix<3, 3>>()).untyped(),
+            &[Rows::new(Space::Matrix(3, 3), stored(rz))],
+            &target,
+        );
+        let want = [(theta / 2.0).cos(), 0.0, 0.0, (theta / 2.0).sin()];
+        close(&out, &want, tol);
+        close(&host::from_matrix(rz), &want, 1e-15);
+    }
+
     fn constructions(target) {
         let tol = tolerance(&target);
         let rows = 6;
@@ -174,6 +220,11 @@ skoro_core::precision_tests! {
             [(theta / 2.0).cos(), b * w[0], b * w[1], b * w[2]]
         }));
         close(&out[0], &exp, tol);
+        let on_host: Vec<f64> = omega.iter().flat_map(|w| host::exp(*w)).collect();
+        close(&on_host, &exp, 1e-14);
+        let back: Vec<f64> = split::<4>(&on_host).iter().flat_map(|q| host::log(*q)).collect();
+        close(&back, &omega.concat(), 1e-12);
+        assert!(host::log([-1.0, 0.0, 0.0, 0.0]).iter().all(|v| !v.is_finite()));
         // Log inverts Exp on the ball of radius 2π.
         close(&out[1], &omega.concat(), tol);
         // Exp at a constant rate is the matrix exponential of [ω]×.

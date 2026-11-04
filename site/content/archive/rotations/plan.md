@@ -41,7 +41,7 @@ section prescribes.
       sequence, with the Tait–Bryan rearrangement, `LOCK` and its guards, and the extrinsic
       conventions by reversal; `rotation::from_euler` and `RotationMaps::euler`; `host::from_euler`
       and `host::euler`. Tests: `euler_round_trips`.
-- [ ] `rotation::from_matrix` by the tournament over the four arguments, projecting the one chosen;
+- [x] `rotation::from_matrix` by the tournament over the four arguments, projecting the one chosen;
       the rest of `host.rs`: `compose`, `matrix`, `from_matrix`, `exp` and `log`. Tests:
       `from_matrix_branches`.
 

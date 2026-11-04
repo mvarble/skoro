@@ -187,6 +187,36 @@ static ALIGN: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     )
 });
 
+/// The four arguments `c_m(X)` of a stored `Matrix(3, 3)`, each a `Vector(4)` linear in `X`.
+fn arguments(x: QDyn) -> [QDyn; 4] {
+    // X_ij, counted from 1 as the mathematics counts them, is stored at (i - 1) + 3 (j - 1).
+    let at = |i: usize, j: usize| algebra::entry(x, (i - 1) + 3 * (j - 1));
+    let (x11, x22, x33) = (at(1, 1), at(2, 2), at(3, 3));
+    let (x12, x13, x21, x23, x31, x32) =
+        (at(1, 2), at(1, 3), at(2, 1), at(2, 3), at(3, 1), at(3, 2));
+    let four = |a: QDyn, b: QDyn, c: QDyn, d: QDyn| concatenate(&[a, b, c, d], Space::Vector(4));
+    [
+        four(x11 + x22 + x33 + 1.0, x32 - x23, x13 - x31, x21 - x12),
+        four(x32 - x23, x11 - x22 - x33 + 1.0, x12 + x21, x13 + x31),
+        four(x13 - x31, x12 + x21, x22 - x11 - x33 + 1.0, x23 + x32),
+        four(x21 - x12, x13 + x31, x23 + x32, x33 - x11 - x22 + 1.0),
+    ]
+}
+
+/// `P(c_m(X))` with `m` the index of the largest of the diagonal entries `c_m(X)_m`, by a
+/// tournament of selections, the argument chosen before it is projected.
+static FROM_MATRIX: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.from_matrix", &[Space::Matrix(3, 3)], |q| {
+        let c = arguments(q[0]);
+        let d = |m: usize| algebra::entry(c[m], m);
+        let first = (d(1) - d(0)).is_nonnegative();
+        let second = (d(3) - d(2)).is_nonnegative();
+        let (a, da) = (choose(first, c[0], c[1]), choose(first, d(0), d(1)));
+        let (b, db) = (choose(second, c[2], c[3]), choose(second, d(2), d(3)));
+        onto(choose((db - da).is_nonnegative(), a, b))
+    })
+});
+
 /// `q₁ * q₂ = P(q₁ ⊗ q₂)`.
 impl QMul for Rotation {
     type Output = Rotation;
@@ -347,4 +377,13 @@ pub fn from_two_vectors(a: Q<Vector<3>>, b: Q<Vector<3>>) -> Q<Rotation> {
 #[track_caller]
 pub fn from_euler(angles: Q<Vector<3>>, convention: Euler) -> Q<Rotation> {
     crate::euler::from_euler(angles, convention)
+}
+
+/// The unit quaternion over a rotation matrix, `P(c_m(X))` with `m` the index of the largest of
+/// the four candidates' diagonal entries: the point over `X` whose `m`-th coordinate is positive.
+/// A discretization where the choice of `m` changes; a matrix near a rotation gives a nearby unit
+/// quaternion.
+#[track_caller]
+pub fn from_matrix(m: Q<Matrix<3, 3>>) -> Q<Rotation> {
+    FROM_MATRIX.call(&[m.untyped()]).narrow()
 }
