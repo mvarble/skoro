@@ -29,7 +29,7 @@ section prescribes.
       `Matrix<3, N>`; `RotationMaps` with `inverse`, `between`, `unrotate`, `matrix` and `adjoint`;
       `rotation::identity`; and in `so3.rs`, `hat` and `vee`. Tests: `group_laws`,
       `actions_are_the_matrix`, `conjugation_is_exact`, `hat_and_vee`.
-- [ ] `series.rs`: the coefficients `a`, `b`, `A`, `B`, `C`, `D`, `E` and `log_ratio`, with the
+- [x] `series.rs`: the coefficients `a`, `b`, `A`, `B`, `C`, `D`, `E` and `log_ratio`, with the
       cutoffs and series lengths of the companion's table and both guards; `rotation::exp`,
       `RotationMaps::log` and `log_shorter`; and `so3::jl`, `jr`, `jl_inv` and `jr_inv`. Tests:
       `exp_and_log`.

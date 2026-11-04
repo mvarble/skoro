@@ -4,7 +4,7 @@
 mod common;
 
 use common::host::{M3, cross, mm, mv, qmul, rot, stored, transpose};
-use common::{Rows, close, quaternions, random_quaternions, tolerance, vectors};
+use common::{CUTOFF, Rows, close, quaternions, random_quaternions, tolerance, vectors};
 use skoro_core::{Matrix, Q, QDyn, Space, Vector, VectorDyn};
 use skoro_spatial::{ROTATION, Rotation, RotationMaps, rotation, so3};
 
@@ -35,7 +35,84 @@ fn by_rows(data: &[f64]) -> M3 {
     std::array::from_fn(|i| std::array::from_fn(|j| data[i + 3 * j]))
 }
 
+/// Rotation vectors in random directions at lengths from 0 to 6, at both sides of the cutoff.
+fn rotation_vectors(seed: u64) -> Vec<[f64; 3]> {
+    let lengths = [
+        0.0,
+        (0.9 * CUTOFF).sqrt(),
+        (1.1 * CUTOFF).sqrt(),
+        0.5,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+    ];
+    vectors::<3>(lengths.len(), seed, -1.0, 1.0)
+        .into_iter()
+        .zip(lengths)
+        .map(|(d, length)| common::unit(d).map(|v| v * length))
+        .collect()
+}
+
 skoro_core::precision_tests! {
+    fn exp_and_log(target) {
+        let tol = tolerance(&target);
+        let omega = rotation_vectors(61);
+        let out = common::evaluate_many(
+            |q| {
+                let omega = q[0].narrow::<Vector<3>>();
+                let e = rotation::exp(omega);
+                vec![e.untyped(), e.log().untyped(), e.matrix().untyped()]
+            },
+            &[Rows::vectors(&omega)],
+            &target,
+        );
+        let exp = flat(omega.iter().map(|w| {
+            let theta = common::host::norm(w);
+            let b = if theta == 0.0 { 0.5 } else { (theta / 2.0).sin() / theta };
+            [(theta / 2.0).cos(), b * w[0], b * w[1], b * w[2]]
+        }));
+        close(&out[0], &exp, tol);
+        // Log inverts Exp on the ball of radius 2π.
+        close(&out[1], &omega.concat(), tol);
+        // Exp at a constant rate is the matrix exponential of [ω]×.
+        let integrated: Vec<f64> = omega
+            .iter()
+            .flat_map(|w| {
+                let rows: Vec<Vec<f64>> = common::host::hat(*w).iter().map(|r| r.to_vec()).collect();
+                let e = common::host::expm(&rows);
+                stored::<3, 3>(std::array::from_fn(|i| std::array::from_fn(|j| e[i][j])))
+            })
+            .collect();
+        close(&out[2], &integrated, tol);
+
+        // The shorter turn: the same at ±q, Log where w > 0, of length at most π.
+        let a = quaternions(5, 62);
+        let minus: Vec<[f64; 4]> = a.iter().map(|q| q.map(|v| -v)).collect();
+        let out = common::evaluate_many(
+            |q| {
+                let (a, minus) = (r(q[0]), r(q[1]));
+                vec![
+                    a.log_shorter().untyped(),
+                    minus.log_shorter().untyped(),
+                    a.log().untyped(),
+                ]
+            },
+            &[rotations(&a), rotations(&minus)],
+            &target,
+        );
+        close(&out[0], &out[1], tol);
+        for (row, q) in a.iter().enumerate() {
+            let shorter = &out[0][3 * row..3 * row + 3];
+            assert!(common::host::norm(shorter) <= std::f64::consts::PI * (1.0 + tol));
+            if q[0] > 0.0 {
+                close(shorter, &out[2][3 * row..3 * row + 3], tol);
+            }
+        }
+    }
+
     fn group_laws(target) {
         let a = quaternions(5, 21);
         let rows = a.len();

@@ -58,6 +58,8 @@ fn every_map() {
     );
     let _ = (a.unrotate(x), a.matrix(), a.adjoint(), rotation::identity());
     let _ = so3::vee(so3::hat(x));
+    let _ = (rotation::exp(x), a.log(), a.log_shorter());
+    let _ = (so3::jl(x), so3::jr(x), so3::jl_inv(x), so3::jr_inv(x));
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

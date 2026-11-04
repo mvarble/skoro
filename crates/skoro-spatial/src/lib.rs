@@ -11,6 +11,7 @@
 )]
 mod algebra;
 pub mod rotation;
+mod series;
 pub mod so3;
 mod types;
 
