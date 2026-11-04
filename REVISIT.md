@@ -12,10 +12,11 @@ archive is the branch `archive`, tagged `archive-2026-10-09`; read it with
   readers of its structure: `crates/skoro-normal/` (`distribution.rs`, `joint.rs`,
   `information.rs`, `structure.rs`). The core's tests keep a private normal of their own
   (`crates/skoro/tests/common/normal.rs`) until then.
-- **SO(3) and SE(3)**, as embedded types, with their fused exponential and logarithm kernels for
-  cubecl: `crates/skoro-so3/` (`ops/exp/cube.rs`, `ops/log/cube.rs`) and `crates/skoro-se3/`. The
-  core's acceptance test runs on a sphere declared in its tests, which goes when a curved type of
-  the library replaces it.
+- **Fused kernels for the rotations.** `skoro-spatial` brought SO(3) and SE(3) back as embedded
+  types whose maps are composites; the archive's fused exponential and logarithm kernels for cubecl
+  (`crates/skoro-so3/src/ops/exp/cube.rs`, `ops/log/cube.rs`) return if the composites prove slow.
+- **Spheres.** The core's acceptance test runs on a sphere declared in its tests, which goes when
+  the library's own spheres replace it.
 - **The linear algebra**: triangular matrices, their inverses and their products with vectors, the
   cross product, and norms: `crates/skoro-linalg/` (`tril/`, `matrix/`, `vector/`).
 - **Pointwise operations the core does not have**: the absolute value, and the general division

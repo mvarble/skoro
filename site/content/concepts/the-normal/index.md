@@ -8,9 +8,9 @@ depends_on: [concepts/terms, concepts/spaces, chart-volume]
 The normal is the first distribution of skoro, and lives in a crate of its own, `skoro-normal`,
 built on the core's public interface alone. It is one distribution on every space it can be exact
 on: the familiar normal on the real line, vectors and matrices, the log-normal on the positive
-orthant, and on a curved type, such as a sphere or the rotations, the normal of its tangent chart
-pushed onto it. This page shows what it is made of: a [term](../terms/), a sampler, and the roles an
-estimator reads.
+orthant, and on a curved type, such as a sphere or the [rotations](../rotations-and-motions/), the
+normal of its tangent chart pushed onto it. This page shows what it is made of: a
+[term](../terms/), a sampler, and the roles an estimator reads.
 
 ## The law and its term
 
