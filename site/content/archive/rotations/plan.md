@@ -76,6 +76,25 @@ section prescribes.
       Tests: `normal_density_on_rotations`, `normal_density_on_poses`,
       `normal_draws_on_rotations`.
 
+## The revision of the Euler angles and the singular rows
+
+- [ ] `LOCK` at $10^{-34}$, shared by the composite and `host::euler`, with its documentation saying
+      the bound it meets and that it decides finiteness, not the round trip. Tests: the cases the
+      companion adds to `euler_round_trips`, at rows within the threshold of the lock and just
+      outside it for the proper sequences, and at the Tait–Bryan locks under rounding, with the
+      random angles kept away from the wrap.
+- [ ] The wrap of the Euler angles, with `euler`'s documentation saying where its angles are cut
+      and that only their values jump there. Tests: the wrap rows the companion adds to
+      `discretizations_jump_cleanly`, and every `euler` row of `composites_pass_check_operation` at
+      least $0.1$ from $\pm\pi$.
+- [ ] `angle_residual` and the sealed trait `Angles` in `euler.rs`, re-exported from the crate's
+      root. Tests: `angle_residual_is_on_the_circle`.
+- [ ] The documentation of every singular row as [Errors and domains](implementation.md#errors-and-domains)
+      states it: `from_two_vectors`, the inverse retraction, `log`, `jl_inv`, the motions'
+      logarithms and `angle_to`, each saying that it is non-finite exactly at the row and what it
+      gives within rounding of it. Tests: `constructions` checks the non-finite case only at
+      opposite pairs whose norms are exact, as it does, with a comment saying why.
+
 ## Done when
 
 Every box is ticked, and
@@ -89,3 +108,13 @@ cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 
 pass. The crate writes no kernel, so the wgpu tests are not required of it; the core's acceptance
 test is untouched and passes as before.
+
+## Revisions
+
+**2026-11-03.** Reopened with the mathematics and the implementation, which now treat the Euler
+angles at the wrap as well as at the lock, add the residual on the circle, set the lock's
+threshold by the mathematics' bound, and state what a map gives within rounding of a singular row.
+The tasks of the first build stand, ticked; four tasks under
+[The revision of the Euler angles and the singular rows](#the-revision-of-the-euler-angles-and-the-singular-rows)
+build the changes. The one new test, `angle_residual_is_on_the_circle`, is in the third; the cases
+added to tests that earlier tasks built are named in the task that adds them.
