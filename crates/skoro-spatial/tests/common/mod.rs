@@ -139,6 +139,17 @@ pub fn hessian(
     wrt: usize,
     target: &Target,
 ) -> Vec<f64> {
+    second_order(f, inputs, wrt, target).1
+}
+
+/// The same pass's `α` and `β` at input `wrt`: per row, the gradient, `d`, and the Hessian
+/// products, `d × d`.
+pub fn second_order(
+    f: impl FnOnce(&[QDyn]) -> QDyn,
+    inputs: &[Rows],
+    wrt: usize,
+    target: &Target,
+) -> (Vec<f64>, Vec<f64>) {
     let mut writer = Writer::new();
     let (roots, out) = writer
         .build(|| {
@@ -167,7 +178,10 @@ pub fn hessian(
     let velocities =
         Frames::new().with(roots[wrt], Frame::from_host(&identity, batch, d, d, target));
     let second = program.hessian_products(&at, &velocities).unwrap();
-    second.beta.get(roots[wrt]).unwrap().to_host()
+    (
+        second.alpha.get(roots[wrt]).unwrap().to_host(),
+        second.beta.get(roots[wrt]).unwrap().to_host(),
+    )
 }
 
 /// Rotation vectors in random directions at lengths from 0 to 6, at both sides of the cutoff.

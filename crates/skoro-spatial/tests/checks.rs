@@ -335,6 +335,62 @@ fn agree(name: &str, inputs: &[Rows], map: Map, alone: Map, target: &Target) {
     }
 }
 
+/// Rows of the intrinsic `sequence` on either side of the wrap of angle `k`, `π - 10⁻⁵` and
+/// `-π + 10⁻⁵`: the angle is near `π` on one side and near `-π` on the other, the other two agree,
+/// and the tangent, cotangent and second-order passes agree across the cut.
+fn wrap_is_a_jump_of_the_value_alone(sequence: Sequence, k: usize, middle: f64, target: &Target) {
+    let pi = std::f64::consts::PI;
+    let side = 1e-5;
+    let convention = Euler {
+        sequence,
+        frame: Frame::Intrinsic,
+    };
+    let angles = |a: f64| {
+        let mut angles = [0.3, middle, 0.3];
+        angles[k] = a;
+        angles
+    };
+    let qs = [angles(pi - side), angles(-pi + side)].map(|a| host::from_euler(a, convention));
+    let rows = [rows_of(rotation_space(), qs.concat())];
+    let name = format!("euler {sequence:?}, angle {k}, across the wrap");
+    let tol = common::tolerance(target);
+
+    let values = common::evaluate(|q| r(q[0]).euler(convention).untyped(), &rows, target);
+    let (below, above) = (&values[0..3], &values[3..6]);
+    assert!(
+        (below[k] - (pi - side)).abs() < tol.max(1e-6),
+        "{name}: {values:?}"
+    );
+    assert!(
+        (above[k] - (-pi + side)).abs() < tol.max(1e-6),
+        "{name}: {values:?}"
+    );
+    for other in (0..3).filter(|&o| o != k) {
+        assert!(
+            (below[other] - above[other]).abs() < tol.max(1e-6),
+            "{name}: {values:?}"
+        );
+    }
+
+    // The passes change by the order of the rows' distance, 2·10⁻⁵, and do not jump.
+    let across = |name: &str, passes: &[f64]| {
+        let n = passes.len() / 2;
+        let scale = passes.iter().fold(1.0f64, |m, v| m.max(v.abs()));
+        for (a, b) in passes[..n].iter().zip(&passes[n..]) {
+            assert!((a - b).abs() < 1e-3 * scale, "{name}: {passes:?}");
+        }
+    };
+    let tangent = common::jacobian(|q| r(q[0]).euler(convention).untyped(), &rows, 0, target);
+    across(&format!("{name}, tangent"), &tangent);
+    let scalar = |q: &[QDyn]| {
+        let weights = constant(Vector::<3>, [0.7, -0.4, 0.9]);
+        (r(q[0]).euler(convention) * weights).sum().untyped()
+    };
+    let (cotangent, second) = common::second_order(scalar, &rows, 0, target);
+    across(&format!("{name}, cotangent"), &cotangent);
+    across(&format!("{name}, second order"), &second);
+}
+
 /// The statement euler's general formula alone, for the intrinsic `sequence`, on the storage of
 /// a rotation: the angles on every row off the lock.
 fn euler_alone(sequence: Sequence, x: QDyn) -> QDyn {
@@ -557,6 +613,9 @@ skoro_core::precision_tests! {
             let map: Map = Box::new(move |q| r(q[0]).euler(convention).untyped());
             let alone: Map = Box::new(move |q| euler_alone(sequence, r(q[0]).include().untyped()));
             agree(&format!("euler {sequence:?} across the wrap"), &[rotations(&wrapped)], map, alone, &target);
+            for k in [0, 2] {
+                wrap_is_a_jump_of_the_value_alone(sequence, k, middle, &target);
+            }
 
             let (i, j, l, epsilon) = frame(sequence);
             let exact: Vec<[f64; 4]> = if sequence.is_proper() {

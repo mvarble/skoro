@@ -316,8 +316,11 @@ pub trait RotationMaps: Sized {
     /// where the two are orthogonal.
     fn aligned_with(self, reference: Q<Rotation>) -> Q<Rotation>;
     /// The angles of `convention`, in the order of its axes: `α` and `γ` in (-π, π], `β` in
-    /// [0, π] for a proper sequence and in [-π/2, π/2] for a Tait–Bryan one. At gimbal lock, `γ`
-    /// is 0, a discretization.
+    /// [0, π] for a proper sequence and in [-π/2, π/2] for a Tait–Bryan one. `α` and `γ` are cut
+    /// where they are π: their values jump there by 2π, and their derivatives do not. At gimbal
+    /// lock, `γ` is 0, a discretization; near it, `α` and `γ` alone are ill-conditioned, their
+    /// derivatives growing like `1 / sin(β/2)`, while `β` and the combination of `α` and `γ` the
+    /// lock determines stay accurate.
     fn euler(self, convention: Euler) -> Q<Vector<3>>;
     /// The angle between two rotations, `|rv(q̄₁ ⊗ q₂)| ∈ [0, π]`: the length of the shorter turn
     /// from one to the other. Its derivatives are non-finite where it is 0 or π.

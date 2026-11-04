@@ -83,7 +83,7 @@ section prescribes.
       companion adds to `euler_round_trips`, at rows within the threshold of the lock and just
       outside it for the proper sequences, and at the Tait–Bryan locks under rounding, with the
       random angles kept away from the wrap.
-- [ ] The wrap of the Euler angles, with `euler`'s documentation saying where its angles are cut
+- [x] The wrap of the Euler angles, with `euler`'s documentation saying where its angles are cut
       and that only their values jump there. Tests: the wrap rows the companion adds to
       `discretizations_jump_cleanly`, and every `euler` row of `composites_pass_check_operation` at
       least $0.1$ from $\pm\pi$.
