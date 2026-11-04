@@ -13,7 +13,7 @@ use skoro_core::testing::{check_agreement, check_operation};
 use skoro_core::{Composite, Declares, Param, QDyn, Space, Vector, VectorDyn};
 use skoro_spatial::{
     Euler, ExtendedPose, ExtendedPoseMaps, Frame, Pose, PoseMaps, Rotation, RotationMaps, Sequence,
-    extended_pose, host, pose, rotation, so3,
+    angle_residual, extended_pose, host, pose, rotation, so3,
 };
 use skoro_tensor::{HostValue, Precision, Target};
 
@@ -271,6 +271,19 @@ skoro_core::precision_tests! {
             }, 0);
             run("euler", &[a], Box::new(move |q| r(q[0]).euler(convention).untyped()));
         }
+        // The residual of angles, at differences away from its cut at odd multiples of π.
+        let (first, second) = (vectors::<3>(16, 530, -10.0, 10.0), vectors::<3>(16, 531, -10.0, 10.0));
+        let (first, second): (Vec<[f64; 3]>, Vec<[f64; 3]>) = first
+            .into_iter()
+            .zip(second)
+            .filter(|(a, b)| (0..3).all(|k| {
+                let d = a[k] - b[k];
+                d.sin().atan2(d.cos()).abs() < std::f64::consts::PI - 0.1
+            }))
+            .unzip();
+        run("angle_residual", &[Rows::vectors(&first), Rows::vectors(&second)], Box::new(|q| {
+            angle_residual(q[0].narrow::<Vector<3>>(), q[1].narrow::<Vector<3>>()).untyped()
+        }));
 
         // The poses.
         run("pose.compose", &[poses.clone(), poses_b.clone()], Box::new(|q| (p(q[0]) * p(q[1])).untyped()));

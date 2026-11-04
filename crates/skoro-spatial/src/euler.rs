@@ -9,7 +9,7 @@ use std::f64::consts::PI;
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::concatenate;
-use skoro_core::{Composite, Param, Q, QDyn, Space, Vector};
+use skoro_core::{Composite, Param, Q, QDyn, Real, Space, Typed, Vector, VectorDyn};
 
 use crate::Rotation;
 use crate::algebra::{choose, entry, mul, one, quaternion, real, sqrt, zero};
@@ -315,6 +315,31 @@ pub(crate) fn euler(q: Q<Rotation>, convention: Euler) -> Q<Vector<3>> {
     let angles = if reversed { reverse(angles) } else { angles };
     angles.narrow()
 }
+
+/// The residual of angles on the circle, elementwise: `a ⊖ b = atan2(sin(a - b), cos(a - b))`, in
+/// (-π, π]. It is cut where `a - b` is an odd multiple of π, as far as an angle can be from the one
+/// it is compared with, and elsewhere has the derivatives of `a - b`, across the wrap of either
+/// angle too. `b + angle_residual(a, b)` is `a` brought within a half-turn of `b`, continuous along
+/// any path that stays within a half-turn of it.
+#[track_caller]
+pub fn angle_residual<M: Angles>(a: Q<M>, b: Q<M>) -> Q<M> {
+    let d = a.untyped() - b.untyped();
+    d.sin().atan2(d.cos()).narrow()
+}
+
+/// The markers whose values may be angles: `Real`, `Vector<N>` and `VectorDyn`.
+pub trait Angles: Typed + sealed::Sealed {}
+
+mod sealed {
+    pub trait Sealed {}
+}
+
+impl sealed::Sealed for Real {}
+impl Angles for Real {}
+impl<const N: usize> sealed::Sealed for Vector<N> {}
+impl<const N: usize> Angles for Vector<N> {}
+impl sealed::Sealed for VectorDyn {}
+impl Angles for VectorDyn {}
 
 /// The angles of the intrinsic `sequence` of `q`, on the host: the composite's formulas with
 /// branches where it selects.

@@ -12,7 +12,7 @@ mod series;
 pub mod so3;
 mod types;
 
-pub use euler::{Axis, Euler, Frame, Sequence};
+pub use euler::{Angles, Axis, Euler, Frame, Sequence, angle_residual};
 pub use extended::ExtendedPoseMaps;
 pub use pose::PoseMaps;
 pub use rotation::RotationMaps;

@@ -87,7 +87,7 @@ section prescribes.
       and that only their values jump there. Tests: the wrap rows the companion adds to
       `discretizations_jump_cleanly`, and every `euler` row of `composites_pass_check_operation` at
       least $0.1$ from $\pm\pi$.
-- [ ] `angle_residual` and the sealed trait `Angles` in `euler.rs`, re-exported from the crate's
+- [x] `angle_residual` and the sealed trait `Angles` in `euler.rs`, re-exported from the crate's
       root. Tests: `angle_residual_is_on_the_circle`.
 - [ ] The documentation of every singular row as [Errors and domains](implementation.md#errors-and-domains)
       states it: `from_two_vectors`, the inverse retraction, `log`, `jl_inv`, the motions'
