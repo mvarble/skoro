@@ -74,6 +74,7 @@ fn every_map() {
         rotation::from_two_vectors(x, x),
     );
     let _ = rotation::from_matrix(a.matrix());
+    let _ = (a.angle_to(b), a.slerp(b, angle), a.slerp_shorter(b, angle));
     for sequence in Sequence::ALL {
         for frame in [Frame::Intrinsic, Frame::Extrinsic] {
             let convention = Euler { sequence, frame };
@@ -97,6 +98,11 @@ fn every_map() {
     );
     let xi6 = quantity("xi6", Vector::<6>);
     let _ = (pose::exp(xi6), s.log(), s.log_shorter());
+    let _ = (s.interpolate(t, angle), s.interpolate_shorter(t, angle));
+    let _ = (
+        s.interpolate_parts(t, angle),
+        s.interpolate_parts_shorter(t, angle),
+    );
     let _ = (
         pose::jl(xi6),
         pose::jr(xi6),
@@ -119,6 +125,7 @@ fn every_map() {
     let _ = (extended_pose::exp(xi9), u.log(), u.log_shorter());
     let _ = (extended_pose::jl(xi9), extended_pose::jr(xi9));
     let _ = (extended_pose::jl_inv(xi9), extended_pose::jr_inv(xi9));
+    let _ = (u.interpolate(v, angle), u.interpolate_shorter(v, angle));
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

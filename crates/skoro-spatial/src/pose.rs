@@ -10,10 +10,10 @@
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::{concatenate, constant, product, project};
-use skoro_core::{Composite, Declares, Matrix, ProductDyn, Q, QDyn, QMul, Space, Vector};
+use skoro_core::{Composite, Declares, Matrix, ProductDyn, Q, QDyn, QMul, Real, Space, Vector};
 
 use crate::algebra::{self, conjugate, dot, mul, rotate, unrotate, zero};
-use crate::rotation::{composite, exp_stored, log_stored, shorter};
+use crate::rotation::{composite, exp_stored, log_stored, shorter, slerp_stored};
 use crate::series::{Coefficient, coefficient};
 use crate::so3::{jl_inv_stored, jl_stored};
 use crate::{Pose, Rotation};
@@ -208,6 +208,13 @@ pub(crate) fn jl_inv_motion_stored(xi: QDyn, k: usize) -> QDyn {
     blocks(&rows)
 }
 
+/// `T₁ Exp(t Log(T₁⁻¹ T₂))` in storage, or with the rotation vector of the shorter turn: the
+/// screw motion at a constant twist.
+pub(crate) fn interpolate_stored(a: QDyn, b: QDyn, t: QDyn, k: usize, shorter_turn: bool) -> QDyn {
+    let twist = log_motion_stored(between_stored(a, b, k), k, shorter_turn);
+    compose_stored(a, exp_motion_stored(t * twist, k), k)
+}
+
 fn pose_space() -> Space {
     Pose.space()
 }
@@ -311,6 +318,43 @@ static JL_INV: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     })
 });
 
+/// The interpolation of the rotation along its geodesic and of the position along a line.
+fn interpolate_parts_stored(a: QDyn, b: QDyn, t: QDyn, shorter_turn: bool) -> QDyn {
+    let ((qa, pa), (qb, pb)) = (split(a, 1), split(b, 1));
+    let q = slerp_stored(qa, qb, t, shorter_turn);
+    join(q, &[pa[0] * (t * -1.0 + 1.0) + pb[0] * t])
+}
+
+fn interpolation(name: &'static str, body: fn(QDyn, QDyn, QDyn) -> QDyn) -> Arc<Composite> {
+    composite(name, &[pose_space(), pose_space(), Space::Real], |q| {
+        onto_pose(body(q[0].include(), q[1].include(), q[2]))
+    })
+}
+
+static INTERPOLATE: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    interpolation("skoro.spatial.pose.interpolate", |a, b, t| {
+        interpolate_stored(a, b, t, 1, false)
+    })
+});
+
+static INTERPOLATE_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    interpolation("skoro.spatial.pose.interpolate_shorter", |a, b, t| {
+        interpolate_stored(a, b, t, 1, true)
+    })
+});
+
+static INTERPOLATE_PARTS: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    interpolation("skoro.spatial.pose.interpolate_parts", |a, b, t| {
+        interpolate_parts_stored(a, b, t, false)
+    })
+});
+
+static INTERPOLATE_PARTS_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    interpolation("skoro.spatial.pose.interpolate_parts_shorter", |a, b, t| {
+        interpolate_parts_stored(a, b, t, true)
+    })
+});
+
 /// `T₁ * T₂ = (P(q₁ ⊗ q₂), p₁ + R₁ p₂)`.
 impl QMul for Pose {
     type Output = Pose;
@@ -355,6 +399,16 @@ pub trait PoseMaps: Sized {
     /// The same with the rotation vector of the shorter turn: the same at `±q`, a discretization
     /// at half-turns.
     fn log_shorter(self) -> Q<Vector<6>>;
+    /// `T₁ Exp(t Log(T₁⁻¹ T₂))`: the screw motion at a constant twist from `self` at `t = 0` to
+    /// `other` at `t = 1`.
+    fn interpolate(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose>;
+    /// The same along the shorter turn.
+    fn interpolate_shorter(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose>;
+    /// `(q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂)), (1 - t) p₁ + t p₂)`: the rotation along its geodesic and the
+    /// position along a line, the geodesic of the product.
+    fn interpolate_parts(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose>;
+    /// The same along the shorter turn.
+    fn interpolate_parts_shorter(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose>;
     /// The same storage as a value of the product `S³ × ℝ³`, whose chart moves the position in a
     /// fixed frame.
     #[expect(
@@ -413,6 +467,34 @@ impl PoseMaps for Q<Pose> {
     #[track_caller]
     fn log_shorter(self) -> Q<Vector<6>> {
         LOG_SHORTER.call(&[self.untyped()]).narrow()
+    }
+
+    #[track_caller]
+    fn interpolate(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose> {
+        INTERPOLATE
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
+    }
+
+    #[track_caller]
+    fn interpolate_shorter(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose> {
+        INTERPOLATE_SHORTER
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
+    }
+
+    #[track_caller]
+    fn interpolate_parts(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose> {
+        INTERPOLATE_PARTS
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
+    }
+
+    #[track_caller]
+    fn interpolate_parts_shorter(self, other: Q<Pose>, t: Q<Real>) -> Q<Pose> {
+        INTERPOLATE_PARTS_SHORTER
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
     }
 
     #[track_caller]

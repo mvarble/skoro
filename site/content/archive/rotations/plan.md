@@ -57,7 +57,7 @@ section prescribes.
       inverses, `pose::jl`, `jr`, `jl_inv`, `jr_inv` and the extended pose's. Tests:
       `motion_exp_and_log`, `adjoints_conjugate`, `jacobians_are_the_passes`,
       `second_order_agrees_on_rotations`, `series_meet_closed_forms`.
-- [ ] The interpolations and the angle: `RotationMaps::slerp`, `slerp_shorter` and `angle_to`;
+- [x] The interpolations and the angle: `RotationMaps::slerp`, `slerp_shorter` and `angle_to`;
       `PoseMaps::interpolate`, `interpolate_shorter`, `interpolate_parts` and
       `interpolate_parts_shorter`; `ExtendedPoseMaps::interpolate` and `interpolate_shorter`.
       Tests: `interpolations`.

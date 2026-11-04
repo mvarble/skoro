@@ -5,11 +5,11 @@
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::{constant, project};
-use skoro_core::{Composite, Declares, Matrix, Q, QDyn, QMul, Space, Vector};
+use skoro_core::{Composite, Declares, Matrix, Q, QDyn, QMul, Real, Space, Vector};
 
 use crate::pose::{
-    adjoint_stored, between_stored, compose_stored, exp_motion_stored, inverse_stored,
-    jl_inv_motion_stored, jl_motion_stored, join, log_motion_stored, matrix_stored,
+    adjoint_stored, between_stored, compose_stored, exp_motion_stored, interpolate_stored,
+    inverse_stored, jl_inv_motion_stored, jl_motion_stored, join, log_motion_stored, matrix_stored,
 };
 use crate::rotation::composite;
 use crate::{ExtendedPose, Pose, Rotation};
@@ -101,6 +101,38 @@ static JL_INV: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     )
 });
 
+static INTERPOLATE: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.interpolate",
+        &[extended_space(), extended_space(), Space::Real],
+        |q| {
+            onto_extended(interpolate_stored(
+                q[0].include(),
+                q[1].include(),
+                q[2],
+                2,
+                false,
+            ))
+        },
+    )
+});
+
+static INTERPOLATE_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.interpolate_shorter",
+        &[extended_space(), extended_space(), Space::Real],
+        |q| {
+            onto_extended(interpolate_stored(
+                q[0].include(),
+                q[1].include(),
+                q[2],
+                2,
+                true,
+            ))
+        },
+    )
+});
+
 /// `T₁ * T₂ = (P(q₁ ⊗ q₂), v₁ + R₁ v₂, p₁ + R₁ p₂)`.
 impl QMul for ExtendedPose {
     type Output = ExtendedPose;
@@ -132,6 +164,10 @@ pub trait ExtendedPoseMaps: Sized {
     fn log(self) -> Q<Vector<9>>;
     /// The same with the rotation vector of the shorter turn.
     fn log_shorter(self) -> Q<Vector<9>>;
+    /// `T₁ Exp(t Log(T₁⁻¹ T₂))`, from `self` at `t = 0` to `other` at `t = 1`.
+    fn interpolate(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose>;
+    /// The same along the shorter turn.
+    fn interpolate_shorter(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose>;
 }
 
 impl ExtendedPoseMaps for Q<ExtendedPose> {
@@ -184,6 +220,20 @@ impl ExtendedPoseMaps for Q<ExtendedPose> {
     #[track_caller]
     fn log_shorter(self) -> Q<Vector<9>> {
         LOG_SHORTER.call(&[self.untyped()]).narrow()
+    }
+
+    #[track_caller]
+    fn interpolate(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose> {
+        INTERPOLATE
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
+    }
+
+    #[track_caller]
+    fn interpolate_shorter(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose> {
+        INTERPOLATE_SHORTER
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
     }
 }
 

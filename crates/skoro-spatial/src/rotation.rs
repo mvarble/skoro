@@ -217,6 +217,43 @@ static FROM_MATRIX: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     })
 });
 
+/// `q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂))` in storage, or with the rotation vector of the shorter turn.
+pub(crate) fn slerp_stored(a: QDyn, b: QDyn, t: QDyn, shorter_turn: bool) -> QDyn {
+    let r = algebra::mul(algebra::conjugate(a), b);
+    let r = if shorter_turn { shorter(r) } else { r };
+    algebra::mul(a, exp_stored(t * log_stored(r)))
+}
+
+static SLERP: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.slerp",
+        &[rotation_space(), rotation_space(), Space::Real],
+        |q| onto(slerp_stored(stored(q[0]), stored(q[1]), q[2], false)),
+    )
+});
+
+static SLERP_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.slerp_shorter",
+        &[rotation_space(), rotation_space(), Space::Real],
+        |q| onto(slerp_stored(stored(q[0]), stored(q[1]), q[2], true)),
+    )
+});
+
+/// `2 atan2(|vec r|, |w(r)|)` with `r = q̄₁ ⊗ q₂`, the absolute value a selection.
+static ANGLE: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.angle",
+        &[rotation_space(), rotation_space()],
+        |q| {
+            let r = algebra::mul(algebra::conjugate(stored(q[0])), stored(q[1]));
+            let (w, u) = parts(r);
+            let magnitude = choose(w.is_nonnegative(), -w, w);
+            norm(u).atan2(magnitude) * 2.0
+        },
+    )
+});
+
 /// `q₁ * q₂ = P(q₁ ⊗ q₂)`.
 impl QMul for Rotation {
     type Output = Rotation;
@@ -282,6 +319,15 @@ pub trait RotationMaps: Sized {
     /// [0, π] for a proper sequence and in [-π/2, π/2] for a Tait–Bryan one. At gimbal lock, `γ`
     /// is 0, a discretization.
     fn euler(self, convention: Euler) -> Q<Vector<3>>;
+    /// The angle between two rotations, `|rv(q̄₁ ⊗ q₂)| ∈ [0, π]`: the length of the shorter turn
+    /// from one to the other. Its derivatives are non-finite where it is 0 or π.
+    fn angle_to(self, other: Q<Rotation>) -> Q<Real>;
+    /// `q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂))`: the geodesic of the unit quaternions from `self` at `t = 0` to
+    /// `other` at `t = 1`, by the arc that avoids `-self`.
+    fn slerp(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
+    /// The same along the shorter of the two turns from one rotation to the other: a
+    /// discretization where they are equally short.
+    fn slerp_shorter(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
 }
 
 impl RotationMaps for Q<Rotation> {
@@ -337,6 +383,25 @@ impl RotationMaps for Q<Rotation> {
     #[track_caller]
     fn euler(self, convention: Euler) -> Q<Vector<3>> {
         crate::euler::euler(self, convention)
+    }
+
+    #[track_caller]
+    fn angle_to(self, other: Q<Rotation>) -> Q<Real> {
+        ANGLE.call(&[self.untyped(), other.untyped()]).narrow()
+    }
+
+    #[track_caller]
+    fn slerp(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation> {
+        SLERP
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
+    }
+
+    #[track_caller]
+    fn slerp_shorter(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation> {
+        SLERP_SHORTER
+            .call(&[self.untyped(), other.untyped(), t.untyped()])
+            .narrow()
     }
 }
 
