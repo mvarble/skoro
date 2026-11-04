@@ -18,6 +18,7 @@ katex_macros:
 	import * as motions from './statements/motions.md';
 	import * as firstOrder from './statements/first-order.md';
 	import * as euler from './statements/euler.md';
+	import * as eulerSingular from './statements/euler-singular.md';
 </script>
 
 ## The problem
@@ -252,7 +253,8 @@ map is of one of three kinds, and the kind says what a model may ask of its deri
   [smooth as computed](../core/math.svx#quantities) asks, by a series below a cutoff, with
   derivatives of every order the core takes, at the identity too;
 - **a discretization and a selection**: where no continuous map exists, by
-  [%full](statement:no-section) or by the jump of a rotation vector at a half-turn, the composite
+  [%full](statement:no-section), by [%full](statement:euler-singular), or by the jump of a
+  rotation vector at a half-turn, the composite
   selects between smooth formulas by a discretization of its input; its derivatives are those of the
   selected formula, and the jump has none.
 
@@ -512,17 +514,83 @@ $u \times e_j = \epsilon u_i\, e_k - \epsilon u_k\, e_i$.
 So the Euler angles of a unit quaternion are, for a proper sequence, those of [%full](statement:euler)
 read off $q$, and for a Tait–Bryan sequence those read off the linear rearrangement of $q$ it
 gives, with $\beta$ lowered by $\tfrac\pi2$ and $\gamma$ multiplied by $-\epsilon$; for an extrinsic
-sequence, those of the reversed sequence, in reverse order. $\alpha$ and $\gamma$ are returned to
-$(-\pi, \pi]$ as $\atantwo(\sin \alpha, \cos \alpha)$, so that $q$ and $-q$ give the same angles.
-The angles are smooth away from *gimbal lock*, $\beta \in \{0, \pi\}$ for a proper sequence and
-$\beta = \pm \tfrac\pi2$ for a Tait–Bryan one, where one of the two norms vanishes and only $\alpha +
-\gamma$ or $\alpha - \gamma$ is determined. There the composite selects, by a discretization of the
-smaller norm against a threshold, the convention $\gamma = 0$: $\beta$ at the lock, $\alpha =
-2\sigma$ when $\lVert (u_j, u_l) \rVert$ vanishes and $\alpha = 2\delta$ when $\lVert (w, u_i) \rVert$
-does. The vanishing norm and the $\atantwo$ it feeds are given a harmless argument on those rows,
-since a norm has no derivative at $0$, and $\beta$ is selected rather than computed there. The derivatives of $\alpha$ and $\gamma$ grow without bound as $\beta$
-approaches the lock, which is why Euler angles are a way into and out of a model, and its noise is
-put in the charts instead.
+sequence, those of the reversed sequence, in reverse order. The rotation is smooth in its angles
+everywhere, but the angles are not smooth in the rotation everywhere, and no choice of formula
+makes them so:
+
+<Statement {...eulerSingular} />
+
+<Proof>
+
+For the first claim, let $\tilde\alpha$ be continuous and real-valued, equal to $\alpha$ modulo
+$2\pi$ on the loop. Off the lock the angles are unique modulo $2\pi$ by [%full](statement:euler),
+so the loop's rotation at $t$ has $\alpha = t$ modulo $2\pi$, and $\tilde\alpha(t) - t$ is
+continuous with values in $2\pi\Z$, hence constant. So $\tilde\alpha$ is larger by $2\pi$ at $t =
+2\pi$ than at $t = 0$, but the loop closes there, since $q_i(2\pi) = -1$ and $\pi(-q) = \pi(q)$. The
+same holds of $\gamma$ on its loop. For the second, take a proper sequence. As $\beta \to 0$,
+$q_i(\alpha) \otimes q_j(\beta) \otimes q_i(\theta - \alpha)$ tends to $q_i(\theta)$ for every
+$\alpha$, and for $\beta \in (0, \pi)$ its angles are $\alpha$ and $\theta - \alpha$ modulo $2\pi$;
+so the rotations near $\pi(q_i(\theta))$ take every $\alpha$ and every $\gamma$, while $\alpha +
+\gamma = \theta$ on all of them. At $\beta = \pi$ the same holds of $q_i(\alpha) \otimes q_j(\beta)
+\otimes q_i(\alpha - \theta)$, which tends to $q_i(\theta) \otimes q_j(\pi)$ for every $\alpha$,
+since $q_j(\pi) \otimes q_i(\varphi) = q_i(-\varphi) \otimes q_j(\pi)$, a half-turn about $e_j$
+reversing $e_i$; there $\alpha - \gamma = \theta$. A Tait–Bryan sequence's angles are, by
+[%full](statement:euler), the proper angles $(\alpha, \beta + \tfrac\pi2, -\epsilon\gamma)$ of $q
+\otimes q_j(\tfrac\pi2)$, a diffeomorphism of the rotations, and its lock is theirs.
+
+</Proof>
+
+The way back therefore has two kinds of singularity, and the composite treats them differently.
+
+**The wrap.** Away from the lock, $\alpha$ and $\gamma$ are smooth as angles, points of the circle,
+and are returned as real numbers in $(-\pi, \pi]$, as $\atantwo(\sin \alpha, \cos \alpha)$, so that
+$q$ and $-q$ give the same angles. By [%full](statement:euler-singular) a real-valued angle must be
+cut somewhere, and this convention cuts it where it is $\pi$: crossing there, it jumps by $2\pi$,
+from $\pi$ to just above $-\pi$. The jump is in the value alone. $\atantwo(a, b)$ jumps across its
+half-line $a = 0$, $b < 0$, but its derivatives, $(b, -a) / (a^2 + b^2)$ by
+[](eq:archive/core/math/atan2), and all of their own, are continuous across it, so the angles'
+derivatives of every order are the same on either side of the wrap: those of the angle on the
+circle. What a jump in value breaks is a difference of values: a finite difference straddling the
+wrap, and a residual. Half-turns about the coordinate axes, common test values, lie on it: a
+half-turn about $x$ has the $(z, y, x)$ angles $(0, 0, \pi)$, and rounding puts its $\gamma$ at
+either end of the interval. A residual between an angle $a$ read off a model and an angle $b$ it is
+compared with is taken on the circle,
+
+$$
+	a \ominus b = \atantwo\bigl(\sin(a - b),\ \cos(a - b)\bigr), @tag(angle-residual)
+$$
+
+which moves the cut to a residual of $\pm\pi$, as far as an angle can be from the one it is compared
+with, and has the derivatives of $a - b$ everywhere else. With $b$ a reference angle, such as the
+previous estimate along a trajectory, $b + (a \ominus b)$ is the angle in $(b - \pi, b + \pi]$,
+continuous along any path that stays within a half-turn of $b$.
+
+**The lock.** At gimbal lock one of the two norms of [%full](statement:euler) vanishes, and by
+[%full](statement:euler-singular) only $\alpha + \gamma$ or $\alpha - \gamma$ is determined there: no
+convention makes the angles continuous at the lock, and the composite chooses $\gamma = 0$, which
+[](eq:euler) maps back to the rotation exactly. It selects it by a discretization of the smaller
+squared norm against a fraction $c$ of $\lVert q \rVert^2$. On the rows selected, $\beta$ is taken at
+the lock rather than computed, $\alpha = 2\sigma$ when $\lVert (u_j, u_l) \rVert$ vanishes and
+$\alpha = 2\delta$ when $\lVert (w, u_i) \rVert$ does, and the vanishing norm and the $\atantwo$ it
+feeds are given a harmless argument, since a norm has no derivative at $0$. A row is selected when
+$\sin \tfrac\beta2 \le \sqrt c$, or $\cos \tfrac\beta2 \le \sqrt c$, and there the convention's
+rotation differs from $q$ by a conjugate of $q_j(\beta)$, or of $q_j(\pi - \beta)$: by the angle
+$\beta$, or $\pi - \beta$, at most $2 \arcsin \sqrt c$. So $c$ is chosen to make that angle smaller
+than the rounding of either precision, and the selection changes the round trip of no rotation that
+rounding can tell from the lock. On the selected rows the derivatives are those of the selected
+formulas: none for $\beta$ and $\gamma$, and for $\alpha$ those of $2\sigma$ or $2\delta$, which are
+the derivatives of $\alpha + \gamma$ or $\alpha - \gamma$, the one combination that has them.
+
+Off the lock the angles are smooth, but not uniformly. $\delta$ is the angle of the vector $(u_j,
+\epsilon u_l)$ of length $\sin \tfrac\beta2$, and $\sigma$ that of $(w, u_i)$ of length $\cos
+\tfrac\beta2$, so the first derivatives of $\alpha$ and $\gamma$ grow like $1 / \sin \tfrac\beta2$ as
+$\beta \to 0$ and $1 / \cos \tfrac\beta2$ as $\beta \to \pi$, and their second derivatives like the
+squares; $\beta$, twice the angle between those two lengths, has bounded first derivatives that turn
+with the direction of approach, and second derivatives that grow in the same way. The same factor
+amplifies a rounding of $q$'s coordinates into $\alpha$ and $\gamma$ near the lock, while $\alpha \pm
+\gamma$, read off the larger norm, stays accurate: that is the condition of the angles, not an error
+of the composite. Euler angles are therefore a way into and out of a model, and its noise is put in
+the charts instead.
 
 **From a matrix.** By [%full](statement:no-section) no continuous map reads a quaternion off every
 rotation matrix, and the usual reading is a selection between four, each a linear map of the matrix
@@ -759,12 +827,16 @@ the blocks of the point and the mean, as on any curved type.
   and $D$ and $E$, against its closed form, in extended precision, on both sides of its cutoff, at both precisions,
   with first and second derivatives at the identity checked against the series'.
 - **The constructions**: [](eq:two-vectors) carrying $a$ to $b$; [%full](statement:euler) by round
-  trips through [](eq:euler) for all twelve sequences, intrinsic and extrinsic, away from the lock,
-  and at the lock the convention $\gamma = 0$ reproducing the rotation; [](eq:from-matrix) returning
+  trips through [](eq:euler) for all twelve sequences, intrinsic and extrinsic, away from the lock
+  and the wrap, and at the lock the convention $\gamma = 0$ reproducing the rotation, on rows exactly
+  at it and within the threshold of it; [](eq:from-matrix) returning
   $\pm q$ from $\pi(q)$ in each of its four branches; alignment and the interpolations at their
   endpoints and at a constant rate.
 - **The discretizations**: each one's value on both sides of its jump, and its derivatives those of
-  the formula selected, finite where the core's passes are taken.
+  the formula selected, finite where the core's passes are taken; at the wrap of the Euler angles,
+  values $2\pi$ apart on either side and derivatives that agree across it, with the angles' finite
+  differences checked only at rows farther from the wrap than their step; and
+  [](eq:angle-residual) continuous across the wrap of either angle.
 - **The normal**: its density integrating to one through the chart of $S^3$ and of $SE(3)$, its
   draws agreeing with quadratures, and [%full](statement:cover)'s law on the rotations, by
   quadrature over $SO(3)$ of $\density(q) + \density(-q)$.
@@ -805,5 +877,11 @@ None remain.
 **2026-11-03.** Reopened after the build: the Euler angles are said to be smooth away from gimbal
 lock, but returning $\alpha$ and $\gamma$ to $(-\pi, \pi]$ makes them jump by $2\pi$ wherever
 either crosses $\pm\pi$, which the derivative checks found at the half-turns about the coordinate
-axes. This revision treats the Euler angles at all of their singularities, the lock and the wrap
-alike.
+axes. This revision treats the Euler angles at all of their singularities. A new proposition,
+[%full](statement:euler-singular), shows that neither singularity can be removed: a
+real-valued angle must be cut somewhere, and at the lock no convention is continuous. The text now
+says that the wrap is a jump of the value alone, the derivatives agreeing across it; gives the
+residual on the circle, [](eq:angle-residual), by which a model compares angles across the wrap or
+keeps them continuous along a path; bounds what the lock's threshold costs, and so how it is
+chosen; and says how the angles' derivatives and their rounding grow near the lock. The tests
+check the wrap and the residual, and the lock within its threshold as well as exactly at it.
