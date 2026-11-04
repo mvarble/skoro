@@ -183,9 +183,14 @@ impl Euler {
     }
 }
 
-/// The threshold of the lock: `β` is taken at the lock where a norm vanishes to within this
-/// fraction of the quaternion's squared norm, that is to within rounding of nothing.
-pub(crate) const LOCK: f64 = 1e-30;
+/// The threshold `c` of the lock: `β` is taken at the lock where the smaller squared norm is at
+/// most this fraction of the quaternion's. On such a row the convention `γ = 0` reproduces the
+/// rotation to within `2 asin √c = 2·10⁻¹⁷`, below double precision's rounding of a unit
+/// quaternion, `2⁻⁵³ ≈ 1.1·10⁻¹⁶`; and `c` times a squared norm of at most 2 stays a normal number
+/// in single precision, so the band is the same at both precisions. The threshold decides
+/// finiteness, not the round trip: a row at the lock only up to rounding is read by the general
+/// formulas, ill-conditioned in `α` and `γ` alone, and still reproduces its rotation.
+pub(crate) const LOCK: f64 = 1e-34;
 
 /// `q_e(θ)` in storage, `(cos(θ/2), sin(θ/2) e)`.
 fn elementary(axis: Axis, angle: QDyn) -> QDyn {

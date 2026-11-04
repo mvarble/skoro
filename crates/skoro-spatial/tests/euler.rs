@@ -160,8 +160,105 @@ skoro_core::precision_tests! {
                 assert_eq!(on_host[gamma], 0.0);
             }
             close(&out[1], &matrices(&locked), tol);
+
+            // Near the lock of a proper sequence, whose rearrangement is the quaternion itself:
+            // within the threshold, the convention γ = 0; just outside it, the general formulas;
+            // the rotation reproduced either way.
+            if intrinsic.is_proper() {
+                let near = near_locks(intrinsic);
+                let out = common::evaluate_many(
+                    |q| {
+                        let angles = q[0].narrow::<Rotation>().euler(convention);
+                        vec![
+                            angles.untyped(),
+                            rotation::from_euler(angles, convention).matrix().untyped(),
+                        ]
+                    },
+                    &[rotations(&near)],
+                    &target,
+                );
+                assert!(out.iter().flatten().all(|v| v.is_finite()), "{name}: {out:?}");
+                for row in 0..near.len() {
+                    let gamma_out = out[0][3 * row + gamma];
+                    if row < 2 {
+                        assert_eq!(gamma_out, 0.0, "{name}, row {row}: {:?}", out[0]);
+                    } else {
+                        assert!(gamma_out.abs() > 0.1, "{name}, row {row}: {:?}", out[0]);
+                    }
+                    let on_host = host::euler(near[row], convention);
+                    close(&on_host, &out[0][3 * row..3 * row + 3], tol);
+                }
+                close(&out[1], &matrices(&near), tol);
+            }
+
+            // At the locks of a Tait–Bryan sequence as `from_euler` computes them, where rounding
+            // leaves the vanishing norm small rather than zero: β and the combination of α and γ
+            // that the lock determines are accurate, and the rotation is reproduced.
+            if !intrinsic.is_proper() && convention.frame == Frame::Intrinsic {
+                let epsilon = epsilon_of(intrinsic);
+                let free = vectors::<2>(6, 93, -3.0, 3.0);
+                let angles: Vec<[f64; 3]> = free
+                    .iter()
+                    .enumerate()
+                    .map(|(r, a)| [a[0], if r % 2 == 0 { PI / 2.0 } else { -PI / 2.0 }, a[1]])
+                    .collect();
+                let qs: Vec<[f64; 4]> =
+                    angles.iter().map(|a| host::from_euler(*a, convention)).collect();
+                let out = common::evaluate_many(
+                    |q| {
+                        let angles = q[0].narrow::<Rotation>().euler(convention);
+                        vec![
+                            angles.untyped(),
+                            rotation::from_euler(angles, convention).matrix().untyped(),
+                        ]
+                    },
+                    &[rotations(&qs)],
+                    &target,
+                );
+                assert!(out.iter().flatten().all(|v| v.is_finite()), "{name}: {out:?}");
+                for (row, want) in angles.iter().enumerate() {
+                    let got = &out[0][3 * row..3 * row + 3];
+                    // α - εγ at β = -π/2, α + εγ at β = π/2.
+                    let sign = want[1].signum() * epsilon;
+                    let combination = |a: &[f64]| a[0] + sign * a[2];
+                    let d = combination(got) - combination(want);
+                    close(&[got[1], d.sin().atan2(d.cos())], &[want[1], 0.0], tol);
+                }
+                close(&out[1], &matrices(&qs), tol);
+            }
         }
     }
+}
+
+/// `ε = ±1` with `e_i × e_j = ε e_l` for the first two axes of `sequence`.
+fn epsilon_of(sequence: Sequence) -> f64 {
+    let [i, j, _] = sequence.axes();
+    if (index(j) + 3 - index(i)) % 3 == 1 {
+        1.0
+    } else {
+        -1.0
+    }
+}
+
+/// Unit quaternions near the locks of the proper intrinsic `sequence`: two within the threshold,
+/// at `β ≈ 2·10⁻¹⁸` and `π - 2·10⁻¹⁸`, and two just outside it, at `2·10⁻¹⁶` and `π - 2·10⁻¹⁶`.
+fn near_locks(sequence: Sequence) -> Vec<[f64; 4]> {
+    let [i, j, _] = sequence.axes();
+    let (i, j) = (index(i), index(j));
+    let l = 3 - i - j;
+    let quaternion = |w: f64, ui: f64, uj: f64, ul: f64| {
+        let mut q = [w, 0.0, 0.0, 0.0];
+        q[1 + i] = ui;
+        q[1 + j] = uj;
+        q[1 + l] = ul;
+        q
+    };
+    vec![
+        quaternion(0.6, 0.8, 1e-18, 0.0),
+        quaternion(1e-18, 0.0, 0.6, 0.8),
+        quaternion(0.6, 0.8, 1e-16, 0.0),
+        quaternion(1e-16, 0.0, 0.6, 0.8),
+    ]
 }
 
 #[test]

@@ -78,7 +78,7 @@ section prescribes.
 
 ## The revision of the Euler angles and the singular rows
 
-- [ ] `LOCK` at $10^{-34}$, shared by the composite and `host::euler`, with its documentation saying
+- [x] `LOCK` at $10^{-34}$, shared by the composite and `host::euler`, with its documentation saying
       the bound it meets and that it decides finiteness, not the round trip. Tests: the cases the
       companion adds to `euler_round_trips`, at rows within the threshold of the lock and just
       outside it for the proper sequences, and at the Tait–Bryan locks under rounding, with the
