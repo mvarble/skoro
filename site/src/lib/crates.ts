@@ -26,6 +26,11 @@ export const CRATES: Crate[] = [
         deps: ['skoro-core'],
     },
     {
+        name: 'skoro-spatial',
+        purpose: 'The rotations, rigid motions and extended poses, and their maps',
+        deps: ['skoro-core'],
+    },
+    {
         name: 'skoro',
         purpose: 'The umbrella: re-exports the core and the tensor layer',
         deps: ['skoro-core'],

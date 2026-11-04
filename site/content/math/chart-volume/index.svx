@@ -232,6 +232,8 @@ an orthonormal basis $B(\point)$ of $\point^\perp$.
 | $SE_2(3)$, exponential | $\mu \operatorname{Exp}(\phi, w, \rho)$ | $\operatorname{Log}(\mu^{-1} \point)$ | $6 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
 | $SO(3)$, Cayley | $\mu\, (I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12 [\tangent]_\times)$ | [](eq:cayley-inverse) | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
 | $SO(3)$, polar | $\mu \operatorname{polar}(I + [\tangent]_\times)$ | $\frac{\operatorname{vee}(R - R\transpose)}{\operatorname{tr} R - 1}$, $R = \mu\transpose \point$ | [](eq:polar) | yes | no, angles $< \pi / 2$ |
+| $S^3$, stereographic | $\mu \otimes \frac{(1 - s,\ \tangent / 2)}{1 + s}$, $s = \frac1{16} \lVert \tangent \rVert^2$ | $\frac{4 \operatorname{vec}(q)}{1 + w(q)}$, $q = \mu^{-1} \otimes \point$ | $-3 \log\bigl(1 + \tfrac1{16} \lVert \tangent \rVert^2\bigr)$ | yes | yes |
+| $SE(3)$, translated | $(\mu_R \oplus \phi,\ \mu_p + \mu_R\, \rho)$ | $(R \ominus \mu_R,\ \mu_R^{-1} (p - \mu_p))$, $\point = (R, p)$ | the rotation chart's | as the rotation chart | as the rotation chart |
 | $S^2$, stereographic | $\frac{(1 - s)\, \mu + B(\mu)\, \tangent}{1 + s}$, $s = \frac14 \lVert \tangent \rVert^2$ | $\frac{2 B(\mu)\transpose \point}{1 + \mu\transpose \point}$ | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
 | $S^2$, normalization | $\frac{\mu + B(\mu)\, \tangent}{\lVert \mu + B(\mu)\, \tangent \rVert}$ | $\frac{B(\mu)\transpose \point}{\mu\transpose \point}$ | $-\tfrac32 \log\bigl(1 + \lVert \tangent \rVert^2\bigr)$ | yes | no, a hemisphere |
 
@@ -288,6 +290,29 @@ $$
 The chart is global but reaches only the rotations by less than $\pi / 2$: a point $\mu \oplus
 \varepsilon$ is never further than a quarter turn from $\mu$, whatever $\varepsilon$ is.
 
+**The quaternion stereographic chart.** On the unit quaternions $S^3$, which cover the rotations
+twice, with Haar measure normalized at the identity by the same derivative, the quaternion
+$(1 - s, \tangent / 2) / (1 + s)$ is the rotation by the angle $\theta = 4 \arctan(\lVert
+\tangent \rVert / 4)$ about $\tangent$, so that $\lVert \tangent \rVert = \theta + \theta^3/48 +
+O(\theta^5)$: these are the modified Rodrigues parameters, scaled by $4$. The chart is the inverse
+of the stereographic projection of $S^3$ from $-\mu$, at $\tangent / 4$, and reaches every
+quaternion but $-\mu$, so every rotation, $\theta$ running over $[0, 2\pi)$. In the exponential
+chart, which on $S^3$ is a diffeomorphism of the ball $\theta < 2\pi$, the measure is
+$4 \sin^2(\theta/2)\, \dd \theta\, \dd a$ as on the rotations; with $r = 4 \tan(\theta/4)$,
+$\dd \theta = \dd r / (1 + r^2/16)$ and $\sin(\theta/2) = (r/2) / (1 + r^2/16)$, so the measure is
+$r^2 \, \dd r \, \dd a / (1 + r^2/16)^3$. The normalized measure is $8$ times surface measure,
+since the chart's derivative at $0$, $\tangent \mapsto \mu \otimes (0, \tangent / 2)$, scales
+lengths by $\tfrac12$.
+
+**The translated charts of the motions.** A chart $\oplus$ of the rotations gives one of $SE(3)$,
+$(\mu_R, \mu_p) \oplus (\phi, \rho) = (\mu_R \oplus \phi, \mu_p + \mu_R\, \rho)$, which is the
+group product of $\mu$ with $(I \oplus \phi, \rho)$ when the rotation's chart is a left
+translation, and likewise on $SE_2(3)$ with a velocity besides. Haar measure on the motions is the
+product of the rotations' with Lebesgue measure, and the chart's derivative is block triangular
+with $\mu_R$, of determinant $1$, in its translation block, so its log-volume is the rotation
+chart's, and it is global, or full, when the rotation's chart is. It is not the group's
+exponential, $(\operatorname{Exp} \phi, V(\phi)\, \rho)$, though the two agree to first order.
+
 **The stereographic chart.** The chart is the inverse of the stereographic projection from $-\mu$,
 with coordinates halved so that its derivative at $0$ is $B(\mu)$. The inverse stereographic projection
 $u \mapsto ((1 - \lVert u \rVert^2)\, \mu + 2 B(\mu)\, u) / (1 + \lVert u \rVert^2)$ is conformal,
@@ -303,4 +328,4 @@ the open hemisphere around $\mu$ alone.
 **Computing the log-volumes.** The log-volume [](eq:so3-exp) has a removable
 singularity at $\theta = 0$, as $\operatorname{Exp}$ itself does, and is computed there from its
 series in $\theta^2$. The Cayley and stereographic log-volumes are $-2 \log(1 + \lVert \tangent
-\rVert^2 / 4)$, and the normalization chart's is of the same kind, smooth everywhere as written.
+\rVert^2 / 4)$, the quaternion stereographic $-3 \log(1 + \lVert \tangent \rVert^2 / 16)$, and the normalization chart's is of the same kind, smooth everywhere as written.

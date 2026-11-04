@@ -1,0 +1,99 @@
+{
+    "kind": "feature",
+    "stage": "done",
+    "started": "2026-11-03",
+    "events": [
+        {
+            "date": "2026-11-03",
+            "action": "start",
+            "stage": "math"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "math",
+            "commit": "855a104"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "02f930e"
+        },
+        {
+            "date": "2026-11-03",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "4a657a8"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "build",
+            "commit": "bc0940d"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The mathematics does not treat the Euler angles at their singularities: besides gimbal lock, the angles jump by 2π where the first or last crosses ±π, which it does not say.",
+            "commit": "8fd4b62"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "math",
+            "commit": "fd4526a"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "30bc9e7"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "08692cc"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "build",
+            "commit": "03c2bc7"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "ef586fc"
+        }
+    ],
+    "approvals": {
+        "math": {
+            "date": "2026-11-04",
+            "commit": "fd4526a",
+            "hash": "9bd7e737979bc129143fc2d2112de813fad06d515072d1d227ec3ba7d1522b19"
+        },
+        "implementation": {
+            "date": "2026-11-04",
+            "commit": "30bc9e7",
+            "hash": "8a944219cd42debe3a1b0a9207354adfef8711c9a4444c5d902236e2d9c6e3ab"
+        },
+        "plan": {
+            "date": "2026-11-04",
+            "commit": "08692cc",
+            "hash": "08397ac46c6b656565f2dea13307393901947809c5927eb2c1bfcdcb69b23471"
+        },
+        "build": {
+            "date": "2026-11-04",
+            "commit": "03c2bc7"
+        },
+        "publish": {
+            "date": "2026-11-04",
+            "commit": "ef586fc"
+        }
+    },
+    "finished": "2026-11-04"
+}

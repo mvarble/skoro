@@ -33,9 +33,11 @@ taken to be the parent of the working directory.
 | `plugins/`                               | skoro's own Markdown plugins: callouts, quoted source, heading anchors.                                                               |
 | `katex.config.ts`                        | Site-wide KaTeX macros.                                                                                                               |
 | `test/content/`                          | A fixture with a document of every kind. `SITE_CONTENT=test/content pnpm build` builds it instead of `content/`.                      |
+| `src/lib/cms/`                           | The content layout: what each file under `content/` is, how its links resolve, and the queries the routes call.                       |
+| `test/cms/`                              | The fixture `src/lib/cms/preset.test.ts` reads, with a few documents that are wrong on purpose.                                       |
 
 The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms)
-with its `skoroPreset`: it reads every document, resolves links, numbers equations and statements,
+with the preset in `src/lib/cms/`: it reads every document, resolves links, numbers equations and statements,
 collects citations, and serves all of it to the routes as `$cms`. A link to a document that does
 not exist, or a `depends_on` that names nothing, is reported when the site builds. KaTeX and the
 scroll box around display math come from
