@@ -25,7 +25,7 @@ section prescribes.
 
 ## The maps of the rotations
 
-- [ ] `rotation.rs`, the group: `QMul` for `Rotation` on itself, `Vector<3>`, `VectorDyn` and
+- [x] `rotation.rs`, the group: `QMul` for `Rotation` on itself, `Vector<3>`, `VectorDyn` and
       `Matrix<3, N>`; `RotationMaps` with `inverse`, `between`, `unrotate`, `matrix` and `adjoint`;
       `rotation::identity`; and in `so3.rs`, `hat` and `vee`. Tests: `group_laws`,
       `actions_are_the_matrix`, `conjugation_is_exact`, `hat_and_vee`.

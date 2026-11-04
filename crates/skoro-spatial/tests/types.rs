@@ -34,6 +34,30 @@ fn types_are_declared() {
         assert!(registry.embedded(name, &[Param::Integer(1)]).is_err());
     }
     assert!(register(&mut registry).is_err(), "registered twice");
+
+    // Every map of the crate, applied once, defines every composite.
+    let mut writer = skoro_core::Writer::new();
+    writer.build(every_map).unwrap();
+}
+
+/// Applies every map of the crate once.
+fn every_map() {
+    use skoro_core::scope::quantity;
+    use skoro_core::{Matrix, Vector};
+    use skoro_spatial::{Rotation, RotationMaps, rotation, so3};
+    let (a, b) = (quantity("a", Rotation), quantity("b", Rotation));
+    let x = quantity("x", Vector::<3>);
+    let m = quantity("m", Matrix::<3, 4>);
+    let _ = (
+        a * b,
+        a * x,
+        a * x.widen(),
+        a * m,
+        a.inverse(),
+        a.between(b),
+    );
+    let _ = (a.unrotate(x), a.matrix(), a.adjoint(), rotation::identity());
+    let _ = so3::vee(so3::hat(x));
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

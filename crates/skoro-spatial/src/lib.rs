@@ -10,6 +10,9 @@
     )
 )]
 mod algebra;
+pub mod rotation;
+pub mod so3;
 mod types;
 
+pub use rotation::RotationMaps;
 pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, register};
