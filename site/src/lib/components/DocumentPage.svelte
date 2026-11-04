@@ -19,8 +19,8 @@
     const date = (d: Date) => d.toISOString().slice(0, 10);
     const tex = (text: string) => renderMixed(text, doc.katexMacros as Record<string, string>);
     const any = (...lists: DocumentLink[][]) => lists.some((list) => list.length);
-    // How much of an entry's summary "How this came to be" shows: an entry without one has its
-    // whole first paragraph, which is more than a list needs.
+    // How much of an entry's summary "How this came to be" and "What it revises" show: an entry
+    // without one has its whole first paragraph, which is more than a list needs.
     const EXCERPT = 200;
 </script>
 
@@ -117,7 +117,7 @@
                 {/if}
                 {#if data.revises.length}
                     <h2>What it revises</h2>
-                    <LinkList links={data.revises} />
+                    <LinkList links={data.revises} excerpt={EXCERPT} />
                 {/if}
                 {#if doc.workflow?.events.length}
                     <h2>History</h2>
