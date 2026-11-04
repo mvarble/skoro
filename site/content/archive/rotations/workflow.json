@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "publish",
+    "stage": "math",
     "started": "2026-11-03",
     "events": [
         {
@@ -31,27 +31,38 @@
             "action": "approve",
             "stage": "build",
             "commit": "bc0940d"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The mathematics does not treat the Euler angles at their singularities: besides gimbal lock, the angles jump by 2π where the first or last crosses ±π, which it does not say.",
+            "commit": "8fd4b62"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-03",
             "commit": "855a104",
-            "hash": "914f558079f8ea11c317c2620ed67ac7f9e918304235cecd75ed594e42e1feb1"
+            "hash": "914f558079f8ea11c317c2620ed67ac7f9e918304235cecd75ed594e42e1feb1",
+            "stale": true
         },
         "implementation": {
             "date": "2026-11-03",
             "commit": "02f930e",
-            "hash": "c8c021675dfd4a2014d3bf64b54455f26c1b62fa595eb65e4529ccdc0b90364c"
+            "hash": "c8c021675dfd4a2014d3bf64b54455f26c1b62fa595eb65e4529ccdc0b90364c",
+            "stale": true
         },
         "plan": {
             "date": "2026-11-03",
             "commit": "4a657a8",
-            "hash": "18dc43e922d2ed917381e18203ef696bce50c048ec9681a0a3cc0ee10a25fffe"
+            "hash": "18dc43e922d2ed917381e18203ef696bce50c048ec9681a0a3cc0ee10a25fffe",
+            "stale": true
         },
         "build": {
             "date": "2026-11-04",
-            "commit": "bc0940d"
+            "commit": "bc0940d",
+            "stale": true
         }
     }
 }

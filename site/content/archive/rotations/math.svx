@@ -799,3 +799,11 @@ core.
 ## Open questions
 
 None remain.
+
+## Revisions
+
+**2026-11-03.** Reopened after the build: the Euler angles are said to be smooth away from gimbal
+lock, but returning $\alpha$ and $\gamma$ to $(-\pi, \pi]$ makes them jump by $2\pi$ wherever
+either crosses $\pm\pi$, which the derivative checks found at the half-turns about the coordinate
+axes. This revision treats the Euler angles at all of their singularities, the lock and the wrap
+alike.
