@@ -4,12 +4,21 @@
 
 mod algebra;
 mod euler;
+mod extended;
 pub mod host;
+pub mod pose;
 pub mod rotation;
 mod series;
 pub mod so3;
 mod types;
 
 pub use euler::{Axis, Euler, Frame, Sequence};
+pub use extended::ExtendedPoseMaps;
+pub use pose::PoseMaps;
 pub use rotation::RotationMaps;
 pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, register};
+
+/// The free functions of the extended poses.
+pub mod extended_pose {
+    pub use crate::extended::{from_parts, identity};
+}

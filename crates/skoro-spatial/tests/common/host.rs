@@ -143,3 +143,38 @@ pub fn dense_mul(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
         })
         .collect()
 }
+
+/// The homogeneous matrix of a motion's storage with `k` translations, by rows: the columns
+/// `(R, t₁, …, t_k)` over `(0, I_k)`.
+pub fn homogeneous(x: &[f64], k: usize) -> Vec<Vec<f64>> {
+    let r = rot([x[0], x[1], x[2], x[3]]);
+    let n = 3 + k;
+    let mut h = dense_identity(n);
+    for i in 0..3 {
+        for j in 0..3 {
+            h[i][j] = r[i][j];
+        }
+        for t in 0..k {
+            h[i][3 + t] = x[4 + 3 * t + i];
+        }
+    }
+    h
+}
+
+/// The storage of the inverse motion: `(q̄, -Rᵀ tᵢ)`.
+pub fn motion_inverse(x: &[f64], k: usize) -> Vec<f64> {
+    let q = [x[0], x[1], x[2], x[3]];
+    let rt = transpose(rot(q));
+    let mut out = conj(q).to_vec();
+    for t in 0..k {
+        let v = [x[4 + 3 * t], x[5 + 3 * t], x[6 + 3 * t]];
+        out.extend(mv(rt, v).map(|c| -c));
+    }
+    out
+}
+
+/// A dense matrix by rows, stored column by column.
+pub fn dense_stored(a: &[Vec<f64>]) -> Vec<f64> {
+    let (m, n) = (a.len(), a[0].len());
+    (0..n).flat_map(|j| (0..m).map(move |i| a[i][j])).collect()
+}

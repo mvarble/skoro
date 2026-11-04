@@ -47,7 +47,7 @@ section prescribes.
 
 ## The maps of the rigid motions
 
-- [ ] `pose.rs` and `extended.rs`, the groups: `QMul` for `Pose` on itself and on `Vector<3>`, and
+- [x] `pose.rs` and `extended.rs`, the groups: `QMul` for `Pose` on itself and on `Vector<3>`, and
       for `ExtendedPose` on itself; `PoseMaps` and `ExtendedPoseMaps` with `inverse`, `between`,
       `rotate`, `untransform`, the parts, `matrix` and `adjoint`; `as_product`; `pose::identity`,
       `from_parts` and `from_product`; `extended_pose::identity` and `from_parts`. Tests:

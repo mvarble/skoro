@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use skoro_core::scope::quantity_in;
 use skoro_core::testing::random;
-use skoro_core::{Composite, QDyn, Query, Space, Values, Writer};
-use skoro_tensor::{HostData, HostValue, Precision, Target, Value};
+use skoro_core::{Composite, Frames, QDyn, Query, Space, Values, Writer};
+use skoro_tensor::{Frame, HostData, HostValue, Precision, Target, Value};
 
 /// Values of one space, `rows` of them laid end to end.
 #[derive(Clone, Debug)]
@@ -91,6 +91,44 @@ pub fn evaluate_many(
     outs.iter()
         .map(|q| continuous(out.get(*q).unwrap()))
         .collect()
+}
+
+/// The tangent pass of `f` at `inputs` along each tangent coordinate of input `wrt`, on
+/// `target`: per row, the derivative in charts, `d_out × d_in`, laid out as `[row][i][c]`.
+pub fn jacobian(
+    f: impl FnOnce(&[QDyn]) -> QDyn,
+    inputs: &[Rows],
+    wrt: usize,
+    target: &Target,
+) -> Vec<f64> {
+    let mut writer = Writer::new();
+    let (roots, out) = writer
+        .build(|| {
+            let roots: Vec<QDyn> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, rows)| quantity_in(i, rows.space.clone()))
+                .collect();
+            let out = f(&roots);
+            (roots, out)
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([out]), target)
+        .unwrap();
+    let batch = inputs.iter().map(Rows::rows).max().unwrap_or(1);
+    let mut at = Values::new();
+    for (q, rows) in roots.iter().zip(inputs) {
+        at.insert(*q, load(rows, batch, target));
+    }
+    let d = inputs[wrt].space.dimension().unwrap();
+    let identity: Vec<f64> = (0..batch)
+        .flat_map(|_| (0..d).flat_map(move |i| (0..d).map(move |c| f64::from(u8::from(i == c)))))
+        .collect();
+    let frames = Frames::new().with(roots[wrt], Frame::from_host(&identity, batch, d, d, target));
+    let (_, tangents) = program.tangent(&at, &frames).unwrap();
+    tangents.get(out).unwrap().to_host()
 }
 
 /// `f` at the quantities `inputs`, row by row, on `target`.
