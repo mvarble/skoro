@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "math",
+    "stage": "implementation",
     "started": "2026-11-03",
     "events": [
         {
@@ -38,14 +38,19 @@
             "stage": "math",
             "reason": "The mathematics does not treat the Euler angles at their singularities: besides gimbal lock, the angles jump by 2π where the first or last crosses ±π, which it does not say.",
             "commit": "8fd4b62"
+        },
+        {
+            "date": "2026-11-04",
+            "action": "approve",
+            "stage": "math",
+            "commit": "fd4526a"
         }
     ],
     "approvals": {
         "math": {
-            "date": "2026-11-03",
-            "commit": "855a104",
-            "hash": "914f558079f8ea11c317c2620ed67ac7f9e918304235cecd75ed594e42e1feb1",
-            "stale": true
+            "date": "2026-11-04",
+            "commit": "fd4526a",
+            "hash": "9bd7e737979bc129143fc2d2112de813fad06d515072d1d227ec3ba7d1522b19"
         },
         "implementation": {
             "date": "2026-11-03",
