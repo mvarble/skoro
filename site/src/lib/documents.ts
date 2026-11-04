@@ -1,5 +1,5 @@
 import { resolve } from '$app/paths';
-import type { SkoroDocument } from '@mvarble/mesearch-cms/presets/skoro/runtime';
+import type { SkoroDocument } from '$lib/cms/runtime';
 
 export type {
     Heading,
@@ -9,7 +9,7 @@ export type {
     SkoroMath,
     SkoroPage,
     WorkflowEvent,
-} from '@mvarble/mesearch-cms/presets/skoro/runtime';
+} from '$lib/cms/runtime';
 
 // What the navigation and the lists of documents need of one, small enough to send with every
 // page.

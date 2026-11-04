@@ -1,7 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { createCms } from '@mvarble/mesearch-cms';
-import { skoroPreset } from '@mvarble/mesearch-cms/presets/skoro';
 import { rehypeKatex, rehypeMathBox, type PluginEntry } from '@mvarble/mesearch-markdown';
 import { mdsvex, escapeSvelte } from 'mdsvex';
 import remarkMath from 'remark-math';
@@ -9,6 +8,7 @@ import { createHighlighter } from 'shiki';
 import { defineConfig } from 'vitest/config';
 
 import katex from './katex.config.ts';
+import { skoroPreset } from './src/lib/cms/preset.ts';
 import { isFileRef, REPO_ROOT, resolveFileRef } from './plugins/file-ref.ts';
 import { rehypeHeadingAnchors } from './plugins/rehype-heading-anchors.ts';
 import { remarkCallouts } from './plugins/remark-callouts.ts';

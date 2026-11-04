@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { cms } from '$cms';
-import { citationLabel } from '@mvarble/mesearch-cms/presets/skoro/runtime';
+import { citationLabel } from '@mvarble/mesearch-cms/runtime';
 import { referenceHtml } from '@mvarble/mesearch-ui/server';
 
 import { resolve } from '$app/paths';
