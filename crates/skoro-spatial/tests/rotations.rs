@@ -5,8 +5,9 @@ mod common;
 
 use common::host::{M3, cross, mm, mv, qmul, rot, stored, transpose};
 use common::{CUTOFF, Rows, close, quaternions, random_quaternions, tolerance, vectors};
+use skoro_core::Real;
 use skoro_core::{Matrix, Q, QDyn, Space, Vector, VectorDyn};
-use skoro_spatial::{ROTATION, Rotation, RotationMaps, rotation, so3};
+use skoro_spatial::{Axis, ROTATION, Rotation, RotationMaps, host, rotation, so3};
 
 fn rotations(rows: &[[f64; 4]]) -> Rows {
     Rows::new(Space::Embedded(ROTATION.clone()), rows.concat())
@@ -57,6 +58,104 @@ fn rotation_vectors(seed: u64) -> Vec<[f64; 3]> {
 }
 
 skoro_core::precision_tests! {
+    fn constructions(target) {
+        let tol = tolerance(&target);
+        let rows = 6;
+        let angles: Vec<f64> = vectors::<1>(rows, 71, -6.0, 6.0).concat();
+        let axes = vectors::<3>(rows, 72, -2.0, 2.0);
+        let out = common::evaluate_many(
+            |q| {
+                let (axis, angle) = (q[0].narrow::<Vector<3>>(), q[1].narrow::<Real>());
+                let about = rotation::about(axis, angle);
+                let (a, theta) = about.axis_angle();
+                vec![
+                    rotation::elementary(Axis::X, angle).untyped(),
+                    rotation::elementary(Axis::Y, angle).untyped(),
+                    rotation::elementary(Axis::Z, angle).untyped(),
+                    about.untyped(),
+                    rotation::about(a, theta).untyped(),
+                    theta.untyped(),
+                ]
+            },
+            &[Rows::vectors(&axes), Rows::new(Space::Real, angles.clone())],
+            &target,
+        );
+        for (k, e) in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]].iter().enumerate() {
+            let want = flat(angles.iter().map(|t| common::about(*e, *t)));
+            close(&out[k], &want, tol);
+        }
+        let want = flat(angles.iter().zip(&axes).map(|(t, a)| common::about(*a, *t)));
+        close(&out[3], &want, tol);
+        // axis_angle inverts about, its angle in [0, 2π).
+        close(&out[4], &out[3], tol);
+        assert!(out[5].iter().all(|t| (0.0..2.0 * std::f64::consts::PI).contains(t)));
+
+        // At the identity: the fixed axis, the angle zero, and finite.
+        let out = common::evaluate_many(
+            |q| {
+                let (a, theta) = r(q[0]).axis_angle();
+                vec![a.untyped(), theta.untyped()]
+            },
+            &[rotations(&[[1.0, 0.0, 0.0, 0.0]])],
+            &target,
+        );
+        close(&out[0], &[1.0, 0.0, 0.0], tol);
+        close(&out[1], &[0.0], tol);
+
+        // From two directions: π(q) a/|a| = b/|b|; non-finite for opposite ones.
+        let (a, b) = (vectors::<3>(rows, 73, -2.0, 2.0), vectors::<3>(rows, 74, -2.0, 2.0));
+        let out = common::evaluate(
+            |q| {
+                let (a, b) = (q[0].narrow::<Vector<3>>(), q[1].narrow::<Vector<3>>());
+                rotation::from_two_vectors(a, b).untyped()
+            },
+            &[Rows::vectors(&a), Rows::vectors(&b)],
+            &target,
+        );
+        for (row, q) in split::<4>(&out).iter().enumerate() {
+            let carried = mv(rot(*q), common::unit(a[row]));
+            close(&carried, &common::unit(b[row]), tol);
+        }
+        // Opposite directions whose norms are exact, so that the argument vanishes exactly
+        // rather than by rounding.
+        let a = [[1.0, 0.0, 0.0], [0.0, 3.0, 4.0], [0.0, 0.0, -2.0]];
+        let opposite: Vec<[f64; 3]> = a.iter().map(|a| a.map(|v| -2.0 * v)).collect();
+        let out = common::evaluate(
+            |q| {
+                let (a, b) = (q[0].narrow::<Vector<3>>(), q[1].narrow::<Vector<3>>());
+                rotation::from_two_vectors(a, b).untyped()
+            },
+            &[Rows::vectors(&a), Rows::vectors(&opposite)],
+            &target,
+        );
+        assert!(out.iter().all(|v| !v.is_finite()), "{out:?}");
+    }
+
+    fn alignment(target) {
+        let tol = tolerance(&target);
+        let z = quaternions(5, 81);
+        let reference = random_quaternions(z.len(), 82);
+        let out = common::evaluate_many(
+            |q| {
+                let (z, reference) = (r(q[0]), r(q[1]));
+                let aligned = z.aligned_with(reference);
+                vec![aligned.untyped(), aligned.matrix().untyped()]
+            },
+            &[rotations(&z), rotations(&reference)],
+            &target,
+        );
+        close(&out[1], &matrices(&z), tol);
+        for (row, aligned) in split::<4>(&out[0]).iter().enumerate() {
+            let (z, reference) = (z[row], reference[row]);
+            let inner = common::host::dot(&z, &reference);
+            let sign = if inner >= 0.0 { 1.0 } else { -1.0 };
+            close(aligned, &z.map(|v| sign * v), tol);
+            assert!(common::host::dot(aligned, &reference) >= 0.0);
+            close(&host::align(z, reference), &z.map(|v| sign * v), 1e-15);
+            close(&host::align(z.map(|v| 3.0 * v), reference), &z.map(|v| sign * v), 1e-15);
+        }
+    }
+
     fn exp_and_log(target) {
         let tol = tolerance(&target);
         let omega = rotation_vectors(61);

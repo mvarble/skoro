@@ -60,6 +60,16 @@ fn every_map() {
     let _ = so3::vee(so3::hat(x));
     let _ = (rotation::exp(x), a.log(), a.log_shorter());
     let _ = (so3::jl(x), so3::jr(x), so3::jl_inv(x), so3::jr_inv(x));
+    let angle = quantity("angle", skoro_core::Real);
+    let _ = (
+        rotation::about(x, angle),
+        rotation::elementary(skoro_spatial::Axis::Y, angle),
+    );
+    let _ = (
+        a.axis_angle(),
+        a.aligned_with(b),
+        rotation::from_two_vectors(x, x),
+    );
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

@@ -33,7 +33,7 @@ section prescribes.
       cutoffs and series lengths of the companion's table and both guards; `rotation::exp`,
       `RotationMaps::log` and `log_shorter`; and `so3::jl`, `jr`, `jl_inv` and `jr_inv`. Tests:
       `exp_and_log`.
-- [ ] The constructions: `rotation::elementary`, `about` and `from_two_vectors`,
+- [x] The constructions: `rotation::elementary`, `about` and `from_two_vectors`,
       `RotationMaps::axis_angle` with its guarded axis, and `aligned_with`; in `host.rs`, `align`.
       Tests: `constructions`, `alignment`.
 - [ ] `euler.rs`: `Axis`, `Sequence`, `Frame`, `Euler` with `YAW_PITCH_ROLL` and `axes`; the

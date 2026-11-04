@@ -2,18 +2,14 @@
 //! `S³ ⋉ ℝ³` and the extended poses `S³ ⋉ (ℝ³ × ℝ³)`, declared as embedded types with their
 //! volumes, and their maps written as composites of the core's operations.
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the arithmetic of the declarations and maps that later tasks add"
-    )
-)]
 mod algebra;
+mod euler;
+pub mod host;
 pub mod rotation;
 mod series;
 pub mod so3;
 mod types;
 
+pub use euler::Axis;
 pub use rotation::RotationMaps;
 pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, register};
