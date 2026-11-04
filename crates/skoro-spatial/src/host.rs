@@ -121,7 +121,8 @@ pub fn exp(omega: [f64; 3]) -> [f64; 4] {
     ]
 }
 
-/// `Log(q) = 2 atan2(n, w) u / n`, of length in [0, 2π); non-finite at `-1`.
+/// `Log(q) = 2 atan2(n, w) u / n`, of length in [0, 2π); undefined at `-1`: non-finite exactly
+/// there, and near it of length near 2π with a direction set by rounding.
 pub fn log(q: [f64; 4]) -> [f64; 3] {
     let u = [q[1], q[2], q[3]];
     let n = u.iter().map(|v| v * v).sum::<f64>().sqrt();

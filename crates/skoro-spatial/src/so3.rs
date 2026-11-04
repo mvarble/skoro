@@ -81,13 +81,15 @@ pub fn jr(omega: Q<Vector<3>>) -> Q<Matrix<3, 3>> {
     JL.call(&[(-omega).untyped()]).narrow()
 }
 
-/// `J_l(ω)⁻¹ = I - ½ Ω + C Ω²`, `C = (1 - (θ/2) cot(θ/2))/θ²`; non-finite at `|ω| = 2π`.
+/// `J_l(ω)⁻¹ = I - ½ Ω + C Ω²`, `C = (1 - (θ/2) cot(θ/2))/θ²`; undefined at `|ω| = 2π`:
+/// non-finite exactly there, and growing without bound near it, large rather than wrong within
+/// rounding of it.
 #[track_caller]
 pub fn jl_inv(omega: Q<Vector<3>>) -> Q<Matrix<3, 3>> {
     JL_INV.call(&[omega.untyped()]).narrow()
 }
 
-/// `J_r(ω)⁻¹ = J_l(-ω)⁻¹ = I + ½ Ω + C Ω²`; non-finite at `|ω| = 2π`.
+/// `J_r(ω)⁻¹ = J_l(-ω)⁻¹ = I + ½ Ω + C Ω²`; undefined at `|ω| = 2π`, as `jl_inv` is.
 #[track_caller]
 pub fn jr_inv(omega: Q<Vector<3>>) -> Q<Matrix<3, 3>> {
     JL_INV.call(&[(-omega).untyped()]).narrow()

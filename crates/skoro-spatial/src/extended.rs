@@ -160,7 +160,9 @@ pub trait ExtendedPoseMaps: Sized {
     fn matrix(self) -> Q<Matrix<5, 5>>;
     /// The adjoint `((R, 0, 0), ([v]× R, R, 0), ([p]× R, 0, R))` in the order `(φ, η, ρ)`.
     fn adjoint(self) -> Q<Matrix<9, 9>>;
-    /// `Log(q, v, p) = (φ, J_l(φ)⁻¹ v, J_l(φ)⁻¹ p)` with `φ = Log q`; non-finite at `q = -1`.
+    /// `Log(q, v, p) = (φ, J_l(φ)⁻¹ v, J_l(φ)⁻¹ p)` with `φ = Log q`. Undefined at `q = -1`:
+    /// non-finite exactly there, and near it `φ` ill-conditioned in direction, as `log` is, and
+    /// the translations' parts growing without bound.
     fn log(self) -> Q<Vector<9>>;
     /// The same with the rotation vector of the shorter turn.
     fn log_shorter(self) -> Q<Vector<9>>;
@@ -272,13 +274,14 @@ pub fn jr(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
 }
 
 /// The left Jacobian's inverse: `J_l⁻¹` on the diagonal, `-J_l⁻¹ Q(φ, η) J_l⁻¹` and
-/// `-J_l⁻¹ Q(φ, ρ) J_l⁻¹` below it; non-finite at `|φ| = 2π`.
+/// `-J_l⁻¹ Q(φ, ρ) J_l⁻¹` below it; undefined at `|φ| = 2π`: non-finite exactly there, and
+/// growing without bound near it, large rather than wrong within rounding of it.
 #[track_caller]
 pub fn jl_inv(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
     JL_INV.call(&[xi.untyped()]).narrow()
 }
 
-/// The right Jacobian's inverse, `𝒥_l(-ξ)⁻¹`.
+/// The right Jacobian's inverse, `𝒥_l(-ξ)⁻¹`; undefined at `|φ| = 2π`, as `jl_inv` is.
 #[track_caller]
 pub fn jr_inv(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
     JL_INV.call(&[(-xi).untyped()]).narrow()

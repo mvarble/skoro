@@ -303,8 +303,9 @@ pub trait RotationMaps: Sized {
     /// The adjoint, `π(q)`, carrying a perturbation in the frame of `self` to the outer frame:
     /// `q ⊕ t = (1 ⊕ π(q) t) q`.
     fn adjoint(self) -> Q<Matrix<3, 3>>;
-    /// `Log(q) = 2 atan2(n, w) u / n`: the inverse of `exp`, of length in [0, 2π); non-finite at
-    /// `-1`. `Log(-q) ≠ Log(q)`.
+    /// `Log(q) = 2 atan2(n, w) u / n`: the inverse of `exp`, of length in [0, 2π). `Log(-q) ≠
+    /// Log(q)`. Undefined at `-1`: non-finite exactly there, and near it of length near 2π with
+    /// its direction ill-conditioned, set by rounding within rounding of `-1`.
     fn log(self) -> Q<Vector<3>>;
     /// The rotation vector of the shorter turn, `Log(s(q) q)` with `s(q)` the sign of `w`: the
     /// same at `±q`, of length in [0, π], and a discretization at half-turns.
@@ -324,7 +325,9 @@ pub trait RotationMaps: Sized {
     /// lock determines stay accurate.
     fn euler(self, convention: Euler) -> Q<Vector<3>>;
     /// The angle between two rotations, `|rv(q̄₁ ⊗ q₂)| ∈ [0, π]`: the length of the shorter turn
-    /// from one to the other. Its derivatives are non-finite where it is 0 or π.
+    /// from one to the other. It has no derivative where it is 0, where its passes are
+    /// non-finite, and where it is π, a discretization whose passes are those of the side
+    /// selected.
     fn angle_to(self, other: Q<Rotation>) -> Q<Real>;
     /// `q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂))`: the geodesic of the unit quaternions from `self` at `t = 0` to
     /// `other` at `t = 1`, by the arc that avoids `-self`.
@@ -434,7 +437,10 @@ pub fn elementary(axis: Axis, angle: Q<Real>) -> Q<Rotation> {
 }
 
 /// The rotation of least angle carrying the direction of `a` to that of `b`,
-/// `P(|a| |b| + a·b, a × b)`; non-finite where `b` is opposite to `a`, or either is zero.
+/// `P(|a| |b| + a·b, a × b)`. Undefined where `b` is opposite to `a`, or either is zero:
+/// non-finite where the argument vanishes exactly, and ill-conditioned near it, its error the
+/// rounding over the angle by which `b` falls short of `-a`, so that at directions opposite only
+/// up to rounding it is finite and meaningless.
 #[track_caller]
 pub fn from_two_vectors(a: Q<Vector<3>>, b: Q<Vector<3>>) -> Q<Rotation> {
     FROM_TWO_VECTORS.call(&[a.untyped(), b.untyped()]).narrow()

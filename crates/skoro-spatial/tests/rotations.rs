@@ -142,7 +142,9 @@ skoro_core::precision_tests! {
             close(&carried, &common::unit(b[row]), tol);
         }
         // Opposite directions whose norms are exact, so that the argument vanishes exactly
-        // rather than by rounding.
+        // rather than by rounding. At directions opposite only up to rounding the argument is
+        // rounding, and the rotation finite and meaningless, as the map's documentation says;
+        // that is not checked, since no value there is right.
         let a = [[1.0, 0.0, 0.0], [0.0, 3.0, 4.0], [0.0, 0.0, -2.0]];
         let opposite: Vec<[f64; 3]> = a.iter().map(|a| a.map(|v| -2.0 * v)).collect();
         let out = common::evaluate(

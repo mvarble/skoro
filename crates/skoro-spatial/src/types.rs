@@ -15,7 +15,9 @@
 //!
 //! The retraction normalizes its base point: on the type that changes nothing, and off it, it
 //! keeps the rounding of a long run of retractions from being carried into every later step. The
-//! inverse does not: its inputs are points of the type.
+//! inverse does not: its inputs are points of the type. It is undefined at `q' = -q`, the chart's
+//! cut: non-finite at a row exactly there, and growing without bound near it, as `4 tan(θ/4)` of
+//! the relative angle `θ`, so that within rounding of the cut it is large rather than wrong.
 
 use std::sync::{Arc, LazyLock};
 

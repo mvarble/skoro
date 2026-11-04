@@ -89,7 +89,7 @@ section prescribes.
       least $0.1$ from $\pm\pi$.
 - [x] `angle_residual` and the sealed trait `Angles` in `euler.rs`, re-exported from the crate's
       root. Tests: `angle_residual_is_on_the_circle`.
-- [ ] The documentation of every singular row as [Errors and domains](implementation.md#errors-and-domains)
+- [x] The documentation of every singular row as [Errors and domains](implementation.md#errors-and-domains)
       states it: `from_two_vectors`, the inverse retraction, `log`, `jl_inv`, the motions'
       logarithms and `angle_to`, each saying that it is non-finite exactly at the row and what it
       gives within rounding of it. Tests: `constructions` checks the non-finite case only at

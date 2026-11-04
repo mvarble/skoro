@@ -393,8 +393,9 @@ pub trait PoseMaps: Sized {
     /// The adjoint `((R, 0), ([p]× R, R))` in the order `(φ, ρ)`, carrying a perturbation in the
     /// frame of `self` to the outer frame to first order.
     fn adjoint(self) -> Q<Matrix<6, 6>>;
-    /// `Log(q, p) = (φ, J_l(φ)⁻¹ p)` with `φ = Log q`: the inverse of `pose::exp`; non-finite at
-    /// `q = -1`.
+    /// `Log(q, p) = (φ, J_l(φ)⁻¹ p)` with `φ = Log q`: the inverse of `pose::exp`. Undefined at
+    /// `q = -1`: non-finite exactly there, and near it `φ` ill-conditioned in direction, as `log`
+    /// is, and `J_l(φ)⁻¹ p` growing without bound.
     fn log(self) -> Q<Vector<6>>;
     /// The same with the rotation vector of the shorter turn: the same at `±q`, a discretization
     /// at half-turns.
@@ -541,13 +542,15 @@ pub fn jr(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
     JL.call(&[(-xi).untyped()]).narrow()
 }
 
-/// `𝒥_l(ξ)⁻¹ = ((J_l⁻¹, 0), (-J_l⁻¹ Q J_l⁻¹, J_l⁻¹))`; non-finite at `|φ| = 2π`.
+/// `𝒥_l(ξ)⁻¹ = ((J_l⁻¹, 0), (-J_l⁻¹ Q J_l⁻¹, J_l⁻¹))`; undefined at `|φ| = 2π`: non-finite
+/// exactly there, and growing without bound near it, large rather than wrong within rounding of
+/// it.
 #[track_caller]
 pub fn jl_inv(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
     JL_INV.call(&[xi.untyped()]).narrow()
 }
 
-/// `𝒥_r(ξ)⁻¹ = 𝒥_l(-ξ)⁻¹`; non-finite at `|φ| = 2π`.
+/// `𝒥_r(ξ)⁻¹ = 𝒥_l(-ξ)⁻¹`; undefined at `|φ| = 2π`, as `jl_inv` is.
 #[track_caller]
 pub fn jr_inv(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
     JL_INV.call(&[(-xi).untyped()]).narrow()
