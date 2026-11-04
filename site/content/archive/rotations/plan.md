@@ -52,7 +52,7 @@ section prescribes.
       `rotate`, `untransform`, the parts, `matrix` and `adjoint`; `as_product`; `pose::identity`,
       `from_parts` and `from_product`; `extended_pose::identity` and `from_parts`. Tests:
       `motion_group_laws`, `parts_and_products`.
-- [ ] The motions' exponentials and logarithms, `pose::exp`, `extended_pose::exp`, `log` and
+- [x] The motions' exponentials and logarithms, `pose::exp`, `extended_pose::exp`, `log` and
       `log_shorter` on both; the composite `skoro.spatial.motion_q`; and the Jacobians and their
       inverses, `pose::jl`, `jr`, `jl_inv`, `jr_inv` and the extended pose's. Tests:
       `motion_exp_and_log`, `adjoints_conjugate`, `jacobians_are_the_passes`,

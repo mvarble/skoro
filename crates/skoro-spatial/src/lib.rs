@@ -20,5 +20,5 @@ pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, reg
 
 /// The free functions of the extended poses.
 pub mod extended_pose {
-    pub use crate::extended::{from_parts, identity};
+    pub use crate::extended::{exp, from_parts, identity, jl, jl_inv, jr, jr_inv};
 }

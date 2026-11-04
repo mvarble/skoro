@@ -43,11 +43,15 @@ fn types_are_declared() {
 /// Applies every map of the crate once.
 fn every_map() {
     use skoro_core::scope::quantity;
-    use skoro_core::{Matrix, Vector};
-    use skoro_spatial::{Rotation, RotationMaps, rotation, so3};
+    use skoro_core::{Matrix, Real, Vector};
+    use skoro_spatial::{
+        Axis, Euler, ExtendedPose, ExtendedPoseMaps, Frame, Pose, PoseMaps, Rotation, RotationMaps,
+        Sequence, extended_pose, pose, rotation, so3,
+    };
     let (a, b) = (quantity("a", Rotation), quantity("b", Rotation));
     let x = quantity("x", Vector::<3>);
     let m = quantity("m", Matrix::<3, 4>);
+    let angle = quantity("angle", Real);
     let _ = (
         a * b,
         a * x,
@@ -60,16 +64,61 @@ fn every_map() {
     let _ = so3::vee(so3::hat(x));
     let _ = (rotation::exp(x), a.log(), a.log_shorter());
     let _ = (so3::jl(x), so3::jr(x), so3::jl_inv(x), so3::jr_inv(x));
-    let angle = quantity("angle", skoro_core::Real);
     let _ = (
         rotation::about(x, angle),
-        rotation::elementary(skoro_spatial::Axis::Y, angle),
+        rotation::elementary(Axis::Y, angle),
     );
     let _ = (
         a.axis_angle(),
         a.aligned_with(b),
         rotation::from_two_vectors(x, x),
     );
+    let _ = rotation::from_matrix(a.matrix());
+    for sequence in Sequence::ALL {
+        for frame in [Frame::Intrinsic, Frame::Extrinsic] {
+            let convention = Euler { sequence, frame };
+            let _ = (a.euler(convention), rotation::from_euler(x, convention));
+        }
+    }
+
+    let (s, t) = (quantity("s", Pose), quantity("t", Pose));
+    let _ = (
+        s * t,
+        s * x,
+        s.inverse(),
+        s.between(t),
+        s.rotate(x),
+        s.untransform(x),
+    );
+    let _ = (s.matrix(), s.adjoint(), pose::from_product(s.as_product()));
+    let _ = (
+        pose::identity(),
+        pose::from_parts(s.rotation(), s.position()),
+    );
+    let xi6 = quantity("xi6", Vector::<6>);
+    let _ = (pose::exp(xi6), s.log(), s.log_shorter());
+    let _ = (
+        pose::jl(xi6),
+        pose::jr(xi6),
+        pose::jl_inv(xi6),
+        pose::jr_inv(xi6),
+    );
+
+    let (u, v) = (quantity("u", ExtendedPose), quantity("v", ExtendedPose));
+    let _ = (
+        u * v,
+        u.inverse(),
+        u.between(v),
+        u.matrix(),
+        u.adjoint(),
+        u.pose(),
+    );
+    let _ = extended_pose::from_parts(u.rotation(), u.velocity(), u.position());
+    let _ = extended_pose::identity();
+    let xi9 = quantity("xi9", Vector::<9>);
+    let _ = (extended_pose::exp(xi9), u.log(), u.log_shorter());
+    let _ = (extended_pose::jl(xi9), extended_pose::jr(xi9));
+    let _ = (extended_pose::jl_inv(xi9), extended_pose::jr_inv(xi9));
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

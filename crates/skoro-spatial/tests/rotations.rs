@@ -4,7 +4,7 @@
 mod common;
 
 use common::host::{M3, cross, mm, mv, qmul, rot, stored, transpose};
-use common::{CUTOFF, Rows, close, quaternions, random_quaternions, tolerance, vectors};
+use common::{Rows, close, quaternions, random_quaternions, rotation_vectors, tolerance, vectors};
 use skoro_core::Real;
 use skoro_core::{Matrix, Q, QDyn, Space, Vector, VectorDyn};
 use skoro_spatial::{Axis, ROTATION, Rotation, RotationMaps, host, rotation, so3};
@@ -34,27 +34,6 @@ fn matrices(qs: &[[f64; 4]]) -> Vec<f64> {
 /// A stored `Matrix(3, 3)` by rows.
 fn by_rows(data: &[f64]) -> M3 {
     std::array::from_fn(|i| std::array::from_fn(|j| data[i + 3 * j]))
-}
-
-/// Rotation vectors in random directions at lengths from 0 to 6, at both sides of the cutoff.
-fn rotation_vectors(seed: u64) -> Vec<[f64; 3]> {
-    let lengths = [
-        0.0,
-        (0.9 * CUTOFF).sqrt(),
-        (1.1 * CUTOFF).sqrt(),
-        0.5,
-        1.0,
-        2.0,
-        3.0,
-        4.0,
-        5.0,
-        6.0,
-    ];
-    vectors::<3>(lengths.len(), seed, -1.0, 1.0)
-        .into_iter()
-        .zip(lengths)
-        .map(|(d, length)| common::unit(d).map(|v| v * length))
-        .collect()
 }
 
 /// Unit quaternions whose largest coordinate in magnitude is the `m`-th, with either sign.

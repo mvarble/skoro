@@ -131,6 +131,90 @@ pub fn jacobian(
     tangents.get(out).unwrap().to_host()
 }
 
+/// The Hessian pass of a `Real`-valued `f` at `inputs`, seeded with one, along each tangent
+/// coordinate of input `wrt`: per row, `β` at that input, `d × d`, laid out as `[row][i][c]`.
+pub fn hessian(
+    f: impl FnOnce(&[QDyn]) -> QDyn,
+    inputs: &[Rows],
+    wrt: usize,
+    target: &Target,
+) -> Vec<f64> {
+    let mut writer = Writer::new();
+    let (roots, out) = writer
+        .build(|| {
+            let roots: Vec<QDyn> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, rows)| quantity_in(i, rows.space.clone()))
+                .collect();
+            let out = f(&roots);
+            (roots, out)
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([out]), target)
+        .unwrap();
+    let batch = inputs.iter().map(Rows::rows).max().unwrap_or(1);
+    let mut at = Values::new();
+    for (q, rows) in roots.iter().zip(inputs) {
+        at.insert(*q, load(rows, batch, target));
+    }
+    let d = inputs[wrt].space.dimension().unwrap();
+    let identity: Vec<f64> = (0..batch)
+        .flat_map(|_| (0..d).flat_map(move |i| (0..d).map(move |c| f64::from(u8::from(i == c)))))
+        .collect();
+    let velocities =
+        Frames::new().with(roots[wrt], Frame::from_host(&identity, batch, d, d, target));
+    let second = program.hessian_products(&at, &velocities).unwrap();
+    second.beta.get(roots[wrt]).unwrap().to_host()
+}
+
+/// Rotation vectors in random directions at lengths from 0 to 6, at both sides of the cutoff.
+pub fn rotation_vectors(seed: u64) -> Vec<[f64; 3]> {
+    let lengths = [
+        0.0,
+        (0.9 * CUTOFF).sqrt(),
+        (1.1 * CUTOFF).sqrt(),
+        0.5,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+    ];
+    vectors::<3>(lengths.len(), seed, -1.0, 1.0)
+        .into_iter()
+        .zip(lengths)
+        .map(|(d, length)| unit(d).map(|v| v * length))
+        .collect()
+}
+
+/// Twists `(φ, t₁, …, t_k)`: the rotation vectors of `rotation_vectors` and translations drawn from
+/// `seed`, laid end to end.
+pub fn twists(k: usize, seed: u64) -> Vec<f64> {
+    let phi = rotation_vectors(seed);
+    let t = vectors::<3>(phi.len() * k, seed + 1, -2.0, 2.0);
+    phi.iter()
+        .enumerate()
+        .flat_map(|(i, phi)| {
+            phi.iter()
+                .copied()
+                .chain(t[i * k..(i + 1) * k].iter().flatten().copied())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// `[row][i][c]` of matrices stored column by column, `n × n` each.
+pub fn by_rows_layout(stored: &[f64], n: usize) -> Vec<f64> {
+    stored
+        .chunks(n * n)
+        .flat_map(|m| (0..n).flat_map(move |i| (0..n).map(move |c| m[i + n * c])))
+        .collect()
+}
+
 /// `f` at the quantities `inputs`, row by row, on `target`.
 pub fn evaluate(f: impl FnOnce(&[QDyn]) -> QDyn, inputs: &[Rows], target: &Target) -> Vec<f64> {
     evaluate_many(|q| vec![f(q)], inputs, target).remove(0)

@@ -4,8 +4,8 @@
 mod common;
 
 use common::host::{dense_mul, dense_stored, homogeneous, motion_inverse, mv, rot, transpose};
-use common::{Rows, close, quaternions, tolerance, vectors, with_translations};
-use skoro_core::{Declares, Q, QDyn, Space, Vector};
+use common::{Rows, close, quaternions, tolerance, twists, vectors, with_translations};
+use skoro_core::{Declares, Q, QDyn, Space, Vector, VectorDyn};
 use skoro_spatial::{
     ExtendedPose, ExtendedPoseMaps, Pose, PoseMaps, Rotation, extended_pose, pose,
 };
@@ -40,7 +40,120 @@ fn stored_rows(data: &[f64], n: usize, f: impl Fn(&[f64]) -> Vec<Vec<f64>>) -> V
         .collect()
 }
 
+/// The twist matrix of `(φ, t₁, …, t_k)`, by rows: `[φ]×` and the `tᵢ` over zeros.
+fn twist_matrix(xi: &[f64], k: usize) -> Vec<Vec<f64>> {
+    let n = 3 + k;
+    let hat = common::host::hat([xi[0], xi[1], xi[2]]);
+    let mut m = vec![vec![0.0; n]; n];
+    for i in 0..3 {
+        m[i][..3].copy_from_slice(&hat[i]);
+        for t in 0..k {
+            m[i][3 + t] = xi[3 + 3 * t + i];
+        }
+    }
+    m
+}
+
 skoro_core::precision_tests! {
+    fn motion_exp_and_log(target) {
+        let tol = tolerance(&target);
+        for k in [1, 2] {
+            let (n, d) = (4 + 3 * k, 3 + 3 * k);
+            let xi = twists(k, 221);
+            let out = common::evaluate_many(
+                |q| {
+                    if k == 1 {
+                        let t = pose::exp(q[0].narrow());
+                        vec![t.matrix().untyped(), t.log().untyped()]
+                    } else {
+                        let t = extended_pose::exp(q[0].narrow());
+                        vec![t.matrix().untyped(), t.log().untyped()]
+                    }
+                },
+                &[Rows::new(Space::Vector(d), xi.clone())],
+                &target,
+            );
+            // The motion at a constant twist is the matrix exponential of the twist.
+            let integrated: Vec<f64> = xi
+                .chunks(d)
+                .flat_map(|xi| dense_stored(&common::host::expm(&twist_matrix(xi, k))))
+                .collect();
+            close(&out[0], &integrated, tol);
+            // Its logarithm inverts it on the ball of radius 2π.
+            close(&out[1], &xi, tol);
+
+            // The shorter turn is the same at ±q.
+            let x = with_translations(&quaternions(5, 222), k, 223);
+            let minus: Vec<f64> = x
+                .chunks(n)
+                .flat_map(|x| x.iter().enumerate().map(|(i, v)| if i < 4 { -v } else { *v }).collect::<Vec<_>>())
+                .collect();
+            let out = common::evaluate_many(
+                |q| {
+                    if k == 1 {
+                        vec![p(q[0]).log_shorter().untyped(), p(q[1]).log_shorter().untyped()]
+                    } else {
+                        vec![e(q[0]).log_shorter().untyped(), e(q[1]).log_shorter().untyped()]
+                    }
+                },
+                &[motions(&x, k), motions(&minus, k)],
+                &target,
+            );
+            close(&out[0], &out[1], tol);
+        }
+    }
+
+    fn adjoints_conjugate(target) {
+        let tol = tolerance(&target);
+        for k in [1, 2] {
+            let (n, d) = (4 + 3 * k, 3 + 3 * k);
+            let t = with_translations(&quaternions(5, 231), k, 232);
+            let rows = t.len() / n;
+            let xi: Vec<f64> = vectors::<9>(rows, 233, -1.0, 1.0)
+                .iter()
+                .flat_map(|v| v[..d].to_vec())
+                .collect();
+            let h = 1e-3;
+            let small: Vec<f64> = xi.iter().map(|v| h * v).collect();
+            let out = common::evaluate_many(
+                |q| {
+                    let (xi, small) = (q[1].narrow::<VectorDyn>(), q[2].narrow::<VectorDyn>());
+                    if k == 1 {
+                        let t = p(q[0]);
+                        let ad: Q<Vector<6>> = t.adjoint().matmul(xi.narrow::<Vector<6>>());
+                        let moved: Q<Vector<6>> = t.adjoint().matmul(small.narrow::<Vector<6>>());
+                        vec![
+                            (t * pose::exp(xi.narrow()) * t.inverse()).untyped(),
+                            pose::exp(ad).untyped(),
+                            t.retract(small).untyped(),
+                            (pose::identity().retract(moved) * t).untyped(),
+                        ]
+                    } else {
+                        let t = e(q[0]);
+                        let ad: Q<Vector<9>> = t.adjoint().matmul(xi.narrow::<Vector<9>>());
+                        let moved: Q<Vector<9>> = t.adjoint().matmul(small.narrow::<Vector<9>>());
+                        vec![
+                            (t * extended_pose::exp(xi.narrow()) * t.inverse()).untyped(),
+                            extended_pose::exp(ad).untyped(),
+                            t.retract(small).untyped(),
+                            (extended_pose::identity().retract(moved) * t).untyped(),
+                        ]
+                    }
+                },
+                &[
+                    motions(&t, k),
+                    Rows::new(Space::Vector(d), xi.clone()),
+                    Rows::new(Space::Vector(d), small),
+                ],
+                &target,
+            );
+            // T Exp(ξ) T⁻¹ = Exp(Ad(T) ξ), exactly.
+            close(&out[0], &out[1], tol);
+            // T ⊕ hξ = (1 ⊕ h Ad(T) ξ) T + O(h²).
+            close(&out[2], &out[3], tol.max(20.0 * h * h));
+        }
+    }
+
     fn motion_group_laws(target) {
         let tol = tolerance(&target);
         for k in [1, 2] {

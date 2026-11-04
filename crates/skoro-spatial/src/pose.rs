@@ -12,8 +12,10 @@ use std::sync::{Arc, LazyLock};
 use skoro_core::scope::{concatenate, constant, product, project};
 use skoro_core::{Composite, Declares, Matrix, ProductDyn, Q, QDyn, QMul, Space, Vector};
 
-use crate::algebra::{self, conjugate, mul, rotate, unrotate, zero};
-use crate::rotation::composite;
+use crate::algebra::{self, conjugate, dot, mul, rotate, unrotate, zero};
+use crate::rotation::{composite, exp_stored, log_stored, shorter};
+use crate::series::{Coefficient, coefficient};
+use crate::so3::{jl_inv_stored, jl_stored};
 use crate::{Pose, Rotation};
 
 /// The rotation's storage and the translations of a motion's storage.
@@ -118,6 +120,94 @@ pub(crate) fn adjoint_stored(x: QDyn, k: usize) -> QDyn {
     blocks(&rows)
 }
 
+/// `Exp(φ, t₁, …) = (Exp φ, J_l(φ) tᵢ)`, before the projection, of a `Vector(3 + 3k)`.
+pub(crate) fn exp_motion_stored(xi: QDyn, k: usize) -> QDyn {
+    let phi = xi.slice(0..3);
+    let jl = jl_stored(phi);
+    let moved: Vec<QDyn> = (0..k)
+        .map(|i| jl.matmul(xi.slice(3 + 3 * i..6 + 3 * i)))
+        .collect();
+    join(exp_stored(phi), &moved)
+}
+
+/// `Log(q, t₁, …) = (φ, J_l(φ)⁻¹ tᵢ)` with `φ = Log q`, or `Log(s(q) q)` for the shorter turn.
+pub(crate) fn log_motion_stored(x: QDyn, k: usize, shorter_turn: bool) -> QDyn {
+    let (q, t) = split(x, k);
+    let q = if shorter_turn { shorter(q) } else { q };
+    let phi = log_stored(q);
+    let inverse = jl_inv_stored(phi);
+    let parts: Vec<QDyn> = std::iter::once(phi)
+        .chain(t.iter().map(|t| inverse.matmul(*t)))
+        .collect();
+    concatenate(&parts, Space::Vector(3 + 3 * k))
+}
+
+/// `Q(φ, ρ) = ½ Ψ + B (ΦΨ + ΨΦ + ΦΨΦ) + D (Φ²Ψ + ΨΦ² - 3 ΦΨΦ) + E (ΦΨΦ² + Φ²ΨΦ)`, with
+/// `Φ = [φ]×` and `Ψ = [ρ]×`: the block below the diagonal of the motions' left Jacobian.
+static MOTION_Q: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.motion_q",
+        &[Space::Vector(3), Space::Vector(3)],
+        |q| {
+            let (phi, rho) = (q[0], q[1]);
+            let theta2 = dot(phi, phi);
+            let (b, d, e) = (
+                coefficient(Coefficient::B, theta2),
+                coefficient(Coefficient::D, theta2),
+                coefficient(Coefficient::E, theta2),
+            );
+            let (f, s) = (algebra::hat(phi), algebra::hat(rho));
+            let (fs, sf) = (f.matmul(s), s.matmul(f));
+            let fsf = fs.matmul(f);
+            let (ffs, sff) = (f.matmul(fs), sf.matmul(f));
+            let first = fs + sf + fsf;
+            let second = ffs + sff - fsf * 3.0;
+            let third = fsf.matmul(f) + f.matmul(fsf);
+            s * 0.5 + b * first + d * second + e * third
+        },
+    )
+});
+
+/// The left Jacobian of a motion's exponential, `J_l(φ)` on the diagonal and `Q(φ, tᵢ)` below it
+/// in the first block column.
+pub(crate) fn jl_motion_stored(xi: QDyn, k: usize) -> QDyn {
+    let phi = xi.slice(0..3);
+    let jl = jl_stored(phi);
+    let rows: Vec<Vec<Option<QDyn>>> = (0..=k)
+        .map(|row| {
+            (0..=k)
+                .map(|column| match (row, column) {
+                    (row, column) if row == column => Some(jl),
+                    (row, 0) => Some(MOTION_Q.call(&[phi, xi.slice(3 * row..3 * row + 3)])),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    blocks(&rows)
+}
+
+/// Its inverse: `J_l(φ)⁻¹` on the diagonal and `-J_l⁻¹ Q(φ, tᵢ) J_l⁻¹` below it.
+pub(crate) fn jl_inv_motion_stored(xi: QDyn, k: usize) -> QDyn {
+    let phi = xi.slice(0..3);
+    let inverse = jl_inv_stored(phi);
+    let rows: Vec<Vec<Option<QDyn>>> = (0..=k)
+        .map(|row| {
+            (0..=k)
+                .map(|column| match (row, column) {
+                    (row, column) if row == column => Some(inverse),
+                    (row, 0) => {
+                        let q = MOTION_Q.call(&[phi, xi.slice(3 * row..3 * row + 3)]);
+                        Some(-inverse.matmul(q).matmul(inverse))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    blocks(&rows)
+}
+
 fn pose_space() -> Space {
     Pose.space()
 }
@@ -191,6 +281,36 @@ static ADJOINT: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     })
 });
 
+static EXP: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.pose.exp", &[Space::Vector(6)], |q| {
+        onto_pose(exp_motion_stored(q[0], 1))
+    })
+});
+
+static LOG: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.pose.log", &[pose_space()], |q| {
+        log_motion_stored(q[0].include(), 1, false)
+    })
+});
+
+static LOG_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.pose.log_shorter", &[pose_space()], |q| {
+        log_motion_stored(q[0].include(), 1, true)
+    })
+});
+
+static JL: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.pose.jl", &[Space::Vector(6)], |q| {
+        jl_motion_stored(q[0], 1)
+    })
+});
+
+static JL_INV: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.pose.jl_inv", &[Space::Vector(6)], |q| {
+        jl_inv_motion_stored(q[0], 1)
+    })
+});
+
 /// `T₁ * T₂ = (P(q₁ ⊗ q₂), p₁ + R₁ p₂)`.
 impl QMul for Pose {
     type Output = Pose;
@@ -229,6 +349,12 @@ pub trait PoseMaps: Sized {
     /// The adjoint `((R, 0), ([p]× R, R))` in the order `(φ, ρ)`, carrying a perturbation in the
     /// frame of `self` to the outer frame to first order.
     fn adjoint(self) -> Q<Matrix<6, 6>>;
+    /// `Log(q, p) = (φ, J_l(φ)⁻¹ p)` with `φ = Log q`: the inverse of `pose::exp`; non-finite at
+    /// `q = -1`.
+    fn log(self) -> Q<Vector<6>>;
+    /// The same with the rotation vector of the shorter turn: the same at `±q`, a discretization
+    /// at half-turns.
+    fn log_shorter(self) -> Q<Vector<6>>;
     /// The same storage as a value of the product `S³ × ℝ³`, whose chart moves the position in a
     /// fixed frame.
     #[expect(
@@ -280,6 +406,16 @@ impl PoseMaps for Q<Pose> {
     }
 
     #[track_caller]
+    fn log(self) -> Q<Vector<6>> {
+        LOG.call(&[self.untyped()]).narrow()
+    }
+
+    #[track_caller]
+    fn log_shorter(self) -> Q<Vector<6>> {
+        LOG_SHORTER.call(&[self.untyped()]).narrow()
+    }
+
+    #[track_caller]
     fn as_product(self) -> Q<ProductDyn> {
         product(&[self.rotation().untyped(), self.position().untyped()])
     }
@@ -302,4 +438,35 @@ pub fn from_parts(q: Q<Rotation>, p: Q<Vector<3>>) -> Q<Pose> {
 #[track_caller]
 pub fn from_product(x: Q<ProductDyn>) -> Q<Pose> {
     from_parts(x.factor(0).narrow(), x.factor(1).narrow())
+}
+
+/// `Exp(φ, ρ) = (Exp φ, J_l(φ) ρ)`: the motion at the constant body twist `(φ, ρ)` for unit time.
+#[track_caller]
+pub fn exp(xi: Q<Vector<6>>) -> Q<Pose> {
+    EXP.call(&[xi.untyped()]).narrow()
+}
+
+/// The left Jacobian of `exp`, `Exp(ξ + ε) = Exp(𝒥_l(ξ) ε) Exp(ξ)` to first order:
+/// `((J_l(φ), 0), (Q(φ, ρ), J_l(φ)))` in the order `(φ, ρ)`.
+#[track_caller]
+pub fn jl(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
+    JL.call(&[xi.untyped()]).narrow()
+}
+
+/// The right Jacobian, `Exp(ξ + ε) = Exp(ξ) Exp(𝒥_r(ξ) ε)` to first order: `𝒥_l(-ξ)`.
+#[track_caller]
+pub fn jr(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
+    JL.call(&[(-xi).untyped()]).narrow()
+}
+
+/// `𝒥_l(ξ)⁻¹ = ((J_l⁻¹, 0), (-J_l⁻¹ Q J_l⁻¹, J_l⁻¹))`; non-finite at `|φ| = 2π`.
+#[track_caller]
+pub fn jl_inv(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
+    JL_INV.call(&[xi.untyped()]).narrow()
+}
+
+/// `𝒥_r(ξ)⁻¹ = 𝒥_l(-ξ)⁻¹`; non-finite at `|φ| = 2π`.
+#[track_caller]
+pub fn jr_inv(xi: Q<Vector<6>>) -> Q<Matrix<6, 6>> {
+    JL_INV.call(&[(-xi).untyped()]).narrow()
 }

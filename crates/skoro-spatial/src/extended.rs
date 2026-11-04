@@ -8,7 +8,8 @@ use skoro_core::scope::{constant, project};
 use skoro_core::{Composite, Declares, Matrix, Q, QDyn, QMul, Space, Vector};
 
 use crate::pose::{
-    adjoint_stored, between_stored, compose_stored, inverse_stored, join, matrix_stored,
+    adjoint_stored, between_stored, compose_stored, exp_motion_stored, inverse_stored,
+    jl_inv_motion_stored, jl_motion_stored, join, log_motion_stored, matrix_stored,
 };
 use crate::rotation::composite;
 use crate::{ExtendedPose, Pose, Rotation};
@@ -62,6 +63,44 @@ static ADJOINT: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     )
 });
 
+static EXP: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.exp",
+        &[Space::Vector(9)],
+        |q| onto_extended(exp_motion_stored(q[0], 2)),
+    )
+});
+
+static LOG: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.log",
+        &[extended_space()],
+        |q| log_motion_stored(q[0].include(), 2, false),
+    )
+});
+
+static LOG_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.log_shorter",
+        &[extended_space()],
+        |q| log_motion_stored(q[0].include(), 2, true),
+    )
+});
+
+static JL: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite("skoro.spatial.extended_pose.jl", &[Space::Vector(9)], |q| {
+        jl_motion_stored(q[0], 2)
+    })
+});
+
+static JL_INV: LazyLock<Arc<Composite>> = LazyLock::new(|| {
+    composite(
+        "skoro.spatial.extended_pose.jl_inv",
+        &[Space::Vector(9)],
+        |q| jl_inv_motion_stored(q[0], 2),
+    )
+});
+
 /// `T₁ * T₂ = (P(q₁ ⊗ q₂), v₁ + R₁ v₂, p₁ + R₁ p₂)`.
 impl QMul for ExtendedPose {
     type Output = ExtendedPose;
@@ -89,6 +128,10 @@ pub trait ExtendedPoseMaps: Sized {
     fn matrix(self) -> Q<Matrix<5, 5>>;
     /// The adjoint `((R, 0, 0), ([v]× R, R, 0), ([p]× R, 0, R))` in the order `(φ, η, ρ)`.
     fn adjoint(self) -> Q<Matrix<9, 9>>;
+    /// `Log(q, v, p) = (φ, J_l(φ)⁻¹ v, J_l(φ)⁻¹ p)` with `φ = Log q`; non-finite at `q = -1`.
+    fn log(self) -> Q<Vector<9>>;
+    /// The same with the rotation vector of the shorter turn.
+    fn log_shorter(self) -> Q<Vector<9>>;
 }
 
 impl ExtendedPoseMaps for Q<ExtendedPose> {
@@ -132,6 +175,16 @@ impl ExtendedPoseMaps for Q<ExtendedPose> {
     fn adjoint(self) -> Q<Matrix<9, 9>> {
         ADJOINT.call(&[self.untyped()]).narrow()
     }
+
+    #[track_caller]
+    fn log(self) -> Q<Vector<9>> {
+        LOG.call(&[self.untyped()]).narrow()
+    }
+
+    #[track_caller]
+    fn log_shorter(self) -> Q<Vector<9>> {
+        LOG_SHORTER.call(&[self.untyped()]).narrow()
+    }
 }
 
 /// The identity extended pose.
@@ -147,4 +200,36 @@ pub fn from_parts(q: Q<Rotation>, v: Q<Vector<3>>, p: Q<Vector<3>>) -> Q<Extende
         ExtendedPose,
         join(q.untyped().include(), &[v.untyped(), p.untyped()]),
     )
+}
+
+/// `Exp(φ, η, ρ) = (Exp φ, J_l(φ) η, J_l(φ) ρ)`.
+#[track_caller]
+pub fn exp(xi: Q<Vector<9>>) -> Q<ExtendedPose> {
+    EXP.call(&[xi.untyped()]).narrow()
+}
+
+/// The left Jacobian of `exp`: `J_l(φ)` on the diagonal, `Q(φ, η)` and `Q(φ, ρ)` below it in the
+/// first block column, in the order `(φ, η, ρ)`.
+#[track_caller]
+pub fn jl(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
+    JL.call(&[xi.untyped()]).narrow()
+}
+
+/// The right Jacobian, `𝒥_l(-ξ)`.
+#[track_caller]
+pub fn jr(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
+    JL.call(&[(-xi).untyped()]).narrow()
+}
+
+/// The left Jacobian's inverse: `J_l⁻¹` on the diagonal, `-J_l⁻¹ Q(φ, η) J_l⁻¹` and
+/// `-J_l⁻¹ Q(φ, ρ) J_l⁻¹` below it; non-finite at `|φ| = 2π`.
+#[track_caller]
+pub fn jl_inv(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
+    JL_INV.call(&[xi.untyped()]).narrow()
+}
+
+/// The right Jacobian's inverse, `𝒥_l(-ξ)⁻¹`.
+#[track_caller]
+pub fn jr_inv(xi: Q<Vector<9>>) -> Q<Matrix<9, 9>> {
+    JL_INV.call(&[(-xi).untyped()]).narrow()
 }
