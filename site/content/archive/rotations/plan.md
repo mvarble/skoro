@@ -16,7 +16,7 @@ section prescribes.
       dependency and the workspace's lints; `lib.rs` and its re-exports; `algebra.rs` with the
       storage arithmetic of the companion, `both` among it. Tests: none of the companion's; the
       crate builds and lints clean.
-- [ ] `types.rs`: the declarations `skoro.spatial.rotation`, `skoro.spatial.pose` and
+- [x] `types.rs`: the declarations `skoro.spatial.rotation`, `skoro.spatial.pose` and
       `skoro.spatial.extended_pose` with their retractions normalizing the base point, inverses,
       projections and global volumes, each in a `LazyLock` with its dead branch `unreachable!`; the
       markers `Rotation`, `Pose` and `ExtendedPose`; their host values, normalized and refused when

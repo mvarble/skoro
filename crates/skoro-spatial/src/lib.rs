@@ -10,3 +10,6 @@
     )
 )]
 mod algebra;
+mod types;
+
+pub use types::{EXTENDED_POSE, ExtendedPose, POSE, Pose, ROTATION, Rotation, register};
