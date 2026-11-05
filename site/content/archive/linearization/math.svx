@@ -60,19 +60,21 @@ $\hat \point \oplus \tangent$ at $\tangent = 0$. Computation is batched, and eve
 a point and a linearization of its own.
 
 **Residuals and remainders.** A term $t$ *binds a whitened residual* when a node $r_t$ is bound
-under the residual role, and its log-density is then split into the squares and a *remainder*,
+under the residual role. What a reader of that role may assume of the rest of the log-density is
+the role's contract, which the normal keeps: the log-density is the squares, a *normalizer* and,
+where the term binds one under the log-volume role, a log-volume,
 
 $$
-	\logterm_t = -\tfrac12 \lVert r_t \rVert^2 + \rho_t , @tag(split)
+	\logterm_t = -\tfrac12 \lVert r_t \rVert^2 + n_t - \lambda_t , @tag(split)
 $$
 
-which defines $\rho_t$. For the normal's term [](eq:archive/normal/math/term),
-$\rho_t = \sum_i \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi - \lambda_\mu(\point \ominus \mu)$:
-the normalizer, which is constant when the scale is fixed, less the log-volume, which is not when
-the scored quantity or the mean is free and the type is curved or positive. For a retirement's
-Gaussian replacement [](eq:archive/normal/math/joint), it is the normalizer and the constant $c$.
-The remainder is not a role: it is read off the term's log-density and its residual, which are both
-nodes of the compilation graph.
+and $\rho_t = n_t - \lambda_t$ is its *remainder*. For the normal's term
+[](eq:archive/normal/math/term), $n_t = \sum_i \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi$,
+which is constant when the scale is fixed, and $\lambda_t = \lambda_\mu(\point \ominus \mu)$, which
+the normal binds only where it is not identically zero, on positive and curved types. For a
+retirement's Gaussian replacement [](eq:archive/normal/math/joint), $n_t$ is the normalizer and the
+constant $c$, and there is no log-volume. A term that binds a residual and no log-volume promises a
+remainder constant whenever its scale is fixed.
 
 **The variables and the factors.** The core reads off the compilation graph the quantities $V_t$
 that each term involves ([terms](../core/math.svx#terms-and-the-importance-weight)). For a query,
@@ -94,8 +96,11 @@ forgotten, and it depends on the query, not only on the model: what is observed 
 The running example is the core's: a vehicle at $\randomPoint_0$ and then $\randomPoint_1$, which
 measures a landmark $\bfm$ from each, as $\bfz_0$ and $\bfz_1$, moved by an IMU's model driven by
 its reading $\bfzeta_1$, with the platform's own motion model $L$ of scale $\bfsigma$ as a
-likelihood factor. A query for the positions and the landmark observes the measurements, the
-reading and the scale, and its factor structure is:
+likelihood factor. Here every term is taken to be a normal, $L$ among them as a normal's
+likelihood factor over the step $\point_1 - \point_0$, so that every term binds a residual; the
+core wrote $L$'s log-density by hand, from primitives, and a term written so would be refused. A
+query for the positions and the landmark observes the measurements, the reading and the scale, and
+its factor structure is:
 
 <ModelGraph spec={factors} />
 
@@ -109,9 +114,26 @@ $$
 	m(0) = f(\hat \point), \qquad \nabla m(0) = g, \qquad \nabla^2 m = \sum_t J_t\transpose J_t . @tag(agreement)
 $$
 
-The first two hold by the choice of $c_0$ and $\eta$, since the gradient of the squares at
-$\tangent = 0$ is $\sum_t J_t\transpose r_t$; the second form of $\eta$ in
-[%full](statement:linearization) follows from $g = -\sum_t \nabla \logterm_t$ and [](eq:split).
+The first holds by the choice of $c_0$. The second holds because $g = -\sum_t \nabla \logterm_t =
+\sum_t J_t\transpose r_t + \sum_t \nabla \lambda_t$ by [](eq:split), the normalizers being
+constant, and the gradient of the squares at $\tangent = 0$ is $\sum_t J_t\transpose r_t$.
+
+**Why $\eta$ is read off the log-volumes.** In exact arithmetic $\eta = g - \sum_t J_t\transpose
+r_t$, and both terms of that difference are passes the linearization runs anyway. It is not
+computed so. On a model of normals with fixed scales on the Euclidean types, $\eta$ is exactly zero,
+while $g$ and $\sum_t J_t\transpose r_t$ are each of the size of $\lVert J \rVert \lVert r \rVert$
+and each rounded at the query's precision: their difference is rounding of that size, not zero.
+The note shows that a linear term is solved at $\kappa(J)^2$, so the noise is amplified by the
+square of the condition number, which is the very loss that solving by the rows rather than the
+normal equations exists to avoid. Where the Jacobians are computed in single precision on a device
+and the step solved in double on the host, as the charter allows, a unit roundoff of $6 \times
+10^{-8}$ times $\kappa(J)^2$ swamps the step for a moderate $\kappa(J)$. Read off the bound
+log-volumes, $\eta$ is exactly zero wherever none is bound, and otherwise only as large, and as
+rounded, as the log-volumes' own gradients. The constant $c_0$ is a difference of the same kind,
+but it enters only additively, in an evidence or a replacement's constant
+([](eq:stacked)), with an absolute error of the query's unit roundoff times $\sum_t \lVert r_t
+\rVert^2$, and no solve amplifies it.
+
 The linearization is the note's problem [](eq:math/square-root-elimination/factored) with one
 factor for each term, with the rows $A_t = J_t$, of the dimension of $r_t$, over the blocks of
 $K_t$, and the right-hand side $b_t = -r_t$, and the linear term $\eta$, split by block. A linear
@@ -122,19 +144,18 @@ $\tangent = 0$, which at a stationary point is the chart Hessian of
 [%full](statement:math/derivatives-in-charts/chart-hessian), is
 
 $$
-	\nabla^2 f = \sum_t J_t\transpose J_t + \sum_t \sum_i (r_t)_i\, \nabla^2 (r_t)_i - \sum_t \nabla^2 \rho_t . @tag(hessian)
+	\nabla^2 f = \sum_t J_t\transpose J_t + \sum_t \sum_i (r_t)_i\, \nabla^2 (r_t)_i + \sum_t \nabla^2 \lambda_t . @tag(hessian)
 $$
 
 The linearization keeps the first sum. The second is what every Gauss–Newton method omits: it is
 small where the residuals are, and it is what makes the Hessian indefinite far from a mode. The
-third is the curvature of the remainders. With fixed scales it is the curvature of the log-volumes
-alone: zero on the Euclidean types, zero on the positive ones, whose log-volume is linear in their
-chart, and on a curved type of the relative order of the noise's variance, by the bound of
-[the normal's Gauss–Newton reading](../normal/math.svx#the-roles). The linear term keeps the
-remainders' gradients exactly. So a step that minimizes the linearization is the iteration of
-[%full](statement:archive/normal/math/gauss-newton), with $s = -\sum_t \rho_t$ there: it stops only
-where $g = 0$, at a stationary point of $f$ itself, log-volumes included, and it converges there at
-the linear rate the omitted curvature sets. When every direction is determined by the rows, the
+third is the curvature of the log-volumes: zero on the Euclidean types, zero on the positive ones,
+whose log-volume is linear in their chart, and on a curved type of the relative order of the
+noise's variance, by the bound of [the normal's Gauss–Newton reading](../normal/math.svx#the-roles).
+The linear term keeps the log-volumes' gradients exactly. So a step that minimizes the
+linearization is the iteration of [%full](statement:archive/normal/math/gauss-newton), with
+$s = \sum_t \lambda_t$ there: it stops only where $g = 0$, at a stationary point of $f$ itself,
+log-volumes included, and it converges there at the linear rate the omitted curvature sets. When every direction is determined by the rows, the
 minimizer is
 
 $$
@@ -155,15 +176,15 @@ quantity or the term:
 1. **a free discrete quantity**, since no derivative is taken with respect to it and the gradient
    at given values is not the target's ([discrete quantities in a query](../core/math.svx#queries));
 2. **a factor that binds no residual**, since its curvature would be missing from the rows
-   altogether, not approximated; its remainder would be its whole log-density, kept to first order
-   alone;
+   altogether, not approximated, and nothing would say what its gradient is beyond its squares;
 3. **a factor whose scale is reached from a free quantity**, read off the scale it binds under the
-   normal's roles. Its residual then depends on the scale, and the residual's own curvature in the
-   scale's coordinates, which the rows omit, is as large as what they keep. For an isotropic scale
-   in its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in
-   $u$ is $\lVert r \rVert^2$ and the squares' is $2 \lVert r \rVert^2$; the remainder
-   $-\dimension u$ is linear and is kept exactly. At the stationary point $\lVert r \rVert^2 =
-   \dimension$, the omitted part equals the kept part, and the rate of
+   normal's roles, since its normalizer then moves, which [](eq:split) excludes. Carrying the
+   normalizer's gradient in $\eta$ would not save it. Its residual depends on the scale, and the
+   residual's own curvature in the scale's coordinates, which the rows omit, is as large as what
+   they keep. For an isotropic scale in its logarithmic chart $u = \log \sigma$,
+   $r = e^{-u} \varepsilon$, so the rows' curvature in $u$ is $\lVert r \rVert^2$ and the squares'
+   is $2 \lVert r \rVert^2$, while the normalizer $-\dimension u$ is linear. At the stationary point
+   $\lVert r \rVert^2 = \dimension$, the omitted part equals the kept part, and the rate of
    [%full](statement:archive/normal/math/gauss-newton) is one: the iteration need not converge.
    Such a scale is estimated by the expected information instead
    ([Information roots](#information-roots)).
@@ -171,8 +192,9 @@ quantity or the term:
 **The passes.** The linearization needs first-order derivatives only, of the order every
 continuous quantity's operations have. The Jacobians $J_t$ are a tangent pass with the identity
 frame of the free quantities, or a cotangent pass with the identity frame of the residuals, whichever
-is narrower; only the columns of $K_t$ are nonzero in $J_t$. The gradient $g$ is one cotangent pass
-of the query's log-density. Both run at the query's precision, and the elimination after them runs
+is narrower; only the columns of $K_t$ are nonzero in $J_t$. The linear term $\eta$ is one
+cotangent pass of the sum of the bound log-volumes, and none where no term binds one, and $c_0$
+needs the query's log-density and its residuals at $\hat \point$. All run at the query's precision, and the elimination after them runs
 on the host in double precision, as the charter has every solve that conditioning governs
 ([position 11](../charter/writeup.md#11-burn-behind-a-layer-of-skoro-s-own-precision-chosen-per-query-solves-on-the-host)).
 
@@ -184,9 +206,9 @@ On a flat-in-disguise type the chart at $\hat \point$ and the chart at any other
 translation, by [](eq:archive/normal/math/translation), so a function affine in one chart's
 coordinates is affine in every chart's, and the hypothesis does not depend on $\hat \point$. An
 affine residual has $r_t(\hat \point \oplus \tangent) = r_t + J_t \tangent$ exactly, and an affine
-remainder is equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t
-\tfrac12 \lVert r_t + J_t \tangent \rVert^2 - \sum_t \rho_t(\hat \point \oplus \tangent)$, plus the
-constant terms, is $m(\tangent)$. The log-volume of a flat-in-disguise type is zero or, on a positive
+log-volume is equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t
+\tfrac12 \lVert r_t + J_t \tangent \rVert^2 + \sum_t \lambda_t(\hat \point \oplus \tangent)$, plus the
+constant normalizers and terms, is $m(\tangent)$. The log-volume of a flat-in-disguise type is zero or, on a positive
 factor, $\sum_i (\log \hat \point_i + \tangent_i)$ [](eq:archive/measures/math/core-volumes), affine
 in $\tangent$, so the chart linearization is exact too.
 
@@ -247,7 +269,9 @@ Three things follow from skoro's side of the problem.
 ## The Laplace approximation
 
 A Laplace approximation replaces an integral against the model's density by the integral of a
-Gaussian. Over free quantities of types with a volume, the integral is taken in the chart at
+Gaussian. The integral is against the reference measures of the free quantities' types, so it is
+refused for a quantity whose type declares no volume, naming the quantity. Otherwise it is taken
+in the chart at
 $\hat \point$, where the reference measure has the density of its log-volume,
 [](eq:archive/measures/math/chart-integral):
 
@@ -262,9 +286,10 @@ two places.
 
 - **Its centre.** The Gaussian is centred at $\tangent = 0$ when $\hat \point$ is a stationary
   point of the chart objective, where $g = \nabla \lambda_{\hat \point}(0)$, rather than of $f$. On
-  the Euclidean types $\lambda = 0$, and on a group whose chart translates the identity's, as the
-  Cayley chart of the rotations does, $\lambda_{\hat \point}(\tangent) = \lambda_e(\tangent)$ has a
-  zero gradient at $0$: on both, the centre is a mode of $f$. On a positive type
+  the Euclidean types $\lambda = 0$. On a group whose chart translates the identity's, as the
+  Cayley chart of the rotations does, $\lambda_{\hat \point} = \lambda_e$, and the Cayley chart's
+  $\lambda_e$ is even in $\tangent$, as the stereographic chart's of the sphere is, so its gradient
+  at $0$ is zero: on these types the centre is a mode of $f$. On a positive type
   $\nabla \lambda_{\hat \point}(0) = 1$ in each coordinate, and the centre is the mode in the
   logarithmic chart. For a quantity scored by a log-normal of median $\mu$, it is $\mu$ itself,
   where $\log \randomPoint$ is centred, while the mode with respect to Lebesgue measure is
@@ -291,8 +316,8 @@ accounting.
 
 Its precision is the rows', $J\transpose J$, which omits from the chart objective's Hessian the
 second sum of [](eq:hessian), which vanishes at a zero residual, and the curvature
-$-\sum_t \nabla^2 \rho_t - \nabla^2 \lambda_{\hat \point}$ of the remainders and the chart's
-log-volume. On the Euclidean and the positive types, with fixed scales, both are zero. On a curved
+$\sum_t \nabla^2 \lambda_t - \nabla^2 \lambda_{\hat \point}$ of the terms' log-volumes and the
+chart's. On the Euclidean and the positive types, with fixed scales, both are zero. On a curved
 type they are of opposite signs and of the same order: near $\tangent = 0$ the Cayley and
 stereographic log-volumes are $-\tfrac12 \lVert \tangent \rVert^2$, so a term's log-volume adds a
 negative curvature of the order of $\Sigma$ against its $\Lambda$, and the chart's adds a positive
@@ -300,10 +325,10 @@ one. For a single normal with a fixed mean, linearized at the mean, the two canc
 the chart objective is then the Gaussian part alone.
 
 > [!TODO] The curvature of the log-volumes
-> The rows cannot carry the remainders' and the chart's curvature: on a curved type the first is
+> The rows cannot carry the terms' and the chart's log-volume curvature: on a curved type the first is
 > negative semidefinite, and a negative curvature is not a sum of squares; adding it to
 > $R\transpose R$ is a downdate of the factor, which can lose definiteness and is not stable in the
-> way the rest of the elimination is. The draft leaves both out, so that the covariance on a curved
+> way the rest of the elimination is. As written, this document leaves both out, so that the covariance on a curved
 > quantity is wrong by a relative error of the order of its noise's variance, $\sigma^2$, which is
 > $10^{-2}$ at $\sigma = 0.1$ rad, and exact on the Euclidean and positive types. The alternative
 > is to add the curvature of the log-volumes to the marginal's precision after the elimination, on
@@ -328,7 +353,9 @@ log-volume of $E_F$ alone, since $E_F$ is integrated over and $B_F$ is not, and 
 blocks of $E_F$ by integration, part 2 of
 [%full](statement:math/square-root-elimination/eliminate-one), from these factors only. This is the
 note's replacement [](eq:math/square-root-elimination/replace): the terms outside $\mathcal T_E$
-stay in the model, and folding them in would count them twice.
+stay in the model, and folding them in would count them twice. A quantity of $E_F$ whose type
+declares no volume has no reference measure to integrate against, and its retirement is refused,
+naming it, as is a discrete one.
 
 <Statement {...replacement} />
 
@@ -344,8 +371,10 @@ quadratic whose matrix has full rank, $e^{-m_T}$ is $Z$ times the normal density
 minimizer of $m_T$ as its mean and the inverse of its matrix as its covariance, with
 $Z = \int e^{-m_T}$, and integrating it over $\tangent_E$ leaves $Z$ times the marginal density on
 $\tangent_B$, which is the normal $\logterm_{\mathcal N}(\tangent_B;\, m, W)$ on $\R^D$ by
-[%full](statement:math/square-root-elimination/marginal). The integral over $\R^{d_E}$ is over the
-whole tangent space, which is the chart's domain when the chart is global.
+[%full](statement:math/square-root-elimination/marginal). The integral of $e^{-m_T}$ is over the
+whole of $\R^{d_E}$, while $\phi$ is defined on the chart's domain alone: putting the one for the
+other is part of the approximation, exact when the chart is global, and otherwise in error by the
+Gaussian's mass outside the domain.
 
 </Proof>
 
@@ -399,8 +428,11 @@ $\hat \point$, and the choice is the filter.
 - At the prediction, $\hat \point_k$ the previous replacement's mean and $\hat \point_{k+1}$ its
   image under the motion, the measurement is linearized where an extended Kalman filter linearizes
   it. The classical filter then linearizes the motion at the updated estimate instead, a second
-  point for the same quantity, which one linearization of one query cannot take; the difference is
-  of second order in the update's step.
+  point for the same quantity, which one linearization of one query cannot take. The predicted
+  mean differs from the classical filter's at second order in the update's step, since it is the
+  motion's first-order expansion about the prediction evaluated at the update; the predicted
+  covariance differs at first order, since it is propagated by the motion's Jacobian at the
+  prediction rather than at the update.
 
 Several states retired at once give one approximation of the whole, and one after another a
 sequence of them, which differ as the core's retirement says they may.
@@ -414,7 +446,10 @@ sequence of them, which differ as the core's retirement says they may.
 > \rVert^2 - \eta\transpose \tangent_B + c$ with $A$ of fewer rows than columns. It is a function of
 > $\tangent_B$, and a likelihood factor needs no normalization, so the core could hold it, binding
 > $A \tangent_B - b$ as its residual; but `Stacked` cannot write it, and neither can any form the
-> normal provides. Should this entry provide a factor of that form, the rows, the right-hand side,
+> normal provides. Its linear term would need a role of its own, since [](eq:split) lets a reader
+> find a term's linear part only through the log-volume it binds. The case is not rare: any blanket
+> quantity whose prior lies outside $\mathcal T_E$ and which the retired terms observe only in part
+> fails the rank condition, which takes in most landmarks measured by bearing alone. Should this entry provide a factor of that form, the rows, the right-hand side,
 > the linear term and the constant at constant anchors, of which `Stacked` is the case of full
 > rank; or refuse such a retirement, naming the blanket quantity left undetermined, and leave the
 > general form to a later entry?
@@ -463,12 +498,18 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   [](eq:archive/core/math/kalman) and [](eq:archive/core/math/joint-blanket), constants included,
   as `Stacked` replacements whose retired models pass the core's checks of retirement; on a
   linear-Gaussian chain of several states, retiring them one at a time gives the Kalman filter's
-  means, covariances and evidence; on a nonlinear chain, the replacement at the prediction
-  agrees with an extended Kalman filter to second order in the update's step.
+  means, covariances and evidence; on a nonlinear chain, the replacement at the prediction agrees
+  with an extended Kalman filter in its predicted mean to second order in the update's step, and
+  in its predicted covariance to first order, and the replacement at the retired terms' mode with
+  an iterated extended Kalman filter.
 - **Batch rows share the plan**: a batch of points has one order and one elimination tree, and
   each row's step is the step of that row linearized alone.
+- **The linear term is exactly zero where no log-volume is bound**: on a model of Euclidean normals
+  with fixed scales the step is the least-squares solution, bit for bit independent of the
+  query's gradient pass.
 - **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
-  is free, and a quantity the rows do not determine, each naming what it names.
+  is free, a quantity the rows do not determine, and an integral over a quantity whose type has no
+  volume, each naming what it names.
 
 ## In skoro's terms
 
@@ -477,12 +518,14 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   Each term reached from a free quantity is a factor over its free quantities $K_t$, read off the
   compilation graph; the others are constants of the query.
 - **A factor's rows are its residual's Jacobian**, $J_t$, and its right-hand side $-r_t$, both
-  from the node it binds under the residual role. The linear term $\eta$ is the query's gradient
-  less what the rows account for, and holds the gradients of the remainders: the log-volumes of
-  normals on positive and curved quantities, and the constants of replacements. Everything is of
+  from the node it binds under the residual role. The linear term $\eta$ is the gradient of the
+  nodes the terms bind under the log-volume role, the log-volumes of normals on positive and curved
+  quantities, and is exactly zero where none is bound; it is not formed as the query's gradient
+  less what the rows account for, a difference that rounding would fill. Everything is of
   first order, computed at the query's precision, and solved on the host in double precision.
 - **The linearization is refused** for a free discrete quantity, a factor without a residual, and
-  a factor whose bound scale is reached from a free quantity.
+  a factor whose bound scale is reached from a free quantity; an integral, for a quantity whose
+  type declares no volume.
 - **Elimination** is the note's, by blocks that are the free quantities, with an order and an
   elimination tree that depend on the factor structure alone and so serve every row of a batch, and
   with a refusal for a quantity the rows do not determine.
@@ -493,8 +536,9 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   computed from the retired terms alone, free in the retired quantities to integrate and in the
   blanket's quantities to keep, at a point the caller chooses, and written as the normal's
   `Stacked` replacement with the anchors at that point, the mean, the whitening and the constant
-  of [](eq:stacked). It is exact for linear-Gaussian terms, where it is the Kalman filter, and an
-  extended Kalman filter otherwise.
+  of [](eq:stacked). It is exact for linear-Gaussian terms, where it is the Kalman filter, and
+  otherwise an iterated extended Kalman filter or, at the prediction, an approximation of the
+  extended one.
 
 ## Open questions
 
