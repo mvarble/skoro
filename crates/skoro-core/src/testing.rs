@@ -171,9 +171,23 @@ fn worst_sine_and_cosine(inputs: &[f64], target: &Target) -> Result<(f64, f64), 
     Ok(worst)
 }
 
-/// The test adapter at single precision, or an error naming the missing adapter.
+/// The test adapter at single precision, or an error naming the missing adapter or, when its sine
+/// and cosine exceed the error the cutoffs are designed for, the error measured (`Admission`).
+/// The adapter is measured once per process, and every later call answers as the first did.
 #[cfg(feature = "wgpu")]
 pub fn wgpu() -> Result<Target, String> {
+    static ADMITTED: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
+    let target = adapter()?;
+    ADMITTED
+        .get_or_init(|| Admission::measure(&target)?.admit())
+        .clone()
+        .map_err(|e| format!("the wgpu adapter is not admitted: {e}"))?;
+    Ok(target)
+}
+
+/// The test adapter at single precision, not yet admitted.
+#[cfg(feature = "wgpu")]
+fn adapter() -> Result<Target, String> {
     let device = skoro_tensor::test_adapter(skoro_tensor::wgpu_devices())?;
     Target::new(device, Precision::Single).map_err(|e| e.to_string())
 }
@@ -1853,6 +1867,16 @@ mod tests {
             admission.near.0 > 0.0,
             "{admission:?}: nothing was measured"
         );
+    }
+
+    /// The adapter measured directly, not through `wgpu()`, which would refuse an unadmitted
+    /// adapter before saying what it measured.
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn the_adapter_is_admitted() {
+        let admission = Admission::measure(&adapter().unwrap()).unwrap();
+        println!("{admission:?}");
+        assert_eq!(admission.admit(), Ok(()), "{admission:?}");
     }
 
     #[test]

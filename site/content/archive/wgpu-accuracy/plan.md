@@ -9,7 +9,7 @@ depends_on: [archive/wgpu-accuracy/implementation]
       private `inputs()`, `measure` and `admit`, and the message format `{:.2e}` of the
       implementation. Tests: `admission_names_the_error_and_the_bound`,
       `the_host_is_admitted_in_single_precision`.
-- [ ] Admit the adapter in `testing::wgpu()`, caching the outcome in a `OnceLock`, and add the
+- [x] Admit the adapter in `testing::wgpu()`, caching the outcome in a `OnceLock`, and add the
       wgpu-gated test that builds the adapter's target directly, prints its `Admission` and asserts
       it is admitted. Run it on the adapter and record the `Admission` in the commit. Tests:
       `the_adapter_is_admitted`.
