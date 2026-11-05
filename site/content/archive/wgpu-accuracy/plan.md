@@ -33,7 +33,7 @@ depends_on: [archive/wgpu-accuracy/implementation]
 
 ## skoro: the test sphere
 
-- [ ] Split `CUT` in `tests/common/sphere.rs` into `EXP_CUT = 0.1` and `LOG_CUT = 1e-8`. Add
+- [x] Split `CUT` in `tests/common/sphere.rs` into `EXP_CUT = 0.1` and `LOG_CUT = 1e-8`. Add
       `COS_SERIES`, `SINC_SERIES` (eight terms each), `LOG_VOLUME_SERIES` (ten terms) and a local
       `horner`. Have the retraction's `Near::Selected` and `Near::Guarded` and the guarded
       log-volume select their series below `EXP_CUT`, and the logarithm use `LOG_CUT`. Leave
