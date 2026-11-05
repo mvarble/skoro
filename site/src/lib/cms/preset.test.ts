@@ -7,8 +7,8 @@ import { test } from 'vitest';
 import { buildStore, createCms, type ResolvedRef } from '@mvarble/mesearch-cms';
 
 import { skoroPreset } from './preset.ts';
-import { bind } from './runtime.ts';
-import type { GraphEdge, SkoroDocument, SkoroSnapshot } from './types.ts';
+import { bind, readingOrder } from './runtime.ts';
+import type { GraphEdge, SkoroDocument, SkoroMath, SkoroSnapshot } from './types.ts';
 
 // A document of every kind, and a few that are wrong on purpose.
 const root = fileURLToPath(new URL('../../../test/cms', import.meta.url));
@@ -46,6 +46,32 @@ test('pages are found by track and ordered within it', () => {
     assert.equal(next, undefined);
     assert.equal(cms.get('other/ignored'), undefined, 'a folder that is not a track is ignored');
     assert.equal(cms.landing(), 'content/landing.md');
+});
+
+test('math notes are listed in reading order, not by title', () => {
+    // "Retractions" comes first by title, but builds on "Tangent spaces".
+    assert.deepEqual(
+        cms.math.list().map((note) => note.key),
+        ['math/tangent-space', 'math/retraction'],
+    );
+});
+
+test('reading order takes the first ready note by title, and leaves a cycle to the end', () => {
+    const note = (key: string, title: string, dependsOn: string[] = []) =>
+        ({ key, title, dependsOn }) as SkoroMath;
+    const order = readingOrder([
+        note('math/d', 'D', ['math/b']),
+        note('math/c', 'C', ['math/e']),
+        note('math/b', 'B'),
+        note('math/a', 'A', ['math/b', 'archive/x/math']),
+        note('math/e', 'E', ['math/c']),
+    ]);
+    // `archive/x/math` is not a math note, so it holds nothing back; `c` and `e` depend on each
+    // other.
+    assert.deepEqual(
+        order.map((n) => n.title),
+        ['B', 'A', 'D', 'C', 'E'],
+    );
 });
 
 test('a summary is the frontmatter’s, or else the first paragraph', () => {

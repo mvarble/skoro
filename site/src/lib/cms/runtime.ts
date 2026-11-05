@@ -31,7 +31,7 @@ export function bind(snapshot: SkoroSnapshot) {
             a.order - b.order ||
             a.key.localeCompare(b.key),
     );
-    const math = ofKind('math').toSorted((a, b) => a.title.localeCompare(b.title));
+    const math = readingOrder(ofKind('math'));
     // Newest first.
     const entries = ofKind('entry').toSorted(
         (a, b) => b.created.valueOf() - a.created.valueOf() || a.key.localeCompare(b.key),
@@ -110,3 +110,24 @@ export function bind(snapshot: SkoroSnapshot) {
 }
 
 export type SkoroCms = ReturnType<typeof bind>;
+
+// The math notes in reading order: each after every note it depends on, and of the notes whose
+// prerequisites have all been read, the first by title next. A cycle, which the content should not
+// have, leaves its notes to the end, by title.
+export function readingOrder(notes: SkoroMath[]): SkoroMath[] {
+    const byTitle = notes.toSorted((a, b) => a.title.localeCompare(b.title));
+    const keys = new Set(notes.map((note) => note.key));
+    const read = new Set<string>();
+    const order: SkoroMath[] = [];
+    for (;;) {
+        const next = byTitle.find(
+            (note) =>
+                !read.has(note.key) &&
+                note.dependsOn.every((key) => !keys.has(key) || read.has(key)),
+        );
+        if (!next) break;
+        read.add(next.key);
+        order.push(next);
+    }
+    return [...order, ...byTitle.filter((note) => !read.has(note.key))];
+}
