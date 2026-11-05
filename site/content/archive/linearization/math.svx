@@ -1,0 +1,502 @@
+---
+summary: How a query of a model is linearized at a point into factors of whitened rows and linear terms over its free quantities' tangent coordinates, and how eliminating those factors gives the step of a Gauss–Newton or Levenberg–Marquardt method, a Laplace approximation's marginals, and a retirement's Gaussian replacement, the update and prediction of a Kalman filter.
+depends_on: [square-root-elimination, retraction, derivatives-in-charts, product-manifold, chart-volume, archive/core/math, archive/normal/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import * as linearization from './statements/linearization.md';
+	import * as exact from './statements/exact.md';
+	import * as replacement from './statements/replacement.md';
+	import { factors, tree } from './tree.graph';
+</script>
+
+## The problem
+
+skoro can build a model, query it and differentiate the query to second order, and its normal
+distribution binds, on every term, the whitened residual that a least-squares reader needs
+([the normal's roles](../normal/math.svx#the-roles)). What it cannot yet do is turn those residuals
+into a step, a covariance or a summary. Every method that does is built on the same two pieces.
+
+- **Linearization** replaces a query's negative log-density, near a point, by a sum of squared
+  affine residuals and a linear term in the tangent coordinates of its free quantities: the rows
+  that the residuals' Jacobians give, one block of rows for each term.
+- **Elimination** solves the linear problem those rows pose, or removes some of its variables from
+  it, one at a time, by orthogonal factorizations of the rows rather than by the normal equations.
+
+A Gauss–Newton step is the minimizer of the linearization; a Levenberg–Marquardt step is the same
+with damping rows appended. A Laplace approximation reads its covariance and its marginals off the
+linearization at a mode, and its evidence off the determinant of the eliminated rows. A retirement
+([the core's retirement](../core/math.svx#retirement)) needs a replacement for the terms it removes,
+an integral the core leaves to the caller, and eliminating the retired quantities from the
+linearization of those terms gives it in the form the normal already writes, its `Stacked`
+replacement. On a chain of states that replacement is the update and the prediction of a Kalman
+filter, exact for linear-Gaussian terms and, for others, an extended Kalman filter's.
+
+This document works out the mathematics of linearizing a query and of eliminating its
+linearization, at the level the implementation needs: what the rows and the linear terms are, what
+is approximated and what it costs, which quantities are variables, what each method asks of the
+elimination, and what the replacement of a retirement is, constants included. The linear algebra of
+elimination stands on its own, and is in the note
+[elimination in square-root form](../../math/square-root-elimination/); this document says how
+skoro's objects meet it. The methods themselves, an optimizer's loop, a damping schedule, a filter,
+are left to the entries that bring them.
+
+## Setting
+
+**A query at a point.** A [query](../core/math.svx#queries) partitions the quantities its targets
+reach into observed and free. Its free continuous quantities, in an order the reader chooses, are
+one point $\point_F = (\point_1, \dots, \point_n)$ of the product of their types, whose tangent
+space is the stacked $\R^\dimension$ of [](eq:math/product-manifold/stack),
+$\dimension = \sum_i \dimension_i$, and whose step is the product's retraction
+[](eq:archive/core/math/step). Write $\hat \point$ for the point at which the query is linearized,
+$\tangent \in \R^\dimension$ for a tangent vector there, $f = -\log \density$ for the query's
+negative log-density [](eq:archive/core/math/query), and $g$ for its chart gradient at
+$\hat \point$ [](eq:math/derivatives-in-charts/gradient). Every derivative below is in the charts of
+the free quantities, so that on a curved quantity it is the derivative of a function of
+$\hat \point \oplus \tangent$ at $\tangent = 0$. Computation is batched, and every row of a batch has
+a point and a linearization of its own.
+
+**Residuals and remainders.** A term $t$ *binds a whitened residual* when a node $r_t$ is bound
+under the residual role, and its log-density is then split into the squares and a *remainder*,
+
+$$
+	\logterm_t = -\tfrac12 \lVert r_t \rVert^2 + \rho_t , @tag(split)
+$$
+
+which defines $\rho_t$. For the normal's term [](eq:archive/normal/math/term),
+$\rho_t = \sum_i \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi - \lambda_\mu(\point \ominus \mu)$:
+the normalizer, which is constant when the scale is fixed, less the log-volume, which is not when
+the scored quantity or the mean is free and the type is curved or positive. For a retirement's
+Gaussian replacement [](eq:archive/normal/math/joint), it is the normalizer and the constant $c$.
+The remainder is not a role: it is read off the term's log-density and its residual, which are both
+nodes of the compilation graph.
+
+**The variables and the factors.** The core reads off the compilation graph the quantities $V_t$
+that each term involves ([terms](../core/math.svx#terms-and-the-importance-weight)). For a query,
+the term's *variables* are its free continuous quantities,
+
+$$
+	K_t = V_t \cap F , @tag(variables)
+$$
+
+and a term with $K_t$ empty is reached from no free quantity: its log-density is a constant of the
+query, part of $f(\hat \point)$ and of nothing else below. The terms with $K_t$ not empty are the
+query's *factors*. Which factor has a block for which free quantity is the *factor structure* of
+[the note](../../math/square-root-elimination/#order-fill-and-the-elimination-tree): a bipartite
+graph with a node for each free continuous quantity and each factor, and an edge between a factor
+$t$ and each quantity of $K_t$. It is the [probabilistic graph](../core/math.svx#the-probabilistic-graph)
+with the observed quantities and the constant terms removed and the directions of its edges
+forgotten, and it depends on the query, not only on the model: what is observed is not a variable.
+
+The running example is the core's: a vehicle at $\randomPoint_0$ and then $\randomPoint_1$, which
+measures a landmark $\bfm$ from each, as $\bfz_0$ and $\bfz_1$, moved by an IMU's model driven by
+its reading $\bfzeta_1$, with the platform's own motion model $L$ of scale $\bfsigma$ as a
+likelihood factor. A query for the positions and the landmark observes the measurements, the
+reading and the scale, and its factor structure is:
+
+<ModelGraph spec={factors} />
+
+## Linearizing a query
+
+<Statement {...linearization} />
+
+The linearization agrees with $f$ to first order, and its curvature is the Gauss–Newton matrix:
+
+$$
+	m(0) = f(\hat \point), \qquad \nabla m(0) = g, \qquad \nabla^2 m = \sum_t J_t\transpose J_t . @tag(agreement)
+$$
+
+The first two hold by the choice of $c_0$ and $\eta$, since the gradient of the squares at
+$\tangent = 0$ is $\sum_t J_t\transpose r_t$; the second form of $\eta$ in
+[%full](statement:linearization) follows from $g = -\sum_t \nabla \logterm_t$ and [](eq:split).
+The linearization is the note's problem [](eq:math/square-root-elimination/factored) with one
+factor for each term, with the rows $A_t = J_t$, of the dimension of $r_t$, over the blocks of
+$K_t$, and the right-hand side $b_t = -r_t$, and the linear term $\eta$, split by block. A linear
+term on a block joins no blocks, so the factor structure is that of the terms alone.
+
+**What is left out.** The Hessian of $\tangent \mapsto f(\hat \point \oplus \tangent)$ at
+$\tangent = 0$, which at a stationary point is the chart Hessian of
+[%full](statement:math/derivatives-in-charts/chart-hessian), is
+
+$$
+	\nabla^2 f = \sum_t J_t\transpose J_t + \sum_t \sum_i (r_t)_i\, \nabla^2 (r_t)_i - \sum_t \nabla^2 \rho_t . @tag(hessian)
+$$
+
+The linearization keeps the first sum. The second is what every Gauss–Newton method omits: it is
+small where the residuals are, and it is what makes the Hessian indefinite far from a mode. The
+third is the curvature of the remainders. With fixed scales it is the curvature of the log-volumes
+alone: zero on the Euclidean types, zero on the positive ones, whose log-volume is linear in their
+chart, and on a curved type of the relative order of the noise's variance, by the bound of
+[the normal's Gauss–Newton reading](../normal/math.svx#the-roles). The linear term keeps the
+remainders' gradients exactly. So a step that minimizes the linearization is the iteration of
+[%full](statement:archive/normal/math/gauss-newton), with $s = -\sum_t \rho_t$ there: it stops only
+where $g = 0$, at a stationary point of $f$ itself, log-volumes included, and it converges there at
+the linear rate the omitted curvature sets. When every direction is determined by the rows, the
+minimizer is
+
+$$
+	\tangent^* = -\Bigl(\sum_t J_t\transpose J_t\Bigr)^{-1} g , @tag(step)
+$$
+
+and it is computed as the note computes [](eq:math/square-root-elimination/complete-square): the
+part from the residuals at $\kappa(J)$, and the part from $\eta$ at $\kappa(J)^2$, as the normal
+equations would. On a model of normals with fixed scales on the Euclidean types, $\eta = 0$ and the
+whole step is a least-squares solution.
+
+**What is refused.** The linearization is defined when every factor binds a residual, and when the
+omitted curvature is of the kind the iteration tolerates. Following the charter's rule that an
+algorithm refuses by structure rather than skip what it cannot read
+([position 6](../charter/writeup.md#6-algorithms-refuse-by-structure)), it refuses, naming the
+quantity or the term:
+
+1. **a free discrete quantity**, since no derivative is taken with respect to it and the gradient
+   at given values is not the target's ([discrete quantities in a query](../core/math.svx#queries));
+2. **a factor that binds no residual**, since its curvature would be missing from the rows
+   altogether, not approximated; its remainder would be its whole log-density, kept to first order
+   alone;
+3. **a factor whose scale is reached from a free quantity**, read off the scale it binds under the
+   normal's roles. Its residual then depends on the scale, and the residual's own curvature in the
+   scale's coordinates, which the rows omit, is as large as what they keep. For an isotropic scale
+   in its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in
+   $u$ is $\lVert r \rVert^2$ and the squares' is $2 \lVert r \rVert^2$; the remainder
+   $-\dimension u$ is linear and is kept exactly. At the stationary point $\lVert r \rVert^2 =
+   \dimension$, the omitted part equals the kept part, and the rate of
+   [%full](statement:archive/normal/math/gauss-newton) is one: the iteration need not converge.
+   Such a scale is estimated by the expected information instead
+   ([Information roots](#information-roots)).
+
+**The passes.** The linearization needs first-order derivatives only, of the order every
+continuous quantity's operations have. The Jacobians $J_t$ are a tangent pass with the identity
+frame of the free quantities, or a cotangent pass with the identity frame of the residuals, whichever
+is narrower; only the columns of $K_t$ are nonzero in $J_t$. The gradient $g$ is one cotangent pass
+of the query's log-density. Both run at the query's precision, and the elimination after them runs
+on the host in double precision, as the charter has every solve that conditioning governs
+([position 11](../charter/writeup.md#11-burn-behind-a-layer-of-skoro-s-own-precision-chosen-per-query-solves-on-the-host)).
+
+<Statement {...exact} />
+
+<Proof>
+
+On a flat-in-disguise type the chart at $\hat \point$ and the chart at any other point differ by a
+translation, by [](eq:archive/normal/math/translation), so a function affine in one chart's
+coordinates is affine in every chart's, and the hypothesis does not depend on $\hat \point$. An
+affine residual has $r_t(\hat \point \oplus \tangent) = r_t + J_t \tangent$ exactly, and an affine
+remainder is equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t
+\tfrac12 \lVert r_t + J_t \tangent \rVert^2 - \sum_t \rho_t(\hat \point \oplus \tangent)$, plus the
+constant terms, is $m(\tangent)$. The log-volume of a flat-in-disguise type is zero or, on a positive
+factor, $\sum_i (\log \hat \point_i + \tangent_i)$ [](eq:archive/measures/math/core-volumes), affine
+in $\tangent$, so the chart linearization is exact too.
+
+</Proof>
+
+The normal on the Euclidean types with a fixed scale and a mean affine in the free quantities is
+such a term, and so is the normal on a positive type, the log-normal, with a mean whose logarithm is
+affine in their logarithms. A model of such terms is *linear-Gaussian*.
+
+## Damping
+
+A Levenberg–Marquardt step minimizes the linearization plus the damping
+$\tfrac12 \lambda\, \tangent\transpose D \tangent$, which the note writes as one factor of rows for
+each free quantity [](eq:math/square-root-elimination/damping): appending them changes neither the
+factor structure nor the plan of the elimination, and it makes every direction determined for
+$\lambda > 0$. The damped minimizer $\tangent$ solves $(J\transpose J + \lambda D)\, \tangent = -g$,
+and the decrease of the undamped linearization that it promises is
+
+$$
+	m(0) - m(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent , @tag(promised)
+$$
+
+since $m(0) - m(\tangent) = -g\transpose \tangent - \tfrac12 \tangent\transpose J\transpose J
+\tangent$ and $-g\transpose \tangent = \tangent\transpose (J\transpose J + \lambda D) \tangent$.
+The ratio of the decrease actually obtained, $f(\hat \point) - f(\hat \point \oplus \tangent)$, to
+[](eq:promised) is what a Levenberg–Marquardt method compares with one to adapt $\lambda$; its
+schedule, its choice of $D$ and its stopping rule are that method's entry's.
+
+## Eliminating the linearization
+
+The linearization is eliminated as the note eliminates [](eq:math/square-root-elimination/factored),
+one free quantity at a time, each a block of its dimension. In the example, with the order
+$\randomPoint_0, \randomPoint_1, \bfm$, eliminating $\randomPoint_0$ collects the four factors
+joined to it, $t_1$, $t_3$, $t_4$ and $t_6$, and leaves a conditional of $\randomPoint_0$ on its
+separator $\{\randomPoint_1, \bfm\}$ and one new factor there, with the linear terms of
+$\randomPoint_0$ pushed onto it; eliminating $\randomPoint_1$ then collects $t_5$ and the new
+factor, with the separator $\{\bfm\}$.
+
+<ModelGraph spec={tree} />
+
+Three things follow from skoro's side of the problem.
+
+- **Batch rows share the plan.** The factor structure is read off the probabilistic graph and the
+  query, not off any number, so every row of a batch has the same one. One order and one
+  elimination tree serve all rows, and only the numeric elimination is done row by row. A
+  retirement changes the model, and so the structure; a step of an optimizer does not.
+- **Each block is the tangent of one quantity.** A conditional solves for the tangent coordinates
+  of its quantity at $\hat \point$, and the step returns to the model by the retraction
+  [](eq:archive/core/math/step), quantity by quantity. A quantity whose rows do not determine it, a
+  zero or a small diagonal entry in its conditional, is refused, naming the quantity: an
+  unobserved direction, such as the position of a landmark seen from one place along one bearing,
+  or a gauge freedom of the whole model, is the model's to fix by a prior or by damping, not the
+  elimination's to guess.
+- **The order is free, except where a reduction constrains it.** A step eliminates everything, in
+  any order that keeps the fill small. A marginal on quantities $K$ eliminates them last, and a
+  retirement eliminates the retired quantities from their own terms alone.
+
+## The Laplace approximation
+
+A Laplace approximation replaces an integral against the model's density by the integral of a
+Gaussian. Over free quantities of types with a volume, the integral is taken in the chart at
+$\hat \point$, where the reference measure has the density of its log-volume,
+[](eq:archive/measures/math/chart-integral):
+
+$$
+	\int e^{-f} \, \dd \nu = \int_{U_{\hat \point}} e^{-f(\hat \point \oplus \tangent) + \lambda_{\hat \point}(\tangent)} \, \dd \tangent . @tag(chart-integral)
+$$
+
+What is approximated by a Gaussian in $\tangent$ is therefore the *chart objective*
+$f(\hat \point \oplus \tangent) - \lambda_{\hat \point}(\tangent)$, whose linearization is the
+chart linearization of [%full](statement:linearization), and not $f$ alone. The difference is in
+two places.
+
+- **Its centre.** The Gaussian is centred at $\tangent = 0$ when $\hat \point$ is a stationary
+  point of the chart objective, where $g = \nabla \lambda_{\hat \point}(0)$, rather than of $f$. On
+  the Euclidean types $\lambda = 0$, and on a group whose chart translates the identity's, as the
+  Cayley chart of the rotations does, $\lambda_{\hat \point}(\tangent) = \lambda_e(\tangent)$ has a
+  zero gradient at $0$: on both, the centre is a mode of $f$. On a positive type
+  $\nabla \lambda_{\hat \point}(0) = 1$ in each coordinate, and the centre is the mode in the
+  logarithmic chart. For a quantity scored by a log-normal of median $\mu$, it is $\mu$ itself,
+  where $\log \randomPoint$ is centred, while the mode with respect to Lebesgue measure is
+  $\mu\, e^{-\sigma^2}$, below it. A Gaussian in the tangent coordinates is a Gaussian in the
+  logarithms, and is centred where they are.
+- **Its constant.** $\lambda_{\hat \point}(0)$ is $\sum_i \log \hat \point_i$ on a positive type and
+  zero on the others the library has: the volume of the reference measure near $\hat \point$.
+
+With the chart linearization $m$ of rows of full rank, $e^{-m}$ is a constant times a normal
+density on $\R^\dimension$, and every quantity a Laplace approximation asks for is a computation
+of the note on its rows:
+
+| asked for | computed by |
+| --- | --- |
+| the mean, in the tangent at $\hat \point$ | the minimizer $\tangent^*$, zero at the centre |
+| the covariance, and its marginal on quantities $K$ | partial elimination of the others, [%full](statement:math/square-root-elimination/marginal), and the triangular root $W$ of what is left on $K$: $W^{-1} W^{-\top}$ |
+| a draw | $\hat \point \oplus (\tangent^* + R^{-1} z)$, with $z$ standard normal |
+| the evidence | $\log \int e^{-f} \dd \nu \approx \tfrac{\dimension}{2} \log 2\pi - m(\tangent^*) - \sum_i \log \lvert R_{ii} \rvert$, by [](eq:math/square-root-elimination/integral) |
+
+The draw lies in the chart's domain on every type the normal accepts, whose chart is global; on a
+type whose chart is not, the Gaussian's mass outside its domain is the error of
+[the note on chart volumes](../../math/chart-volume/) and is not part of this approximation's
+accounting.
+
+Its precision is the rows', $J\transpose J$, which omits from the chart objective's Hessian the
+second sum of [](eq:hessian), which vanishes at a zero residual, and the curvature
+$-\sum_t \nabla^2 \rho_t - \nabla^2 \lambda_{\hat \point}$ of the remainders and the chart's
+log-volume. On the Euclidean and the positive types, with fixed scales, both are zero. On a curved
+type they are of opposite signs and of the same order: near $\tangent = 0$ the Cayley and
+stereographic log-volumes are $-\tfrac12 \lVert \tangent \rVert^2$, so a term's log-volume adds a
+negative curvature of the order of $\Sigma$ against its $\Lambda$, and the chart's adds a positive
+one. For a single normal with a fixed mean, linearized at the mean, the two cancel exactly, since
+the chart objective is then the Gaussian part alone.
+
+> [!TODO] The curvature of the log-volumes
+> The rows cannot carry the remainders' and the chart's curvature: on a curved type the first is
+> negative semidefinite, and a negative curvature is not a sum of squares; adding it to
+> $R\transpose R$ is a downdate of the factor, which can lose definiteness and is not stable in the
+> way the rest of the elimination is. The draft leaves both out, so that the covariance on a curved
+> quantity is wrong by a relative error of the order of its noise's variance, $\sigma^2$, which is
+> $10^{-2}$ at $\sigma = 0.1$ rad, and exact on the Euclidean and positive types. The alternative
+> is to add the curvature of the log-volumes to the marginal's precision after the elimination, on
+> the few quantities kept, where it is a small dense matrix, and to refuse when the sum is not
+> positive definite. Should the entry leave the curvature out, add it to the kept marginals only,
+> or carry it through the elimination?
+
+## A retirement's replacement
+
+A [retirement](../core/math.svx#retirement) removes the quantities $E$, fixing those of $E_O$ at
+given values and integrating those of $E_F$ out of the terms $\mathcal T_E$ joined to them, and
+replaces those terms by one likelihood factor $\logterm_B$ over their Markov blanket $B$
+[](eq:archive/core/math/blanket), the integral of
+[%full](statement:archive/core/math/retirement). The core computes $E$, $\mathcal T_E$ and $B$ and
+applies the change; the caller computes $\logterm_B$. The linearization computes it as follows.
+
+Take the query of the terms $\mathcal T_E$ alone, whose log-density is their sum: free in $E_F$
+and in the continuous quantities $B_F$ of the blanket that the replacement is to depend on, and
+observing everything else they involve, the quantities of $E_O$ at their given values among them.
+Linearize it at a point $\hat \point = (\hat \point_E, \hat \point_B)$, with the chart's
+log-volume of $E_F$ alone, since $E_F$ is integrated over and $B_F$ is not, and eliminate the
+blocks of $E_F$ by integration, part 2 of
+[%full](statement:math/square-root-elimination/eliminate-one), from these factors only. This is the
+note's replacement [](eq:math/square-root-elimination/replace): the terms outside $\mathcal T_E$
+stay in the model, and folding them in would count them twice.
+
+<Statement {...replacement} />
+
+<Proof>
+
+By [](eq:archive/measures/math/chart-integral) over $E_F$, $\logterm_B(\point_B) = \log \int
+e^{\logterm_T(\point_E, \point_B)} \dd \nu(\point_E)$, with $\logterm_T$ the sum of the terms of
+$\mathcal T_E$, is the logarithm of the integral over $\tangent_E$ of
+$e^{-\phi(\tangent_E, \tangent_B)}$, with $\phi = -\logterm_T(\hat \point \oplus \tangent) -
+\lambda_{\hat \point_E}(\tangent_E)$ the chart objective of the query above, at
+$\point_B = \hat \point_B \oplus \tangent_B$. Replacing $\phi$ by its linearization $m_T$, a
+quadratic whose matrix has full rank, $e^{-m_T}$ is $Z$ times the normal density with the
+minimizer of $m_T$ as its mean and the inverse of its matrix as its covariance, with
+$Z = \int e^{-m_T}$, and integrating it over $\tangent_E$ leaves $Z$ times the marginal density on
+$\tangent_B$, which is the normal $\logterm_{\mathcal N}(\tangent_B;\, m, W)$ on $\R^D$ by
+[%full](statement:math/square-root-elimination/marginal). The integral over $\R^{d_E}$ is over the
+whole tangent space, which is the chart's domain when the chart is global.
+
+</Proof>
+
+The replacement is therefore exactly the normal's `Stacked` replacement
+[](eq:archive/normal/math/joint), with:
+
+$$
+	p_i = \hat \point_i \ (i \in B_F), \qquad
+	m = \tangent_B^*, \qquad
+	W, \qquad
+	c = \log Z = \tfrac{d_E + D}{2} \log 2\pi - m_T(\tangent^*) - \sum_i \log \lvert R_{ii} \rvert , @tag(stacked)
+$$
+
+where $\tangent^* = (\tangent_E^*; \tangent_B^*)$ is the minimizer of $m_T$, $R$ the triangular
+root of its rows, eliminated in any order, and $W$ the lower-triangular root of what is left on
+$B_F$ after $E_F$ is eliminated, brought to a positive diagonal as
+[the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. The
+anchors are the linearization point, constants of the model as `Stacked` requires, so the factor
+does not move with the quantities it summarizes, and its value and its derivatives at
+$\hat \point_B$ are the linearization's. The constant makes the replacement right in value as well
+as in shape, which the core's tests of retirement check ([What the tests check](#what-the-tests-check)).
+
+**Exact for linear-Gaussian terms.** If the terms of $\mathcal T_E$ are linear-Gaussian, the
+chart objective is quadratic by [%full](statement:exact), $m_T = \phi$, nothing is approximated,
+and the replacement is the integral of [%full](statement:archive/core/math/retirement), at every
+point $\hat \point$. The core's replacements [](eq:archive/core/math/kalman) and
+[](eq:archive/core/math/joint-blanket) are two cases: retiring $\randomPoint_0$ and $\bfz_0$, with
+$\bfz_0$ observed, from the scalar chain gives the Kalman filter's update and prediction, its
+evidence $\log \mathcal N(a, s^2 + r^2)(\hat z_0)$ as $\log Z$; retiring $\randomPoint_0$ alone,
+with $B_F = \{\bfz_0, \randomPoint_1\}$, gives the joint normal with $c = 0$, since then every term
+of $\mathcal T_E$ is a normalized density of a quantity integrated or kept, and $Z = 1$.
+
+**Observed blanket quantities.** A blanket quantity the query observes is fixed at its value
+before the integral is approximated, and the replacement is not reached from it: it is the
+replacement at that value, as an extended Kalman filter's prediction is the prediction for the
+controls it was given. That is right for data, such as the example's IMU reading $\bfzeta_1$, and
+the core accepts a replacement reached from part of the blanket only. A blanket quantity the
+replacement must stay a function of, such as a parameter a later query may leave free, is put in
+$B_F$. A discrete blanket quantity is always fixed, since a free one is refused.
+
+**Filters.** On a chain, retiring the oldest state $\randomPoint_k$ with its measurement, while the
+next state $\randomPoint_{k+1}$ stays, linearizes the replacement left by the previous retirement,
+the measurement's term and the motion's term, and integrates $\randomPoint_k$ out: an update and a
+prediction in one, in square-root information form. Where it is taken is the caller's choice of
+$\hat \point$, and the choice is the filter.
+
+- At the mode of the retired terms, which puts $\hat \point_k$ at the update's mode and
+  $\hat \point_{k+1}$ at its prediction, the replacement is an iterated extended Kalman filter's
+  step: the measurement and the motion are both linearized at the updated estimate. Reaching that
+  mode is a Gauss–Newton iteration on the retired terms alone.
+- At the prediction, $\hat \point_k$ the previous replacement's mean and $\hat \point_{k+1}$ its
+  image under the motion, the measurement is linearized where an extended Kalman filter linearizes
+  it. The classical filter then linearizes the motion at the updated estimate instead, a second
+  point for the same quantity, which one linearization of one query cannot take; the difference is
+  of second order in the update's step.
+
+Several states retired at once give one approximation of the whole, and one after another a
+sequence of them, which differ as the core's retirement says they may.
+
+> [!TODO] A replacement the rows do not determine
+> [%full](statement:replacement) asks that the rows of the retired terms determine every direction
+> of $(\tangent_E, \tangent_B)$, so that what is left on $B_F$ is a normal with a whitening of full
+> rank, the form `Stacked` takes. A common retirement fails it: a landmark of $B$ seen by a bearing
+> from the retired state alone leaves fewer rows on $B_F$ than its dimension, and the exact
+> replacement is then an improper Gaussian in some directions, $-\tfrac12 \lVert A \tangent_B - b
+> \rVert^2 - \eta\transpose \tangent_B + c$ with $A$ of fewer rows than columns. It is a function of
+> $\tangent_B$, and a likelihood factor needs no normalization, so the core could hold it, binding
+> $A \tangent_B - b$ as its residual; but `Stacked` cannot write it, and neither can any form the
+> normal provides. Should this entry provide a factor of that form, the rows, the right-hand side,
+> the linear term and the constant at constant anchors, of which `Stacked` is the case of full
+> rank; or refuse such a retirement, naming the blanket quantity left undetermined, and leave the
+> general form to a later entry?
+
+## Information roots
+
+Fisher scoring uses the expected information in place of the Gauss–Newton matrix, and the normal
+binds a root $C$ of it on every term that scores a quantity
+([the expected information](../normal/math.svx#the-expected-information)). Its rows are $C_t$
+composed with the Jacobians of the term's scored quantity, mean and scale coordinates, and it is the
+estimator that handles a free scale, which the residual linearization refuses. In the note's terms
+it is the same problem with the right-hand side $b = 0$ and the linear term $\eta = g$: its minimizer
+solves the normal equations with the gradient on the right, at $\kappa(A)^2$, and its elimination,
+damping, marginals and plan are the ones above. Only its rows differ, and the passes that compute
+them: Jacobians of the mean and the scale's coordinates as well as of the residual.
+
+> [!TODO] Whether information roots belong to this entry
+> The elimination accepts the information root's rows unchanged, so including them costs only their
+> assembly and their tests, and gives a free scale a linearization now. Leaving them to a Fisher
+> scoring entry keeps this one to the residual linearization that Gauss–Newton,
+> Levenberg–Marquardt, the Laplace approximation and the filters need. Should this entry also
+> linearize with information roots?
+
+## What the tests check
+
+- **The linearization agrees with the query**, [](eq:agreement): $m(0)$ with the query's
+  log-density, $\nabla m(0)$ with its cotangent pass, and each $J_t$ with finite differences of
+  $r_t$ along $\hat \point \oplus h \tangent$, on Euclidean, positive and rotation quantities, at
+  both precisions, with only the columns of $K_t$ nonzero.
+- **It is exact for linear-Gaussian terms**, [%full](statement:exact): $m(\tangent) = f(\hat \point
+  \oplus \tangent)$ at several $\tangent$, at a point that is not the mode, on Euclidean and on
+  positive quantities.
+- **The step is Gauss–Newton's**, [](eq:step): it agrees with a dense solve of the normal
+  equations on a small, well-conditioned model; on the note's ill-conditioned example it is
+  accurate where the normal equations fail; iterated on normals of rotations, it converges to the
+  mode of [](eq:archive/normal/math/gn-objective), the log-volumes included through $\eta$.
+- **The elimination is order-independent**: the step, the marginal covariances and the
+  log-determinant agree across orders, and with dense computations on small models; the marginal
+  on $K$ equals the $K$ block of the inverse of $J\transpose J$.
+- **Damping** gives the minimizer of $(J\transpose J + \lambda D)\, \tangent = -g$ and the
+  promised decrease [](eq:promised), and leaves the plan unchanged.
+- **The Laplace approximation is centred in the chart**: on a log-normal quantity it is centred at
+  the median, with the covariance of the logarithm, and its evidence is exact for a linear-Gaussian
+  model, against quadrature.
+- **The replacement is the core's**, [](eq:stacked): retiring from the core's scalar chain gives
+  [](eq:archive/core/math/kalman) and [](eq:archive/core/math/joint-blanket), constants included,
+  as `Stacked` replacements whose retired models pass the core's checks of retirement; on a
+  linear-Gaussian chain of several states, retiring them one at a time gives the Kalman filter's
+  means, covariances and evidence; on a nonlinear chain, the replacement at the prediction
+  agrees with an extended Kalman filter to second order in the update's step.
+- **Batch rows share the plan**: a batch of points has one order and one elimination tree, and
+  each row's step is the step of that row linearized alone.
+- **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
+  is free, and a quantity the rows do not determine, each naming what it names.
+
+## In skoro's terms
+
+- **A query is linearized at a point**: its free continuous quantities, in the order of a layout,
+  are the variables, each a block of its tangent dimension, and every other quantity is fixed.
+  Each term reached from a free quantity is a factor over its free quantities $K_t$, read off the
+  compilation graph; the others are constants of the query.
+- **A factor's rows are its residual's Jacobian**, $J_t$, and its right-hand side $-r_t$, both
+  from the node it binds under the residual role. The linear term $\eta$ is the query's gradient
+  less what the rows account for, and holds the gradients of the remainders: the log-volumes of
+  normals on positive and curved quantities, and the constants of replacements. Everything is of
+  first order, computed at the query's precision, and solved on the host in double precision.
+- **The linearization is refused** for a free discrete quantity, a factor without a residual, and
+  a factor whose bound scale is reached from a free quantity.
+- **Elimination** is the note's, by blocks that are the free quantities, with an order and an
+  elimination tree that depend on the factor structure alone and so serve every row of a batch, and
+  with a refusal for a quantity the rows do not determine.
+- **A step** is the minimizer, retracted quantity by quantity; damping appends a factor per
+  quantity; a Laplace approximation uses the chart linearization, with the log-volume of the
+  quantities integrated over, and reads its marginals, draws and evidence off the eliminated rows.
+- **A retirement's replacement** is the linearized integral of [%full](statement:replacement),
+  computed from the retired terms alone, free in the retired quantities to integrate and in the
+  blanket's quantities to keep, at a point the caller chooses, and written as the normal's
+  `Stacked` replacement with the anchors at that point, the mean, the whitening and the constant
+  of [](eq:stacked). It is exact for linear-Gaussian terms, where it is the Kalman filter, and an
+  extended Kalman filter otherwise.
+
+## Open questions
+
+The three questions above, the curvature of the log-volumes, a replacement the rows do not
+determine, and whether information roots belong to this entry, remain open.
