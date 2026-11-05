@@ -367,7 +367,7 @@ passes. New and changed tests:
 **The rotations' coefficients**, in `crates/skoro-spatial/src/series.rs`'s tests:
 
 - `series_are_truncated_below_rounding` (new): for each coefficient and $m \le 2$, the tail beyond
-  the table's last term, at $x = $ `CUTOFF`, is below $2^{-53}\, \lvert f \rvert$. This is
+  the table's last term, at `CUTOFF`, is below $2^{-53}\, \lvert f \rvert$. This is
   [](eq:archive/wgpu-accuracy/math/truncation-condition) itself. For `a`, `b`, `A`, `B`, `D` and `E`,
   the tail is summed from the closed expressions of the terms for forty terms past the table, which
   bounds it since the terms fall factorially. For `C`, the tail is bounded with
@@ -391,7 +391,7 @@ passes. New and changed tests:
 **The test sphere**, in `crates/skoro/tests/sphere.rs`:
 
 - `exponential_series_are_truncated_below_rounding` (new): as for the coefficients, the tails of
-  `COS_SERIES`, `SINC_SERIES` and `LOG_VOLUME_SERIES` at $r^2 = $ `EXP_CUT`, for $m \le 2$, are below
+  `COS_SERIES`, `SINC_SERIES` and `LOG_VOLUME_SERIES` at `EXP_CUT`, for $m \le 2$, are below
   $2^{-53}$ times each function's value there. $\Lambda$'s tail is bounded with $\lvert \lambda_n \rvert
   = \zeta(2n) / (n \pi^{2n})$, a geometric series in $r^2 / \pi^2$.
 - `exponential_series_meet_closed_forms` (new): each series at $0.9$ `EXP_CUT`, in double precision
