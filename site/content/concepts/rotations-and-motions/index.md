@@ -122,8 +122,24 @@ The exponential, the logarithm and the Jacobians are smooth at the identity, but
 divide by the angle there. Each coefficient is computed by a truncated series below a cutoff and by
 its closed form above it, selected by the core's selection, with each formula given a harmless
 argument on the rows where the other is chosen, so that every pass is finite at the identity too.
-The cutoffs are one for both precisions, since a composite does not know the precision it will run
-at.
+The cutoff is one for both precisions and for every device, since a composite does not know where
+it will run:
+
+```rust
+{../../../../crates/skoro-spatial/src/series.rs:16..19}
+```
+
+At $\theta^2 = 1$, the closed forms above the cutoff agree with double precision in single
+precision on a GPU, whose sine is accurate only to an absolute error (see
+[queries](../queries/#a-target)). Their derivatives agree too, to second order. The series below
+it keep as many terms as double precision needs there, up to $\theta^{22}$ for the inverse
+Jacobians' coefficient.
+
+> [!DECISION] One cutoff, high enough for the GPU
+> The closed forms whose numerators hold a sine, those of the Jacobians of the motions, lose a factor
+> of ten to a GPU's sine just above a low cutoff. Moving the cutoff costs a few more terms of each
+> series on every device, and saves choosing a cutoff by precision, which a composite cannot do.
+> [Accuracy on the GPU](../../archive/wgpu-accuracy/) derives the conditions and measures them.
 
 ## Euler angles
 

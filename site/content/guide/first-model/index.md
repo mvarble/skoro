@@ -72,6 +72,8 @@ The value is the closed form above, and the gradient is
 $-x / \sigma_0^2 + 2x(\rho - |x|^2) / \sigma_1^2$, which the test's own functions compute by hand.
 The test runs once at single precision and once at double on the CPU, and on a GPU through wgpu
 when that feature is on: `target` is each in turn. The model never changes; only the target does.
+On a GPU, `testing::wgpu()` first measures the adapter's sine and cosine. If they err by more than
+skoro's formulas are designed for, every wgpu test fails there, naming the error measured.
 
 ## Programs of any value
 
