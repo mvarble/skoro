@@ -161,12 +161,17 @@ $\varepsilon_\star / \hat\varepsilon \approx 2.5$ times those measured, with $\h
 measured error. That factor, applied to the measurements, is what the conditions below are checked
 against. The constant $K_m$ is left out of the bound, and the measurements stand in for it.
 
-The exponential, the logarithm and $\operatorname{atan2}$ need no bound of their own. Their errors
-enter no cancelling numerator: a closed form's $\theta = e^{\frac12 \log \theta^2}$, computed with
-a relative error, is a nearby argument $\tilde\theta$, and the closed form is then evaluated
-consistently at $\tilde\theta$, with $\sin \tilde\theta$ and $\theta^k$ alike. The error of $f$ is
-then $f'(\theta)(\tilde\theta - \theta)$, which is bounded near $0$, rather than an error divided by
-$\theta^k$. The design asks of them only the relative accuracy measured.
+The exponential, the logarithm and $\operatorname{atan2}$ need no bound of their own, because the
+cancelling numerators do not amplify their errors as they amplify the sine's. A closed form's
+$\theta = e^{\frac12 \log \theta^2}$ is computed with a relative error $\eta$, of a few roundings,
+and so is a nearby argument $\tilde\theta = \theta(1 + \eta)$. Where the numerator and the power
+$\theta^k$ are both formed from $\tilde\theta$, the closed form is evaluated consistently there, and
+its error is $f'(\theta)(\tilde\theta - \theta)$, bounded near $0$. Where a power is formed from the
+exact $\theta^2$ instead, the numerator's $\eta\, \theta$ is left uncancelled. Divided by $\theta^k$,
+it gives an error of order $\eta\, \theta^{1 - k}$. That is the order of the CPU's own sine error,
+$u\, \theta^{1-k}$, larger only by the few roundings $\eta / u$, and never by the factor
+$\varepsilon / (u\, \theta)$. Either way, the design asks of them only the relative accuracy
+measured.
 
 **Admission.** The checks that compare single precision with double precision rest on
 [](eq:design-error), so a device must show that it meets it. With $X$ a finite set of
@@ -212,8 +217,8 @@ drops $K_m$ and the CPU's errors from sources other than the sine, and for $b$, 
 $\theta_c^2 \approx 0.48$, the measurements show the GPU's error already below the CPU's. The
 measurements decide. At $\theta^2 = 1$ the GPU's errors in the second derivatives in $\theta^2$
 were $3.7 \cdot 10^{-7}$ for $B$, $3.8 \cdot 10^{-7}$ for $D$ and $1.5 \cdot 10^{-6}$ for $E$.
-Scaled to $\varepsilon_\star$, they are at most $4 \cdot 10^{-6}$, three orders below what the CPU
-reaches at the present cutoff.
+Scaled to $\varepsilon_\star$, they are at most $4 \cdot 10^{-6}$, two to three orders below what
+the CPU reaches at the present cutoff.
 
 **The series below it.** The series truncated after $N$ terms, with remainder $R_N$, must meet
 double precision's rounding at the cutoff, in its value and its first two derivatives:
@@ -239,8 +244,9 @@ $\theta_c^2 = 1$ falls by $(2\pi)^{-2} \approx 0.025$ a term, so it reaches doub
 rounding in about a dozen. The sphere needs its cutoff moved furthest. Its present one, $r^2 =
 10^{-8}$, leaves the closed form in use at the check's $r^2 = 10^{-4}$, where its second
 derivative's error is of the order of $\varepsilon_\star\, r^{-5} \approx 10^{4}$. At $r^2 = 0.1$ the
-error measured, $1.7 \cdot 10^{-5}$, is at most $4.3 \cdot 10^{-5}$ at $\varepsilon_\star$, well
-inside the check's $5 \cdot 10^{-3}$. There the series falls by $0.1 / \pi^2 \approx 0.01$ a term
+error measured, $1.7 \cdot 10^{-5}$, is at most $4.3 \cdot 10^{-5}$ at $\varepsilon_\star$. That is well
+inside the check's $5 \cdot 10^{-3}$, which is relative to the larger of the value and one and so,
+for values this small, absolute. There the series falls by $0.1 / \pi^2 \approx 0.01$ a term
 and reaches double precision's rounding in about eight. Below such a cutoff the check's central
 differences, at $r^2 = 10^{-4}$, are taken from the series, as the second-order map is.
 
