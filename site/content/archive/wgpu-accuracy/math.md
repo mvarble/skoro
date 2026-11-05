@@ -1,5 +1,5 @@
 ---
-summary: How the absolute error of a GPU's sine and cosine reaches the closed forms of the removable singularities and their derivatives, measured on a wgpu adapter, and the conditions a cutoff and its series must meet so that single precision on the GPU agrees with double precision as it does on the CPU.
+summary: How the absolute error of a GPU's sine and cosine reaches the closed forms of the removable singularities and their derivatives, measured on a wgpu adapter; the error the cutoffs are designed for and how a device is admitted to it; and the conditions a cutoff and its series must meet so that single precision on the GPU agrees with double precision as it does on the CPU.
 depends_on: [archive/rotations/math, archive/measures/math]
 ---
 
@@ -16,9 +16,9 @@ the rotations' tests, and the second-order map of the exponential sphere's log-v
 the core's. Every other check passes there.
 
 This writeup finds why, by measuring the adapter's elementary functions, shows how their error
-reaches a closed form and its derivatives, and states the conditions a cutoff and its series must
-meet for single precision on the GPU to agree with double precision as closely as it does on the
-CPU. It decides no cutoff: as the rotations' mathematics left them, the numbers are settled by the
+reaches a closed form and its derivatives, states the error the design assumes of a device and how
+a device is admitted to it, and states the conditions a cutoff and its series must meet for single
+precision on the GPU to agree with double precision as closely as it does on the CPU. It decides no cutoff: as the rotations' mathematics left them, the numbers are settled by the
 implementation, against measurements, under the conditions found here.
 
 ## Setting
@@ -135,26 +135,85 @@ $\varepsilon$ into its value once, below $10^{-6}$. The logarithm's $L = 2 \oper
 / n$ divides by $n$ the angle of a point, which the GPU computes to its relative accuracy, so it
 loses nothing either.
 
+## The error designed for
+
+The cutoffs cannot be designed for the specification's bound. Under an absolute error of
+$2^{-11}$ no map of a rotation agrees with double precision to $10^{-4}$, closed form or not, and
+not even a rotation's matrix. Nor can they be designed for the one adapter measured, since other
+adapters, and other drivers of this one, may differ. They are designed instead for a stated bound on
+the absolute error of the sine and the cosine,
+
+$$
+	\varepsilon_\star = 2^{-20} \approx 9.5 \cdot 10^{-7} \quad \text{on } [-\pi, \pi], \qquad
+	\varepsilon_\star^{\text{far}} = 2^{-16} \approx 1.5 \cdot 10^{-5} \quad \text{beyond}, @tag(design-error)
+$$
+
+about $2.5$ times the error measured on $[-\pi, \pi]$ and twice the error measured between $10$ and
+$100$. The two bounds differ because only the first is amplified. A closed form evaluates its sine
+and cosine beyond $\pi$ only where $\theta > \pi$, where the factor $\theta^{-(k + 2m)}$ of
+[](eq:derivative-error) is below $\pi^{-(k + 2m)}$ and amplifies nothing. There, as in a map
+without a cancelling numerator, the error reaches a value about once, and $\varepsilon_\star^{\text{far}}$
+leaves room under the agreement of $10^{-4}$.
+
+The sine's and cosine's parts of the errors in [](eq:derivative-error) are linear in $\varepsilon$,
+and the rest does not depend on it. At $\varepsilon_\star$, then, the GPU's errors are at most
+$\varepsilon_\star / \hat\varepsilon \approx 2.5$ times those measured, with $\hat\varepsilon$ the
+measured error. That factor, applied to the measurements, is what the conditions below are checked
+against. The constant $K_m$ is left out of the bound, and the measurements stand in for it.
+
+The exponential, the logarithm and $\operatorname{atan2}$ need no bound of their own. Their errors
+enter no cancelling numerator: a closed form's $\theta = e^{\frac12 \log \theta^2}$, computed with
+a relative error, is a nearby argument $\tilde\theta$, and the closed form is then evaluated
+consistently at $\tilde\theta$, with $\sin \tilde\theta$ and $\theta^k$ alike. The error of $f$ is
+then $f'(\theta)(\tilde\theta - \theta)$, which is bounded near $0$, rather than an error divided by
+$\theta^k$. The design asks of them only the relative accuracy measured.
+
+**Admission.** The checks that compare single precision with double precision rest on
+[](eq:design-error), so a device must show that it meets it. With $X$ a finite set of
+single-precision inputs, and the exact values taken in double precision, whose own error of
+$2^{-53}$ is negligible, the device is admitted when
+
+$$
+	\hat\varepsilon = \max_{x \in X \cap [-\pi, \pi]} \max\bigl(\lvert \widetilde{\sin}\, x - \sin x
+	\rvert, \lvert \widetilde{\cos}\, x - \cos x \rvert\bigr) \le \varepsilon_\star, @tag(admission)
+$$
+
+and the same maximum over $X$ beyond $\pi$ is at most $\varepsilon_\star^{\text{far}}$. A device
+that is not admitted fails there. The failure names $\hat\varepsilon$ and the bound it exceeds,
+rather than a coefficient's second derivative several steps later. Admission is necessary, not
+sufficient: $\hat\varepsilon$ is a maximum over a sample and can miss the worst input. The room
+between the bound and the error measured is what absorbs the inputs the sample misses, on an
+adapter like the one measured. $X$ therefore covers the arguments the closed forms and the maps
+evaluate, near $0$ as densely as near $\pi$, as the measurements above did.
+
 ## Conditions on a cutoff
 
 The coefficient's closed form is used above its cutoff $\theta_c$ and its series below it. Two
-conditions decide $\theta_c$, the first new.
+conditions decide $\theta_c$, and the first is new.
 
-**The closed form above the cutoff.** For each coefficient $f$, each order $m \le 2$, and each map
-that uses $f$, with $w_m(\theta)$ the factor by which the map multiplies $f$'s $m$-th derivative,
+**The closed form above the cutoff.** Take each coefficient $f$, each order $m \le 2$, and each map
+that uses $f$, and let $w_m(\theta)$ be the factor by which the map multiplies $f$'s $m$-th
+derivative. Then
 
 $$
-	K_m\, \varepsilon\, \theta_c^{-(k + 2m)}\, w_m(\theta_c) \le \tau, @tag(closed-condition)
+	K_m\, \varepsilon_\star\, \theta_c^{-(k + 2m)}\, w_m(\theta_c) \le \tau, @tag(closed-condition)
 $$
 
 where $\tau$ is the share of the agreement of single with double precision that the coefficient
-may spend. Since the bound decreases in $\theta_c$, a larger cutoff always meets it, and it is met
-on the CPU, by [](eq:derivative-error), wherever it is met on the GPU. For the GPU's error to be no
-larger than the CPU's is at the present $\theta_c$, a coefficient holding a sine needs its cutoff
-raised by the factor $(\varepsilon_s / (u\, \theta_c))^{1 / (k + 2m)}$; for $E$ at $m = 2$ this is about
-$1.4$, $\theta_c^2 \approx 0.2$. At $\theta^2 = 1$ the GPU's errors measured are, for the second
-derivatives in $\theta^2$, $3.7 \cdot 10^{-7}$ for $B$, $3.8 \cdot 10^{-7}$ for $D$ and $1.5 \cdot
-10^{-6}$ for $E$: below what the CPU reaches at the present cutoff.
+may spend. The bound decreases in $\theta_c$, so a larger cutoff always meets it. By
+[](eq:derivative-error), it is also met on the CPU wherever it is met on the GPU.
+
+The scaling of [](eq:derivative-error) suggests how far a cutoff holding a sine must rise for its
+error on the GPU at $\varepsilon_\star$ to be no larger than its error on the CPU at the present
+$\theta_c^2 = 0.1$. The factor is $(\varepsilon_\star / (u\, \theta_c))^{1 / (k + 2m)}$. At $m = 2$
+it is about $1.75$ for $B$, giving $\theta_c^2 \approx 0.31$, and $1.55$ for $E$, giving
+$\theta_c^2 \approx 0.24$. The factor is largest where $k + 2m$ is smallest. It is only a guide: it
+drops $K_m$ and the CPU's errors from sources other than the sine, and for $b$, where it predicts
+$\theta_c^2 \approx 0.48$, the measurements show the GPU's error already below the CPU's. The
+measurements decide. At $\theta^2 = 1$ the GPU's errors in the second derivatives in $\theta^2$
+were $3.7 \cdot 10^{-7}$ for $B$, $3.8 \cdot 10^{-7}$ for $D$ and $1.5 \cdot 10^{-6}$ for $E$.
+Scaled to $\varepsilon_\star$, they are at most $4 \cdot 10^{-6}$, three orders below what the CPU
+reaches at the present cutoff.
 
 **The series below it.** The series truncated after $N$ terms, with remainder $R_N$, must meet
 double precision's rounding at the cutoff, in its value and its first two derivatives:
@@ -165,35 +224,41 @@ $$
 $$
 
 The series of $b$, $A$, $B$, $D$ and $E$ are entire, with terms falling like $\theta^{2n} / (2n +
-k)!$, so every cutoff can be met with enough terms: at $\theta^2 = 1$, about ten. $C$'s series, that of
-$\tfrac\theta2 \cot \tfrac\theta2$, converges for $\theta < 2\pi$, with terms falling by
-$(\theta / 2\pi)^2$; $\Lambda$'s, $\log(\sin r / r) = -\tfrac{r^2}{6} - \tfrac{r^4}{180} -
-\tfrac{r^6}{2835} - \cdots$, converges for $r < \pi$, by $(r / \pi)^2$. Either bounds the cutoff
-away from its radius, and the number of terms grows as the cutoff nears it. A series costs a product
-and a sum per term, on every device.
+k)!$, so every cutoff can be met with enough terms: at $\theta^2 = 1$, about ten. $C$'s series is
+that of $\tfrac\theta2 \cot \tfrac\theta2$. It converges for $\theta < 2\pi$, with terms falling by
+$(\theta / 2\pi)^2$. $\Lambda$'s series, $\log(\sin r / r) = -\tfrac{r^2}{6} - \tfrac{r^4}{180} -
+\tfrac{r^6}{2835} - \cdots$, converges for $r < \pi$, with terms falling by $(r / \pi)^2$. Either
+radius bounds the cutoff away from it, and the number of terms grows as the cutoff nears it. A
+series costs a product and a sum per term, on every device.
 
-One cutoff still serves every target, since a composite sees neither its precision nor its device:
-the conditions are met for the worst of them, the GPU's absolute $\varepsilon$ in single precision
-for [](eq:closed-condition) and double precision for [](eq:truncation-condition), and every other
-target meets them a fortiori. The archive's cutoff for single precision, $\theta^2 \approx 1.37$,
-with its series through $\theta^8$, was of this size.
+**Every coefficient has a cutoff meeting both.** For $b$, $A$, $B$, $D$ and $E$, $\theta_c^2 = 1$
+meets [](eq:closed-condition) at $\varepsilon_\star$ by the measurements just scaled, and
+[](eq:truncation-condition) with about ten terms. $C$, of sines and cosines of $\theta / 2$ with
+$k = 2$, was measured no worse on the GPU than on the CPU at $\theta^2 = 0.1$. Its series at
+$\theta_c^2 = 1$ falls by $(2\pi)^{-2} \approx 0.025$ a term, so it reaches double precision's
+rounding in about a dozen. The sphere needs its cutoff moved furthest. Its present one, $r^2 =
+10^{-8}$, leaves the closed form in use at the check's $r^2 = 10^{-4}$, where its second
+derivative's error is of the order of $\varepsilon_\star\, r^{-5} \approx 10^{4}$. At $r^2 = 0.1$ the
+error measured, $1.7 \cdot 10^{-5}$, is at most $4.3 \cdot 10^{-5}$ at $\varepsilon_\star$, well
+inside the check's $5 \cdot 10^{-3}$. There the series falls by $0.1 / \pi^2 \approx 0.01$ a term
+and reaches double precision's rounding in about eight. Below such a cutoff the check's central
+differences, at $r^2 = 10^{-4}$, are taken from the series, as the second-order map is.
+
+One cutoff still serves every target, since a composite sees neither its precision nor its
+device. The conditions are met for the worst of them: [](eq:design-error) in single precision for
+[](eq:closed-condition), and double precision for [](eq:truncation-condition). Every other target,
+the CPU's in either precision and an admitted GPU's in double, meets them a fortiori. The archive's
+cutoff for single precision, $\theta^2 \approx 1.37$, with its series through $\theta^8$, was of
+this size.
 
 ## In skoro's terms
 
 Nothing random or estimated changes, and no map changes its value in exact arithmetic: the series
-and the closed form agree, and only where one is used instead of the other moves. What changes is
-the computation of a composite's value and of its derivatives of both orders on a target whose
-elementary functions have absolute error, which the core's passes inherit by evaluating each
+and the closed form agree, and only the point where one replaces the other moves. What changes is
+the computation of a composite's value, and of its derivatives of both orders, on a target whose
+elementary functions have absolute error. The core's passes inherit that error by evaluating each
 primitive's derivative formula at the computed values. The checks that compare single precision
-with double precision, at both sides of each cutoff, hold on the GPU once the cutoffs meet
-[](eq:closed-condition) for its $\varepsilon$.
-
-## Open questions
-
-> [!TODO] Which $\varepsilon$ the cutoffs are designed for
-> The specification's bound, $2^{-11}$, cannot be designed for at all: under it no map of a
-> rotation, closed form or not, agrees with double precision to $10^{-4}$. The adapter measured has
-> $\varepsilon \approx 2^{-21}$, and other adapters may differ. The recommendation is to design for a stated $\varepsilon$, about
-> $2^{-20}$, with room over the measured one, and to have the tests measure the adapter's
-> $\varepsilon$ first and fail naming it when it exceeds the stated one, rather than failing in a
-> coefficient's second derivative. Is that the target, or should the design aim at something else?
+with double precision, on both sides of each cutoff, hold on the GPU once two things are true: the
+cutoffs meet [](eq:closed-condition) at $\varepsilon_\star$, and the device is admitted by
+[](eq:admission). The bounds of [](eq:design-error) are a property of the target that the design
+assumes, stated once. They are not a tolerance of any one check.
