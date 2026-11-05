@@ -5,8 +5,10 @@ depends_on: [archive/wgpu-accuracy/math]
 
 ## Overview
 
-When this is built, three things are different, and none of them is visible to a user of the library
-outside its tests.
+When this is built, three things are different, and no interface changes. Admission and the
+sphere's fixture are test support. The cutoff of the rotations' coefficients is library code. Moving
+it changes the single-precision values of every rotation, pose and Jacobian at $0.1 < \theta^2 < 1$,
+but only within rounding, and toward double precision.
 
 1. **Every wgpu test admits its adapter first.** `skoro_core::testing::wgpu()`, which every
    `name::wgpu` instance of `precision_tests!` calls, measures the adapter's sine and cosine once per
@@ -16,8 +18,8 @@ outside its tests.
    naming the error measured, the argument at which it was reached, and the bound exceeded:
 
    ```text
-   the wgpu adapter is not admitted: its sine and cosine err by 2.1e-6 at x = 0.73 on [-π, π],
-   above the 9.5e-7 the cutoffs are designed for (archive/wgpu-accuracy/math)
+   the wgpu adapter is not admitted: its sine and cosine err by 2.10e-6 at x = 7.30e-1 on [-π, π],
+   above the 9.54e-7 the cutoffs are designed for (archive/wgpu-accuracy/math)
    ```
 
 2. **The rotations' coefficients switch at $\theta^2 = 1$.** `skoro-spatial`'s `series::CUTOFF`
@@ -85,8 +87,14 @@ impl Tolerance {
 
     pub fn of(precision: Precision) -> Tolerance {
         match precision {
-            Precision::Double => Tolerance { step: 1e-6, relative: 1e-7 },
-            Precision::Single => Tolerance { step: 1e-2, relative: 5e-3 },
+            Precision::Double => Tolerance {
+                step: 1e-6,
+                relative: 1e-7,
+            },
+            Precision::Single => Tolerance {
+                step: 1e-2,
+                relative: 5e-3,
+            },
         }
     }
 }
@@ -182,7 +190,9 @@ impl Admission {
     pub fn measure(target: &Target) -> Result<Admission, String>;
 
     /// `Ok` when both errors are within their bounds; otherwise a message naming the error, its
-    /// argument, the bound exceeded, and the document the bound is stated in.
+    /// argument, the bound exceeded, and the document the bound is stated in, each number written
+    /// `{:.2e}`: "its sine and cosine err by 2.00e-6 at x = 7.30e-1 on [-π, π], above the 9.54e-7
+    /// the cutoffs are designed for (archive/wgpu-accuracy/math)", and "beyond π" with `FAR`.
     pub fn admit(&self) -> Result<(), String>;
 }
 ```
@@ -350,17 +360,20 @@ passes. New and changed tests:
 **Admission**, in `crates/skoro-core/src/testing.rs`'s tests:
 
 - `admission_names_the_error_and_the_bound`: `Admission { near: (2e-6, 0.73), far: (1e-6, 50.0) }
-  .admit()` fails with a message containing `2e-6` (or its formatting), `0.73`, the bound $2^{-20}$
-  and `archive/wgpu-accuracy/math`. An `Admission` within both bounds is admitted, and one within
-  `NEAR` but over `FAR` fails naming `FAR`. This checks the comparison and the message without a
+  .admit()` fails with a message containing `2.00e-6`, `7.30e-1`, `on [-π, π]`, `9.54e-7` and
+  `archive/wgpu-accuracy/math`. An `Admission` within both bounds is admitted. One within `NEAR` but
+  with `far: (2e-5, 50.0)` fails with a message containing `2.00e-5`, `beyond π` and `1.53e-5`. This checks the comparison and the message without a
   device that fails.
 - `the_host_is_admitted_in_single_precision`: `Admission::measure(&flex(Single))` is admitted, with
   `near.0` below $10^{-7}$. The CPU's sine is accurate relative to its value, so its absolute error on
   $[-\pi, \pi]$ is a few single-precision roundings of numbers at most $1$. This shows the
   measurement measures, and gives a known answer for the program it compiles. It is not gated on
   `wgpu`.
-- `the_adapter_is_admitted` (with `wgpu`): `Admission::measure(&wgpu-target)` is admitted, and the
-  test prints the `Admission`, so that the build's commit can quote it. On the adapter of the
+- `the_adapter_is_admitted` (with `wgpu`): the target is built directly, as
+  `Target::new(skoro_tensor::test_adapter(skoro_tensor::wgpu_devices())?, Precision::Single)`, not
+  through `wgpu()`, which would refuse an unadmitted adapter before the test could say what it
+  measured. The test prints `Admission::measure` of it, then asserts `admit()`, so that the build's
+  commit can quote the measurement. On the adapter of the
   mathematics, `near.0` is about $3.8 \cdot 10^{-7}$ and `far.0` about $7.8 \cdot 10^{-6}$, and a
   value far from these says the measurement differs from the one the mathematics made.
 
@@ -376,7 +389,7 @@ passes. New and changed tests:
   raised without the terms.
 - `series_meet_closed_forms` (changed reference): `summed`, its reference sum to convergence, takes
   twenty terms rather than twelve. `C`'s terms become $2 \zeta(2k + 2) / (2\pi)^{2k + 2}$, with
-  $\zeta$ summed directly, rather than the `BERNOULLI` table. Without that change, a reference of
+  $\zeta$ from the test helper `zeta` below, rather than the `BERNOULLI` table. Without that change, a reference of
   twelve terms from the table the series is built from would compare `C`'s series with itself below
   the cutoff. The comment "twelve terms being far below rounding at θ² ≤ 0.11" becomes one for
   $\theta^2 \le 1.1$. The test's points follow `CUTOFF`. Its far length `1.3` now sits just above
@@ -387,6 +400,14 @@ passes. New and changed tests:
 - `the_bernoulli_numbers_are_the_zeta_values` (new): each entry of `BERNOULLI` against $(-1)^{n+1}
   2 \zeta(2n) (2n)! / (2\pi)^{2n}$, to $10^{-14}$ relative. The table now builds a series, so it is
   checked against an independent expression of the same numbers.
+
+The references above take $\zeta$ from one helper in each test module, `fn zeta(s: u32) -> f64` for
+even $s \ge 2$. A sum of $j^{-2}$ taken directly would need about $10^{14}$ terms to reach rounding,
+so the helper does not sum the first two values. It returns $\zeta(2) = \pi^2 / 6$ and $\zeta(4) =
+\pi^4 / 90$ exactly. For $s \ge 6$ it sums $\sum_{j \le J} j^{-s}$ with $J = 1000$ and adds the
+Euler–Maclaurin tail $J^{1-s} / (s - 1) - \tfrac12 J^{-s}$, whose own error is below $s\, J^{-s-1} /
+12$, far below rounding. The tail bounds of the truncation tests need no such care, since they use
+$\zeta(2n) \le 1 + 2^{-2n} + 2^{1-2n} / (2n - 1)$ only beyond the tables, at $2n \ge 22$.
 
 **The test sphere**, in `crates/skoro/tests/sphere.rs`:
 
