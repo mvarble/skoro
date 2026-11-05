@@ -22,4 +22,8 @@ retirement gives back.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the
-`precision_tests!` macro, and a declared chart volume against the area formula.
+`precision_tests!` macro, and a declared chart volume against the area formula. Its wgpu target
+is admitted before any test uses it: `Admission` measures the adapter's sine and cosine against
+double precision, and refuses an adapter whose absolute error exceeds what the removable
+singularities' cutoffs are designed for, as [Accuracy on the
+GPU](../../../archive/wgpu-accuracy/) works out.

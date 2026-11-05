@@ -47,6 +47,23 @@ The model itself commits to neither: precision belongs to the query, and two pro
 one snapshot may run at different precisions side by side. `Target::host()` is the Flex device at
 double precision, where the model folds its constants.
 
+A target's elementary functions are not equally accurate everywhere. The CPU's sine is accurate
+relative to its value, as a library's is. A GPU's is accurate only to an absolute error, about
+$4 \cdot 10^{-7}$ on the adapter skoro is tested on, whatever the argument. Near $0$, where
+$\sin x \approx x$ is small, that is a large relative error. A formula that cancels its
+numerator to a power of a small argument and divides by that power amplifies it, and so do the
+formula's derivatives, more with each order. skoro's own such formulas, the removable
+singularities of its rotations, switch to a series far enough from $0$ that they hold on a GPU whose
+sine and cosine err by up to $2^{-20}$ on $[-\pi, \pi]$ (see
+[the rotations](../rotations-and-motions/#derivatives)). A model that writes one of its own needs the
+same care.
+
+> [!DECISION] Designed for a stated error, not for one adapter
+> The WGSL specification promises the sine an absolute error of only $2^{-11}$, under which nothing
+> computed from a rotation agrees with double precision to $10^{-4}$. skoro designs instead for a
+> stated $2^{-20}$, about two and a half times what was measured, and its tests measure the adapter
+> before they run. [Accuracy on the GPU](../../archive/wgpu-accuracy/) works out why and how far.
+
 ## Compiling
 
 A snapshot compiles a query for a target with

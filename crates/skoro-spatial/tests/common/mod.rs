@@ -304,7 +304,7 @@ pub fn about(axis: [f64; 3], angle: f64) -> [f64; 4] {
 }
 
 /// The squared-angle cutoff of the series in `θ²`, and the cutoff of `L`'s series in `n²/w²`.
-pub const CUTOFF: f64 = 0.1;
+pub const CUTOFF: f64 = 1.0;
 pub const LOG_CUTOFF: f64 = 0.01;
 
 /// The fixed rows: the identity; rotations whose angles sit at 0.9 and 1.1 times the cutoff of

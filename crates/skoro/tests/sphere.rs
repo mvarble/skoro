@@ -6,8 +6,9 @@ mod common;
 use std::sync::Arc;
 
 use common::sphere::{
-    EXPONENTIAL, Near, SPHERE, Sphere, ball_of_radius_pi, basis, exponential_log_volume,
-    exponential_sphere, measured_exponential_sphere, points,
+    COS_SERIES, EXP_CUT, EXPONENTIAL, LOG_VOLUME_SERIES, Near, SINC_SERIES, SPHERE, Sphere,
+    ball_of_radius_pi, basis, exponential_log_volume, exponential_sphere,
+    measured_exponential_sphere, points,
 };
 use skoro::scope::{project, quantity};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
@@ -257,6 +258,118 @@ skoro::precision_tests! {
         if let Err(error) = check_volume(&EXPONENTIAL, &sphere_points(4), &target) {
             panic!("{error}");
         }
+    }
+}
+
+/// `ζ(s)` for even `s ≥ 2`: exact at `2` and `4`, where a direct sum converges far too slowly,
+/// and beyond them summed to `J = 1000` with the Euler–Maclaurin tail
+/// `J^{1-s}/(s-1) - J^{-s}/2`, whose own error, below `s J^{-s-1}/12`, is far below rounding.
+fn zeta(s: u32) -> f64 {
+    use std::f64::consts::PI;
+    match s {
+        2 => PI * PI / 6.0,
+        4 => PI.powi(4) / 90.0,
+        _ => {
+            let (s, j) = (s as i32, 1000.0f64);
+            let sum: f64 = (1..=1000).rev().map(|i| f64::from(i).powi(-s)).sum();
+            sum + j.powi(1 - s) / f64::from(s - 1) - 0.5 * j.powi(-s)
+        }
+    }
+}
+
+/// `n!` as a float.
+fn factorial(n: u32) -> f64 {
+    (2..=n).map(f64::from).product()
+}
+
+/// `Σ cₖ xᵏ` in double precision on the host.
+fn horner_on_host(coefficients: &[f64], x: f64) -> f64 {
+    coefficients.iter().rev().fold(0.0, |sum, c| sum * x + c)
+}
+
+/// The truncation condition of archive/wgpu-accuracy/math: the tails of the exponential sphere's
+/// series beyond their tables, at its cutoff, are below double precision's rounding of the
+/// function there, in its value and its first two derivatives in `r²`.
+#[test]
+fn exponential_series_are_truncated_below_rounding() {
+    use std::f64::consts::PI;
+    let x = EXP_CUT;
+    let r = x.sqrt();
+    // Each series as (its first power of r² past the table, a bound on its k-th coefficient, the
+    // function's value at the cutoff). Λ's coefficients are ζ(2n) / (n π^{2n}) in magnitude, with
+    // ζ(s) ≤ 1 + 2^{-s} + 2^{1-s}/(s-1): geometric in r²/π².
+    fn zeta_bound(s: i32) -> f64 {
+        1.0 + 2f64.powi(-s) + 2f64.powi(1 - s) / f64::from(s - 1)
+    }
+    type Series = (&'static str, u32, fn(u32) -> f64, f64);
+    let series: [Series; 3] = [
+        (
+            "cos",
+            COS_SERIES.len() as u32,
+            |k| 1.0 / factorial(2 * k),
+            r.cos(),
+        ),
+        (
+            "sinc",
+            SINC_SERIES.len() as u32,
+            |k| 1.0 / factorial(2 * k + 1),
+            r.sin() / r,
+        ),
+        (
+            "Λ",
+            LOG_VOLUME_SERIES.len() as u32 + 1,
+            |n| zeta_bound(2 * n as i32) / (f64::from(n) * PI.powi(2 * n as i32)),
+            (r.sin() / r).ln().abs(),
+        ),
+    ];
+    for (name, first, bound, value) in series {
+        for m in 0..=2u32 {
+            let tail: f64 = (first..first + 40)
+                .map(|k| {
+                    let falling: f64 = (0..m).map(|j| f64::from(k - j)).product();
+                    bound(k) * falling * x.powi((k - m) as i32)
+                })
+                .sum();
+            assert!(
+                tail <= 2f64.powi(-53) * value,
+                "{name}: the tail of its {m}-th derivative at r² = {x}, {tail:e}, is above \
+                 rounding, {:e}",
+                2f64.powi(-53) * value
+            );
+        }
+    }
+}
+
+/// The exponential sphere's series against their closed forms just below its cutoff, where the
+/// closed forms are accurate in double precision, and Λ's coefficients against `-ζ(2n) / (n
+/// π^{2n})`, independent of the Bernoulli numbers they are built from.
+#[test]
+fn exponential_series_meet_closed_forms() {
+    use std::f64::consts::PI;
+    let x = 0.9 * EXP_CUT;
+    let r = x.sqrt();
+    for (name, got, want) in [
+        ("cos", horner_on_host(&COS_SERIES, x), r.cos()),
+        ("sinc", horner_on_host(&SINC_SERIES, x), r.sin() / r),
+        (
+            "Λ",
+            x * horner_on_host(&LOG_VOLUME_SERIES, x),
+            (r.sin() / r).ln(),
+        ),
+    ] {
+        assert!(
+            (got - want).abs() <= 1e-15,
+            "{name} at r² = {x}: {got} against {want}"
+        );
+    }
+    for (i, &c) in LOG_VOLUME_SERIES.iter().enumerate() {
+        let n = i as u32 + 1;
+        let want = -zeta(2 * n) / (f64::from(n) * PI.powi(2 * n as i32));
+        assert!(
+            (c - want).abs() <= 1e-14 * want.abs(),
+            "Λ's coefficient of r^{}: {c} against {want}",
+            2 * n
+        );
     }
 }
 

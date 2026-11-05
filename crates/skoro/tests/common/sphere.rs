@@ -143,8 +143,99 @@ pub enum Near {
     Guarded,
 }
 
-/// The squared radius below which the series is used.
-pub const CUT: f64 = 1e-8;
+/// The squared radius below which the exponential retraction and its log-volume use their series,
+/// chosen so that their closed forms above it meet the GPU's error designed for
+/// (archive/wgpu-accuracy/math, "Conditions on a cutoff").
+pub const EXP_CUT: f64 = 0.1;
+
+/// The squared radius below which the logarithm's ratio `θ / r` uses its series. Its closed form
+/// divides an `atan2`, which loses nothing to the GPU, and its series `1 + r²/6` holds only near
+/// `r = 0`.
+pub const LOG_CUT: f64 = 1e-8;
+
+/// `n!` as a float.
+const fn factorial(n: u32) -> f64 {
+    let mut f = 1.0;
+    let mut k = 2;
+    while k <= n {
+        f *= k as f64;
+        k += 1;
+    }
+    f
+}
+
+/// `(-1)^k`.
+const fn sign(k: u32) -> f64 {
+    if k.is_multiple_of(2) { 1.0 } else { -1.0 }
+}
+
+/// `cos r = Σ (-1)^k r^{2k} / (2k)!`, eight terms, in `r²`.
+pub const COS_SERIES: [f64; 8] = {
+    let mut out = [0.0; 8];
+    let mut k = 0;
+    while k < 8 {
+        out[k as usize] = sign(k) / factorial(2 * k);
+        k += 1;
+    }
+    out
+};
+
+/// `sin r / r = Σ (-1)^k r^{2k} / (2k+1)!`, eight terms, in `r²`.
+pub const SINC_SERIES: [f64; 8] = {
+    let mut out = [0.0; 8];
+    let mut k = 0;
+    while k < 8 {
+        out[k as usize] = sign(k) / factorial(2 * k + 1);
+        k += 1;
+    }
+    out
+};
+
+/// The Bernoulli numbers `B₂, B₄, …, B₂₀`.
+const BERNOULLI: [f64; 10] = [
+    1.0 / 6.0,
+    -1.0 / 30.0,
+    1.0 / 42.0,
+    -1.0 / 30.0,
+    5.0 / 66.0,
+    -691.0 / 2730.0,
+    7.0 / 6.0,
+    -3617.0 / 510.0,
+    43867.0 / 798.0,
+    -174611.0 / 330.0,
+];
+
+/// `Λ = log(sin r / r) = Σ_{n ≥ 1} (-1)^n 2^{2n-1} B_{2n} r^{2n} / (n (2n)!)`, ten terms, in `r²`
+/// from its coefficient of `r²`: `-r²/6 - r⁴/180 - r⁶/2835 - …`.
+pub const LOG_VOLUME_SERIES: [f64; 10] = {
+    let mut out = [0.0; 10];
+    let mut i = 0;
+    while i < 10 {
+        let n = i as u32 + 1;
+        let mut power = 0.5;
+        let mut j = 0;
+        while j < n {
+            power *= 4.0;
+            j += 1;
+        }
+        out[i] = sign(n) * power * BERNOULLI[i] / (n as f64 * factorial(2 * n));
+        i += 1;
+    }
+    out
+};
+
+/// `Σ cₖ xᵏ`, by Horner's rule.
+pub fn horner(coefficients: &[f64], x: QDyn) -> QDyn {
+    let mut terms = coefficients.iter().rev();
+    let (Some(&last), Some(&next)) = (terms.next(), terms.next()) else {
+        unreachable!("every series keeps two terms or more")
+    };
+    let mut sum = x * last + next;
+    for &c in terms {
+        sum = sum * x + c;
+    }
+    sum
+}
 
 pub fn select(index: QDyn, values: [QDyn; 2]) -> QDyn {
     apply(Arc::new(Select), &[index, values[0], values[1]])
@@ -164,7 +255,7 @@ pub fn exponential(near: Near) -> Arc<Composite> {
         move |q| {
             let (x, t) = (q[0], q[1]);
             let ss = (t * t).sum();
-            let small = (-ss + CUT).is_nonnegative();
+            let small = (-ss + EXP_CUT).is_nonnegative();
             let one = constant(Real, 1.0).untyped();
             let input = if near == Near::Guarded {
                 select(small, [ss, one])
@@ -176,11 +267,8 @@ pub fn exponential(near: Near) -> Arc<Composite> {
             let (cos, sinc) = match near {
                 Near::Closed => (cos, sinc),
                 Near::Selected | Near::Guarded => (
-                    select(small, [cos, -ss * 0.5 + 1.0 + ss * ss * (1.0 / 24.0)]),
-                    select(
-                        small,
-                        [sinc, -ss * (1.0 / 6.0) + 1.0 + ss * ss * (1.0 / 120.0)],
-                    ),
+                    select(small, [cos, horner(&COS_SERIES, ss)]),
+                    select(small, [sinc, horner(&SINC_SERIES, ss)]),
                 ),
             };
             cos * x + sinc * basis_times(x, t)
@@ -200,7 +288,7 @@ pub fn logarithm() -> Arc<Composite> {
             let (x, y) = (q[0], q[1]);
             let bty = basis_transpose(x, y);
             let rr = (bty * bty).sum();
-            let small = (-rr + CUT).is_nonnegative();
+            let small = (-rr + LOG_CUT).is_nonnegative();
             let one = constant(Real, 1.0).untyped();
             let r = (select(small, [rr, one]).log() * 0.5).exp();
             let theta = r.atan2((x * y).sum());
@@ -221,8 +309,8 @@ pub fn exponential_sphere(near: Near) -> Arc<Embedded> {
 }
 
 /// The exponential chart's log-volume against surface measure, `log(sin r / r)` with
-/// `r = |t|`: guarded as its retraction is, below the same cutoff, by the series
-/// `-r²/6 - r⁴/180`, or computed as written.
+/// `r = |t|`: guarded as its retraction is, below the same cutoff, by its series
+/// (`LOG_VOLUME_SERIES`), or computed as written.
 pub fn exponential_log_volume(guarded: bool) -> Arc<Composite> {
     let name = if guarded {
         "sphere.exp.log_volume"
@@ -239,11 +327,11 @@ pub fn exponential_log_volume(guarded: bool) -> Arc<Composite> {
                 let r = (rr.log() * 0.5).exp();
                 return (r.sin() * reciprocal(r)).log();
             }
-            let small = (-rr + CUT).is_nonnegative();
+            let small = (-rr + EXP_CUT).is_nonnegative();
             let one = constant(Real, 1.0).untyped();
             let r = (select(small, [rr, one]).log() * 0.5).exp();
             let closed = (r.sin() * reciprocal(r)).log();
-            select(small, [closed, -rr * (1.0 / 6.0) - rr * rr * (1.0 / 180.0)])
+            select(small, [closed, rr * horner(&LOG_VOLUME_SERIES, rr)])
         },
     )
     .unwrap()
