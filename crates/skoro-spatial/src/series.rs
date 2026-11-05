@@ -108,16 +108,25 @@ table!(E_SERIES, 6, |k| sign(k) * (k as f64 + 1.0)
 // L = (2/w) Σ (-1)^k x^k / (2k+1), the sum without its factor 2/w.
 table!(LOG_SERIES, 8, |k| sign(k) / (2 * k + 1) as f64);
 
-/// `C = Σ (-1)^k B_{2k+2} θ^{2k} / (2k+2)!`, with the Bernoulli numbers `B₂ … B₁₄`.
-const C_SERIES: [f64; 7] = [
-    1.0 / 12.0,
-    1.0 / 720.0,
-    1.0 / 30240.0,
-    1.0 / 1_209_600.0,
-    1.0 / 47_900_160.0,
-    (691.0 / 2730.0) / 479_001_600.0,
-    (7.0 / 6.0) / 87_178_291_200.0,
+/// The Bernoulli numbers `B₂, B₄, …, B₂₄`.
+const BERNOULLI: [f64; 12] = [
+    1.0 / 6.0,
+    -1.0 / 30.0,
+    1.0 / 42.0,
+    -1.0 / 30.0,
+    5.0 / 66.0,
+    -691.0 / 2730.0,
+    7.0 / 6.0,
+    -3617.0 / 510.0,
+    43867.0 / 798.0,
+    -174611.0 / 330.0,
+    854513.0 / 138.0,
+    -236364091.0 / 2730.0,
 ];
+
+// C = Σ (-1)^k B_{2k+2} θ^{2k} / (2k+2)!
+table!(C_SERIES, 7, |k| sign(k) * BERNOULLI[k as usize]
+    / factorial(2 * k + 2));
 
 /// `Σ cₖ xᵏ`, by Horner's rule.
 pub(crate) fn horner(coefficients: &[f64], x: QDyn) -> QDyn {
@@ -256,21 +265,27 @@ mod tests {
         }
     }
 
-    /// The Bernoulli numbers `B₂, B₄, …, B₂₄`.
-    const BERNOULLI: [f64; 12] = [
-        1.0 / 6.0,
-        -1.0 / 30.0,
-        1.0 / 42.0,
-        -1.0 / 30.0,
-        5.0 / 66.0,
-        -691.0 / 2730.0,
-        7.0 / 6.0,
-        -3617.0 / 510.0,
-        43867.0 / 798.0,
-        -174611.0 / 330.0,
-        854513.0 / 138.0,
-        -236364091.0 / 2730.0,
-    ];
+    /// `ζ(s)` for even `s ≥ 2`: exact at `2` and `4`, where a direct sum converges far too slowly,
+    /// and beyond them summed to `J = 1000` with the Euler–Maclaurin tail
+    /// `J^{1-s}/(s-1) - J^{-s}/2`, whose own error, below `s J^{-s-1}/12`, is far below rounding.
+    fn zeta(s: u32) -> f64 {
+        use std::f64::consts::PI;
+        match s {
+            2 => PI * PI / 6.0,
+            4 => PI.powi(4) / 90.0,
+            _ => {
+                let (s, j) = (s as i32, 1000.0f64);
+                let sum: f64 = (1..=1000).rev().map(|i| f64::from(i).powi(-s)).sum();
+                sum + j.powi(1 - s) / f64::from(s - 1) - 0.5 * j.powi(-s)
+            }
+        }
+    }
+
+    /// `C`'s `k`-th coefficient in `θ²`, `(-1)^k B_{2k+2} / (2k+2)! = 2 ζ(2k+2) / (2π)^{2k+2}`,
+    /// independent of `BERNOULLI`.
+    fn c_term(k: u32) -> f64 {
+        2.0 * zeta(2 * k + 2) / (2.0 * std::f64::consts::PI).powi(2 * k as i32 + 2)
+    }
 
     /// The coefficient's series in `θ²`, summed until its terms are negligible.
     fn summed(c: Coefficient, t2: f64) -> f64 {
@@ -281,13 +296,28 @@ mod tests {
                 Coefficient::B0 => sign(k) * x / (2.0 * four(k) * factorial(2 * k + 1)),
                 Coefficient::A => sign(k) * x / factorial(2 * k + 2),
                 Coefficient::B => sign(k) * x / factorial(2 * k + 3),
-                Coefficient::C => sign(k) * BERNOULLI[k as usize] * x / factorial(2 * k + 2),
+                Coefficient::C => c_term(k) * x,
                 Coefficient::D => sign(k) * x / factorial(2 * k + 4),
                 Coefficient::E => sign(k) * (k as f64 + 1.0) * x / factorial(2 * k + 5),
             }
         };
-        // Summed from the smallest term up, twelve terms being far below rounding at θ² ≤ 0.11.
-        (0..12).rev().map(term).sum()
+        // Summed from the smallest term up, twenty terms being far below rounding at θ² ≤ 0.11.
+        (0..20).rev().map(term).sum()
+    }
+
+    #[test]
+    fn the_bernoulli_numbers_are_the_zeta_values() {
+        // B_{2n} = (-1)^{n+1} 2 ζ(2n) (2n)! / (2π)^{2n}.
+        for (i, &b) in BERNOULLI.iter().enumerate() {
+            let n = i as u32 + 1;
+            let want = -sign(n) * 2.0 * zeta(2 * n) * factorial(2 * n)
+                / (2.0 * std::f64::consts::PI).powi(2 * n as i32);
+            assert!(
+                (b - want).abs() <= 1e-14 * want.abs(),
+                "B_{}: {b} against {want}",
+                2 * n
+            );
+        }
     }
 
     /// `L`'s series in `x = n²/w²`, summed until its terms are negligible.

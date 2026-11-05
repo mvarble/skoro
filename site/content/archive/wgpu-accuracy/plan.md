@@ -16,7 +16,7 @@ depends_on: [archive/wgpu-accuracy/implementation]
 
 ## skoro-spatial: the coefficients
 
-- [ ] Move `BERNOULLI` ($B_2 \ldots B_{24}$) from the tests into `series.rs`, and build `C_SERIES`
+- [x] Move `BERNOULLI` ($B_2 \ldots B_{24}$) from the tests into `series.rs`, and build `C_SERIES`
       from it with `table!`, still at its present seven terms. Add the test helper `zeta`. Give
       `summed` twenty terms, with `C`'s terms from `zeta`. Tests:
       `the_bernoulli_numbers_are_the_zeta_values`, `series_meet_closed_forms` (its `f32` and `f64`
