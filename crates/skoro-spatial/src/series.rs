@@ -3,16 +3,20 @@
 //! closed form's argument is replaced by a harmless one on the rows where the series is chosen, as
 //! the series' is on the rows where the closed form is, wherever the series could be undefined.
 //!
-//! One cutoff serves both precisions: the series' truncation at the cutoff is below double
-//! precision's rounding, and the closed form just above it agrees with double precision in single
-//! precision, its value and its first and second derivatives, within the core's agreement.
+//! One cutoff serves both precisions and every device: the series' truncation at the cutoff is
+//! below double precision's rounding, and the closed form just above it agrees with double
+//! precision in single precision, its value and its first and second derivatives, within the
+//! core's agreement, on a device whose sine and cosine err by as much as the absolute error the
+//! cutoffs are designed for (`skoro_core::testing::Admission`, archive/wgpu-accuracy/math).
 
 use skoro_core::QDyn;
 
 use crate::algebra::{both, choose, one, reciprocal, sqrt};
 
-/// The cutoff in `θ²` below which the series of `a`, `b`, `A`, `B`, `C`, `D` and `E` are used.
-pub(crate) const CUTOFF: f64 = 0.1;
+/// The cutoff in `θ²` below which the series of `a`, `b`, `A`, `B`, `C`, `D` and `E` are used,
+/// chosen so that the closed form above it meets the GPU's error designed for
+/// (archive/wgpu-accuracy/math, "Conditions on a cutoff").
+pub(crate) const CUTOFF: f64 = 1.0;
 
 /// The cutoff in `x = n²/w²` below which the series of `L` is used.
 pub(crate) const LOG_CUTOFF: f64 = 0.01;
@@ -63,8 +67,9 @@ const fn four(k: u32) -> f64 {
     p
 }
 
-/// The series' coefficients in `θ²`, from the constant term, each kept through `θ¹⁰`, `C`'s
-/// through `θ¹²`.
+/// The series' coefficients in `θ²`, from the constant term, each kept as far as its truncation at
+/// `CUTOFF` is below double precision's rounding in its value and its first two derivatives:
+/// `a` and `b` through `θ¹⁴`, `A`, `B`, `D` and `E` through `θ¹⁶`, `C` through `θ²²`.
 const fn series(c: Coefficient) -> &'static [f64] {
     match c {
         Coefficient::A0 => &A0_SERIES,
@@ -92,18 +97,18 @@ macro_rules! table {
 }
 
 // a = Σ (-1)^k θ^{2k} / (4^k (2k)!)
-table!(A0_SERIES, 6, |k| sign(k) / (four(k) * factorial(2 * k)));
+table!(A0_SERIES, 8, |k| sign(k) / (four(k) * factorial(2 * k)));
 // b = Σ (-1)^k θ^{2k} / (2^{2k+1} (2k+1)!)
-table!(B0_SERIES, 6, |k| sign(k)
+table!(B0_SERIES, 8, |k| sign(k)
     / (2.0 * four(k) * factorial(2 * k + 1)));
 // A = Σ (-1)^k θ^{2k} / (2k+2)!
-table!(A_SERIES, 6, |k| sign(k) / factorial(2 * k + 2));
+table!(A_SERIES, 9, |k| sign(k) / factorial(2 * k + 2));
 // B = Σ (-1)^k θ^{2k} / (2k+3)!
-table!(B_SERIES, 6, |k| sign(k) / factorial(2 * k + 3));
+table!(B_SERIES, 9, |k| sign(k) / factorial(2 * k + 3));
 // D = Σ (-1)^k θ^{2k} / (2k+4)!
-table!(D_SERIES, 6, |k| sign(k) / factorial(2 * k + 4));
+table!(D_SERIES, 9, |k| sign(k) / factorial(2 * k + 4));
 // E = Σ (-1)^k (k+1) θ^{2k} / (2k+5)!
-table!(E_SERIES, 6, |k| sign(k) * (k as f64 + 1.0)
+table!(E_SERIES, 9, |k| sign(k) * (k as f64 + 1.0)
     / factorial(2 * k + 5));
 // L = (2/w) Σ (-1)^k x^k / (2k+1), the sum without its factor 2/w.
 table!(LOG_SERIES, 8, |k| sign(k) / (2 * k + 1) as f64);
@@ -125,7 +130,7 @@ const BERNOULLI: [f64; 12] = [
 ];
 
 // C = Σ (-1)^k B_{2k+2} θ^{2k} / (2k+2)!
-table!(C_SERIES, 7, |k| sign(k) * BERNOULLI[k as usize]
+table!(C_SERIES, 12, |k| sign(k) * BERNOULLI[k as usize]
     / factorial(2 * k + 2));
 
 /// `Σ cₖ xᵏ`, by Horner's rule.
@@ -229,7 +234,7 @@ mod tests {
             Coefficient::E,
         ];
         for c in all {
-            for t2 in [0.5, 2.0, 9.0] {
+            for t2 in [1.5, 2.0, 9.0] {
                 let got = eval(|h| coefficient(c, entry(h[0], 0)), &[&[t2]])[0];
                 let want = closed_on_host(c, t2);
                 assert!(
@@ -287,22 +292,62 @@ mod tests {
         2.0 * zeta(2 * k + 2) / (2.0 * std::f64::consts::PI).powi(2 * k as i32 + 2)
     }
 
+    /// The coefficient's `k`-th coefficient in `θ²`, from closed expressions, `C`'s from `ζ`.
+    fn term(c: Coefficient, k: u32) -> f64 {
+        match c {
+            Coefficient::A0 => sign(k) / (four(k) * factorial(2 * k)),
+            Coefficient::B0 => sign(k) / (2.0 * four(k) * factorial(2 * k + 1)),
+            Coefficient::A => sign(k) / factorial(2 * k + 2),
+            Coefficient::B => sign(k) / factorial(2 * k + 3),
+            Coefficient::C => c_term(k),
+            Coefficient::D => sign(k) / factorial(2 * k + 4),
+            Coefficient::E => sign(k) * (k as f64 + 1.0) / factorial(2 * k + 5),
+        }
+    }
+
     /// The coefficient's series in `θ²`, summed until its terms are negligible.
     fn summed(c: Coefficient, t2: f64) -> f64 {
-        let term = |k: u32| -> f64 {
-            let x = t2.powi(k as i32);
-            match c {
-                Coefficient::A0 => sign(k) * x / (four(k) * factorial(2 * k)),
-                Coefficient::B0 => sign(k) * x / (2.0 * four(k) * factorial(2 * k + 1)),
-                Coefficient::A => sign(k) * x / factorial(2 * k + 2),
-                Coefficient::B => sign(k) * x / factorial(2 * k + 3),
-                Coefficient::C => c_term(k) * x,
-                Coefficient::D => sign(k) * x / factorial(2 * k + 4),
-                Coefficient::E => sign(k) * (k as f64 + 1.0) * x / factorial(2 * k + 5),
+        // Summed from the smallest term up, twenty terms being far below rounding at θ² ≤ 1.1.
+        (0..20).rev().map(|k| term(c, k) * t2.powi(k as i32)).sum()
+    }
+
+    /// The truncation condition of archive/wgpu-accuracy/math: the tail of each series beyond its
+    /// table, at the cutoff, is below double precision's rounding of the coefficient there, in
+    /// its value and its first two derivatives in `θ²`.
+    #[test]
+    fn series_are_truncated_below_rounding() {
+        use std::f64::consts::PI;
+        let x = CUTOFF;
+        for c in ALL {
+            let n = series(c).len() as u32;
+            // An upper bound on |cₖ|: the terms themselves, which fall factorially, and for `C`
+            // 2 ζ(2k+2) / (2π)^{2k+2} with ζ(s) ≤ 1 + 2^{-s} + 2^{1-s}/(s-1), geometric in x/4π².
+            let bound = |k: u32| -> f64 {
+                match c {
+                    Coefficient::C => {
+                        let s = 2 * k as i32 + 2;
+                        let zeta = 1.0 + 2f64.powi(-s) + 2f64.powi(1 - s) / f64::from(s - 1);
+                        2.0 * zeta / (2.0 * PI).powi(s)
+                    }
+                    _ => term(c, k).abs(),
+                }
+            };
+            let value = closed_on_host(c, x).abs();
+            for m in 0..=2u32 {
+                let tail: f64 = (n..n + 40)
+                    .map(|k| {
+                        let falling: f64 = (0..m).map(|j| f64::from(k - j)).product();
+                        bound(k) * falling * x.powi((k - m) as i32)
+                    })
+                    .sum();
+                assert!(
+                    tail <= 2f64.powi(-53) * value,
+                    "{c:?}: the tail of its {m}-th derivative at θ² = {x}, {tail:e}, is above \
+                     rounding, {:e}",
+                    2f64.powi(-53) * value
+                );
             }
-        };
-        // Summed from the smallest term up, twenty terms being far below rounding at θ² ≤ 0.11.
-        (0..20).rev().map(term).sum()
+        }
     }
 
     #[test]
@@ -425,7 +470,7 @@ mod tests {
 
             // Every composite that uses a coefficient, at the identity and at both sides of each
             // cutoff: its passes against finite differences, at both precisions.
-            let lengths = [0.0, (0.9 * CUTOFF).sqrt(), (1.1 * CUTOFF).sqrt(), 1.3];
+            let lengths = [0.0, (0.9 * CUTOFF).sqrt(), (1.1 * CUTOFF).sqrt(), 1.3, 2.5];
             let omega: Vec<f64> = lengths
                 .iter()
                 .flat_map(|l| [0.3 * l, -0.8 * l, 0.5 * l].map(|v| v / 0.98995f64.sqrt()))

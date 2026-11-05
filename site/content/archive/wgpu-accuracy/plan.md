@@ -21,7 +21,7 @@ depends_on: [archive/wgpu-accuracy/implementation]
       `summed` twenty terms, with `C`'s terms from `zeta`. Tests:
       `the_bernoulli_numbers_are_the_zeta_values`, `series_meet_closed_forms` (its `f32` and `f64`
       instances, against the new reference).
-- [ ] Raise `CUTOFF` to `1.0` in `series.rs` and in `tests/common/mod.rs`, and lengthen the series
+- [x] Raise `CUTOFF` to `1.0` in `series.rs` and in `tests/common/mod.rs`, and lengthen the series
       to 8 terms for `a` and `b`, 9 for `A`, `B`, `D` and `E`, and 12 for `C`. Update the module's
       doc comment and the comment on `summed`. Move the points of
       `coefficients_are_their_closed_forms_away_from_the_identity` to $1.5$, $2$ and $9$, and add
