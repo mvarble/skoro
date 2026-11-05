@@ -5,7 +5,7 @@ depends_on: [archive/wgpu-accuracy/implementation]
 
 ## skoro-core: admission
 
-- [ ] Add `Admission` to `skoro_core::testing`, with its bounds `NEAR`, `FAR` and `FAR_RANGE`, its
+- [x] Add `Admission` to `skoro_core::testing`, with its bounds `NEAR`, `FAR` and `FAR_RANGE`, its
       private `inputs()`, `measure` and `admit`, and the message format `{:.2e}` of the
       implementation. Tests: `admission_names_the_error_and_the_bound`,
       `the_host_is_admitted_in_single_precision`.

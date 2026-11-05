@@ -45,6 +45,132 @@ pub fn flex(precision: Precision) -> Result<Target, String> {
     Target::new(Device::flex(), precision).map_err(|e| e.to_string())
 }
 
+/// The absolute error of a target's sine and cosine, measured against double precision on the
+/// host, and the bounds the removable singularities' cutoffs are designed for
+/// (archive/wgpu-accuracy/math, "The error designed for").
+///
+/// A target whose error exceeds them computes correctly, but less accurately than the cutoffs
+/// assume, and the checks of single against double precision are not expected to hold on it.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Admission {
+    /// The largest error measured on `[-π, π]`, and the argument it was reached at.
+    pub near: (f64, f64),
+    /// The largest error measured on `π < |x| ≤ FAR_RANGE`, and the argument.
+    pub far: (f64, f64),
+}
+
+impl Admission {
+    /// `ε⋆`: the error designed for on `[-π, π]`, `2⁻²⁰`.
+    pub const NEAR: f64 = 9.5367431640625e-7;
+    /// `ε⋆ far`: the error designed for beyond `π`, `2⁻¹⁶`.
+    pub const FAR: f64 = 1.52587890625e-5;
+    /// The largest argument measured beyond `π`.
+    pub const FAR_RANGE: f64 = 100.0;
+
+    /// The error of `target`'s sine and cosine over the arguments of `admission_inputs`, each
+    /// computed by the core's own primitives, as the checks compute them.
+    pub fn measure(target: &Target) -> Result<Admission, String> {
+        let (near, far) = admission_inputs();
+        Ok(Admission {
+            near: worst_sine_and_cosine(&near, target)?,
+            far: worst_sine_and_cosine(&far, target)?,
+        })
+    }
+
+    /// `Ok` when both errors are within their bounds; otherwise a message naming the error, its
+    /// argument, the bound exceeded, and the document the bound is stated in.
+    pub fn admit(&self) -> Result<(), String> {
+        for ((error, at), bound, range) in [
+            (self.near, Admission::NEAR, "on [-π, π]"),
+            (self.far, Admission::FAR, "beyond π"),
+        ] {
+            // A NaN error is refused with the rest.
+            if error.is_nan() || error > bound {
+                return Err(format!(
+                    "its sine and cosine err by {error:.2e} at x = {at:.2e} {range}, above the \
+                     {bound:.2e} the cutoffs are designed for (archive/wgpu-accuracy/math)"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The arguments of an admission, rounded to single precision so that the reference is taken at
+/// the input the device receives: on `[-π, π]`, 4096 spaced logarithmically from `10⁻⁷` to `π` and
+/// 4096 evenly on `[0, π]`, each with its negative, and `0`; beyond `π`, 4096 spaced evenly on
+/// `(π, FAR_RANGE]`, each with its negative.
+fn admission_inputs() -> (Vec<f64>, Vec<f64>) {
+    use std::f64::consts::PI;
+    const N: usize = 4096;
+    let single = |x: f64| x as f32 as f64;
+    // The largest single-precision number in `[0, π]`: `π` rounds up in single precision.
+    let rounded = PI as f32;
+    let top = if f64::from(rounded) > PI {
+        f64::from(f32::from_bits(rounded.to_bits() - 1))
+    } else {
+        f64::from(rounded)
+    };
+    let (low, high) = (1e-7f64.ln(), PI.ln());
+    let mut near = vec![0.0];
+    for i in 0..N {
+        let t = i as f64 / (N - 1) as f64;
+        let logarithmic = single((low + t * (high - low)).exp()).min(top);
+        let even = single(t * PI).min(top);
+        near.extend([logarithmic, -logarithmic, even, -even]);
+    }
+    let mut far = Vec::with_capacity(2 * N);
+    for i in 1..=N {
+        let x = single(PI + i as f64 / N as f64 * (Admission::FAR_RANGE - PI));
+        far.extend([x, -x]);
+    }
+    far.retain(|x| x.abs() > PI);
+    (near, far)
+}
+
+/// The largest of `|sin x - sin x̃|` and `|cos x - cos x̃|` over `inputs` on `target`, with the
+/// reference in double precision on the host, and the argument it was reached at.
+fn worst_sine_and_cosine(inputs: &[f64], target: &Target) -> Result<(f64, f64), String> {
+    let mut writer = Writer::new();
+    let (x, sin, cos) = writer
+        .build(|| {
+            let x = crate::scope::quantity_in("testing.admission.x", Space::Real);
+            (x, x.sin(), x.cos())
+        })
+        .map_err(|e| e.to_string())?;
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([sin, cos]), target)
+        .map_err(describe)?;
+    let rows = inputs.len();
+    let value = HostValue::new(Some(rows), 1, HostData::Continuous(inputs.to_vec()))
+        .ok_or("the admission's inputs")?
+        .load(rows, target)
+        .map_err(|e| e.to_string())?
+        .ok_or("the admission's inputs do not fit their batch")?;
+    let out = program
+        .forward(&Values::new().with(x, value))
+        .map_err(describe)?;
+    let read = |q: QDyn| -> Result<Vec<f64>, String> {
+        out.get(q)
+            .map(continuous_or_discrete)
+            .ok_or_else(|| "the admission's program computes its outputs".to_string())
+    };
+    let (sines, cosines) = (read(sin)?, read(cos)?);
+    let mut worst = (0.0f64, 0.0f64);
+    for ((&x, s), c) in inputs.iter().zip(sines).zip(cosines) {
+        let error = (s - x.sin()).abs().max((c - x.cos()).abs());
+        // A NaN is the worst error of all.
+        if error.is_nan() || error > worst.0 {
+            worst = (error, x);
+            if error.is_nan() {
+                break;
+            }
+        }
+    }
+    Ok(worst)
+}
+
 /// The test adapter at single precision, or an error naming the missing adapter.
 #[cfg(feature = "wgpu")]
 pub fn wgpu() -> Result<Target, String> {
@@ -1668,5 +1794,80 @@ fn local(space: &Space, y: &[f64], x: &[f64]) -> Result<Vec<f64>, String> {
         }
         Space::Embedded(declaration) => run(declaration.inverse(), &[x, y]),
         Space::Categorical(_) | Space::Integer => Err(format!("{space:?} has no retraction")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::*;
+
+    #[test]
+    fn admission_names_the_error_and_the_bound() {
+        let near = Admission {
+            near: (2e-6, 0.73),
+            far: (1e-6, 50.0),
+        }
+        .admit()
+        .unwrap_err();
+        for part in [
+            "2.00e-6",
+            "7.30e-1",
+            "on [-π, π]",
+            "9.54e-7",
+            "archive/wgpu-accuracy/math",
+        ] {
+            assert!(near.contains(part), "{part:?} is not in {near:?}");
+        }
+
+        let within = Admission {
+            near: (4e-7, 0.73),
+            far: (8e-6, 50.0),
+        };
+        assert_eq!(within.admit(), Ok(()));
+
+        let far = Admission {
+            near: (4e-7, 0.73),
+            far: (2e-5, 50.0),
+        }
+        .admit()
+        .unwrap_err();
+        for part in ["2.00e-5", "beyond π", "1.53e-5"] {
+            assert!(far.contains(part), "{part:?} is not in {far:?}");
+        }
+
+        let nan = Admission {
+            near: (f64::NAN, 0.73),
+            far: (8e-6, 50.0),
+        };
+        assert!(nan.admit().is_err(), "a NaN error is admitted");
+    }
+
+    #[test]
+    fn the_host_is_admitted_in_single_precision() {
+        let admission = Admission::measure(&flex(Precision::Single).unwrap()).unwrap();
+        assert_eq!(admission.admit(), Ok(()), "{admission:?}");
+        assert!(admission.near.0 < 1e-7, "{admission:?}");
+        assert!(
+            admission.near.0 > 0.0,
+            "{admission:?}: nothing was measured"
+        );
+    }
+
+    #[test]
+    fn the_admission_s_inputs_lie_in_their_ranges() {
+        use std::f64::consts::PI;
+        let (near, far) = admission_inputs();
+        assert!(
+            near.iter()
+                .all(|x| x.abs() <= PI && f64::from(*x as f32) == *x)
+        );
+        assert!(near.iter().any(|x| x.abs() < 1e-6));
+        assert!(
+            far.iter()
+                .all(|x| x.abs() > PI && x.abs() <= Admission::FAR_RANGE)
+        );
+        assert_eq!(far.len(), 2 * 4096);
     }
 }
