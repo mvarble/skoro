@@ -52,9 +52,10 @@ leaves ten digits to a method that works with $A$ and four to one that works wit
 The loss can be total. With $\varepsilon = 10^{-8}$, take
 
 $$
-	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix},
-	\qquad
-	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
+	\begin{aligned}
+		A &= \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} , \\
+		b &= \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
+	\end{aligned}
 $$
 
 The least-squares solution is $(1, 1)$, with zero residual, and $\kappa(A) \approx 1.4 \times 10^8$,
@@ -70,7 +71,8 @@ A square matrix $Q$ is orthogonal if $Q\transpose Q = I$. It preserves lengths, 
 to the residual without changing the problem, $\lVert A \tangent - b \rVert = \lVert Q\transpose(A
 \tangent - b) \rVert$, and its condition number is one, so applying it amplifies no error. The
 orthogonal matrices used here are reflections: $H_w$ below fixes every vector orthogonal to $w$ and
-sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$.
+sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$. A tuple of vectors,
+such as $(v, u)$, stands for the column vector that stacks them, $v$ above $u$.
 
 <Statement {...reflection} />
 
@@ -80,7 +82,7 @@ $H_w$ is symmetric because $w w\transpose$ is, and
 
 $$
 	\begin{aligned}
-		H_w\transpose H_w = H_w^2
+		H_w\transpose H_w &= H_w^2 \\
 		&= I - 4 \frac{w w\transpose}{\lVert w \rVert^2} + 4 \frac{w\, (w\transpose w)\, w\transpose}{\lVert w \rVert^4} \\
 		&= I .
 	\end{aligned}
@@ -139,7 +141,7 @@ $$
 	\end{aligned}
 $$
 
-Read column by column, with $(v; u)$ each coordinate vector in turn, this is the block form.
+Read column by column, with $(v, u)$ each coordinate vector in turn, this is the block form.
 
 </Proof>
 
@@ -158,7 +160,7 @@ be the entries of column $j$ of $M_{j-1}$ in rows $j$ to $m$. Then $x \neq 0$: o
 $j$ columns of $M_{j-1}$ would all lie in the span of the first $j - 1$ coordinate vectors, and so
 be linearly dependent, but they are the first $j$ columns of $H_{j-1} \cdots H_1 A$, which has rank
 $n$ since each $H_i$ is invertible. Take $\alpha_j$ and $w'$ for $x$ from
-[%full](statement:reflection), and let $H_j = H_w$ with $w = (0; w')$, its first $j - 1$ entries
+[%full](statement:reflection), and let $H_j = H_w$ with $w = (0, w')$, its first $j - 1$ entries
 zero. By [%full](statement:reflection-block), $H_j$ leaves rows $1$ to $j - 1$ of $M_{j-1}$
 unchanged, and its first $j - 1$ columns too, since each is zero below row $j - 1$; and it maps
 column $j$'s entries in rows $j$ to $m$ to $\alpha_j$ followed by zeros. So the first $j$ columns
@@ -197,8 +199,10 @@ $\kappa(R) = \kappa(A)$. A triangular system is solved by *back substitution*, f
 unknown up,
 
 $$
-	\tangent_n = \frac{d_n}{R_{nn}}, \qquad
-	\tangent_i = \frac{1}{R_{ii}} \Bigl( d_i - \sum_{j > i} R_{ij}\, \tangent_j \Bigr), @tag(back-substitution)
+	\begin{aligned}
+		\tangent_n &= \frac{d_n}{R_{nn}} , \\
+		\tangent_i &= \frac{1}{R_{ii}} \Bigl( d_i - \sum_{j > i} R_{ij}\, \tangent_j \Bigr) ,
+	\end{aligned} @tag(back-substitution)
 $$
 
 in about $n^2$ operations, and backward stably; a lower-triangular one, such as
@@ -210,28 +214,29 @@ divided by.
 For example, take
 
 $$
-	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix},
-	\qquad
-	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
+	\begin{aligned}
+		A &= \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix} , \\
+		b &= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
+	\end{aligned}
 $$
 
-The first column is $x = (-2; 1; 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
-and $w = (-5; 1; 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
-$y - (w\transpose y / 15)\, w$, so the first column goes to $(3; 0; 0)$, as
+The first column is $x = (-2, 1, 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
+and $w = (-5, 1, 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
+$y - (w\transpose y / 15)\, w$, so the first column goes to $(3, 0, 0)$, as
 [%full](statement:reflection) says, and the others follow with $w\transpose y = 15$ and
 $w\transpose b = 45$:
 
 $$
 	\begin{aligned}
 		H_1 \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix}
-		&= \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
-		= \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
+		&= \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
+		&= \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
 		H_1 \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix}
-		&= \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
-		= \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
+		&= \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
+		&= \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
 		H_1 \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix}
-		&= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
-		= \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
+		&= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
+		&= \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
 	\end{aligned}
 $$
 
@@ -243,20 +248,20 @@ $$
 $$
 
 The first row and the first column are now final. The second step works on what is left, rows 2
-and 3 of the last two columns. There $x = (4; 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
-$\alpha_2 = -5$ and $w' = (9; 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
-$w = (0; 9; 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $(3, 5, 8)$,
-alone, and the first column, $(3; 0; 0)$, which is of the form $(v; 0)$. On the rest it acts as
+and 3 of the last two columns. There $x = (4, 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
+$\alpha_2 = -5$ and $w' = (9, 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
+$w = (0, 9, 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $[3 \;\, 5 \;\, 8]$,
+alone, and the first column, $(3, 0, 0)$, which is of the form $(v, 0)$. On the rest it acts as
 $H_{w'}$, which maps $y$ to $y - (w'^\top y / 45)\, w'$:
 
 $$
 	\begin{aligned}
 		H_{w'} \begin{bmatrix} 4 \\ 3 \end{bmatrix}
-		&= \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix}
-		= \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
+		&= \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} \\
+		&= \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
 		H_{w'} \begin{bmatrix} 13 \\ -9 \end{bmatrix}
-		&= \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix}
-		= \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
+		&= \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} \\
+		&= \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
 	\end{aligned}
 $$
 
@@ -267,22 +272,27 @@ $$
 	= \begin{bmatrix} 3 & 5 & 8 \\ 0 & -5 & -5 \\ 0 & 0 & -15 \end{bmatrix} .
 $$
 
-So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d = (8; -5)$ and
+So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d = (8, -5)$ and
 $e = -15$. Back substitution gives the minimizer,
 
 $$
-	\tangent_2 = \frac{-5}{-5} = 1 ,
-	\qquad
-	\tangent_1 = \frac{8 - 5 \cdot 1}{3} = 1 ,
+	\begin{aligned}
+		\tangent_2 &= \frac{-5}{-5} \\
+		&= 1 , \\
+		\tangent_1 &= \frac{8 - 5 \tangent_2}{3} \\
+		&= 1 ,
+	\end{aligned}
 $$
 
 and the minimum of $\lVert A \tangent - b \rVert^2$ is $e^2 = 225$. Indeed, and with the root as
 the theorem says,
 
 $$
-	b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} ,
-	\qquad
-	R\transpose R = \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} = A\transpose A .
+	\begin{aligned}
+		b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} &= \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} , \\
+		R\transpose R &= \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} \\
+		&= A\transpose A .
+	\end{aligned}
 $$
 
 The second diagonal entry of $R$ is negative, which the sign rule of [%full](statement:reflection)
@@ -315,7 +325,10 @@ So $\phi$ is minimized at $\tangent^* = R^{-1}(d - y)$, which solves
 $A\transpose A\, \tangent^* = A\transpose b - \eta$, and the decrease from $\tangent = 0$ is
 
 $$
-	\phi(0) - \phi(\tangent^*) = \tfrac12 \lVert d - y \rVert^2 = \tfrac12 \lVert R \tangent^* \rVert^2 , @tag(decrease)
+	\begin{aligned}
+		\phi(0) - \phi(\tangent^*) &= \tfrac12 \lVert d - y \rVert^2 \\
+		&= \tfrac12 \lVert R \tangent^* \rVert^2 ,
+	\end{aligned} @tag(decrease)
 $$
 
 since $\phi(0) = \tfrac12 \lVert d \rVert^2 + \tfrac12 \lVert e \rVert^2$. Two things change with
@@ -337,7 +350,7 @@ right, which is the form of every method whose rows come without a residual.
 
 ## Eliminating one block
 
-The variables usually come in *blocks*, $\tangent = (\tangent_1; \dots; \tangent_n)$, the
+The variables usually come in *blocks*, $\tangent = (\tangent_1, \dots, \tangent_n)$, the
 coordinates of one unknown each, and the rows in *factors*: a factor $f$ is a block of rows $A_f$
 with a right-hand side $b_f$, over the few blocks $K_f$ whose columns of $A_f$ are not zero.
 Linear terms are kept per block, $\eta_k$ on block $k$, since a linear term joins no two blocks.
@@ -531,9 +544,10 @@ $E$? Split $\phi = \phi_{\ni E} + \phi_{\not\ni E}$ into the factors joined to $
 Since the rest does not involve $\tangent_E$,
 
 $$
-	\min_{\tangent_E} \phi = \Bigl(\min_{\tangent_E} \phi_{\ni E}\Bigr) + \phi_{\not\ni E},
-	\qquad
-	\int e^{-\phi} \, \dd \tangent_E = e^{-\phi_{\not\ni E}} \int e^{-\phi_{\ni E}} \, \dd \tangent_E , @tag(replace)
+	\begin{aligned}
+		\min_{\tangent_E} \phi &= \Bigl(\min_{\tangent_E} \phi_{\ni E}\Bigr) + \phi_{\not\ni E} , \\
+		\int e^{-\phi} \, \dd \tangent_E &= e^{-\phi_{\not\ni E}} \int e^{-\phi_{\ni E}} \, \dd \tangent_E ,
+	\end{aligned} @tag(replace)
 $$
 
 so the replacement is the elimination of $E$ from $\phi_{\ni E}$ alone, with the linear terms of

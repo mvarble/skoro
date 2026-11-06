@@ -388,7 +388,7 @@ $$
 	c = \log Z = \tfrac{d_E + D}{2} \log 2\pi - m_T(\tangent^*) - \sum_i \log \lvert R_{ii} \rvert , @tag(stacked)
 $$
 
-where $\tangent^* = (\tangent_E^*; \tangent_B^*)$ is the minimizer of $m_T$, $R$ the triangular
+where $\tangent^* = (\tangent_E^*, \tangent_B^*)$ is the minimizer of $m_T$, $R$ the triangular
 root of its rows, eliminated in any order, and $W$ the lower-triangular root of what is left on
 $B_F$ after $E_F$ is eliminated, brought to a positive diagonal as
 [the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. The
