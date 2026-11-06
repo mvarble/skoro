@@ -8,6 +8,8 @@ depends_on: []
 	import Statement from '$lib/components/Statement.svelte';
 	import Proof from '$lib/components/Proof.svelte';
 	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import * as reflection from './statements/reflection.md';
+	import * as reflectionBlock from './statements/reflection-block.md';
 	import * as triangularRoot from './statements/triangular-root.md';
 	import * as eliminateOne from './statements/eliminate-one.md';
 	import * as marginal from './statements/marginal.md';
@@ -62,19 +64,77 @@ and $1 + 10^{-16}$ rounds to $1$, so the matrix of the normal equations, as comp
 The information was lost when the matrix was formed, and no solver of [](eq:normal-equations) can
 recover it. The factorization below returns $(1, 1)$ to full precision.
 
-## The triangular root
+## Householder reflections
 
 A square matrix $Q$ is orthogonal if $Q\transpose Q = I$. It preserves lengths, so it can be applied
 to the residual without changing the problem, $\lVert A \tangent - b \rVert = \lVert Q\transpose(A
-\tangent - b) \rVert$, and its condition number is one, so applying it amplifies no error.
+\tangent - b) \rVert$, and its condition number is one, so applying it amplifies no error. The
+orthogonal matrices used here are reflections: $H_w$ below fixes every vector orthogonal to $w$ and
+sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$.
+
+<Statement {...reflection} />
+
+<Proof>
+
+$H_w$ is symmetric because $w w\transpose$ is, and
+$H_w^2 = I - 4 w w\transpose / \lVert w \rVert^2 + 4 w (w\transpose w) w\transpose / \lVert w \rVert^4 = I$,
+so $H_w\transpose H_w = H_w^2 = I$. For the second part, $\alpha^2 = \lVert x \rVert^2$, so
+
+$$
+	w\transpose x = \lVert x \rVert^2 - \alpha x_1 ,
+	\qquad
+	\lVert w \rVert^2 = \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 = 2\, w\transpose x .
+$$
+
+Since $-\alpha x_1 = \lvert x_1 \rvert \lVert x \rVert \ge 0$, $\lVert w \rVert^2 \ge 2 \lVert x
+\rVert^2 > 0$. Then $H_w x = x - 2 w (w\transpose x) / \lVert w \rVert^2 = x - w$, which is $\alpha$
+in the first entry and zero in every other.
+
+</Proof>
+
+Either sign of $\alpha$ would do, as long as $w \neq 0$; the one chosen makes
+$w_1 = x_1 + \operatorname{sgn}(x_1) \lVert x \rVert$ a sum of two numbers of the same sign. The
+other sign subtracts them, and when $x$ is already close to a multiple of the first coordinate
+vector they nearly cancel, and $w$ is computed with a large relative error.
+
+A reflection built from a vector whose leading entries are zero touches only the trailing entries
+of what it is applied to.
+
+<Statement {...reflectionBlock} />
+
+<Proof>
+
+$\lVert w \rVert = \lVert w' \rVert$ and $w\transpose (v; u) = w'^\top u$, so
+$H_w (v; u) = (v; u) - 2 (w'^\top u)\, (0; w') / \lVert w' \rVert^2 = (v; H_{w'} u)$. Read column by
+column, with $(v; u)$ each coordinate vector in turn, this is the block form.
+
+</Proof>
+
+## The triangular root
 
 <Statement {...triangularRoot} />
 
 <Proof>
 
-The QR factorization of $A$ gives an orthogonal $Q$ with $Q\transpose A$ zero below an
-$n \times n$ upper-triangular block $R$, which is nonsingular since $A$ has rank $n$; split
-$Q\transpose b$ conformably into $d$ and $e$. Then $\lVert A \tangent - b \rVert^2 = \lVert
+The matrix $Q$ is built from $n$ reflections, one for each column of $A$, each of them made by
+[%full](statement:reflection) to reduce one column, and each leaving the columns already reduced
+alone by [%full](statement:reflection-block). Let $M_0 = [A \;\, b]$ and $M_j = H_j M_{j-1}$ for
+$j = 1, \dots, n$, with $H_j$ chosen as follows. Suppose that each of the first $j - 1$ columns of
+$M_{j-1}$ is zero below its diagonal entry, which holds for $j = 1$ since there are none. Let $x$
+be the entries of column $j$ of $M_{j-1}$ in rows $j$ to $m$. Then $x \neq 0$: otherwise the first
+$j$ columns of $M_{j-1}$ would all lie in the span of the first $j - 1$ coordinate vectors, and so
+be linearly dependent, but they are the first $j$ columns of $H_{j-1} \cdots H_1 A$, which has rank
+$n$ since each $H_i$ is invertible. Take $\alpha_j$ and $w'$ for $x$ from
+[%full](statement:reflection), and let $H_j = H_w$ with $w = (0; w')$, its first $j - 1$ entries
+zero. By [%full](statement:reflection-block), $H_j$ leaves rows $1$ to $j - 1$ of $M_{j-1}$
+unchanged, and its first $j - 1$ columns too, since each is zero below row $j - 1$; and it maps
+column $j$'s entries in rows $j$ to $m$ to $\alpha_j$ followed by zeros. So the first $j$ columns
+of $M_j$ are zero below their diagonal entries.
+
+After $n$ steps, $M_n = H_n \cdots H_1 [A \;\, b]$ has the form of the theorem, with $R$ upper
+triangular with diagonal entries $\alpha_1, \dots, \alpha_n$, each nonzero. Each $H_j$ is
+symmetric and orthogonal, so $Q = H_1 \cdots H_n$ is orthogonal and
+$Q\transpose = H_n \cdots H_1$. Then $\lVert A \tangent - b \rVert^2 = \lVert
 Q\transpose (A \tangent - b) \rVert^2 = \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2$, and
 $A\transpose A = A\transpose Q Q\transpose A = R\transpose R$.
 
@@ -97,12 +157,56 @@ means $A$ does not have rank $n$: some direction is not determined by the rows, 
 entry small against the others means a direction determined poorly. Either is reported, not
 divided by.
 
-$Q$ is never formed. The *Householder reflection* $I - 2 w w\transpose / \lVert w \rVert^2$ is
-orthogonal, and $w$ can be chosen so that it maps a given column onto a multiple of the first
-coordinate vector. One reflection per column, each applied to the part of the matrix not yet
-reduced, brings $[A \;\, b]$ to the form of [%full](statement:triangular-root) in about $2 m n^2$
-operations, twice the cost of forming $A\transpose A$ and factoring it, which is the price of the
-digits kept. Applying them to $b$ alongside $A$ gives $d$ and $e$ in the same pass.
+For example, take
+
+$$
+	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix},
+	\qquad
+	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
+$$
+
+The first column is $x = (-2; 1; 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
+and $w = (-5; 1; 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
+$y - (w\transpose y / 15)\, w$: the first to $(3; 0; 0)$, as [%full](statement:reflection) says,
+the second, with $w\transpose y = 15$, to $(5; 4; 3)$, and $b$, with $w\transpose b = 45$, to
+$(8; 13; -9)$:
+
+$$
+	H_1 \begin{bmatrix} A & b \end{bmatrix}
+	= \begin{bmatrix} 3 & 5 & 8 \\ 0 & 4 & 13 \\ 0 & 3 & -9 \end{bmatrix} .
+$$
+
+The first row and the first column are now final. The second step works on what is left, rows 2
+and 3 of the last two columns. There $x = (4; 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
+$\alpha_2 = -5$ and $w' = (9; 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
+$w = (0; 9; 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $(3, 5, 8)$,
+alone, and the first column, $(3; 0; 0)$, which is of the form $(v; 0)$; it maps $(4; 3)$ to
+$(-5; 0)$ and, with $w'^\top (13; -9) = 90$, $(13; -9)$ to $(13; -9) - 2\, (9; 3) = (-5; -15)$:
+
+$$
+	H_2 H_1 \begin{bmatrix} A & b \end{bmatrix}
+	= \begin{bmatrix} 3 & 5 & 8 \\ 0 & -5 & -5 \\ 0 & 0 & -15 \end{bmatrix} .
+$$
+
+So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d = (8; -5)$ and
+$e = -15$. Back substitution gives $\tangent_2 = -5 / {-5} = 1$ and
+$\tangent_1 = (8 - 5 \cdot 1) / 3 = 1$, the minimizer, and the minimum of
+$\lVert A \tangent - b \rVert^2$ is $e^2 = 225$; indeed $b - A (1; 1) = (-5; 10; -10)$. And
+$R\transpose R = \left[\begin{smallmatrix} 9 & 15 \\ 15 & 50 \end{smallmatrix}\right] = A\transpose A$.
+
+The second diagonal entry of $R$ is negative, which the sign rule of [%full](statement:reflection)
+allows and the theorem does not mind. Changing the sign of a row of $[R \;\, d]$, which is
+multiplying $Q$ by a diagonal matrix of signs, changes nothing in the theorem, so a positive
+diagonal can be had when it is wanted.
+
+Neither $Q$ nor any $H_j$ is formed. A reflection is applied to a vector $y$ of $p$ entries as
+$y - \beta\, (w\transpose y)\, w$, with $\beta = 2 / \lVert w \rVert^2$, in about $4p$ operations,
+and only the vectors $w$ are kept, if $Q$ is needed again at all. Step $j$ applies one to the last
+$n - j$ columns of $A$, in rows $j$ to $m$, so the reduction takes about
+$\sum_j 4 (m - j)(n - j) \approx 2 m n^2 - \tfrac23 n^3$ operations. Forming $A\transpose A$ and
+factoring it takes about $m n^2 + \tfrac13 n^3$, so when $m$ is much larger than $n$ the
+reflections cost twice as much, which is the price of the digits kept. Applying them to $b$
+alongside $A$ gives $d$ and $e$ in the same pass.
 
 ## Linear terms
 
