@@ -96,6 +96,38 @@ Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. The site-wide
 `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
 one document goes in its `katex_macros`.
 
+Lay equations out so that they read the way the argument runs:
+
+- **Chains are displayed.** A chain of equations, `a = b = c`, never goes inline, least of all one
+  with stacked vectors. An equation between stacked vectors is displayed even when it is a single
+  equality. A lone short equation, such as $w\transpose x = \lVert x \rVert^2 - \alpha x_1$, may
+  stay in the sentence.
+- **A short chain takes one line.** If the reader can take it in at once, it goes on one line. Several
+  such chains in a row go in one `gathered` block, a chain to a row. Give a chain one relation per
+  row, in `aligned`, only when it is a derivation to follow step by step or too wide for one line.
+- **Align on the last relation of the first row.** When the first row holds several relations,
+  the `&` goes before the last of them, so that the next row continues from it:
+
+  ```
+  $$
+  	\begin{aligned}
+  		a = b + c + d &= f + g \\
+  		&= h + i .
+  	\end{aligned}
+  $$
+  ```
+
+  Never put it before the first, as in `a &= b + c + d = f + g`.
+- **Prose separates equations that do not continue each other.** Write the first in a display,
+  then "and" or "where", then the second, rather than aligning them together or setting them side
+  by side with `\qquad`. There are two exceptions. Short definitions that fit side by side, such as
+  a small example's $A$ and $b$, may share a display with `\qquad` between them. A parallel pair
+  that shares one `@tag` goes in a `gathered` block. A tag after `\end{aligned}` or
+  `\end{gathered}` numbers the whole block.
+- **Commas stack blocks.** The tuple $(v, u)$ is the column vector with $v$ above $u$; never write
+  it with semicolons. Say so where a document first uses one. Write a row by juxtaposition, as in
+  $[A \;\, b]$. Matrices and displayed vectors use `bmatrix`.
+
 skoro's own notation is written with its macros, never with the letters they stand for, so that it
 can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`,
 `\randomPoint` and `\otherRandomPoint` (the random variables, in boldface), `\tangent` and
