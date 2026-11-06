@@ -22,12 +22,15 @@ with $R$ a $d_k \times d_k$ upper-triangular matrix with a nonzero diagonal. Wit
 $y = R^{-\top} \eta_k$,
 
 $$
-	\begin{aligned}
-		\phi(\tangent_k, \tangent_S)
-		&= \tfrac12 \bigl\lVert R \tangent_k + T \tangent_S - (d - y) \bigr\rVert^2
-		+ \phi'(\tangent_S) + \gamma , \\
-		\phi'(\tangent_S) &= \tfrac12 \lVert A' \tangent_S - b' \rVert^2 + (\eta_S - T\transpose y)\transpose \tangent_S ,
-	\end{aligned}
+	\phi(\tangent_k, \tangent_S)
+	= \tfrac12 \bigl\lVert R \tangent_k + T \tangent_S - (d - y) \bigr\rVert^2
+	+ \phi'(\tangent_S) + \gamma ,
+$$
+
+where
+
+$$
+	\phi'(\tangent_S) = \tfrac12 \lVert A' \tangent_S - b' \rVert^2 + (\eta_S - T\transpose y)\transpose \tangent_S
 $$
 
 and $\gamma = y\transpose d - \tfrac12 \lVert y \rVert^2$. Consequently:

@@ -7,10 +7,13 @@ title: Reflections that leave a leading block alone
 Let $w = (0, w') \in \R^p$, with $0 \in \R^i$ and $w' \in \R^{p - i}$ nonzero. Then
 
 $$
-	\begin{aligned}
-		H_w &= \begin{bmatrix} I & 0 \\ 0 & H_{w'} \end{bmatrix} , \\
-		H_w \begin{bmatrix} v \\ u \end{bmatrix} &= \begin{bmatrix} v \\ H_{w'} u \end{bmatrix}
-	\end{aligned}
+	H_w = \begin{bmatrix} I & 0 \\ 0 & H_{w'} \end{bmatrix} ,
+$$
+
+so that
+
+$$
+	H_w \begin{bmatrix} v \\ u \end{bmatrix} = \begin{bmatrix} v \\ H_{w'} u \end{bmatrix}
 $$
 
 for every $v \in \R^i$ and $u \in \R^{p - i}$. In particular, $H_w$ leaves the first $i$ entries

@@ -52,10 +52,13 @@ leaves ten digits to a method that works with $A$ and four to one that works wit
 The loss can be total. With $\varepsilon = 10^{-8}$, take
 
 $$
-	\begin{aligned}
-		A &= \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} , \\
-		b &= \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
-	\end{aligned}
+	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix}
+$$
+
+and
+
+$$
+	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
 $$
 
 The least-squares solution is $(1, 1)$, with zero residual, and $\kappa(A) \approx 1.4 \times 10^8$,
@@ -89,12 +92,12 @@ $$
 $$
 
 For the second part, $w$ differs from $x$ only in its first entry, by $-\alpha$, and
-$\alpha^2 = \lVert x \rVert^2$, so
+$\alpha^2 = \lVert x \rVert^2$, so $w\transpose x = \lVert x \rVert^2 - \alpha x_1$ and
 
 $$
 	\begin{aligned}
-		w\transpose x &= \lVert x \rVert^2 - \alpha x_1 , \\
-		\lVert w \rVert^2 &= \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 \\
+		\lVert w \rVert^2
+		&= \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 \\
 		&= 2 \bigl( \lVert x \rVert^2 - \alpha x_1 \bigr) \\
 		&= 2\, w\transpose x .
 	\end{aligned}
@@ -196,16 +199,13 @@ The minimizer of $\lVert A \tangent - b \rVert^2$ therefore solves the triangula
 $R \tangent = d$, and the minimum is $\lVert e \rVert^2$. $R$ is a square root of the normal
 equations' matrix, $R\transpose R = A\transpose A$, computed without forming that matrix, and
 $\kappa(R) = \kappa(A)$. A triangular system is solved by *back substitution*, from the last
-unknown up,
+unknown up: for $i = n, n - 1, \dots, 1$,
 
 $$
-	\begin{aligned}
-		\tangent_n &= \frac{d_n}{R_{nn}} , \\
-		\tangent_i &= \frac{1}{R_{ii}} \Bigl( d_i - \sum_{j > i} R_{ij}\, \tangent_j \Bigr) ,
-	\end{aligned} @tag(back-substitution)
+	\tangent_i = \frac{1}{R_{ii}} \Bigl( d_i - \sum_{j > i} R_{ij}\, \tangent_j \Bigr) , @tag(back-substitution)
 $$
 
-in about $n^2$ operations, and backward stably; a lower-triangular one, such as
+the sum being empty for $i = n$, in about $n^2$ operations, and backward stably; a lower-triangular one, such as
 $R\transpose y = c$, by *forward substitution*, from the first unknown down. A zero diagonal entry
 means $A$ does not have rank $n$: some direction is not determined by the rows, and a diagonal
 entry small against the others means a direction determined poorly. Either is reported, not
@@ -214,10 +214,13 @@ divided by.
 For example, take
 
 $$
-	\begin{aligned}
-		A &= \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix} , \\
-		b &= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
-	\end{aligned}
+	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix}
+$$
+
+and
+
+$$
+	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
 $$
 
 The first column is $x = (-2, 1, 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
@@ -227,17 +230,11 @@ $y - (w\transpose y / 15)\, w$, so the first column goes to $(3, 0, 0)$, as
 $w\transpose b = 45$:
 
 $$
-	\begin{aligned}
-		H_1 \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix}
-		&= \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
-		&= \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
-		H_1 \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix}
-		&= \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
-		&= \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
-		H_1 \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix}
-		&= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} \\
-		&= \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
-	\end{aligned}
+	\begin{gathered}
+		H_1 \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} = \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
+	\end{gathered}
 $$
 
 Together,
@@ -255,14 +252,10 @@ alone, and the first column, $(3, 0, 0)$, which is of the form $(v, 0)$. On the 
 $H_{w'}$, which maps $y$ to $y - (w'^\top y / 45)\, w'$:
 
 $$
-	\begin{aligned}
-		H_{w'} \begin{bmatrix} 4 \\ 3 \end{bmatrix}
-		&= \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} \\
-		&= \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
-		H_{w'} \begin{bmatrix} 13 \\ -9 \end{bmatrix}
-		&= \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} \\
-		&= \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
-	\end{aligned}
+	\begin{gathered}
+		H_{w'} \begin{bmatrix} 4 \\ 3 \end{bmatrix} = \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} = \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
+		H_{w'} \begin{bmatrix} 13 \\ -9 \end{bmatrix} = \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} = \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
+	\end{gathered}
 $$
 
 Together,
@@ -276,23 +269,20 @@ So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d 
 $e = -15$. Back substitution gives the minimizer,
 
 $$
-	\begin{aligned}
-		\tangent_2 &= \frac{-5}{-5} \\
-		&= 1 , \\
-		\tangent_1 &= \frac{8 - 5 \tangent_2}{3} \\
-		&= 1 ,
-	\end{aligned}
+	\begin{gathered}
+		\tangent_2 = \frac{-5}{-5} = 1 , \\
+		\tangent_1 = \frac{8 - 5 \tangent_2}{3} = 1 ,
+	\end{gathered}
 $$
 
 and the minimum of $\lVert A \tangent - b \rVert^2$ is $e^2 = 225$. Indeed, and with the root as
 the theorem says,
 
 $$
-	\begin{aligned}
-		b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} &= \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} , \\
-		R\transpose R &= \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} \\
-		&= A\transpose A .
-	\end{aligned}
+	\begin{gathered}
+		b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} , \\
+		R\transpose R = \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} = A\transpose A .
+	\end{gathered}
 $$
 
 The second diagonal entry of $R$ is negative, which the sign rule of [%full](statement:reflection)
@@ -325,10 +315,7 @@ So $\phi$ is minimized at $\tangent^* = R^{-1}(d - y)$, which solves
 $A\transpose A\, \tangent^* = A\transpose b - \eta$, and the decrease from $\tangent = 0$ is
 
 $$
-	\begin{aligned}
-		\phi(0) - \phi(\tangent^*) &= \tfrac12 \lVert d - y \rVert^2 \\
-		&= \tfrac12 \lVert R \tangent^* \rVert^2 ,
-	\end{aligned} @tag(decrease)
+	\phi(0) - \phi(\tangent^*) = \tfrac12 \lVert d - y \rVert^2 = \tfrac12 \lVert R \tangent^* \rVert^2 , @tag(decrease)
 $$
 
 since $\phi(0) = \tfrac12 \lVert d \rVert^2 + \tfrac12 \lVert e \rVert^2$. Two things change with
@@ -383,11 +370,13 @@ $$
 Write $w = R \tangent_k + T \tangent_S - d$. Since $R\transpose y = \eta_k$,
 
 $$
-	\begin{aligned}
-		\eta_k\transpose \tangent_k &= y\transpose R \tangent_k \\
-		&= y\transpose w - y\transpose T \tangent_S + y\transpose d , \\
-		\tfrac12 \lVert w \rVert^2 + y\transpose w &= \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y \rVert^2 ,
-	\end{aligned}
+	\eta_k\transpose \tangent_k = y\transpose R \tangent_k = y\transpose w - y\transpose T \tangent_S + y\transpose d ,
+$$
+
+and completing the square in $w$,
+
+$$
+	\tfrac12 \lVert w \rVert^2 + y\transpose w = \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y \rVert^2 ,
 $$
 
 which together give the decomposition. Only its first term depends on $\tangent_k$; it is zero
@@ -544,10 +533,10 @@ $E$? Split $\phi = \phi_{\ni E} + \phi_{\not\ni E}$ into the factors joined to $
 Since the rest does not involve $\tangent_E$,
 
 $$
-	\begin{aligned}
-		\min_{\tangent_E} \phi &= \Bigl(\min_{\tangent_E} \phi_{\ni E}\Bigr) + \phi_{\not\ni E} , \\
-		\int e^{-\phi} \, \dd \tangent_E &= e^{-\phi_{\not\ni E}} \int e^{-\phi_{\ni E}} \, \dd \tangent_E ,
-	\end{aligned} @tag(replace)
+	\begin{gathered}
+		\min_{\tangent_E} \phi = \Bigl(\min_{\tangent_E} \phi_{\ni E}\Bigr) + \phi_{\not\ni E} , \\
+		\int e^{-\phi} \, \dd \tangent_E = e^{-\phi_{\not\ni E}} \int e^{-\phi_{\ni E}} \, \dd \tangent_E ,
+	\end{gathered} @tag(replace)
 $$
 
 so the replacement is the elimination of $E$ from $\phi_{\ni E}$ alone, with the linear terms of
