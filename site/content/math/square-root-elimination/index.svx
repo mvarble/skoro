@@ -52,12 +52,8 @@ leaves ten digits to a method that works with $A$ and four to one that works wit
 The loss can be total. With $\varepsilon = 10^{-8}$, take
 
 $$
-	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix}
-$$
-
-and
-
-$$
+	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} ,
+	\qquad
 	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
 $$
 
@@ -214,12 +210,8 @@ divided by.
 For example, take
 
 $$
-	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix}
-$$
-
-and
-
-$$
+	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix} ,
+	\qquad
 	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
 $$
 
