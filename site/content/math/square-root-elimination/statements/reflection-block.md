@@ -14,4 +14,7 @@ $$
 
 for every $v \in \R^i$ and $u \in \R^{p - i}$. In particular, $H_w$ leaves the first $i$ entries
 of every vector unchanged, and fixes every vector whose other entries are zero:
-$H_w (v; 0) = (v; 0)$.
+
+$$
+	H_w \begin{bmatrix} v \\ 0 \end{bmatrix} = \begin{bmatrix} v \\ 0 \end{bmatrix} .
+$$

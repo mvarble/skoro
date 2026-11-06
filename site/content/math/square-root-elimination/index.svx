@@ -77,18 +77,37 @@ sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$.
 <Proof>
 
 $H_w$ is symmetric because $w w\transpose$ is, and
-$H_w^2 = I - 4 w w\transpose / \lVert w \rVert^2 + 4 w (w\transpose w) w\transpose / \lVert w \rVert^4 = I$,
-so $H_w\transpose H_w = H_w^2 = I$. For the second part, $\alpha^2 = \lVert x \rVert^2$, so
 
 $$
-	w\transpose x = \lVert x \rVert^2 - \alpha x_1 ,
-	\qquad
-	\lVert w \rVert^2 = \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 = 2\, w\transpose x .
+	\begin{aligned}
+		H_w\transpose H_w = H_w^2
+		&= I - 4 \frac{w w\transpose}{\lVert w \rVert^2} + 4 \frac{w\, (w\transpose w)\, w\transpose}{\lVert w \rVert^4} \\
+		&= I .
+	\end{aligned}
 $$
 
-Since $-\alpha x_1 = \lvert x_1 \rvert \lVert x \rVert \ge 0$, $\lVert w \rVert^2 \ge 2 \lVert x
-\rVert^2 > 0$. Then $H_w x = x - 2 w (w\transpose x) / \lVert w \rVert^2 = x - w$, which is $\alpha$
-in the first entry and zero in every other.
+For the second part, $w$ differs from $x$ only in its first entry, by $-\alpha$, and
+$\alpha^2 = \lVert x \rVert^2$, so
+
+$$
+	\begin{aligned}
+		w\transpose x &= \lVert x \rVert^2 - \alpha x_1 , \\
+		\lVert w \rVert^2 &= \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 \\
+		&= 2 \bigl( \lVert x \rVert^2 - \alpha x_1 \bigr) \\
+		&= 2\, w\transpose x .
+	\end{aligned}
+$$
+
+The product $-\alpha x_1$ is $\lvert x_1 \rvert \lVert x \rVert$, which is not negative, so
+$\lVert w \rVert^2 \ge 2 \lVert x \rVert^2$, which is positive. Then
+
+$$
+	\begin{aligned}
+		H_w x &= x - 2 \frac{w\transpose x}{\lVert w \rVert^2}\, w \\
+		&= x - w \\
+		&= \begin{bmatrix} \alpha \\ 0 \end{bmatrix} .
+	\end{aligned}
+$$
 
 </Proof>
 
@@ -104,9 +123,23 @@ of what it is applied to.
 
 <Proof>
 
-$\lVert w \rVert = \lVert w' \rVert$ and $w\transpose (v; u) = w'^\top u$, so
-$H_w (v; u) = (v; u) - 2 (w'^\top u)\, (0; w') / \lVert w' \rVert^2 = (v; H_{w'} u)$. Read column by
-column, with $(v; u)$ each coordinate vector in turn, this is the block form.
+The norms agree, $\lVert w \rVert = \lVert w' \rVert$, and the leading zeros of $w$ meet $v$, so
+
+$$
+	w\transpose \begin{bmatrix} v \\ u \end{bmatrix} = w'^\top u .
+$$
+
+Therefore
+
+$$
+	\begin{aligned}
+		H_w \begin{bmatrix} v \\ u \end{bmatrix}
+		&= \begin{bmatrix} v \\ u \end{bmatrix} - 2 \frac{w'^\top u}{\lVert w' \rVert^2} \begin{bmatrix} 0 \\ w' \end{bmatrix} \\
+		&= \begin{bmatrix} v \\ H_{w'} u \end{bmatrix} .
+	\end{aligned}
+$$
+
+Read column by column, with $(v; u)$ each coordinate vector in turn, this is the block form.
 
 </Proof>
 
@@ -134,9 +167,26 @@ of $M_j$ are zero below their diagonal entries.
 After $n$ steps, $M_n = H_n \cdots H_1 [A \;\, b]$ has the form of the theorem, with $R$ upper
 triangular with diagonal entries $\alpha_1, \dots, \alpha_n$, each nonzero. Each $H_j$ is
 symmetric and orthogonal, so $Q = H_1 \cdots H_n$ is orthogonal and
-$Q\transpose = H_n \cdots H_1$. Then $\lVert A \tangent - b \rVert^2 = \lVert
-Q\transpose (A \tangent - b) \rVert^2 = \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2$, and
-$A\transpose A = A\transpose Q Q\transpose A = R\transpose R$.
+$Q\transpose = H_n \cdots H_1$. Then
+
+$$
+	\begin{aligned}
+		\lVert A \tangent - b \rVert^2
+		&= \bigl\lVert Q\transpose (A \tangent - b) \bigr\rVert^2 \\
+		&= \left\lVert \begin{bmatrix} R \tangent - d \\ -e \end{bmatrix} \right\rVert^2 \\
+		&= \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2 ,
+	\end{aligned}
+$$
+
+and
+
+$$
+	\begin{aligned}
+		A\transpose A &= A\transpose Q Q\transpose A \\
+		&= \begin{bmatrix} R \\ 0 \end{bmatrix}\transpose \begin{bmatrix} R \\ 0 \end{bmatrix} \\
+		&= R\transpose R .
+	\end{aligned}
+$$
 
 </Proof>
 
@@ -167,9 +217,25 @@ $$
 
 The first column is $x = (-2; 1; 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
 and $w = (-5; 1; 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
-$y - (w\transpose y / 15)\, w$: the first to $(3; 0; 0)$, as [%full](statement:reflection) says,
-the second, with $w\transpose y = 15$, to $(5; 4; 3)$, and $b$, with $w\transpose b = 45$, to
-$(8; 13; -9)$:
+$y - (w\transpose y / 15)\, w$, so the first column goes to $(3; 0; 0)$, as
+[%full](statement:reflection) says, and the others follow with $w\transpose y = 15$ and
+$w\transpose b = 45$:
+
+$$
+	\begin{aligned}
+		H_1 \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix}
+		&= \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
+		= \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix}
+		&= \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
+		= \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix}
+		&= \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix}
+		= \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
+	\end{aligned}
+$$
+
+Together,
 
 $$
 	H_1 \begin{bmatrix} A & b \end{bmatrix}
@@ -180,8 +246,21 @@ The first row and the first column are now final. The second step works on what 
 and 3 of the last two columns. There $x = (4; 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
 $\alpha_2 = -5$ and $w' = (9; 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
 $w = (0; 9; 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $(3, 5, 8)$,
-alone, and the first column, $(3; 0; 0)$, which is of the form $(v; 0)$; it maps $(4; 3)$ to
-$(-5; 0)$ and, with $w'^\top (13; -9) = 90$, $(13; -9)$ to $(13; -9) - 2\, (9; 3) = (-5; -15)$:
+alone, and the first column, $(3; 0; 0)$, which is of the form $(v; 0)$. On the rest it acts as
+$H_{w'}$, which maps $y$ to $y - (w'^\top y / 45)\, w'$:
+
+$$
+	\begin{aligned}
+		H_{w'} \begin{bmatrix} 4 \\ 3 \end{bmatrix}
+		&= \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix}
+		= \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
+		H_{w'} \begin{bmatrix} 13 \\ -9 \end{bmatrix}
+		&= \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix}
+		= \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
+	\end{aligned}
+$$
+
+Together,
 
 $$
 	H_2 H_1 \begin{bmatrix} A & b \end{bmatrix}
@@ -189,10 +268,22 @@ $$
 $$
 
 So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d = (8; -5)$ and
-$e = -15$. Back substitution gives $\tangent_2 = -5 / {-5} = 1$ and
-$\tangent_1 = (8 - 5 \cdot 1) / 3 = 1$, the minimizer, and the minimum of
-$\lVert A \tangent - b \rVert^2$ is $e^2 = 225$; indeed $b - A (1; 1) = (-5; 10; -10)$. And
-$R\transpose R = \left[\begin{smallmatrix} 9 & 15 \\ 15 & 50 \end{smallmatrix}\right] = A\transpose A$.
+$e = -15$. Back substitution gives the minimizer,
+
+$$
+	\tangent_2 = \frac{-5}{-5} = 1 ,
+	\qquad
+	\tangent_1 = \frac{8 - 5 \cdot 1}{3} = 1 ,
+$$
+
+and the minimum of $\lVert A \tangent - b \rVert^2$ is $e^2 = 225$. Indeed, and with the root as
+the theorem says,
+
+$$
+	b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} ,
+	\qquad
+	R\transpose R = \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} = A\transpose A .
+$$
 
 The second diagonal entry of $R$ is negative, which the sign rule of [%full](statement:reflection)
 allows and the theorem does not mind. Changing the sign of a row of $[R \;\, d]$, which is
@@ -267,21 +358,52 @@ $\tangent_k$.
 <Proof>
 
 Since $Q$ preserves lengths, the squares are
-$\tfrac12 \lVert R \tangent_k + T \tangent_S - d \rVert^2 + \tfrac12 \lVert A' \tangent_S - b'
-\rVert^2$. Write $w = R \tangent_k + T \tangent_S - d$. Then $\eta_k\transpose \tangent_k =
-y\transpose R \tangent_k = y\transpose w - y\transpose T \tangent_S + y\transpose d$, and
-$\tfrac12 \lVert w \rVert^2 + y\transpose w = \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y
-\rVert^2$, which gives the decomposition. Only its first term depends on $\tangent_k$; it is zero
+
+$$
+	\begin{aligned}
+		\tfrac12 \lVert A_k \tangent_k + A_S \tangent_S - b \rVert^2
+		&= \tfrac12 \left\lVert \begin{bmatrix} R \tangent_k + T \tangent_S - d \\ A' \tangent_S - b' \end{bmatrix} \right\rVert^2 \\
+		&= \tfrac12 \lVert R \tangent_k + T \tangent_S - d \rVert^2 + \tfrac12 \lVert A' \tangent_S - b' \rVert^2 .
+	\end{aligned}
+$$
+
+Write $w = R \tangent_k + T \tangent_S - d$. Since $R\transpose y = \eta_k$,
+
+$$
+	\begin{aligned}
+		\eta_k\transpose \tangent_k &= y\transpose R \tangent_k \\
+		&= y\transpose w - y\transpose T \tangent_S + y\transpose d , \\
+		\tfrac12 \lVert w \rVert^2 + y\transpose w &= \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y \rVert^2 ,
+	\end{aligned}
+$$
+
+which together give the decomposition. Only its first term depends on $\tangent_k$; it is zero
 exactly at the point of part 1, since $R$ is nonsingular, which proves part 1, and the substitution
 $s = R \tangent_k$ turns its integral into that of a standard normal density's kernel, of volume
 $(2\pi)^{d_k/2}$, times $\lvert \det R \rvert^{-1}$, which proves part 2. For part 3, $Q$ is
 orthogonal, so $\Lambda$ is also the product of the reduced columns with themselves:
 $\Lambda_{kk} = R\transpose R$, $\Lambda_{kS} = R\transpose T$ and
-$\Lambda_{SS} = T\transpose T + A'^\top A'$, whence $\Lambda_{SS} - \Lambda_{Sk} \Lambda_{kk}^{-1}
-\Lambda_{kS} = A'^\top A'$. In the same way $g_k = \eta_k - R\transpose d$ and
-$g_S = \eta_S - T\transpose d - A'^\top b'$, so
-$g_S - \Lambda_{Sk} \Lambda_{kk}^{-1} g_k = \eta_S - A'^\top b' - T\transpose R^{-\top} \eta_k$,
-which is the gradient of $\phi'$ at zero.
+$\Lambda_{SS} = T\transpose T + A'^\top A'$, whence
+
+$$
+	\begin{aligned}
+		\Lambda_{SS} - \Lambda_{Sk} \Lambda_{kk}^{-1} \Lambda_{kS}
+		&= T\transpose T + A'^\top A' - T\transpose R\, (R\transpose R)^{-1} R\transpose T \\
+		&= A'^\top A' .
+	\end{aligned}
+$$
+
+In the same way $g_k = \eta_k - R\transpose d$ and $g_S = \eta_S - T\transpose d - A'^\top b'$, so
+
+$$
+	\begin{aligned}
+		g_S - \Lambda_{Sk} \Lambda_{kk}^{-1} g_k
+		&= \eta_S - T\transpose d - A'^\top b' - T\transpose R^{-\top} (\eta_k - R\transpose d) \\
+		&= \eta_S - A'^\top b' - T\transpose R^{-\top} \eta_k ,
+	\end{aligned}
+$$
+
+which is the gradient of $\phi'$ at zero, since $R^{-\top} \eta_k = y$.
 
 </Proof>
 
