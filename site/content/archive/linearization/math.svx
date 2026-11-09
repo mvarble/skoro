@@ -491,8 +491,9 @@ So, on a curved quantity:
   smaller there: the sum is $\sum_t G_t\transpose (\Lambda_t - I) G_t$ alone.
 
 > [!DECISION] The precision is the rows' alone
-> Every precision this entry computes, a Laplace approximation's and a replacement's, is the rows'
-> $J\transpose J$ and what elimination leaves of it. The curvature [](eq:omitted) of the residuals
+> Every precision this entry computes, a Laplace approximation's and a replacement's, is the
+> assembled rows' product, $J\transpose J$ for the residual linearization, and what elimination
+> leaves of it. The curvature [](eq:omitted) of the residuals
 > and of the log-volumes is left out. The rows keep three things: a precision that is a sum of
 > squares, positive definite by construction whenever the rows determine every direction; one
 > elimination with no downdate; and first-order passes only. On a curved quantity the rows err by a
@@ -774,10 +775,11 @@ On the flat-in-disguise types those derivatives are $\pm I$ everywhere, so the f
 $W_t \D s_t = J^\mu_t$ exactly, and $m_F$'s matrix,
 
 $$
-	\nabla^2 m_F = \sum_t J^{\mu\top}_t J^\mu_t + \sum_{t \text{ free scale}} K_t\transpose K_t , @tag(fisher-matrix)
+	\nabla^2 m_F = \sum_t J^{\mu\top}_t J^\mu_t + \sum_{t \text{ free scale}} J^{\theta\top}_t J^\theta_t , @tag(fisher-matrix)
 $$
 
-is the model's expected information. On a curved type the derivatives of $\ominus$ at the current
+is the sum of the terms' expected information, each an expectation over its own scored quantity
+with its inputs at their values at $\hat \point$. On a curved type the derivatives of $\ominus$ at the current
 residual stand where the root has their values at zero. The two differ at first order in the
 residual, and in a quadratic form at second order, the accuracy
 [the normal](../normal/math.svx#the-expected-information) states for the root's blocks of the
@@ -789,7 +791,7 @@ of the two derivatives, for the reason that follows.
 **Its gradient is exact.** The gradient of $m_F$ at zero is
 
 $$
-	\nabla m_F(0) = \sum_t J^{\mu\top}_t (r_t + \hat c_t) + \sum_{t \text{ free scale}} K_t\transpose u_t + \eta = g .
+	\nabla m_F(0) = \sum_t J^{\mu\top}_t (r_t + \hat c_t) + \sum_{t \text{ free scale}} J^{\theta\top}_t u_t + \eta = g .
 $$
 
 The first sum and $\eta$ are the gradients of the squares through the quantity and the mean, and of
@@ -830,16 +832,17 @@ $J^\mu_t$ is $J_t$, and $m_F = m$, on every type. The two assemblies differ only
 free, which the residual linearization refuses. They are kept separate all the same, since they
 answer to different readers. The residual linearization is the Gauss–Newton model of $f$, whose
 curvature at a mode is a Laplace approximation's. The Fisher linearization is the expected
-information, whose inverse is the asymptotic covariance of an estimator.
+information, whose inverse, where the free quantities are parameters rather than scored
+quantities themselves, is the asymptotic covariance of their maximum-likelihood estimator.
 
 **What it gives, and what it does not.** The Fisher linearization is eliminated as the residual
 linearization is. Its factor structure is the same: a term's variables $K_t$ are the free quantities
 it involves, whether through its quantity, its mean or its scale. So one plan serves both, and its
 steps, damping and marginals are computed as above. Its marginal covariances are those of the
-inverse expected information, a free scale's among them. It gives no evidence and no replacement.
-Those approximate an integral of the model's density, whose curvature in a free scale is not the
-expected information. A query with a free scale, retired or integrated over, is refused by both
-assemblies, naming the term.
+inverse of [](eq:fisher-matrix), a free scale's among them. It provides no evidence and no
+replacement. Those approximate an integral of the model's density, whose curvature in a free
+scale is not the expected information, and the residual linearization, which does provide them,
+refuses a free scale.
 
 **What it refuses.** The Fisher linearization refuses, naming the term or the quantity:
 
@@ -913,7 +916,8 @@ assemblies, naming the term.
   maximum-likelihood estimate; its marginal covariances equal the corresponding blocks of the
   inverse expected information; and it shares the residual linearization's plan.
 - **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
-  is free, a quantity the rows do not determine, a retirement whose terms do not determine a
+  is free in the residual linearization, a free scale whose term binds no information root in the
+  Fisher linearization, a quantity the rows do not determine, a retirement whose terms do not determine a
   retired quantity, and an integral over a quantity whose type has no volume, each naming what it
   names.
 
@@ -930,12 +934,14 @@ assemblies, naming the term.
   replacement's linear part, and is exactly zero where there are none; it is not formed as the query's gradient
   less what the rows account for, a difference that rounding would fill. Everything is of
   first order, computed at the query's precision, and solved on the host in double precision.
-- **The linearization is refused** for a free discrete quantity, a factor without a residual, and
-  a factor whose bound scale is reached from a free quantity; an integral, for a quantity whose
+- **The residual linearization is refused** for a free discrete quantity, a factor without a
+  residual, and a factor whose bound scale is reached from a free quantity; the Fisher
+  linearization accepts the last when its term binds an information root; an integral, for a quantity whose
   type declares no volume.
 - **Fisher linearization** is a second assembly of the same factored problem: a term with a free
-  scale contributes the rows of its residual's Jacobian with the scale held, and the rows of its
-  information root's scale block composed with the Jacobian of the scale's coordinates, with the
+  scale contributes the rows $J^\mu_t$ of its residual's Jacobian with the scale held, and the rows
+  $J^\theta_t$ of its information root's scale block composed with the Jacobian of the scale's
+  coordinates, with the
   scale residual on the right; every other term contributes as above. It is refused for a free
   scale whose term binds no information root, and gives steps and covariances, not evidence or
   replacements.
