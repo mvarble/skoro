@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use skoro_tensor::burn::Tensor;
+use skoro_tensor::{broadcast, reshape};
 
 use super::rule::{Rule, RuleKernel, columns, widen};
 use crate::{Error, Lowered, Lowering, Operation, Param, Space};
@@ -486,7 +487,7 @@ struct Scaling;
 impl Scaling {
     fn s(x: &[Tensor<2>]) -> Tensor<2> {
         let [n, d] = x[1].dims();
-        x[0].clone().expand([n, d])
+        broadcast(x[0].clone(), [n, d])
     }
 }
 
@@ -499,7 +500,7 @@ impl Rule for Scaling {
         let [n, d] = x[1].dims();
         let k = t.dims()[2];
         match j {
-            0 => t.expand([n, d, k]) * columns(&x[1], k),
+            0 => broadcast(t, [n, d, k]) * columns(&x[1], k),
             _ => columns(&Scaling::s(x), k) * t,
         }
     }
@@ -529,7 +530,7 @@ impl Rule for Scaling {
             _ => {
                 let v_s = v[0].clone()?;
                 let k = v_s.dims()[2];
-                Some(v_s.expand([n, d, k]) * widen(alpha, k))
+                Some(broadcast(v_s, [n, d, k]) * widen(alpha, k))
             }
         }
     }
@@ -538,29 +539,29 @@ impl Rule for Scaling {
 /// A row of storage `[N, rows * cols]`, column by column, as matrices `[N, rows, cols]`.
 fn matrix(x: Tensor<2>, rows: usize, cols: usize) -> Tensor<3> {
     let n = x.dims()[0];
-    x.reshape([n, cols, rows]).swap_dims(1, 2)
+    reshape(x, [n, cols, rows]).swap_dims(1, 2)
 }
 
 fn unmatrix(x: Tensor<3>) -> Tensor<2> {
     let [n, rows, cols] = x.dims();
-    x.swap_dims(1, 2).reshape([n, rows * cols])
+    reshape(x.swap_dims(1, 2), [n, rows * cols])
 }
 
 /// A frame `[N, rows * cols, K]` as matrices `[N, K, rows, cols]`.
 fn matrices(t: Tensor<3>, rows: usize, cols: usize) -> Tensor<4> {
     let [n, _, k] = t.dims();
-    t.reshape([n, cols, rows, k]).permute([0, 3, 2, 1])
+    reshape(t, [n, cols, rows, k]).permute([0, 3, 2, 1])
 }
 
 fn unmatrices(t: Tensor<4>) -> Tensor<3> {
     let [n, k, rows, cols] = t.dims();
-    t.permute([0, 3, 2, 1]).reshape([n, rows * cols, k])
+    reshape(t.permute([0, 3, 2, 1]), [n, rows * cols, k])
 }
 
 /// Matrices `[N, rows, cols]` repeated over `K` columns.
 fn repeat(x: Tensor<3>, k: usize) -> Tensor<4> {
     let [n, rows, cols] = x.dims();
-    x.unsqueeze_dim::<4>(1).expand([n, k, rows, cols])
+    broadcast(reshape(x, [n, 1, rows, cols]), [n, k, rows, cols])
 }
 
 /// `A B` with `A` of `m × k` and `B` of `k × n`.
@@ -616,13 +617,13 @@ impl Rule for MatrixProduct {
                 let v_b = v[1].clone()?;
                 let k = v_b.dims()[2];
                 let v_b = matrices(v_b, self.k, self.n).swap_dims(2, 3);
-                alpha.expand([n, k, rows, cols]).matmul(v_b)
+                broadcast(alpha, [n, k, rows, cols]).matmul(v_b)
             }
             _ => {
                 let v_a = v[0].clone()?;
                 let k = v_a.dims()[2];
                 let v_a = matrices(v_a, self.m, self.k).swap_dims(2, 3);
-                v_a.matmul(alpha.expand([n, k, rows, cols]))
+                v_a.matmul(broadcast(alpha, [n, k, rows, cols]))
             }
         }))
     }
@@ -643,7 +644,7 @@ impl Rule for Summation {
 
     fn pull(&self, _: &[Tensor<2>], _: usize, alpha: Tensor<3>) -> Tensor<3> {
         let [n, _, k] = alpha.dims();
-        alpha.expand([n, self.dimension, k])
+        broadcast(alpha, [n, self.dimension, k])
     }
 }
 

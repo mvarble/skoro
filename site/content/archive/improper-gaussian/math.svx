@@ -1,0 +1,362 @@
+---
+summary: The improper Gaussian factor, a sum of squared affine rows of any number, a linear term and a constant in the stacked tangent of a retirement's blanket at constant anchors, which keeps what retired terms say about blanket quantities they do not determine, adds across retirements, and is the normal's Stacked replacement when it is of full rank.
+depends_on: [generative-models, archive/core/math, archive/normal/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as factor from './statements/factor.md';
+	import * as fullRank from './statements/full-rank.md';
+	import * as forms from './statements/forms.md';
+</script>
+
+## The problem
+
+A [retirement](../core/math.svx#retirement) removes quantities from a model and keeps what they said
+about the rest in a replacement: a likelihood factor over the Markov blanket of the retired terms,
+the integral of those terms over the retired quantities. The normal writes that replacement in one
+form, its `Stacked` replacement ([the normal as a likelihood factor](../normal/math.svx#as-a-likelihood-factor)),
+a normal density of the blanket's tangent coordinates at fixed anchors. A normal density has a
+covariance, so `Stacked` can only write a replacement that determines every direction of the
+blanket.
+
+Many retirements do not. A landmark seen by bearing from a single pose is the standard case. When
+the pose is retired, the bearing has said in which direction the landmark lies, and nothing about
+how far. In the landmark's tangent coordinates, the replacement is then Gaussian across the
+bearing and constant along it, and no covariance describes it. A filter that must write its replacement as a normal density has two bad
+choices: refuse the retirement, or invent a depth. The first keeps the pose in the model until the
+landmark is seen again, so that the window grows. The second puts a prior on the landmark that the
+data never gave.
+
+The archive's sliding windows wrote their replacement as a joint normal in the offset form
+$W (\point_B \ominus \hat \point_B) - d$, anchored at the point where it was computed so that its
+value and Jacobian there are exactly the eliminated rows, with a triangular $W$ of full rank. The
+anchoring carries over unchanged; the rank does not.
+
+This entry gives skoro a form that needs neither a refusal nor an invented depth: the *improper Gaussian factor*, a sum of
+squared affine rows of any number, a linear term and a constant, in the blanket's tangent
+coordinates at fixed anchors. It keeps exactly what the retired terms say and nothing more. Such
+factors add, so that a model can marginalize what it learns about a quantity it cannot yet
+estimate, accumulate it over several retirements, and estimate the quantity once enough is known.
+When the factor determines its blanket, it is a normal, and its value is the `Stacked`
+replacement's.
+
+The entry provides the factor, the forms in which it can be written, and the roles it binds.
+Computing a factor from a linearized retirement is the work of the `linearization` entry, which
+needs it. This document works out what the factor is, when it is a normal, which of its forms are
+the same function, how factors accumulate, and what a reader of its roles may assume.
+
+## Setting
+
+**Retirement.** A retirement retires the quantities $E$, of which $E_O$ are fixed at given values
+and $E_F$ are integrated out, and replaces the terms $\mathcal T_E$ joined to them by a likelihood
+factor $\logterm_B$ over their Markov blanket $B$ [](eq:archive/core/math/blanket), the integral of
+[%full](statement:archive/core/math/retirement). The core checks that the factor is reached from no
+quantity outside $B$, and applies the change. After it, a blanket quantity whose scoring term was
+retired is scored by no term, and so is a parameter, of which $\exp \logterm_B$ is a score, as a
+score is conditioned on a parameter with an improper prior
+([parameters and improper priors](../../math/generative-models/#parameters-and-improper-priors)).
+Generation draws such a quantity from a proposal given with the replacement, and is refused for it
+otherwise. A retirement's replacement may bind roles, which the retirement binds to the factor it
+adds ([the replacement's bindings](../replacement-bindings/)).
+
+**The stacked tangent.** For continuous blanket quantities $B_F = (\point_1, \dots, \point_k)$ and
+an anchor $p_i$ for each, a constant of its type, the normal's stacked tangent is
+
+$$
+	\delta(\point_B) = (\point_1 \ominus p_1, \dots, \point_k \ominus p_k) \in \R^D , \qquad D = \sum_i \dimension_i ,
+$$
+
+[](eq:archive/normal/math/stacked), the blocks stacked as columns, as every tuple in this document
+is. It is defined where each $\point_i$ lies in the chart's image at $p_i$, which for a full chart
+is all of the type but a set of measure zero. On a flat-in-disguise type, a Euclidean or a positive
+one, it translates exactly with the anchor, [](eq:archive/normal/math/translation). The anchors are
+constants, so that a factor written in $\delta$ does not move with the quantities it summarizes.
+
+**`Stacked`.** The normal's replacement is $\logterm_{\mathcal N}(\delta;\, m, W) + c$
+[](eq:archive/normal/math/joint): the normal's term on $\R^D$, where the log-volume vanishes, at
+the value $\delta$, with a mean $m$, a whitening $W$ of full rank and a constant $c$. It binds the
+whitened residual $W(\delta - m)$, the mean and the scale.
+
+**What a reader of a residual assumes.** The normal's roles let a reader of the whitened residual
+$r$ assume that the rest of the term's log-density is a normalizer constant in the free quantities
+and, where one is bound, a log-volume $\lambda$, a node of its own
+([the normal's roles](../normal/math.svx#the-roles)):
+
+$$
+	\logterm = -\tfrac12 \lVert r \rVert^2 + n - \lambda . @tag(split)
+$$
+
+A least-squares reader adds the bound log-volume's gradient to the residuals' to find the term's
+own stationary points. The factor of this entry is written so that it keeps this contract.
+
+## The improper Gaussian factor
+
+<Statement {...factor} />
+
+The rows say what the factor determines. Write $\delta = \delta_\parallel + \delta_\perp$, with
+$\delta_\parallel$ in the row space of $A$ and $\delta_\perp$ in its null space. Along the row
+space the squares are a Gaussian. Along the null space the squares do not change, and the factor
+is linear, with slope $-\eta\transpose \delta_\perp$. A factor with $r = 0$ rows is linear and a
+constant alone.
+
+<Statement {...fullRank} />
+
+<Proof>
+
+If $A$ has rank less than $D$, take $n \ne 0$ with $A n = 0$. Along the line $\delta + t n$ the
+factor is $\logterm(\delta) - t\, \eta\transpose n$, so $e^{\logterm}$ is constant or grows
+exponentially along every such line, and the integral over $\R^D$ diverges. If $A$ has rank $D$,
+$\Lambda = A\transpose A = W\transpose W$ is positive definite, and
+
+$$
+	\begin{aligned}
+		-\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta
+		&= -\tfrac12 \delta\transpose \Lambda \delta + \delta\transpose (A\transpose b - \eta) - \tfrac12 \lVert b \rVert^2 \\
+		&= -\tfrac12 \lVert W (\delta - m) \rVert^2 + \tfrac12 \lVert W m \rVert^2 - \tfrac12 \lVert b \rVert^2 ,
+	\end{aligned}
+$$
+
+since $\Lambda m = A\transpose b - \eta$. The first term is
+$\logterm_{\mathcal N}(\delta;\, m, W) - \sum_i \log W_{ii} + \tfrac{D}{2} \log 2\pi$, which is
+integrable, and adding $c$ gives $c_{\mathcal N}$.
+
+</Proof>
+
+So the improper Gaussian factor contains `Stacked` as its case of full rank, and adds every factor
+that `Stacked` cannot write. Integrability in $\delta$ is the only difference, and a likelihood
+factor never needed it: [%full](statement:archive/core/math/retirement) asks of a replacement that it be a
+function of the blanket, which an improper factor is. Integrability in $\delta$ is not
+integrability against the blanket's reference measure, which carries the chart's volume
+$e^{\lambda}$: on a compact curved type such as the rotations, a bounded factor of any rank is
+integrable against the type's measure, and on a positive type the two differ by the factor
+$\point$. What matters below is the reading in $\delta$, where the factor is Gaussian or flat.
+
+What integrability does change is generation. A blanket quantity that becomes a parameter with an
+improper factor as its only score is not drawn from the factor. It needs a proposal, as the core
+already asks of every parameter, and generation is refused for it without one. Where the factor
+determines a Euclidean blanket, drawing $\delta$ from the normal of [%full](statement:full-rank)
+and setting $\point_i = p_i \oplus \delta_i$ is a proposal that makes every draw's weight the same,
+as the Kalman prediction does for the core's replacement of full rank. On a positive or a curved
+type the draw has the density of that normal times $e^{-\lambda}$ with respect to the type's
+measure, and the weights then vary with the chart's volume.
+
+## Two examples
+
+**A bearing in the plane.** Take a landmark $\ell \in \R^2$ and poses $\point_k \in \R^2$, each with
+its own prior $\mathcal N(p_k, P_k)$, and a measurement of each pose along a known unit direction
+$a_k$,
+
+$$
+	z_k = a_k\transpose (\ell - \point_k) + \varepsilon_k , \qquad \varepsilon_k \sim \mathcal N(0, \sigma^2) ,
+$$
+
+a linear stand-in for a bearing, which measures the landmark's offset from the pose across one
+direction only. Retire $\point_k$, with $z_k$ observed at $\hat z_k$. Integrating the pose out,
+$a_k\transpose \ell - z_k$ is normal with mean $a_k\transpose p_k$ and variance
+$s_k^2 = \sigma^2 + a_k\transpose P_k a_k$, so that, with the anchor $q$ for $\ell$ and
+$\delta = \ell - q$,
+
+$$
+	\logterm_k(\ell) = -\frac{1}{2 s_k^2} \bigl(a_k\transpose \delta - (\hat z_k + a_k\transpose p_k - a_k\transpose q)\bigr)^2 - \tfrac12 \log (2\pi s_k^2) .
+$$
+
+This is the factor with one row, $A = a_k\transpose / s_k$, $b = (\hat z_k + a_k\transpose p_k -
+a_k\transpose q) / s_k$, $\eta = 0$ and $c = -\tfrac12 \log (2\pi s_k^2)$, exactly. It has rank one
+on $\R^2$ and is constant along the direction orthogonal to $a_k$: the line on which the
+measurement places the landmark. Retiring a second pose with a direction $a_{k'}$ not parallel to
+$a_k$ gives a second such factor. Their sum has two rows of rank two, and is by
+[%full](statement:full-rank) a normal, whose mean is the point at which the two lines cross. It is
+the replacement that retiring both poses at once would give, since their retired terms are disjoint
+and the joint integral is the product of the two.
+
+**A positive quantity.** Let a positive quantity $\point$ be scored by the normal on the positive
+type with the mean $e^{\theta + \varphi}$ and the scale $\sigma$, where $\theta \sim \mathcal N(0, 1)$
+is Euclidean, and retire $\theta$, keeping $\varphi$ and $\point$. The normal's term on the positive
+type is the Gaussian of $\log \point$ less the log-volume $\log \point$
+([](eq:archive/normal/math/term)), so
+
+$$
+	\logterm_B(\varphi, \point)
+	= \log \int \mathcal N(\theta;\, 0, 1)\, \frac{1}{\point}\, \mathcal N(\log \point;\, \theta + \varphi, \sigma^2) \, \dd \theta
+	= -\log \point - \frac{(\log \point - \varphi)^2}{2 s^2} - \tfrac12 \log (2\pi s^2) ,
+$$
+
+with $s^2 = 1 + \sigma^2$. In the stacked tangent at the anchors $(\hat \varphi, \hat \point)$,
+$\delta = (\varphi - \hat \varphi,\, \log \point - \log \hat \point)$, it is the factor with
+
+$$
+	A = \tfrac{1}{s} \begin{bmatrix} -1 & 1 \end{bmatrix} , \qquad
+	b = -\frac{\log \hat \point - \hat \varphi}{s} , \qquad
+	\eta = (0, 1) , \qquad
+	c = -\log \hat \point - \tfrac12 \log (2\pi s^2) .
+$$
+
+The linear term is not in the row space of $A$: by part 3 of [%full](statement:forms), at most its
+projection onto that space, $(-\tfrac12, \tfrac12)$, can be moved into $b$, and $(\tfrac12, \tfrac12)$
+remains. Along the null direction $(1, 1)$, the factor falls linearly. A replacement computed by
+linearizing normals on the Euclidean and the curved types has no such term, since the normal's
+log-volume there is a function of its tangent coordinate alone and its gradient lies in the span of
+its own rows; the `linearization` entry shows it. On the positive types one remains, as here, which
+is why the factor carries $\eta$.
+
+## Forms of one factor
+
+<Statement {...forms} />
+
+<Proof>
+
+For part 1, $\lVert Q\transpose (A \delta - b) \rVert = \lVert A \delta - b \rVert$. For part 2, the
+squares of the zero rows are $\lVert 0 \cdot \delta - e \rVert^2 = \lVert e \rVert^2$. For part 3,
+expanding the square,
+
+$$
+	\begin{aligned}
+		-\tfrac12 \lVert A \delta - (b - u) \rVert^2 - (\eta - A\transpose u)\transpose \delta
+		&= -\tfrac12 \lVert A \delta - b \rVert^2 - u\transpose (A \delta - b) - \tfrac12 \lVert u \rVert^2 - \eta\transpose \delta + u\transpose A \delta \\
+		&= -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + u\transpose b - \tfrac12 \lVert u \rVert^2 ,
+	\end{aligned}
+$$
+
+and the new constant restores $c$. For the anchors,
+$\point_i \ominus p_i' = (\point_i \ominus p_i) - w_i$ by [](eq:archive/normal/math/translation),
+and the blocks of the anchors kept are unchanged, so $\delta = \delta' + w$ in the new stacked
+tangent $\delta'$, and substituting gives the new
+right-hand side and constant.
+
+</Proof>
+
+Parts 1 and 2 together are an orthogonal factorization of $[A \;\, b]$. It leaves at most $D$
+rows, so a factor never needs more rows than its blanket has coordinates. Part 3 moves any part of
+$\eta$ that lies in the row space into $b$. Choosing $u$ to minimize $\lVert \eta - A\transpose u
+\rVert$ leaves only the part of $\eta$ in the null space, which no form removes. When $A$ has rank
+$D$, that part is zero, and the form is the normal's of [%full](statement:full-rank).
+
+None of these changes the value, so a factor is the function it is, whichever form it is given in.
+The factor is kept in the form it is given, and no form is chosen for it by looking at its numbers.
+A batch of models has one factor for every row, with numbers of its own, and a form chosen by rank
+would give different rows different shapes. The number of rows $r$, and whether $\eta$ is present,
+are therefore set by whoever writes the factor, and are the same for every row of a batch. A
+reduction by parts 1 and 2 to $\min(r, D)$ rows depends on the shapes alone, and is safe to apply
+to every row.
+
+## Accumulation
+
+Factors over the same quantities add. Two factors over blankets $B_1$ and $B_2$, with the same
+anchor for each quantity they share, sum to a factor over $B_1 \cup B_2$, whose rows are the two
+sets of rows, each with zero columns for the quantities it does not involve, whose linear term is
+the sum of the two, each extended by zeros, and whose constant is the sum. The sum's value is the
+sum of the values, at every point, by the definition alone. Its rows can then be reduced by
+[%full](statement:forms) to at most $D$, and once they have rank $D$ it is a normal.
+
+The model does not need its factors summed: a model that holds several factors is their sum, and
+every reader of the model reads them as terms. Summing is a convenience, which keeps a model of many
+retirements small. It is exact when the anchors agree, and whatever the anchors of the
+flat-in-disguise quantities, since the last part of [%full](statement:forms) moves those anchors
+without changing the factor's value. On a curved type, the stacked tangent at one anchor is not an affine function
+of the stacked tangent at another, and two factors anchored differently are kept as two terms.
+
+> [!DECISION] The library does not sum factors here
+> This entry gives no operation that sums factors. A model that holds several factors already reads
+> them as their sum, so the accumulation the filter needs happens without one, and each retirement
+> adds its factor as a term of its own. What a sum would buy is a smaller model when many
+> retirements leave factors on a quantity that is never retired itself, and a retirement does not
+> need it. The mathematics above is what a later entry would build on, should a sum turn out to
+> fit.
+
+The example of the bearings shows what this buys. A filter retires each pose as it leaves the
+window, and each retirement leaves one row on the landmark. The landmark is undetermined until two
+rows of different directions have accumulated. Until then, a query that leaves it free, with
+nothing else to determine it, has no unique answer, and an estimator that needs one refuses it.
+After that, it is estimated, and nothing was lost on the way.
+
+## Derivatives
+
+The factor is a function of the blanket's quantities through $\delta$, and its derivatives are
+those of its two parts. In the chart at $\point_i$, the block of $\delta$ for $\point_i$ has the
+derivative $\D(\point_i \ominus p_i)$, which is the identity at $\point_i = p_i$ and everywhere on a
+flat-in-disguise type, and on a curved type moves with $\point_i$ as the core's inverse retraction
+does. So the residual $A \delta - b$ has the Jacobian $A\, \D \delta$, and the linear part has the
+gradient $\D \delta\transpose \eta$.
+
+On the flat-in-disguise types, $\delta$ is affine in every chart of the blanket, so the factor is
+exactly quadratic in it. Its residual's Jacobian is constant, its Gauss–Newton matrix
+$\D \delta\transpose A\transpose A\, \D \delta$ is its exact negative Hessian, and the linear part
+has no curvature. On a curved type the factor has the curvature that $\delta$ has, as a `Stacked`
+replacement does: it vanishes at the anchors and is of first order in $\delta$ near them.
+
+## The roles
+
+The factor keeps the contract [](eq:split) of a term that binds a residual:
+
+- its **whitened residual** is $A \delta - b$, with $r$ components, none included;
+- its **normalizer** is the constant $c$;
+- its **log-volume**, where $\eta$ is present, is its linear part $\eta\transpose \delta$, the
+  varying part of its remainder, the part that [](eq:split) calls $\lambda$.
+
+A least-squares reader that reads the residual and adds the gradient of the bound log-volume
+therefore finds the factor's own gradient, and a reader that reads only the residual finds the
+gradient of its squares. That is what such a reader finds on the normal's terms, where the bound
+node is a log-volume indeed. The factor binds no mean and no scale. Where it is not of full rank it
+has neither, and where it is, they can be computed from it by [%full](statement:full-rank). It binds
+no information root, since it is a likelihood factor and scores no quantity, as the normal says of
+its own likelihood factors. A residual of no components is a residual: a reader that requires every
+factor to bind a residual accepts such a factor, whose remainder is then all it says.
+
+> [!DECISION] The linear part under the log-volume role
+> The linear part is in general not the log-volume of any measure. In
+> [the positive example](#two-examples) it is what remains of the retired normal's log-volume, but
+> part 3 of [%full](statement:forms) moves it in and out of the squares, and a sum of factors adds
+> the linear parts of factors over different quantities, so that no chart's volume need be what it
+> is. It is bound under the log-volume role all the same, because what a least-squares reader takes from that
+> role is its place in [](eq:split), the varying part of the remainder that is not a square, and from
+> it the value and the gradient. Binding it there fits the contract every such reader already reads.
+> A role of its own, the *linear part*, would name it truthfully, at the cost of teaching every
+> least-squares reader to read a second role exactly as it reads the first.
+>
+> The cost of the name is that a reader of a term's log-volume role must not take it at face value,
+> as the volume of a chart. On the normal's terms it is one; on this factor it is not. No reader
+> needs it to be: a reader that needs the volume of a quantity's chart, as a Laplace approximation
+> does, takes it from the quantity's type, never from the roles of the terms around it, and this
+> factor scores no quantity in any case. What the role promises its readers is therefore the
+> varying part of the remainder, and the normal's log-volume is the case of it that gave it its
+> name.
+
+## In skoro's terms
+
+- **The factor is a likelihood factor** over continuous blanket quantities, scoring none of them,
+  added by a retirement as its replacement, or by a model directly. It is reached only from the
+  blanket's quantities, through $\delta$, so the core's check of a replacement holds.
+- **Its constants** are the anchors, constants of the quantities' types, and $A$, $b$, $\eta$ and
+  $c$, constants of the model. In a batch, their numbers may differ from row to row, while the
+  number of rows $r$, the blanket's dimension $D$, and whether $\eta$ is present are one for every
+  row.
+- **Its value** is [%full](statement:factor). Its derivatives are those of $\delta$, composed with
+  $A$ and $\eta$, of the order of the blanket's inverse retractions.
+- **It is a normal when it is of full rank**, with the mean, the whitening and the constant of
+  [%full](statement:full-rank). The normal's `Stacked` replacement stays the form for a caller that
+  has a mean and a scale. The improper factor is the form for one that has rows.
+- **Its forms** are those of [%full](statement:forms). A factor keeps the one it is given. A reduction
+  to $\min(r, D)$ rows is a change of form the library may apply, since it depends on the shapes
+  alone; it applies no other.
+- **Several factors** over the same quantities are held as several terms, which every reader of the
+  model reads as their sum. Summing them into one is exact at common anchors and on the
+  flat-in-disguise types at any anchors, and is left to a later entry.
+- **Its roles** are the whitened residual $A \delta - b$ and, where $\eta$ is present, the
+  log-volume role, bound to the linear part $\eta\transpose \delta$, which a reader takes as the
+  varying part of the remainder and not as the volume of a chart.
+- **A blanket quantity it leaves undetermined** becomes a parameter that it cannot generate: the
+  caller gives a proposal, or generation is refused for it, as the core does for every parameter.
+
+## Open questions
+
+None remain. Which role binds the linear part is settled in [The roles](#the-roles), and whether
+the library sums factors in [Accumulation](#accumulation).
+
+## Revisions
+
+**2026-11-09.** In [In skoro's terms](#in-skoro-s-terms), the sentence saying that a reduction to
+$\min(r, D)$ rows "is the only one the library applies by itself" read as a promise that the library
+applies one, which the implementation does not. It now says that the library may apply that
+reduction, since it depends on the shapes alone, and applies no other change of form.

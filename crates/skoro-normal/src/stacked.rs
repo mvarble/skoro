@@ -91,7 +91,7 @@ impl Stacked {
 }
 
 /// What the normal's roles are bound on: a term in a scope, or a retirement's replacement.
-trait Binds: Sized {
+pub(crate) trait Binds: Sized {
     fn bind_role<M: Multiplicity>(self, role: &Role<M>, node: QDyn) -> Self;
 }
 

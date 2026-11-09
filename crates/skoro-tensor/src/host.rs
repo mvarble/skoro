@@ -1,4 +1,4 @@
-use crate::{Integers, Points, Target, TensorError, Value};
+use crate::{Integers, Points, Target, TensorError, Value, broadcast};
 
 /// A value on the host: what a model stores and what a query observes.
 #[derive(Clone, PartialEq, Debug)]
@@ -65,14 +65,14 @@ impl HostValue {
             HostData::Continuous(data) => {
                 let points = Points::from_host(data, rows, self.storage, target).into_burn();
                 Value::Continuous(Points::from_burn(
-                    points.expand([batch, self.storage]),
+                    broadcast(points, [batch, self.storage]),
                     target,
                 )?)
             }
             HostData::Discrete(data) => {
                 let integers = Integers::from_host(data, rows, self.storage, target)?.into_burn();
                 Value::Discrete(Integers::from_burn(
-                    integers.expand([batch, self.storage]),
+                    broadcast(integers, [batch, self.storage]),
                     target,
                 )?)
             }

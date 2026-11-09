@@ -25,8 +25,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
       '@mvarble/mesearch-ui':
-        specifier: ^0.2.0
-        version: 0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+        specifier: ^0.2.1
+        version: 0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
         version: 3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)))
@@ -219,8 +219,8 @@ packages:
     peerDependencies:
       svelte: ^5.0.0
 
-  '@mvarble/mesearch-ui@0.2.0':
-    resolution: {integrity: sha512-ZjmelJ+9luyXRs7cdMnWSxnTZqTp11tjY5mxaK34iPhTJ54mYECwktt/8ABUQjMFR2DNuFAYI0FmEahcoem+xA==}
+  '@mvarble/mesearch-ui@0.2.1':
+    resolution: {integrity: sha512-edIJdmyCD9Ej/+aIkk8/bpoEjTlUc/dOSRUZSq+iU2y843riE+Kj9pEvbtELk/HJ5HWL6SptlDhnyByftBcfvg==}
     engines: {node: '>=22.18'}
     peerDependencies:
       svelte: ^5.0.0
@@ -1709,7 +1709,7 @@ snapshots:
       shiki: 4.5.0
       svelte: 5.57.2(@typescript-eslint/types@8.71.2)
 
-  '@mvarble/mesearch-ui@0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))':
+  '@mvarble/mesearch-ui@0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))':
     dependencies:
       '@fontsource-variable/inter': 5.3.0
       '@fontsource-variable/source-serif-4': 5.3.1

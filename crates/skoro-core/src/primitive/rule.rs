@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use skoro_tensor::burn::Tensor;
-use skoro_tensor::{Frame, Points, Target, Value};
+use skoro_tensor::{Frame, Points, Target, Value, broadcast, reshape};
 
 use crate::{FirstOrder, Forward, Kernel, Pullback, SecondOrder, SecondPullback};
 
@@ -173,11 +173,11 @@ pub(crate) fn frame(tensor: Tensor<3>, target: &Target) -> Frame {
 /// `[N, d]` as `[N, d, K]`, the same in every column.
 pub(crate) fn columns(x: &Tensor<2>, k: usize) -> Tensor<3> {
     let [n, d] = x.dims();
-    x.clone().unsqueeze_dim::<3>(2).expand([n, d, k])
+    broadcast(reshape(x.clone(), [n, d, 1]), [n, d, k])
 }
 
 /// A frame of one column, `[N, d, 1]`, repeated to `k` columns.
 pub(crate) fn widen(alpha: Tensor<3>, k: usize) -> Tensor<3> {
     let [n, d, _] = alpha.dims();
-    alpha.expand([n, d, k])
+    broadcast(alpha, [n, d, k])
 }

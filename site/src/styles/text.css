@@ -50,6 +50,25 @@
         margin-top: var(--space-1);
     }
 
+    /* A plan's checklist: the boxes stand where the bullets would, and a task that wraps hangs
+     * clear of its box. */
+    ul.contains-task-list {
+        list-style: none;
+        padding-left: 0;
+    }
+
+    li.task-list-item {
+        position: relative;
+        padding-left: 1.6rem;
+
+        > input[type='checkbox'] {
+            position: absolute;
+            left: 0.1rem;
+            top: 0.25em;
+            margin: 0;
+        }
+    }
+
     strong {
         font-weight: 650;
         color: var(--fg-1);

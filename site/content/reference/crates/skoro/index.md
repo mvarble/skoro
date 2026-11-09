@@ -8,7 +8,9 @@ and an exponential sphere whose chart is not global, a density pushed through th
 generation and retirement, and a normal distribution private to the core's tests. The tests of
 [`skoro-normal`](../skoro-normal/) on those spheres live here too, with the crate as a development
 dependency: its density, sampler and information on a curved type, Gauss–Newton with the
-log-volume, its refusals, and the core's retirement replacements written with its stacked
-tangent; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
+log-volume, its refusals, the core's retirement replacements written with its stacked
+tangent, and its improper factor, retired along the bearings of two poses until it determines a
+landmark, binding its roles on a retirement's factor, needing a proposal for the quantity it leaves
+undetermined, and read on the sphere; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
 with `sample` and without it, generated, and queried with its range observed. One of its tests
 checks that none of the others names `skoro-core` or `skoro-tensor` directly.

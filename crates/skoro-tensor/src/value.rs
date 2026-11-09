@@ -1,3 +1,4 @@
+use burn::tensor::kind::Basic;
 use burn::tensor::{Bool, DType, FloatDType, Int, IntDType, Tensor, TensorData};
 
 use crate::{Target, TensorError};
@@ -216,6 +217,60 @@ impl Value {
             Value::Discrete(integers) => integers.storage(),
         }
     }
+}
+
+/// `tensor` broadcast to `shape`, of as many dimensions or more, as burn's `expand` does; where
+/// `shape` has a dimension of zero, which `expand` refuses, the tensor of no entries of that shape,
+/// of `tensor`'s kind, element type and device.
+pub fn broadcast<const D: usize, const D2: usize, K: Basic>(
+    tensor: Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    if shape.contains(&0) {
+        // expand's rule, aligned from the last dimension: each of the tensor's is 1 or the shape's.
+        debug_assert!(
+            D <= D2
+                && tensor
+                    .dims()
+                    .iter()
+                    .rev()
+                    .zip(shape.iter().rev())
+                    .all(|(&from, &to)| from == 1 || from == to),
+            "{:?} does not broadcast to {shape:?}",
+            tensor.dims()
+        );
+        no_entries(&tensor, shape)
+    } else {
+        tensor.expand(shape)
+    }
+}
+
+/// `tensor` reshaped to `shape`, of any number of dimensions, its entries in order, as burn's
+/// `reshape` does; where `shape` has a dimension of zero, which `reshape` reads as the source's
+/// size there, the tensor of no entries of that shape, of `tensor`'s kind, element type and
+/// device.
+pub fn reshape<const D: usize, const D2: usize, K: Basic>(
+    tensor: Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    if shape.contains(&0) {
+        debug_assert!(
+            tensor.dims().contains(&0),
+            "{:?} has entries, and does not reshape to {shape:?}",
+            tensor.dims()
+        );
+        no_entries(&tensor, shape)
+    } else {
+        tensor.reshape(shape)
+    }
+}
+
+/// The tensor of no entries of `shape`, of `like`'s kind, element type and device.
+fn no_entries<const D: usize, const D2: usize, K: Basic>(
+    like: &Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    Tensor::empty(shape, (&like.device(), like.dtype()))
 }
 
 fn float_tensor<const D: usize>(data: &[f64], shape: [usize; D], target: &Target) -> Tensor<D> {

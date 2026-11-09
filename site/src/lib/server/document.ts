@@ -6,6 +6,7 @@ import { referenceHtml } from '@mvarble/mesearch-ui/server';
 import { resolve } from '$app/paths';
 import { hrefOf, linkOf, type DocumentLink, type SkoroDocument } from '$lib/documents';
 import { entryCrates } from '$lib/server/reading';
+import { qualifiedTitle } from '$lib/server/title';
 import { ARCHIVE, MATH, SITE, TRACKS } from '$lib/site';
 
 export interface Crumb {
@@ -70,7 +71,11 @@ export function documentData(key: string) {
         next,
         references,
         prerequisites: links(cms.prerequisites(key)),
-        dependents: links(cms.dependents(key)),
+        // Named as the map names them, since an archive document's own title ("Mathematics") says
+        // nothing of the entry it belongs to.
+        dependents: cms
+            .dependents(key)
+            .map((record) => ({ ...linkOf(record), title: qualifiedTitle(record) })),
         // A page: the development behind it. An entry: what it changed (its pages and its
         // crates), and what it revises or is revised by. An entry's document: its siblings.
         entries: doc.kind == 'page' ? keys(doc.entries) : [],

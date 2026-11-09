@@ -1,6 +1,6 @@
 ---
 title: The normal distribution
-summary: skoro's normal is the law of a point moved by normal noise through its space's chart, on every space whose chart is global, with an exact density and sampler, a scale in four forms, and roles that estimators read.
+summary: skoro's normal is the law of a point moved by normal noise through its space's chart, on every space whose chart is global, with an exact density and sampler, a scale in four forms, roles that estimators read, and the Gaussian and improper Gaussian replacements of a retirement.
 order: 6
 depends_on: [concepts/terms, concepts/spaces, chart-volume]
 ---
@@ -136,7 +136,7 @@ A term binds the nodes an estimator needs, under [roles](../terms/) a reader in 
 up by name:
 
 ```rust
-{../../../../crates/skoro-normal/src/roles.rs:10..25}
+{../../../../crates/skoro-normal/src/roles.rs:11..31}
 ```
 
 The scale is bound under the role of its form, so a reader learns the form from which is bound. The
@@ -145,6 +145,17 @@ the term over $(\point, \mu, \theta)$, exact on the core's spaces. On a curved t
 the scale's block and holds to second order in the dispersion elsewhere. The log-volume's role lets
 a least-squares reader add its gradient, and so reach the model's own mode rather than that of the
 residuals alone.
+
+What such a reader takes from the log-volume's role is the varying part of the term's remainder,
+what is left of its log-density after the squares of its residual and a normalizer: on a normal it
+is the chart's log-volume, and on the [improper factor](#an-improper-factor) below its linear part.
+
+> [!DECISION] The log-volume role holds the varying part of a remainder
+> The improper factor binds its linear part under the log-volume role, which is not the volume of
+> any chart, so that every least-squares reader reads one role for the varying part of a term's
+> remainder. A reader that needs a quantity's chart volume reads it from the quantity's type, never
+> from the roles of the terms around it. [Improper Gaussian replacements](../../archive/improper-gaussian/)
+> decided it.
 
 ## As a likelihood factor
 
@@ -176,3 +187,41 @@ publishes, so that a reader finds the residual of a retired window as it finds a
 ```rust
 {../../../../crates/skoro-normal/src/stacked.rs:111..119}
 ```
+
+## An improper factor
+
+A `Stacked` replacement is a normal, so it determines every direction of the blanket. A retirement
+whose terms do not, such as a landmark seen by bearing from a single pose, which says in which
+direction the landmark lies and nothing of how far, has as its replacement an _improper Gaussian
+factor_ in the same stacked tangent $\delta$: a sum of squared affine rows of any number, a linear
+part and a constant,
+
+$$
+	\logterm(\point_B) = -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + c ,
+$$
+
+which no normalization need make a density of $\delta$, and a likelihood factor never needed one.
+Where its rows have full rank it is a normal, and its value is a `Stacked` replacement's; where they
+do not, it keeps exactly what the retired terms said and nothing more. `Stacked::improper` builds it
+from its rows, right-hand side and constant, each a constant of the model and each shared or given
+row by row of a batch, and `linear` gives it a linear part:
+
+```rust
+{../../../../crates/skoro-normal/src/improper.rs:25..71}
+```
+
+Like `Stacked`, it gives a log-density alone, a retirement's `Replacement`, or a likelihood factor,
+the last two binding its roles through one helper: the residual $A \delta - b$, of any number of
+components, none included, and, where a linear part is given, $\eta\transpose \delta$ under the
+log-volume role. It binds no mean and no scale, which a factor of lower rank does not have.
+
+```rust
+{../../../../crates/skoro-normal/src/improper.rs:118..127}
+```
+
+A blanket quantity the factor leaves undetermined is scored by no term after the retirement, and is
+a parameter: generation draws it from a proposal given with the replacement, and refuses it
+otherwise. Factors over the same quantity accumulate as terms of their own, and the model reads them
+as their sum: once the bearings of two poses have been retired, along different directions, the
+landmark is determined, at the point where the two lines cross. The mathematics, its forms and its
+examples are in [the entry](../../archive/improper-gaussian/math.svx).
