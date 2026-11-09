@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use skoro_tensor::{Frame, Integers, Points, Target, Value};
+use skoro_tensor::{Frame, Integers, Points, Target, Value, broadcast};
 
 use crate::{Error, Kernel, Layout, NodeId, Order, Pullback, QDyn, SecondPullback, Space};
 
@@ -772,12 +772,12 @@ pub(crate) fn expand(value: &Value, rows: usize, target: &Target) -> Result<Valu
     Ok(match value {
         Value::Continuous(points) => {
             let storage = points.storage();
-            let tensor = points.clone().into_burn().expand([rows, storage]);
+            let tensor = broadcast(points.clone().into_burn(), [rows, storage]);
             Value::Continuous(Points::from_burn(tensor, target)?)
         }
         Value::Discrete(integers) => {
             let storage = integers.storage();
-            let tensor = integers.clone().into_burn().expand([rows, storage]);
+            let tensor = broadcast(integers.clone().into_burn(), [rows, storage]);
             Value::Discrete(Integers::from_burn(tensor, target)?)
         }
     })
@@ -790,7 +790,7 @@ fn rows_of(frame: &Frame, rows: usize, target: &Target) -> Result<Frame, Error> 
     }
     let (d, k) = (frame.dimension(), frame.columns());
     Ok(Frame::from_burn(
-        frame.clone().into_burn().expand([rows, d, k]),
+        broadcast(frame.clone().into_burn(), [rows, d, k]),
         target,
     )?)
 }

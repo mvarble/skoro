@@ -20,7 +20,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The core (`skoro-core`)
 
-- [ ] The fourteen calls of `expand` in `program.rs` and in the primitives' `rule.rs`,
+- [x] The fourteen calls of `expand` in `program.rs` and in the primitives' `rule.rs`,
       `euclidean.rs` and `positive.rs` replaced by `broadcast`, and the seven reshapes of
       `euclidean.rs`, `rule.rs` and `positive.rs` replaced by `reshape`, as the implementation's two
       tables list them, and any further kernel that fails on values of no entries fixed where it fails, or the
