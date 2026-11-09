@@ -284,30 +284,36 @@ The factor keeps the contract [](eq:split) of a term that binds a residual:
 
 - its **whitened residual** is $A \delta - b$, with $r$ components, none included;
 - its **normalizer** is the constant $c$;
-- its **linear part** $\eta\transpose \delta$ is the varying part of its remainder, the part that
-  [](eq:split) calls $\lambda$.
+- its **log-volume**, where $\eta$ is present, is its linear part $\eta\transpose \delta$, the
+  varying part of its remainder, the part that [](eq:split) calls $\lambda$.
 
-A least-squares reader that reads the residual and adds the gradient of $\lambda$ therefore finds
-the factor's own gradient, and a reader that reads only the residual finds the gradient of its
-squares. That is what such a reader finds on the normal's terms, where $\lambda$ is a log-volume.
-The factor binds no mean and no scale. Where it is not of full rank it has neither, and where it
-is, they can be computed from it by [%full](statement:full-rank). It binds no information root,
-since it is a likelihood factor and scores no quantity, as the normal says of its own likelihood
-factors. A residual of no components is a residual: a reader that requires every factor to bind a
-residual accepts such a factor, whose remainder is then all it says.
+A least-squares reader that reads the residual and adds the gradient of the bound log-volume
+therefore finds the factor's own gradient, and a reader that reads only the residual finds the
+gradient of its squares. That is what such a reader finds on the normal's terms, where the bound
+node is a log-volume indeed. The factor binds no mean and no scale. Where it is not of full rank it
+has neither, and where it is, they can be computed from it by [%full](statement:full-rank). It binds
+no information root, since it is a likelihood factor and scores no quantity, as the normal says of
+its own likelihood factors. A residual of no components is a residual: a reader that requires every
+factor to bind a residual accepts such a factor, whose remainder is then all it says.
 
-> [!TODO] Which role binds the linear part
-> The linear part must be bound so that a least-squares reader finds it, and [](eq:split) puts the
-> varying part of a term's remainder under the log-volume role. Binding $\eta\transpose \delta$
-> there keeps one role for that part, which is what every reader of it needs: its value and its
-> gradient. But the role's name and the normal's table describe it as $\lambda_\mu(\point \ominus
-> \mu)$, the log-volume of a measure, and a reader that took the name at its word could treat it as
-> one. The alternative is a role of its own, the *linear part*, which every least-squares reader
-> must then be taught to read as it reads the log-volume. This document recommends the first, with
-> the log-volume role's description widened to "the varying part of the remainder", since no reader
-> treats a term's bound log-volume as a measure: a Laplace approximation takes its chart's volume
-> from the quantities' types, not from the terms' roles. Should the linear part be bound under the
-> log-volume role, or under a role of its own?
+> [!DECISION] The linear part under the log-volume role
+> The linear part is in general not the log-volume of any measure. In
+> [the positive example](#two-examples) it is what remains of the retired normal's log-volume, but
+> part 3 of [%full](statement:forms) moves it in and out of the squares, and a sum of factors adds
+> the linear parts of factors over different quantities, so that no chart's volume need be what it
+> is. It is bound under the log-volume role all the same, because what a least-squares reader takes from that
+> role is its place in [](eq:split), the varying part of the remainder that is not a square, and from
+> it the value and the gradient. Binding it there fits the contract every such reader already reads.
+> A role of its own, the *linear part*, would name it truthfully, at the cost of teaching every
+> least-squares reader to read a second role exactly as it reads the first.
+>
+> The cost of the name is that a reader of a term's log-volume role must not take it at face value,
+> as the volume of a chart. On the normal's terms it is one; on this factor it is not. No reader
+> needs it to be: a reader that needs the volume of a quantity's chart, as a Laplace approximation
+> does, takes it from the quantity's type, never from the roles of the terms around it, and this
+> factor scores no quantity in any case. What the role promises its readers is therefore the
+> varying part of the remainder, and the normal's log-volume is the case of it that gave it its
+> name.
 
 ## In skoro's terms
 
@@ -327,9 +333,9 @@ residual accepts such a factor, whose remainder is then all it says.
   reduction to $\min(r, D)$ rows is the only one the library applies by itself.
 - **Several factors** over the same quantities sum to one, exactly at common anchors and on the
   flat-in-disguise types at any anchors.
-- **Its roles** are the whitened residual $A \delta - b$ and, where $\eta$ is present, the linear
-  part $\eta\transpose \delta$ under the role that [Which role binds the linear part](#the-roles)
-  settles.
+- **Its roles** are the whitened residual $A \delta - b$ and, where $\eta$ is present, the
+  log-volume role, bound to the linear part $\eta\transpose \delta$, which a reader takes as the
+  varying part of the remainder and not as the volume of a chart.
 - **A blanket quantity it leaves undetermined** becomes a parameter that it cannot generate: the
   caller gives a proposal, or generation is refused for it, as the core does for every parameter.
 
@@ -341,5 +347,3 @@ residual accepts such a factor, whose remainder is then all it says.
 > several terms. Providing a sum keeps a model of many retirements that never
 > retire the landmark small, at the cost of an operation that a retirement does not need. This
 > document recommends leaving it out of this entry. Should the library provide the sum of factors?
-
-The question of [which role binds the linear part](#the-roles) is open as well.
