@@ -329,21 +329,45 @@ right, which is the form of every method whose rows come without a residual.
 
 ## Eliminating one block
 
-The variables usually come in *blocks*, $\tangent = (\tangent_1, \dots, \tangent_n)$, the
-coordinates of one unknown each, and the rows in *factors*: a factor $f$ is a block of rows $A_f$
-with a right-hand side $b_f$, over the few blocks $K_f$ whose columns of $A_f$ are not zero.
-Linear terms are kept per block, $\eta_k$ on block $k$, since a linear term joins no two blocks.
-The problem is
+The variables of a large problem usually fall into *blocks*, one for each unknown, holding that
+unknown's coordinates: in a map built along a robot's path, a block for each pose and one for each
+landmark. Write $\tangent = (\tangent_1, \dots, \tangent_n)$, with block $k$ the vector
+$\tangent_k \in \R^{d_k}$.
+
+The rows fall into *factors* in the same way, one for each measurement. A measurement concerns
+only a few of the unknowns, so the rows it gives are zero in the columns of every other block. A
+factor $f$ is therefore described by three things:
+
+- the set $K_f$ of the blocks it *involves*, those whose columns are not all zero in its rows;
+- its rows $A_f$, keeping only the columns of the blocks it involves;
+- its right-hand side $b_f$.
+
+Its residual is $A_f \tangent_{K_f} - b_f$, where $\tangent_{K_f}$ stacks the blocks of $K_f$.
+Stacking the rows of every factor, with zeros put back in the columns of the blocks it does not
+involve, gives back $A$ and $b$. The odometry in the example at the end of this section,
+$\tangent_2 - \tangent_1 = 1$, is a factor with $K_f = \{1, 2\}$, $A_f = [\,{-1} \;\, 1\,]$ and
+$b_f = 1$.
+
+The linear term needs no factors. It splits into one piece for each block,
+$\eta\transpose \tangent = \sum_k \eta_k\transpose \tangent_k$, and each piece involves a single
+block, so it never ties two blocks together. It is kept as a vector $\eta_k$ for each block, and
+the problem [](eq:problem) is
 
 $$
-	\phi(\tangent) = \sum_f \tfrac12 \bigl\lVert A_f\, \tangent_{K_f} - b_f \bigr\rVert^2 + \sum_k \eta_k\transpose \tangent_k , @tag(factored)
+	\phi(\tangent) = \sum_f \tfrac12 \bigl\lVert A_f\, \tangent_{K_f} - b_f \bigr\rVert^2 + \sum_k \eta_k\transpose \tangent_k . @tag(factored)
 $$
 
-and its matrix $A\transpose A$ has a nonzero block $(j, k)$ only when some factor has blocks for
-both $j$ and $k$. *Eliminating* a block $k$ removes it from the problem. Collect the factors with a
-block for $k$, call the other blocks they have the *separator* $S$ of $k$, and stack their rows
-into $[A_k \;\, A_S \;\, b]$, the columns of $k$ first. Nothing else in [](eq:factored) involves
-$\tangent_k$.
+The factors say where the matrix $A\transpose A$ is zero. Its block $(j, k)$ is the sum, over the
+factors that involve both $j$ and $k$, of the product of their columns for $j$, transposed, with
+their columns for $k$. It is zero when no factor involves both blocks.
+
+*Eliminating* a block $k$ removes it from the problem. Apart from the linear term $\eta_k$, only
+the factors that involve $k$ depend on $\tangent_k$. The other blocks that those factors involve
+form the *separator* $S$ of $k$. Stack the rows of those factors into one matrix
+$[A_k \;\, A_S \;\, b]$, where $A_k$ holds their columns for $k$, $A_S$ their columns for the
+blocks of $S$ (zero where a factor does not involve one of them), and $b$ their right-hand sides.
+The lemma concerns these factors together with the linear terms of $k$ and of $S$, where $\eta_S$
+stacks the vectors $\eta_j$ of the blocks $j$ of $S$.
 
 <Statement {...eliminateOne} />
 
@@ -403,8 +427,8 @@ which is the gradient of $\phi'$ at zero, since $R^{-\top} \eta_k = y$.
 
 The first term of the decomposition is a *conditional*: it says what $\tangent_k$ is once
 $\tangent_S$ is known. The second, $\phi'$, is a *new factor* on the separator, with the linear
-term $-T\transpose y$ pushed onto the separator's blocks, and it replaces every factor that had a
-block for $k$. The constant $\gamma$, and $\tfrac12 \lVert e \rVert^2$ when $A'$ is reduced
+term $-T\transpose y$ pushed onto the separator's blocks, and it replaces every factor that
+involved $k$. The constant $\gamma$, and $\tfrac12 \lVert e \rVert^2$ when $A'$ is reduced
 further, depend on nothing. The problem now has one block fewer and the same form. Minimizing over
 $\tangent_k$ and integrating over it leave the same new factor, and differ only in a constant,
 $\tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert$. Part 3 says that the new factor is what
@@ -432,9 +456,9 @@ marginal variance of $\tangent_2$ is $2$: one unit from the prior, one from the 
 
 ## Order, fill and the elimination tree
 
-Which factors have a block for which variables is recorded by the *factor structure*, a bipartite
-graph with a node for each block of variables and each factor, and an edge between a factor and
-every block its rows have a nonzero block for. Eliminating $k$ removes $k$ and the factors joined to
+Which factors involve which blocks is recorded by the *factor structure*, a bipartite graph with a
+node for each block of variables and each factor, and an edge between a factor and every block it
+involves. Eliminating $k$ removes $k$ and the factors joined to
 it, and adds one factor joined to the whole separator. Blocks that shared no factor may now share
 one, and the new nonzero blocks of the matrix this creates are its *fill*. The answer does not
 depend on the order of elimination; the cost does, entirely.

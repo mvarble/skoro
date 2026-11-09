@@ -86,7 +86,7 @@ $$
 
 and a term with $K_t$ empty is reached from no free quantity: its log-density is a constant of the
 query, part of $f(\hat \point)$ and of nothing else below. The terms with $K_t$ not empty are the
-query's *factors*. Which factor has a block for which free quantity is the *factor structure* of
+query's *factors*. Which factor involves which free quantity is the *factor structure* of
 [the note](../../math/square-root-elimination/#order-fill-and-the-elimination-tree): a bipartite
 graph with a node for each free continuous quantity and each factor, and an edge between a factor
 $t$ and each quantity of $K_t$. It is the [probabilistic graph](../core/math.svx#the-probabilistic-graph)
@@ -136,8 +136,9 @@ but it enters only additively, in an evidence or a replacement's constant
 
 The linearization is the note's problem [](eq:math/square-root-elimination/factored) with one
 factor for each term, with the rows $A_t = J_t$, of the dimension of $r_t$, over the blocks of
-$K_t$, and the right-hand side $b_t = -r_t$, and the linear term $\eta$, split by block. A linear
-term on a block joins no blocks, so the factor structure is that of the terms alone.
+$K_t$, and the right-hand side $b_t = -r_t$, and the linear term $\eta$, split by block. Each
+piece of the linear term involves a single block, so the factor structure is that of the terms
+alone.
 
 **What is left out.** The Hessian of $\tangent \mapsto f(\hat \point \oplus \tangent)$ at
 $\tangent = 0$, which at a stationary point is the chart Hessian of

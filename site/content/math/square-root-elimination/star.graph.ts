@@ -6,7 +6,7 @@ import { defineGraph } from '$lib/graph/spec';
 
 export const starFactors = defineGraph({
     title: 'The factor structure of a star',
-    caption: String.raw`Each variable is a circle and each factor a square, with a line from a factor to every variable its rows have a block for. Eliminating $h$ first would join $l_1$, $l_2$ and $l_3$ in one new factor; eliminating each leaf first joins it to nothing new.`,
+    caption: String.raw`Each variable is a circle and each factor a square, with a line from a factor to every variable it involves. Eliminating $h$ first would join $l_1$, $l_2$ and $l_3$ in one new factor; eliminating each leaf first joins it to nothing new.`,
     width: 560,
     height: 300,
     nodeKinds: {
@@ -14,7 +14,7 @@ export const starFactors = defineGraph({
         factor: { name: 'Factor', hue: 'purple', shape: 'square' },
     },
     edgeKinds: {
-        touches: { name: 'has a block for' },
+        touches: { name: 'involves' },
     },
     nodes: [
         { id: 'p', x: 60, y: 150, kind: 'factor', label: String.raw`$f_0$` },
