@@ -257,6 +257,14 @@ flat-in-disguise quantities, since the last part of [%full](statement:forms) mov
 without changing the factor's value. On a curved type, the stacked tangent at one anchor is not an affine function
 of the stacked tangent at another, and two factors anchored differently are kept as two terms.
 
+> [!DECISION] The library does not sum factors here
+> This entry gives no operation that sums factors. A model that holds several factors already reads
+> them as their sum, so the accumulation the filter needs happens without one, and each retirement
+> adds its factor as a term of its own. What a sum would buy is a smaller model when many
+> retirements leave factors on a quantity that is never retired itself, and a retirement does not
+> need it. The mathematics above is what a later entry would build on, should a sum turn out to
+> fit.
+
 The example of the bearings shows what this buys. A filter retires each pose as it leaves the
 window, and each retirement leaves one row on the landmark. The landmark is undetermined until two
 rows of different directions have accumulated. Until then, a query that leaves it free, with
@@ -331,8 +339,9 @@ factor to bind a residual accepts such a factor, whose remainder is then all it 
   has a mean and a scale. The improper factor is the form for one that has rows.
 - **Its forms** are those of [%full](statement:forms). A factor keeps the one it is given, and a
   reduction to $\min(r, D)$ rows is the only one the library applies by itself.
-- **Several factors** over the same quantities sum to one, exactly at common anchors and on the
-  flat-in-disguise types at any anchors.
+- **Several factors** over the same quantities are held as several terms, which every reader of the
+  model reads as their sum. Summing them into one is exact at common anchors and on the
+  flat-in-disguise types at any anchors, and is left to a later entry.
 - **Its roles** are the whitened residual $A \delta - b$ and, where $\eta$ is present, the
   log-volume role, bound to the linear part $\eta\transpose \delta$, which a reader takes as the
   varying part of the remainder and not as the volume of a chart.
@@ -341,9 +350,5 @@ factor to bind a residual accepts such a factor, whose remainder is then all it 
 
 ## Open questions
 
-> [!TODO] Whether the library sums factors
-> [Accumulation](#accumulation) shows that summing factors is exact at common anchors and on the
-> flat-in-disguise types, and that a model never needs it, since it reads several factors as
-> several terms. Providing a sum keeps a model of many retirements that never
-> retire the landmark small, at the cost of an operation that a retirement does not need. This
-> document recommends leaving it out of this entry. Should the library provide the sum of factors?
+None remain. Which role binds the linear part is settled in [The roles](#the-roles), and whether
+the library sums factors in [Accumulation](#accumulation).
