@@ -337,8 +337,9 @@ factor to bind a residual accepts such a factor, whose remainder is then all it 
 - **It is a normal when it is of full rank**, with the mean, the whitening and the constant of
   [%full](statement:full-rank). The normal's `Stacked` replacement stays the form for a caller that
   has a mean and a scale. The improper factor is the form for one that has rows.
-- **Its forms** are those of [%full](statement:forms). A factor keeps the one it is given, and a
-  reduction to $\min(r, D)$ rows is the only one the library applies by itself.
+- **Its forms** are those of [%full](statement:forms). A factor keeps the one it is given. A reduction
+  to $\min(r, D)$ rows is a change of form the library may apply, since it depends on the shapes
+  alone; it applies no other.
 - **Several factors** over the same quantities are held as several terms, which every reader of the
   model reads as their sum. Summing them into one is exact at common anchors and on the
   flat-in-disguise types at any anchors, and is left to a later entry.
@@ -357,5 +358,5 @@ the library sums factors in [Accumulation](#accumulation).
 
 **2026-11-09.** In [In skoro's terms](#in-skoro-s-terms), the sentence saying that a reduction to
 $\min(r, D)$ rows "is the only one the library applies by itself" read as a promise that the library
-applies one, which the implementation does not. It is reworded to say that the library may apply
-it, and applies no other change of form.
+applies one, which the implementation does not. It now says that the library may apply that
+reduction, since it depends on the shapes alone, and applies no other change of form.
