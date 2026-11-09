@@ -349,18 +349,15 @@ as a linearization's does. And it named its quantities by id, beside a map of th
 Its warning that the order of the blocks is load-bearing carries over unchanged, to the
 documentation of `improper`.
 
-> [!TODO] Whether the library reduces the rows
-> [In skoro's terms](math.svx#in-skoro-s-terms) says that "a reduction to $\min(r, D)$ rows is the
-> only one the library applies by itself", which reads plainly as a promise that it applies one.
-> This design applies none, by a host QR of $[A \;\, b]$ or otherwise: a reduction would read the
-> numbers of every row on the host, it would change the residual a reader finds from the one the
-> caller wrote, and the `linearization` entry, the one producer in sight, already gives
-> $\min(m', D)$ rows. A caller with more rows than the blanket has coordinates reduces them
-> itself, or keeps them, at no cost but their number. If the math's sentence means that a
-> reduction is the only change of form the library *may* apply, the design stands as written; if it
-> means that the library applies one, either the builder reduces when $r > D$, or the math is
-> reopened (`/wf-reopen math`) to say "may". This document recommends reading it as "may", which
-> leaves the math as it is. Which is it?
+> [!DECISION] The builder reduces no rows
+> [In skoro's terms](math.svx#in-skoro-s-terms) says that a reduction to $\min(r, D)$ rows is a
+> change of form the library may apply, and that it applies no other. This design applies none, by
+> a host QR of $[A \;\, b]$ or otherwise. A reduction would read the numbers of every row on the
+> host, and would change the residual a reader finds from the one the caller wrote, while the
+> `linearization` entry, the one producer in sight, already gives $\min(m', D)$ rows. A caller with
+> more rows than the blanket has coordinates reduces them itself, or keeps them, at no cost but
+> their number. A later entry may give the builder the reduction, as the math allows, should a
+> caller need it.
 
 ### The roles' descriptions
 
@@ -524,5 +521,5 @@ For values of no entries, whichever entry carries the fix:
 
 ## Open questions
 
-Two questions are open: [where values of no entries are fixed](#a-factor-of-no-rows), and
-[whether the library reduces the rows](#the-factor).
+The question of [where values of no entries are fixed](#a-factor-of-no-rows) is open. Whether the
+library reduces the rows is settled in [The factor](#the-factor): it does not.
