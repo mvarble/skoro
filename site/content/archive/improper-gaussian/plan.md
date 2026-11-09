@@ -29,7 +29,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The normal (`skoro-normal`)
 
-- [ ] `Binds` made `pub(crate)` in `stacked.rs`; `improper.rs` with `Improper`, `Stacked::improper`,
+- [x] `Binds` made `pub(crate)` in `stacked.rs`; `improper.rs` with `Improper`, `Stacked::improper`,
       `Improper::linear`, its accessors, `log_density`, `replacement` and `factor`, and the shared
       binding of the residual and the linear part; `Improper` exported from the crate's root, and
       the crate's documentation naming it. Tests: `value_is_the_definition`, `roles_are_bound`,
