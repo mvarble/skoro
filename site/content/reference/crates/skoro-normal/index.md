@@ -13,4 +13,8 @@ whitening, from quantities or from constants that the crate factors on the host;
 that read it are defined once per form and dimension. `Stacked` builds the stacked tangent of a
 retirement's blanket at constant anchors, and the Gaussian replacement on it, which binds its
 residual, mean and scale under the normal's roles whether it is added as a factor or given to a
-retirement as its `Replacement`.
+retirement as its `Replacement`. Over the same stacked tangent, `Stacked::improper` builds an
+`Improper`, the [improper Gaussian factor](../../../concepts/the-normal/#an-improper-factor) of any
+number of rows, a right-hand side, a linear part and a constant, which keeps what a retirement says
+about quantities it does not determine. It binds its residual, and its linear part under the
+log-volume role, which the crate's roles describe as the varying part of a term's remainder.

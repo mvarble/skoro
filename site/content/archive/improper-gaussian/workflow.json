@@ -1,0 +1,100 @@
+{
+    "kind": "feature",
+    "stage": "done",
+    "started": "2026-11-09",
+    "events": [
+        {
+            "date": "2026-11-09",
+            "action": "start",
+            "stage": "math"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "math",
+            "commit": "e500fce"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The math said a reduction to min(r, D) rows is the only one the library applies by itself, which reads as a promise that it applies one; it should say the library may apply it.",
+            "commit": "25dc103"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "math",
+            "commit": "b91a360"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "8287c3e"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "7846700"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "burn's reshape reads a zero dimension as \"keep the source's size\", so the matrix product's reshapes and broadcast's own body fail on values of no entries.",
+            "commit": "e6e5017"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "1c97236"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "ab8f9cd"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "build",
+            "commit": "599eab0"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "86e1f12"
+        }
+    ],
+    "approvals": {
+        "math": {
+            "date": "2026-11-09",
+            "commit": "b91a360",
+            "hash": "fab5a85ec8f39fffc3864502b781f311b6f93dee02dd753283224ad382d4bfaa"
+        },
+        "implementation": {
+            "date": "2026-11-09",
+            "commit": "1c97236",
+            "hash": "eec9fb2072d66fd01ab1860850733f63763e2d61483f973d64a6189f169527ee"
+        },
+        "plan": {
+            "date": "2026-11-09",
+            "commit": "ab8f9cd",
+            "hash": "5b71b6fff26f74ddcc337b1a5b4b4007f6cf2ac204b2446b8c488a662099043b"
+        },
+        "build": {
+            "date": "2026-11-09",
+            "commit": "599eab0"
+        },
+        "publish": {
+            "date": "2026-11-09",
+            "commit": "86e1f12"
+        }
+    },
+    "finished": "2026-11-09"
+}

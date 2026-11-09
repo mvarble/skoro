@@ -4,6 +4,7 @@ import type { GraphLink, GraphNode, IndexEntry } from '@mvarble/mesearch-ui';
 
 import { hrefOf } from '$lib/documents';
 import { MAP_TUNING } from '$lib/map';
+import { qualifiedTitle } from '$lib/server/title';
 import katex from '../../../katex.config';
 
 export interface DocumentMapData {
@@ -21,8 +22,7 @@ export function documentMap(): DocumentMapData {
     const entries: Record<string, IndexEntry> = {};
     for (const key of graph.nodes) {
         const doc = cms.get(key)!;
-        const title =
-            doc.kind == 'entry-document' ? `${cms.get(doc.entry)!.title}: ${doc.title}` : doc.title;
+        const title = qualifiedTitle(doc);
         entries[key] = {
             key,
             kind: doc.kind,

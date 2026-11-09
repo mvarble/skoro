@@ -1,6 +1,7 @@
 //! Selection, and the primitives on positive values, read in the logarithmic charts.
 
 use skoro_tensor::burn::Tensor;
+use skoro_tensor::{broadcast, reshape};
 
 use super::rule::{Rule, RuleKernel, columns, widen};
 use crate::{Error, Lowered, Lowering, Operation, Param, Space};
@@ -154,15 +155,13 @@ impl Rule for Selection {
     fn value(&self, x: &[Tensor<2>]) -> Tensor<2> {
         let [n, s] = x[1].dims();
         (1..x.len()).fold(x[1].zeros_like(), |out, j| {
-            out.mask_where(Selection::chosen(x, j - 1).expand([n, s]), x[j].clone())
+            out.mask_where(broadcast(Selection::chosen(x, j - 1), [n, s]), x[j].clone())
         })
     }
 
     fn push(&self, x: &[Tensor<2>], j: usize, t: Tensor<3>) -> Tensor<3> {
         let [n, d, k] = t.dims();
-        let chosen = Selection::chosen(x, j - 1)
-            .unsqueeze_dim::<3>(2)
-            .expand([n, d, k]);
+        let chosen = broadcast(reshape(Selection::chosen(x, j - 1), [n, 1, 1]), [n, d, k]);
         t.zeros_like().mask_where(chosen, t)
     }
 

@@ -3,10 +3,11 @@
 
 use std::sync::Arc;
 
-use skoro_core::scope::quantity;
+use skoro_core::scope::{concatenate, constant, quantity};
 use skoro_core::testing::Tolerance;
 use skoro_core::{
-    Composite, Frames, Key, Program, QDyn, Query, Real, Space, Values, Vector, Writer,
+    Composite, Frames, Key, MatrixDyn, Program, QDyn, Query, Real, Space, Values, Vector,
+    VectorDyn, Writer,
 };
 use skoro_tensor::{Frame, HostData, HostValue, Target, Value};
 
@@ -346,5 +347,55 @@ skoro_core::precision_tests! {
         let at = Values::new().with(x, value(&[0.5, -0.5], 1, 2, &target));
         let expected: Vec<f64> = [0.5f64, -0.5].iter().map(|&x| (0..20).fold(x, |y, _| y.sin())).collect();
         close(&host(&program.forward(&at).unwrap(), y), &expected, Tolerance::AGREEMENT, "the chain");
+    }
+
+    fn values_of_no_entries_through_every_pass(target) {
+        // Values of no entries, from a constant and from a slice of a quantity, through a product, a
+        // difference, a scaling, matrix products with an empty output and an empty inner dimension,
+        // sums and a concatenation; none of them contributes, so f = Σ x², and `empty` has no entries.
+        let mut writer = Writer::new();
+        let (x, f, empty) = writer
+            .build(|| {
+                let x = quantity("x", Vector::<2>).untyped().narrow::<VectorDyn>();
+                let e = x.slice(0..0);
+                let none = constant(VectorDyn(0), &[] as &[f64]);
+                let wide = constant(MatrixDyn(0, 2), &[] as &[f64]);
+                let tall = constant(MatrixDyn(2, 0), &[] as &[f64]);
+                let z = (e - none) * (e - none) + x.sum() * e;
+                let m = wide.matmul(x);
+                let w = tall.matmul(e);
+                let y = concatenate(&[e.untyped(), x.untyped()], Space::Vector(2)).narrow::<VectorDyn>();
+                let f = z.sum() + m.sum() + (w + y * y).sum();
+                (x.untyped(), f.untyped(), (z + m).untyped())
+            })
+            .unwrap();
+        let data = [0.3, -1.2, 0.8, 0.5];
+        let at = Values::new().with(x, value(&data, 2, 2, &target));
+        let tolerance = Tolerance::of(target.precision());
+
+        let program = compile(&writer, &[f, empty], &target);
+        let out = program.forward(&at).unwrap();
+        let squares: Vec<f64> = data.chunks(2).map(|r| r.iter().map(|x| x * x).sum()).collect();
+        close(&host(&out, f), &squares, tolerance.relative, "f forward");
+        assert!(host(&out, empty).is_empty(), "a value of no entries");
+
+        let t = [0.4, -0.7, 1.1, 0.2];
+        let (_, tangents) = program
+            .tangent(&at, &Frames::new().with(x, Frame::from_host(&t, 2, 2, 1, &target)))
+            .unwrap();
+        let expected: Vec<f64> = (0..2).map(|r| 2.0 * (data[2 * r] * t[2 * r] + data[2 * r + 1] * t[2 * r + 1])).collect();
+        close(&tangents.get(f).unwrap().to_host(), &expected, tolerance.relative, "f tangent");
+        assert!(tangents.get(empty).unwrap().to_host().is_empty(), "a tangent of no entries");
+
+        let program = compile(&writer, &[f], &target);
+        let (_, gradient) = program.gradient(&at).unwrap();
+        let twice: Vec<f64> = data.iter().map(|x| 2.0 * x).collect();
+        close(&gradient.get(x).unwrap().to_host(), &twice, tolerance.relative, "f gradient");
+        let second = program
+            .hessian_products(&at, &Frames::new().with(x, Frame::from_host(&t, 2, 2, 1, &target)))
+            .unwrap();
+        close(&second.alpha.get(x).unwrap().to_host(), &twice, tolerance.relative, "α");
+        let expected: Vec<f64> = t.iter().map(|v| 2.0 * v).collect();
+        close(&second.beta.get(x).unwrap().to_host(), &expected, tolerance.relative, "β");
     }
 }
