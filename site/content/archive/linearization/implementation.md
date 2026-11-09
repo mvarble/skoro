@@ -33,11 +33,11 @@ let snapshot = writer.snapshot();
 let query = Query::log_density().given(observations.clone());
 let target = Target::host();
 let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual)?;
-let plan = linearizer.plan()?; // the order and the junction tree, once
+let schedule = linearizer.schedule()?; // the order and the junction tree, once
 let mut point = initial;       // the values of the free quantities, a batch of rows
 for _ in 0..20 {
     let linearized = linearizer.at(&point)?;   // one problem per row
-    let solved = linearized.eliminate(&plan, None)?;
+    let solved = linearized.eliminate(&schedule, None)?;
     let step = solved.minimizer(&target)?;     // `Points`, [rows, D]
     point = linearizer.layout().retract(&point, &step, &target)?;
 }
@@ -50,9 +50,9 @@ use skoro::Addresses;
 use skoro_linearize::Replacing;
 
 let retirement = writer.retire(Addresses::new().under("tick/0"), observed.clone())?;
-let replacing = Replacing::new(&retirement, &[x1.untyped()], &observed, &target)?;
-let replacement = replacing.at(&at)?;          // rows, right-hand side, linear term, constant
-retirement.replace(|_| replacement.build())?;  // the `Improper` factor, its roles bound
+let replacing = Replacing::new(&retirement, &[x1.untyped()], &Observations::new(), &target)?;
+let linearized = replacing.at(&at)?;           // rows, right-hand side, linear term, constant
+retirement.replace(|_| linearized.build())?;   // the `Improper` factor, its roles bound
 ```
 
 The pieces map onto the mathematics as follows.
@@ -65,15 +65,15 @@ The pieces map onto the mathematics as follows.
 | the step [](eq:archive/linearization/math/step) | `Solved::minimizer` |
 | damping, and the promised decrease [](eq:archive/linearization/math/promised) | `Damping`, `Problem::promised` |
 | the Laplace approximation's table ([The Laplace approximation](math.svx#the-laplace-approximation)) | `Solved::{minimizer, marginal, draw, log_integral}` on a chart linearization |
-| the replacement [](eq:archive/linearization/math/improper), [](eq:archive/linearization/math/information-form) | `Replacing`, `Replacement::build` |
+| the replacement [](eq:archive/linearization/math/improper), [](eq:archive/linearization/math/information-form) | `Replacing`, `LinearizedReplacement::build` |
 | the Fisher linearization [%full](statement:archive/linearization/math/fisher), [](eq:archive/linearization/math/fisher-matrix) | `Assembly::Fisher` |
 | the refusals of [Linearizing a query](math.svx#linearizing-a-query) and [Information roots](math.svx#information-roots) | `skoro_linearize::Error` |
 
 Building them asks a little of the crates beside them, all of it public API that a feature crate
 needs and the core and the normal do not yet expose ([Additions to the core and the
 normal](#additions-to-the-core-and-the-normal)): the core gives a query's terms and observations,
-the quantities a node is reached from, whether a space's chart volume reads its point, and a
-constant of a space known at run time; the normal binds the tangent $\point \ominus \mu$ of its
+the union of two sets of observations, the quantities a node is reached from, whether a space's
+chart volume reads its point, and a constant of a space known at run time; the normal binds the tangent $\point \ominus \mu$ of its
 term under a role, and stacks a block of a space known at run time.
 
 ## Constraints
@@ -395,7 +395,7 @@ faer has no constrained COLAMD.
 ```text
 crates/skoro-elimination/   numbers only: faer, and nothing of skoro
     src/lib.rs              Matrix, Structure, Problem, Damping, re-exports
-    src/structure.rs        the factor structure, the order, the junction tree: Plan
+    src/structure.rs        the factor structure, the order, the junction tree: Schedule
     src/eliminate.rs        the numeric elimination: Elimination, its conditionals and constants
     src/answers.rs          minimizer, solves, marginal, integral, draws, the reduced factor
 crates/skoro-linearize/     skoro-core, skoro-normal, skoro-elimination
@@ -403,7 +403,7 @@ crates/skoro-linearize/     skoro-core, skoro-normal, skoro-elimination
     src/linearizer.rs       Linearizer: refusals, factors, folding, the programs and the seeds
     src/assemble.rs         Linearized: the passes at a point, and each row's Problem
     src/solved.rs           Solved: a batch's eliminations, mapped back to quantities
-    src/replacing.rs        Replacing and Replacement
+    src/replacing.rs        Replacing and LinearizedReplacement
 ```
 
 Two crates, as the archive had (`skoro-dense` and `skoro-linearize`), and for a reason of the
@@ -447,6 +447,13 @@ impl Query {
     pub fn terms(&self, snapshot: &Snapshot) -> Option<Vec<NodeId>>;
 }
 
+// crates/skoro-core/src/query.rs
+impl Observations {
+    /// This set with the values of `other` for the quantities this set does not observe: a new
+    /// set. Where both observe a quantity, this set's value is kept.
+    pub fn union(self, other: &Observations) -> Observations;
+}
+
 // crates/skoro-core/src/model.rs
 impl Snapshot {
     /// The quantities `id` is reached from, walking back through mapped nodes and stopping at
@@ -478,7 +485,8 @@ impl Space {
 pub fn constant_in(space: Space, value: HostValue) -> QDyn;
 ```
 
-`reached_from` is the private `roots`, under the name its meaning has. `reads` walks the body's
+`reached_from` is the private `roots`, under the name its meaning has: in the compilation graph,
+the quantities among the roots from which a node is reached. `reads` walks the body's
 model from the output through `Node::inputs`, as `roots` does, and is conservative where it cannot
 look: a composite called inside the body is taken to read all its inputs. That errs towards not
 folding, which is always correct ([Folding](#folding)). `constant_in` is `constant` with the space
@@ -571,14 +579,15 @@ impl Problem {
 pub struct Damping { pub lambda: f64, pub diagonal: Vec<f64> }
 ```
 
-**The plan.** The symbolic factorization of
+**The schedule.** The symbolic factorization of
 [Order, fill and the elimination tree](../../math/square-root-elimination/#order-fill-and-the-elimination-tree):
 
 ```rust
-/// An order, an elimination tree and the junction tree of its cliques, for one structure and one
-/// set of blocks to eliminate. Shared by every problem of the structure.
+/// The symbolic factorization: an order, an elimination tree and the junction tree of its
+/// cliques, for one structure and one set of blocks to eliminate. Shared by every problem of the
+/// structure.
 #[derive(Clone, Debug)]
-pub struct Plan { structure: Arc<Structure>, order: Vec<usize>, cliques: Vec<Clique>, /* ... */ }
+pub struct Schedule { structure: Arc<Structure>, order: Vec<usize>, cliques: Vec<Clique>, /* ... */ }
 
 struct Clique {
     /// Eliminated together, consecutive in the order.
@@ -590,16 +599,17 @@ struct Clique {
     children: Vec<usize>,
 }
 
-impl Plan {
+impl Schedule {
     /// Every block, in a COLAMD order of the block pattern.
-    pub fn all(structure: &Arc<Structure>) -> Result<Plan, Error>;
-    /// Every block but `keep`, which are eliminated last if at all: the plan of a marginal on
-    /// `keep`.
-    pub fn keeping(structure: &Arc<Structure>, keep: &[usize]) -> Result<Plan, Error>;
-    /// The blocks `eliminate` alone, from the factors joined to them: the plan of a replacement.
-    pub fn eliminating(structure: &Arc<Structure>, eliminate: &[usize]) -> Result<Plan, Error>;
+    pub fn all(structure: &Arc<Structure>) -> Result<Schedule, Error>;
+    /// Every block but `keep`, which are kept: the schedule of a marginal on `keep`.
+    pub fn keeping(structure: &Arc<Structure>, keep: &[usize]) -> Result<Schedule, Error>;
+    /// The blocks `eliminate` alone, from the factors joined to them: the schedule of a
+    /// replacement.
+    pub fn eliminating(structure: &Arc<Structure>, eliminate: &[usize])
+        -> Result<Schedule, Error>;
     /// A given order, for the tests of order-independence.
-    pub fn in_order(structure: &Arc<Structure>, order: Vec<usize>) -> Result<Plan, Error>;
+    pub fn in_order(structure: &Arc<Structure>, order: Vec<usize>) -> Result<Schedule, Error>;
     pub fn order(&self) -> &[usize];
     pub fn cliques(&self) -> usize;
 }
@@ -613,7 +623,7 @@ are eliminated last in one front whatever their order. The elimination tree pare
 the first block of its separator in the order, and the cliques are its chains under
 [](eq:math/square-root-elimination/clique-chain), each block joining its parent's clique when the
 equation holds, children before parents. A structure depends on the query and not on any number,
-so a plan serves every row of a batch and every iteration of a loop, and both assemblies.
+so a schedule serves every row of a batch and every iteration of a loop, and both assemblies.
 
 **The numeric elimination.** For each clique in order, the rows of its factors, the new factors its
 children left, and the damping rows of its frontals ($\sqrt{\lambda D_k}$, diagonal, right-hand side
@@ -630,7 +640,7 @@ together, so that every $R$ has a positive diagonal.
 /// eliminate, and the constants.
 #[derive(Clone, Debug)]
 pub struct Elimination {
-    plan: Plan,
+    schedule: Schedule,
     /// `R τ_f + T τ_s = d - y`, per clique, `R` upper triangular with a positive diagonal.
     conditionals: Vec<Conditional>,
     /// The new factors on the kept blocks, and the original factors joined to none eliminated.
@@ -644,9 +654,9 @@ pub struct Elimination {
 }
 
 impl Problem {
-    /// Eliminates the plan's blocks, with the damping rows appended if given. Refuses a block its
-    /// rows do not determine (`Error::Undetermined { block }`).
-    pub fn eliminate(&self, plan: &Plan, damping: Option<&Damping>)
+    /// Eliminates the schedule's blocks, with the damping rows appended if given. Refuses a block
+    /// its rows do not determine (`Error::Undetermined { block }`).
+    pub fn eliminate(&self, schedule: &Schedule, damping: Option<&Damping>)
         -> Result<Elimination, Error>;
 }
 ```
@@ -689,12 +699,12 @@ impl Elimination {
     pub fn solve(&self, z: &[f64]) -> Result<Vec<f64>, Error>;
     /// `Σ log R_ii`: half the log-determinant of `AᵀA` over the eliminated blocks.
     pub fn log_determinant(&self) -> f64;
-    /// The marginal on the kept blocks of a `Plan::keeping` elimination, by one more QR of what is
+    /// The marginal on the kept blocks of a `Schedule::keeping` elimination, by one more QR of what is
     /// left, with the kept coordinates reversed, as the note says
     /// ([%full](statement:math/square-root-elimination/marginal)): refuses kept blocks the rows do
     /// not determine.
     pub fn marginal(&self) -> Result<Marginal, Error>;
-    /// What is left of a `Plan::eliminating` elimination, reduced by one more QR with no pivoting
+    /// What is left of a `Schedule::eliminating` elimination, reduced by one more QR with no pivoting
     /// and no decision of rank, with the constant of integrating the eliminated blocks out:
     /// [](eq:archive/linearization/math/improper).
     pub fn reduced(&self) -> Reduced;
@@ -792,14 +802,15 @@ impl Linearizer {
     pub fn structure(&self) -> &Arc<Structure>;
     /// Each factor's term, in the order of the structure's factors.
     pub fn terms(&self) -> Vec<NodeId>;
-    /// `Plan::all` of the structure.
-    pub fn plan(&self) -> Result<Plan, Error>;
-    /// `Plan::keeping` the blocks of `quantities` (`Error::NotFree` for one that is not).
-    pub fn plan_keeping(&self, quantities: &[NodeId]) -> Result<Plan, Error>;
+    /// `Schedule::all` of the structure.
+    pub fn schedule(&self) -> Result<Schedule, Error>;
+    /// `Schedule::keeping` the blocks of `quantities` (`Error::NotFree` for one that is not).
+    pub fn schedule_keeping(&self, quantities: &[NodeId]) -> Result<Schedule, Error>;
     /// The linearization at `point`, one problem per row.
     pub fn at(&self, point: &Values) -> Result<Linearized, Error>;
     /// The chart linearization at `point` over `quantities`, each of whose spaces must have a
-    /// volume (`NoVolume`): the linear term less `∇λ_p̂(0)` and the constant less `λ_p̂(0)`.
+    /// volume (`NoVolume`): the linear term less `∇λ_p̂(0)` and the constant less `λ_p̂(0)`
+    /// (`Error::NotAnIntegral` of the Fisher assembly).
     pub fn at_in_chart(&self, point: &Values, quantities: &[NodeId])
         -> Result<Linearized, Error>;
 }
@@ -851,6 +862,9 @@ pub enum Error {
     NotFree { quantity: NodeId },
     /// A retirement whose retired terms do not determine a retired quantity.
     RetiredUndetermined { quantity: NodeId },
+    /// An integral, a draw or a chart linearization asked of the Fisher linearization, which
+    /// approximates no integral.
+    NotAnIntegral,
     /// A value given for the replacement's query that leaves a quantity of the retired terms
     /// neither free nor observed, or observes one it should keep.
     Blanket { quantity: NodeId },
@@ -864,9 +878,10 @@ its quantity; the free discrete quantity and the integral without a volume are t
 ### Folding
 
 A factor's log-volume is folded, [%full](statement:archive/linearization/math/linearization), when
-it binds `TANGENT` and `LOG_VOLUME`, its scale is held (fixed, or held at $\hat \point$ by the
-Fisher assembly), and the space of the quantity it scores has
-`volume_reads_point() == Ok(false)`. The role promises $r_t = W_t s_t$ and
+it binds `TANGENT`, `LOG_VOLUME` and `INFORMATION_ROOT`, its scale is held (fixed, or held at
+$\hat \point$ by the Fisher assembly), and the space of the quantity it scores has
+`volume_reads_point() == Ok(false)`. A term that lacks the root is not folded, which is safe, since
+$\hat c_t$ reads $W_t$ off it. The tangent role promises $r_t = W_t s_t$ and
 $\lambda_t = \lambda_\mu(s_t)$; a log-volume that does not read its point makes $\lambda_t$ a
 function of $s_t$ alone; and a held scale makes $W_t$ constant. That is the statement's hypothesis,
 decided by the term's roles and its scored quantity's type, never by a number, so every row of a
@@ -910,27 +925,41 @@ The rows program's targets, per factor $t$:
 | `INFORMATION_ROOT`, when folded or of a free scale | $W_t$, and $C_{\theta, t}$ |
 | `TANGENT` and the scale, when the scale is free (Fisher) | $\D s_t$ and $\D \theta_t$ |
 
-All of them come from one tangent pass, at the point, with a frame at every free quantity. The
-identity frame of the layout, `Frames::identity`, would do, and is what
+All of them come from one tangent pass of the rows program, at the point. The pass takes frames at
+the rows program's free quantities and at no others (`Program::columns` refuses a frame at any
+other node with `FrameShape`), so the seeds are built from `rows.free()`. Every one of them is a
+free quantity of the density program, since every target is reached from its term's variables, and
+`Linearizer::new` checks it; a free quantity of the density program that no target is reached from
+has no rows at all, and is refused at elimination as undetermined.
+
+The identity frame of the layout, `Frames::identity`, would do, and is what
 [The passes](math.svx#linearizing-a-query) describes, but its frames are dense in all $D$ columns:
 every target's frame is `[rows, dimension, D]`, which for a map of a few thousand poses is the whole
 Jacobian, mostly zeros, at every row of the batch. A cotangent pass per target, seeded at that
 target alone, keeps the columns down but runs one pass per target. The design compresses the
-identity frame instead, as a sparse Jacobian is compressed by colouring (Curtis, Powell and Reid):
+identity frame instead, by colouring, as sparse Jacobians are compressed. The colouring is read off
+the factor structure, the bipartite graph of
+[the note](../../math/square-root-elimination/#order-fill-and-the-elimination-tree) whose nodes are
+the free quantities and the factors, with an edge between a factor and each quantity it involves,
+drawn for the running example in [the mathematics' Setting](math.svx#setting):
 
-- two free quantities *conflict* when some factor involves both;
-- a greedy colouring, in the layout's order, gives each quantity the first colour none of its
-  conflicting quantities has;
+- two free quantities *conflict* when they are joined to a common factor in the factor structure;
+- a greedy colouring, in the layout's order, gives each quantity the first colour that none of the
+  quantities it conflicts with has;
 - colour $c$ owns a range of columns as wide as the largest block of its colour, and the seed of a
   quantity $q$ of colour $c$ is the identity of its dimension placed in $c$'s first columns: a
   frame of one row, shared by every row of the batch.
 
-A target of factor $t$ is reached only from $K_t$, since a bound node is reached from no quantity
-outside its term (`BindingOutsideTerm`), and the quantities of $K_t$ conflict pairwise, so they
-have different colours. The columns of $J_t$ for $q \in K_t$ are therefore exactly $q$'s colour's
-columns of the target's frame. The number of columns is the colours' total width, which the
-factor structure alone fixes: on a chain of poses with landmarks it is a few blocks, whatever the
-length of the chain. The colouring is computed once, in `Linearizer::new`.
+That each factor's columns come out unmixed is read off the
+[compilation graph](../core/math.svx#the-compilation-graph), whose nodes are the model's values
+and whose edges run from each input of an operation to its output, and whose roots are the
+quantities and constants. A node bound to a term's role is reached from no quantity outside the
+term (`TermHandle::bind` refuses it with `BindingOutsideTerm`), so the roots a target of factor $t$
+is reached from are among $V_t$, and its free roots among $K_t$. The quantities of $K_t$ conflict
+pairwise, so they have different colours, and the columns of $J_t$ for $q \in K_t$ are exactly
+$q$'s colour's columns of the target's frame. The number of columns is the colours' total width,
+which the factor structure alone fixes: on a chain of poses with landmarks it is a few blocks,
+whatever the length of the chain. The colouring is computed once, in `Linearizer::new`.
 
 The pass gives frames on the target, at the query's precision; each target's values and frames
 cross to the host once per pass, as `Frame::to_host` gives them, and are cut into each row's rows
@@ -946,14 +975,18 @@ constants of the query included.
 /// A batch's linearization: one problem per row, over the linearizer's structure.
 pub struct Linearized {
     problems: Vec<Problem>,
+    assembly: Assembly,
     layout: Layout,
     quantities: Vec<NodeId>,
+    /// The quantities of a curved type, whose covariances carry an error of order `σ²`.
+    curved: Vec<NodeId>,
 }
 
 impl Linearized {
     pub fn problems(&self) -> &[Problem];
-    /// Eliminates every row along `plan`, which must be of the linearizer's structure.
-    pub fn eliminate(&self, plan: &Plan, damping: Option<&Damping>) -> Result<Solved, Error>;
+    /// Eliminates every row along `schedule`, which must be of the linearizer's structure.
+    pub fn eliminate(&self, schedule: &Schedule, damping: Option<&Damping>)
+        -> Result<Solved, Error>;
 }
 ```
 
@@ -992,21 +1025,55 @@ curved types has no linear term in the chart either, as
 
 ```rust
 /// A batch's eliminations, one per row, mapped back to the linearizer's quantities.
-pub struct Solved { eliminations: Vec<Elimination>, layout: Layout, quantities: Vec<NodeId> }
+pub struct Solved {
+    eliminations: Vec<Elimination>,
+    assembly: Assembly,
+    layout: Layout,
+    quantities: Vec<NodeId>,
+    curved: Vec<NodeId>,
+}
 
 impl Solved {
     pub fn eliminations(&self) -> &[Elimination];
     /// Each row's minimizer as a `Points` of `[rows, D]` on `target`, for `Layout::retract`.
     pub fn minimizer(&self, target: &Target) -> Result<Points, Error>;
-    /// Each row's marginal, of a `plan_keeping` elimination.
-    pub fn marginal(&self) -> Result<Vec<Marginal>, Error>;
-    /// `log ∫ e^{-m}` per row: with a chart linearization at a mode, the Laplace evidence.
+    /// Each row's marginal, of a `schedule_keeping` elimination, with its quantities. The
+    /// covariance of a curved quantity errs by a relative amount of order `σ²`, the noise's
+    /// variance in its chart, against the second-order approximation and the posterior alike.
+    pub fn marginal(&self) -> Result<Vec<QuantityMarginal>, Error>;
+    /// `log ∫ e^{-m}` per row: with a chart linearization at a mode, the Laplace evidence
+    /// (`Error::NotAnIntegral` of a Fisher linearization).
     pub fn log_integral(&self) -> Result<Vec<f64>, Error>;
     /// A draw per row, `τ* + R⁻¹ z` with `z` standard normal from `key`, retracted onto the
-    /// quantities.
+    /// quantities (`Error::NotAnIntegral` of a Fisher linearization).
     pub fn draw(&self, at: &Values, key: &Key, target: &Target) -> Result<Values, Error>;
 }
+
+/// A marginal of the linearization, over named quantities.
+pub struct QuantityMarginal {
+    /// The kept quantities, in the order of the marginal's blocks.
+    pub quantities: Vec<NodeId>,
+    /// Those of them of a curved type, whose covariance is reported with an error of order `σ²`.
+    pub curved: Vec<NodeId>,
+    pub marginal: Marginal,
+}
 ```
+
+**What the Fisher linearization does not give.** It gives steps, damping and marginal covariances,
+and [What it gives, and what it does not](math.svx#information-roots) says it gives no evidence
+and no replacement: those approximate an integral of the density, whose curvature in a free scale
+is not the expected information. `log_integral` and `draw` of a Fisher linearization, and
+`at_in_chart` of a Fisher linearizer, are refused with `Error::NotAnIntegral`; a draw is a draw
+from the Gaussian that approximates the integrand, and so belongs with the evidence. `Replacing`
+builds its linearizer with `Assembly::Residual` always.
+
+**The order of the error.** [The precision is the rows' alone](math.svx#what-the-covariance-leaves-out)
+asks that wherever the covariance of a curved quantity is reported, the order of its error be
+stated with it. The code states it twice: the documentation of every function that gives a
+covariance or a replacement says that on a curved quantity it errs by a relative amount of order
+$\sigma^2$, and a `QuantityMarginal` names the curved quantities among its own, those whose space
+is `Space::Embedded` or a product with such a factor, so that a reader that prints a covariance can
+print the caveat beside it.
 
 A draw takes its variates as every draw in skoro does
 ([position 10](../charter/writeup.md#10-randomness-is-explicit)): one key per row by `Key::split`,
@@ -1019,7 +1086,7 @@ on a chart linearization at the mode: `at_in_chart` over every free quantity, th
 the marginal, a draw and the evidence. The entry builds no `Laplace` type: which point is the mode,
 and how it is found, are the method's.
 
-Damping is a `Damping` passed to `eliminate`, and leaves the plan as it is; the promised decrease
+Damping is a `Damping` passed to `eliminate`, and leaves the schedule as it is; the promised decrease
 is `Problem::promised` of each row at the damped minimizer. The schedule of $\lambda$ and the choice
 of $D$ are left to the method's entry.
 
@@ -1032,21 +1099,23 @@ pub struct Replacing {
     linearizer: Linearizer,
     integrated: Vec<NodeId>,  // E_F
     kept: Vec<(NodeId, Space)>, // B_F, in the blanket's order
-    plan: Plan,               // Plan::eliminating the blocks of E_F
+    schedule: Schedule,       // Schedule::eliminating the blocks of E_F
 }
 
 impl Replacing {
-    /// `keep` the continuous blanket quantities the replacement stays a function of; `given` the
-    /// values of every other quantity the retired terms involve, those of `E_O` as given to
-    /// `retire` among them.
-    pub fn new(retirement: &Retirement<'_>, keep: &[QDyn], given: &Observations, target: &Target)
+    /// `keep` the continuous blanket quantities the replacement stays a function of; `fixed` the
+    /// values of the other blanket quantities the retired terms involve. The values of `E_O` are
+    /// the retirement's own.
+    pub fn new(retirement: &Retirement<'_>, keep: &[QDyn], fixed: &Observations, target: &Target)
         -> Result<Replacing, Error>;
-    /// The replacement linearized at `at`, which holds `p̂_E` and the anchors `p̂_B`.
-    pub fn at(&self, at: &Values) -> Result<Replacement, Error>;
+    /// The replacement linearized at `at`, which holds `p̂_E` and the anchors `p̂_B`. On a curved
+    /// quantity of the blanket its precision errs by a relative amount of order `σ²`, the noise's
+    /// variance in its chart, and more over a sequence of retirements that measure nothing.
+    pub fn at(&self, at: &Values) -> Result<LinearizedReplacement, Error>;
 }
 
 /// The numbers of [](eq:archive/linearization/math/information-form) per row, with the anchors.
-pub struct Replacement {
+pub struct LinearizedReplacement {
     blocks: Vec<(NodeId, Space, HostValue)>, // each kept quantity, its space, its anchors per row
     rows: usize,                             // min(m', D)
     a: Vec<Vec<f64>>,                        // per row, column by column
@@ -1055,8 +1124,8 @@ pub struct Replacement {
     constant: Vec<f64>,
 }
 
-impl Replacement {
-    /// The improper factor as a core `Replacement`, its roles bound: to be called inside
+impl LinearizedReplacement {
+    /// The improper factor as the core's `Replacement`, its roles bound: to be called inside
     /// `Retirement::replace`'s body.
     #[track_caller]
     pub fn build(&self) -> skoro_core::Replacement;
@@ -1068,16 +1137,16 @@ impl Replacement {
 `Replacing::new` reads the retirement's plan and snapshot, and
 
 1. checks that every quantity of `keep` is a continuous blanket quantity (`Error::Blanket`);
-2. builds the query of the retired terms, `Query::log_density_of(plan.terms).given(given)`, and a
+2. builds the query of the retired terms,
+   `Query::log_density_of(plan.terms).given(plan.observed.clone().union(fixed))`, and a
    `Linearizer` of it with `Assembly::Residual`, which refuses as any linearization does;
 3. checks that the program's free continuous quantities are exactly $E_F \cup B_F$
-   (`Error::Blanket`, naming the first that is not): a quantity of $E_F$ observed, one of $B_F$
-   observed, or a quantity of the retired terms given no value would each make another
-   integral;
-4. plans the elimination of $E_F$'s blocks, `Plan::eliminating`.
+   (`Error::Blanket`, naming the first that is not): a quantity of $E_F$ or of $B_F$ that `fixed`
+   observes, or a quantity of the retired terms given no value, would each make another integral;
+4. schedules the elimination of $E_F$'s blocks, `Schedule::eliminating`.
 
 `at` linearizes in the chart of $E_F$ alone, `at_in_chart(at, E_F)`, since $E_F$ is integrated
-against its reference measure and $B_F$ is not; eliminates $E_F$ along the plan, where an
+against its reference measure and $B_F$ is not; eliminates $E_F$ along the schedule, where an
 undetermined block is `Error::RetiredUndetermined`, naming the retired quantity; and reads
 `Elimination::reduced` per row. The kept blocks are the layout's in its order, which is the
 blanket's ancestral order; the anchors are the values of `at` at them. The shape, $\min(m', D)$
@@ -1092,11 +1161,13 @@ from the layout, so the correspondence `improper`'s documentation calls load-bea
 construction; `A` is turned from the elimination's row-by-row `Matrix` to column-by-column storage
 in this one place. A batch of one row passes plain values, so that the factor pins no batch.
 
-> [!DECISION] The replacement's query is the caller's to give values to
-> The core's `Observations` is a persistent map with no iteration outside the core, so the
-> replacement does not extend `plan.observed` itself: the caller passes one set, `given`, holding
-> $E_O$'s values and those of the blanket quantities it fixes. The check of step 3 makes a
-> mismatch an error naming the quantity, not a different integral.
+> [!DECISION] The retirement's own values, and the caller's for the blanket
+> The values of $E_O$ are those the retirement was read with, `plan.observed`, and the caller
+> gives only the values of the blanket quantities it fixes, joined to them by the core's new
+> `Observations::union`, which keeps the retirement's value of any quantity both name. A single set
+> from the caller, holding $E_O$'s values again, would have needed no core addition, but a value of
+> $E_O$ that differed from the one the retirement removed would then have given a replacement at
+> the wrong point, silently, since nothing could compare the two.
 
 ### What is kept from the archive, and what is not
 
@@ -1151,7 +1222,8 @@ In `crates/skoro-core/tests/`:
 In `crates/skoro-normal/tests/`:
 
 - `score_binds_the_tangent` (`roles.rs`): the node under `TANGENT` is `x ⊖ μ`, and the residual
-  is `W` times it, at both precisions, on a vector, a positive and a rotation.
+  is `W` times it, at both precisions, on a vector, a positive and a rotation. `roles_are_bound`,
+  which lists every role a term binds, gains `TANGENT`: bound by `score`, not by `factor_at`.
 - `block_in_is_block` (`improper.rs`): an improper factor over blocks stacked by `block_in` equals
   the same factor over `block`, on a vector and a positive.
 
@@ -1171,7 +1243,7 @@ In `crates/skoro-elimination/tests/elimination.rs`, each against the note:
 - `a_linear_term_in_the_row_space_stays_there`: with $\eta = A\transpose u$, the new factor's
   linear term is $A'^\top u_2$, and folding it into $b$ gives the same minimizer.
 - `orders_agree`: on random sparse problems, the minimizer, the log-determinant, the minimum and
-  every marginal agree across `Plan::all`, a reversed order and random orders, to $10^{-10}$, and
+  every marginal agree across `Schedule::all`, a reversed order and random orders, to $10^{-10}$, and
   with dense computations; the marginal on $K$ is the $K$ block of $(A\transpose A)^{-1}$.
 - `the_star_eliminates_its_leaves_first` and `the_map_has_three_cliques`: the note's star and its
   map of three poses and two landmarks give the plans of its figures, and the merged junction tree
@@ -1182,14 +1254,14 @@ In `crates/skoro-elimination/tests/elimination.rs`, each against the note:
   $R^{-1}$, so that $R^{-1} R^{-\top} = (A\transpose A)^{-1}$ exactly, not by sampling.
 - `marginal_whitening_is_lower_triangular`: a positive diagonal, $W\transpose W$ the Schur
   complement.
-- `damping_appends_rows_and_keeps_the_plan`: the damped minimizer solves
-  $(A\transpose A + \lambda D) \tangent = A\transpose b - \eta$; the plan is the same object before
+- `damping_appends_rows_and_keeps_the_schedule`: the damped minimizer solves
+  $(A\transpose A + \lambda D) \tangent = A\transpose b - \eta$; the schedule is the same object before
   and after; `promised` equals $m(0) - m(\tangent)$ of the undamped problem.
 - `an_undetermined_block_is_refused`: a gauge freedom and a block no row reaches are
   `Undetermined`, naming the block, at the double-precision roundoff, and an exact dependence in
   rows rounded to single precision is refused at the single-precision roundoff.
 - `replacing_from_some_factors_is_the_split`: [](eq:math/square-root-elimination/replace):
-  `Plan::eliminating` of $E$ from $\phi_{\ni E}$, plus $\phi_{\not\ni E}$, has the minimum and the
+  `Schedule::eliminating` of $E$ from $\phi_{\ni E}$, plus $\phi_{\not\ni E}$, has the minimum and the
   integral of the whole; two disjoint replacements on the same kept block add to the replacement of
   both.
 - `reduced_rows_have_their_shape`: `Reduced` has $\min(m', D)$ rows, the same for rows whose last
@@ -1222,8 +1294,8 @@ In `crates/skoro-linearize/tests/linearize.rs`:
   same gradients as a linear term instead.
 - `positive_log_volumes_are_a_linear_term`: on log-normal terms, `linear` is present and equals the
   log-volumes' gradients, $(1, \dots, 1)$ per scored positive coordinate.
-- `batch_rows_share_the_plan`: a batch of five points is linearized and eliminated along one plan,
-  and each row's step equals the step of that row linearized alone, to rounding.
+- `batch_rows_share_the_schedule`: a batch of five points is linearized and eliminated along one
+  schedule, and each row's step equals the step of that row linearized alone, to rounding.
 - `damping_promises_the_decrease`: the damped step solves
   $(J\transpose J + \lambda D) \tangent = -g$, and [](eq:archive/linearization/math/promised)
   equals $m(0) - m(\tangent)$.
@@ -1233,6 +1305,8 @@ In `crates/skoro-linearize/tests/linearize.rs`:
   one-dimensional quadrature.
 - `draws_have_the_marginal_covariance`: the sample covariance of many draws in the chart is within
   sampling error of the marginal's, and two draws from one key are equal.
+- `marginals_name_their_curved_quantities`: a marginal over a vector, a positive and a rotation
+  names the rotation alone as curved.
 
 In `crates/skoro-linearize/tests/fisher.rs`:
 
@@ -1250,8 +1324,10 @@ In `crates/skoro-linearize/tests/fisher.rs`:
   $(\lVert r \rVert^2 - \dimension) / 2 \dimension$.
 - `fisher_marginals_are_the_inverse_information`: the marginal covariances equal the blocks of the
   inverse expected information, a free scale's among them.
-- `fisher_shares_the_plan`: both assemblies of one query have one structure, and one plan serves
-  both.
+- `fisher_shares_the_schedule`: both assemblies of one query have one structure, and one schedule
+  serves both.
+- `fisher_gives_no_integral`: `log_integral`, `draw` and `at_in_chart` of the Fisher assembly are
+  `NotAnIntegral`.
 
 In `crates/skoro-linearize/tests/replacement.rs`:
 
@@ -1259,7 +1335,9 @@ In `crates/skoro-linearize/tests/replacement.rs`:
   the core's scalar chain gives [](eq:archive/core/math/kalman), and retiring $\randomPoint_0$
   alone [](eq:archive/core/math/joint-blanket) with $c = 0$; each equals in value the `Stacked`
   replacement with the mean, whitening and constant of [](eq:archive/linearization/math/stacked),
-  at several points, and the retired model passes the core's checks of retirement.
+  at several points; and the model after the retirement, queried for $\randomPoint_1$, gives the
+  log-density the model retired with the exact replacement of `crates/skoro/tests/retirement.rs`
+  gives, at several points.
 - `retiring_a_chain_one_state_at_a_time_is_the_kalman_filter`: on a linear-Gaussian chain of
   several states, the replacements' means, covariances and accumulated constants are the Kalman
   filter's and its evidence.
