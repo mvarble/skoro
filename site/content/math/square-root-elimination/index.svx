@@ -441,6 +441,21 @@ The new factor has $m - d_k$ rows, which may be more than the separator's dimens
 further QR of $[A' \;\, b']$ leaves at most $d_S$ rows and a scalar residual, a constant, and is
 worth doing when the factor is to be stored or eliminated again.
 
+**A linear term in the row space stays there.** Suppose the linear term of the eliminated factors
+is of the form $(\eta_k, \eta_S) = [A_k \;\, A_S]\transpose u$ for some vector $u$. Write
+$Q\transpose u = (u_1, u_2)$, split as the rows of the reduced matrix are. Then
+
+$$
+	\begin{bmatrix} \eta_k \\ \eta_S \end{bmatrix}
+	= \begin{bmatrix} R & T \\ 0 & A' \end{bmatrix}\transpose \begin{bmatrix} u_1 \\ u_2 \end{bmatrix}
+	= \begin{bmatrix} R\transpose u_1 \\ T\transpose u_1 + A'^\top u_2 \end{bmatrix} ,
+$$
+
+so $y = R^{-\top} \eta_k = u_1$, and the new factor's linear term is
+$\eta_S - T\transpose y = A'^\top u_2$. It is again in the row space of the factor's rows, and it
+can be folded into the right-hand side, as [Linear terms](#linear-terms) says. Elimination never
+creates a linear term that cannot be folded. One that cannot be folded was there from the start.
+
 For example, take two scalars with a prior $\tangent_1 = 1$ and an odometry
 $\tangent_2 - \tangent_1 = 1$, both of unit variance: the factors $[\,1 \;\, 0 \mid 1\,]$ and
 $[\,{-1} \;\, 1 \mid 1\,]$, with no linear term. Eliminating $\tangent_1$ reduces their rows to

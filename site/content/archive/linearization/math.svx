@@ -1,5 +1,5 @@
 ---
-summary: How a query of a model is linearized at a point into factors of whitened rows and linear terms over its free quantities' tangent coordinates, and how eliminating those factors gives the step of a Gauss–Newton or Levenberg–Marquardt method, a Laplace approximation's marginals, and a retirement's Gaussian replacement, the update and prediction of a Kalman filter.
+summary: How a query of a model is linearized at a point into factors of whitened rows and linear terms over its free quantities' tangent coordinates, and how eliminating those factors gives the step of a Gauss–Newton or Levenberg–Marquardt method, a Laplace approximation's marginals, and a retirement's replacement, an improper Gaussian that is the update and prediction of a Kalman filter when it determines the blanket.
 depends_on: [square-root-elimination, retraction, derivatives-in-charts, product-manifold, chart-volume, archive/core/math, archive/normal/math]
 ---
 
@@ -31,8 +31,11 @@ with damping rows appended. A Laplace approximation reads its covariance and its
 linearization at a mode, and its evidence off the determinant of the eliminated rows. A retirement
 ([the core's retirement](../core/math.svx#retirement)) needs a replacement for the terms it removes,
 an integral the core leaves to the caller, and eliminating the retired quantities from the
-linearization of those terms gives it in the form the normal already writes, its `Stacked`
-replacement. On a chain of states that replacement is the update and the prediction of a Kalman
+linearization of those terms gives it as an improper Gaussian in the blanket's tangent
+coordinates. When the retired terms determine the whole blanket, that is the form the normal
+already writes, its `Stacked` replacement. When they do not, as for a landmark seen by bearing
+from one pose, it keeps what they say about a quantity that cannot yet be estimated, so that a
+model can accumulate information before it estimates. On a chain of states that replacement is the update and the prediction of a Kalman
 filter, exact for linear-Gaussian terms and, for others, an extended Kalman filter's.
 
 This document works out the mathematics of linearizing a query and of eliminating its
@@ -73,8 +76,10 @@ and $\rho_t = n_t - \lambda_t$ is its *remainder*. For the normal's term
 which is constant when the scale is fixed, and $\lambda_t = \lambda_\mu(\point \ominus \mu)$, which
 the normal binds only where it is not identically zero, on positive and curved types. For a
 retirement's Gaussian replacement [](eq:archive/normal/math/joint), $n_t$ is the normalizer and the
-constant $c$, and there is no log-volume. A term that binds a residual and no log-volume promises a
-remainder constant whenever its scale is fixed.
+constant $c$, and there is no log-volume. For an improper replacement [](eq:information-form),
+$n_t = c$, and $\lambda_t = \eta\transpose \delta$ where a linear term remains: the varying part
+of the remainder, which is all [](eq:split) asks of $\lambda_t$. A term that binds a residual and
+no log-volume promises a remainder constant whenever its scale is fixed.
 
 **The variables and the factors.** The core reads off the compilation graph the quantities $V_t$
 that each term involves ([terms](../core/math.svx#terms-and-the-importance-weight)). For a query,
@@ -473,7 +478,9 @@ So, on a curved quantity:
 > including the curvature buys no consistency that the rows lack. A replacement's larger error comes
 > from its Gaussian form and is untouched by either choice. Wherever the covariance of a curved
 > quantity is reported, the order of its error is stated with it. Second-order Laplace
-> approximations, and replacements of another form, are left to the entries that need them.
+> approximations, and replacements of another form, are left to the entries that need them. This
+> departs from [the normal's replacement](../normal/math.svx#as-a-likelihood-factor), which
+> expected a replacement's $W$ over a curved quantity to carry the log-volume's Hessian.
 
 ## A retirement's replacement
 
@@ -505,20 +512,71 @@ e^{\logterm_T(\point_E, \point_B)} \dd \nu(\point_E)$, with $\logterm_T$ the sum
 $\mathcal T_E$, is the logarithm of the integral over $\tangent_E$ of
 $e^{-\phi(\tangent_E, \tangent_B)}$, with $\phi = -\logterm_T(\hat \point \oplus \tangent) -
 \lambda_{\hat \point_E}(\tangent_E)$ the chart objective of the query above, at
-$\point_B = \hat \point_B \oplus \tangent_B$. Replacing $\phi$ by its linearization $m_T$, a
-quadratic whose matrix has full rank, $e^{-m_T}$ is $Z$ times the normal density with the
-minimizer of $m_T$ as its mean and the inverse of its matrix as its covariance, with
-$Z = \int e^{-m_T}$, and integrating it over $\tangent_E$ leaves $Z$ times the marginal density on
-$\tangent_B$, which is the normal $\logterm_{\mathcal N}(\tangent_B;\, m, W)$ on $\R^D$ by
-[%full](statement:math/square-root-elimination/marginal). The integral of $e^{-m_T}$ is over the
-whole of $\R^{d_E}$, while $\phi$ is defined on the chart's domain alone: putting the one for the
-other is part of the approximation, exact when the chart is global, and otherwise in error by the
-Gaussian's mass outside the domain.
+$\point_B = \hat \point_B \oplus \tangent_B$. The approximation replaces $\phi$ by its
+linearization $m_T$.
+
+The columns of the rows for $E_F$ have rank $d_E$, so eliminating the blocks of $E_F$ one at a
+time, in any order, meets a nonsingular triangular block $R_k$ at each. Part 2 of
+[%full](statement:math/square-root-elimination/eliminate-one), applied to each in turn, gives
+
+$$
+	\int_{\R^{d_E}} e^{-m_T(\tangent_E, \tangent_B)} \, \dd \tangent_E
+	= (2\pi)^{d_E / 2} \prod_{i \in E_F} \lvert R_{ii} \rvert^{-1} e^{-c_0 - \Gamma - \phi_B(\tangent_B)} ,
+$$
+
+where the product is over the diagonal entries of the blocks of $E_F$, $\Gamma$ is the sum of
+their constants $\gamma$, and $\phi_B(\tangent_B) = \tfrac12 \lVert A' \tangent_B - b' \rVert^2 +
+\eta'^\top \tangent_B$ is the sum of the factors left on $B_F$. This holds for every
+$\tangent_B$, and asks nothing of the rows on $B_F$.
+
+Two reductions bring $\phi_B$ to the form stated. First, an orthogonal factorization of $[A' \;\,
+b']$ that reveals the rank of $A'$, with its columns pivoted, gives rows $A$ of full row rank $r$
+and leaves a residual $e$ in the rows below, so that $\tfrac12 \lVert A' \tangent_B - b' \rVert^2
+= \tfrac12 \lVert A \tangent_B - b_0 \rVert^2 + \tfrac12 \lVert e \rVert^2$. The rank is decided
+against a tolerance of the order of the unit roundoff times the largest diagonal entry. Second, the
+linear term splits as $\eta' = A\transpose u + \eta$, with $u = (A A\transpose)^{-1} A \eta'$ and
+$\eta$ in the null space of $A$, computed from an orthogonal factorization of $A\transpose$
+without forming $A A\transpose$. The part in the row space folds into the right-hand side, as
+[the note's linear terms](../../math/square-root-elimination/#linear-terms) do:
+$\tfrac12 \lVert A \tangent_B - b_0 \rVert^2 + u\transpose A \tangent_B = \tfrac12 \lVert A
+\tangent_B - (b_0 - u) \rVert^2 + u\transpose b_0 - \tfrac12 \lVert u \rVert^2$. Collecting the
+constants,
+
+$$
+	b = b_0 - u , \qquad
+	c = \tfrac{d_E}{2} \log 2\pi - \sum_{i \in E_F} \log \lvert R_{ii} \rvert - c_0 - \Gamma
+	- \tfrac12 \lVert e \rVert^2 - u\transpose b_0 + \tfrac12 \lVert u \rVert^2 . @tag(improper)
+$$
+
+If the rows have rank $d_E + D$, the matrix of $\phi_B$ is the Schur complement of a positive
+definite matrix, so $A$ is square and nonsingular, its null space is zero, and $\eta = 0$. The right-hand side is then a
+Gaussian in $\tangent_B$ with the precision $A\transpose A$ and the mean $m = A^{-1} b$, which by
+[%full](statement:math/square-root-elimination/marginal) are those of the marginal of the normal
+density proportional to $e^{-m_T}$, and integrating it over $\tangent_B$ gives $Z$.
+
+The integral of $e^{-m_T}$ is over the whole of $\R^{d_E}$, while $\phi$ is defined on the chart's
+domain alone: putting the one for the other is part of the approximation, exact when the chart is
+global, and otherwise in error by the Gaussian's mass outside the domain.
 
 </Proof>
 
-The replacement is therefore exactly the normal's `Stacked` replacement
-[](eq:archive/normal/math/joint), with:
+The replacement is therefore an *improper Gaussian* in the blanket's tangent coordinates at the
+anchors $p_i = \hat \point_i$, $i \in B_F$:
+
+$$
+	\logterm_B(\point_B) = -\tfrac12 \bigl\lVert A\, \delta(\point_B) - b \bigr\rVert^2 - \eta\transpose \delta(\point_B) + c , @tag(information-form)
+$$
+
+with $\delta$ the stacked tangent of [](eq:archive/normal/math/stacked). It is a function of the
+blanket's quantities that no normalization need make a density, and a likelihood factor needs
+none. The anchors are the linearization point, constants of the model, so the factor does not move
+with the quantities it summarizes, and its value and its derivatives at $\hat \point_B$ are the
+linearization's. The constant makes the replacement right in value as well as in shape, which the
+core's tests of retirement check ([What the tests check](#what-the-tests-check)).
+
+When the retired terms determine the whole blanket, $r = D$ and $\eta = 0$, and
+[](eq:information-form) is the normal's `Stacked` replacement [](eq:archive/normal/math/joint),
+with:
 
 $$
 	p_i = \hat \point_i \ (i \in B_F), \qquad
@@ -530,11 +588,10 @@ $$
 where $\tangent^* = (\tangent_E^*, \tangent_B^*)$ is the minimizer of $m_T$, $R$ the triangular
 root of its rows, eliminated in any order, and $W$ the lower-triangular root of what is left on
 $B_F$ after $E_F$ is eliminated, brought to a positive diagonal as
-[the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. The
-anchors are the linearization point, constants of the model as `Stacked` requires, so the factor
-does not move with the quantities it summarizes, and its value and its derivatives at
-$\hat \point_B$ are the linearization's. The constant makes the replacement right in value as well
-as in shape, which the core's tests of retirement check ([What the tests check](#what-the-tests-check)).
+[the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. When the
+retired terms do not determine the blanket, the replacement keeps what they say about it, and
+[Blanket quantities the rows do not determine](#blanket-quantities-the-rows-do-not-determine) says
+what that buys and what it costs.
 
 **Exact for linear-Gaussian terms.** If the terms of $\mathcal T_E$ are linear-Gaussian, the
 chart objective is quadratic by [%full](statement:exact), $m_T = \phi$, nothing is approximated,
@@ -576,22 +633,89 @@ $\hat \point$, and the choice is the filter.
 Several states retired at once give one approximation of the whole, and one after another a
 sequence of them, which differ as the core's retirement says they may.
 
-> [!TODO] A replacement the rows do not determine
-> [%full](statement:replacement) asks that the rows of the retired terms determine every direction
-> of $(\tangent_E, \tangent_B)$, so that what is left on $B_F$ is a normal with a whitening of full
-> rank, the form `Stacked` takes. A common retirement fails it: a landmark of $B$ seen by a bearing
-> from the retired state alone leaves fewer rows on $B_F$ than its dimension, and the exact
-> replacement is then an improper Gaussian in some directions, $-\tfrac12 \lVert A \tangent_B - b
-> \rVert^2 - \eta\transpose \tangent_B + c$ with $A$ of fewer rows than columns. It is a function of
-> $\tangent_B$, and a likelihood factor needs no normalization, so the core could hold it, binding
-> $A \tangent_B - b$ as its residual; but `Stacked` cannot write it, and neither can any form the
-> normal provides. Its linear term would need a role of its own, since [](eq:split) lets a reader
-> find a term's linear part only through the log-volume it binds. The case is not rare: any blanket
-> quantity whose prior lies outside $\mathcal T_E$ and which the retired terms observe only in part
-> fails the rank condition, which takes in most landmarks measured by bearing alone. Should this entry provide a factor of that form, the rows, the right-hand side,
-> the linear term and the constant at constant anchors, of which `Stacked` is the case of full
-> rank; or refuse such a retirement, naming the blanket quantity left undetermined, and leave the
-> general form to a later entry?
+### Blanket quantities the rows do not determine
+
+[%full](statement:replacement) asks that the retired terms determine the retired quantities, given
+the blanket. It asks nothing of the blanket itself, and often they determine only part of it. A landmark seen by bearing from the retired pose alone is the standard example. The bearing
+fixes the landmark's direction from that pose, but not its depth along it, so the replacement on
+the landmark has fewer rows than the landmark has coordinates. It keeps what the retired terms say,
+the direction, and says nothing about the depth. Read as a function of the landmark, it is constant
+along the bearing's ray and Gaussian across it, and no normalization makes it a density. For
+linear-Gaussian terms it is still the exact integral.
+
+**Information accumulates.** Replacements over the same quantities add: their rows stack, and one
+orthogonal factorization reduces them; their linear terms add; and their constants add. Take a
+linear stand-in for the bearing in the plane: a landmark $\ell \in \R^2$ and poses
+$\point_1, \point_2 \in \R^2$, each pose with its own prior, and measurements
+$z_k = a_k\transpose (\ell - \point_k) + \varepsilon_k$ along known unit directions $a_k$.
+Retiring $\point_1$ and $z_1$ leaves one row on $\ell$, along $a_1$. Retiring $\point_2$ and
+$z_2$ leaves a second, along $a_2$. Neither determines $\ell$. When $a_1$ and $a_2$ are not
+parallel, the two together do, and their sum is exactly the replacement that retiring both poses
+and both measurements at once would give, by [](eq:math/square-root-elimination/replace), since
+the two sets of retired terms are disjoint. A model can therefore marginalize what it learns about
+a quantity it cannot yet estimate, keep it at the cost of a few rows, and estimate the quantity
+once enough has accumulated, losing nothing on the way. Until then, a query that leaves the
+quantity free, with nothing else to determine it, is refused, naming it, as a quantity the rows do
+not determine.
+
+**Where it is linearized.** For linear-Gaussian terms the point does not matter. Otherwise the rows
+are the retired terms' Jacobians at $\hat \point_B$, and along the directions the terms do not
+determine, nothing in the data says where $\hat \point_B$ should be. For a bearing, the Jacobian
+with respect to the landmark's position scales with the inverse of the depth at which it is taken.
+The replacement is then only as good as the depth guessed for it, and since a retired term is
+never linearized again, a poor guess is kept. A parametrization in which the undetermined direction
+enters linearly, such as an inverse depth, reduces this. That is the model's choice, not the
+linearization's.
+
+**When there is a linear term.** On the Euclidean and the curved types, the replacement has none.
+A normal's log-volume on these types depends on its tangent coordinate $t = \point \ominus \mu$
+alone: it is zero on a Euclidean type, $\lambda_e(t)$ on a group with the Cayley chart, and a
+function of $\lVert t \rVert$ on the sphere. Its gradient is therefore $G_t\transpose \nabla
+\lambda(t) = J_t\transpose W_t^{-\top} \nabla \lambda(t)$, with $G_t$ the derivative of $t$, $W_t$
+the whitening and $J_t = W_t G_t$ the term's rows. It lies in the row space of the term's own rows.
+The chart's log-volume of $E_F$ is even on these types, so its gradient at zero is zero. The whole
+linear term of $m_T$ therefore lies in the row space of the rows. By
+[the note](../../math/square-root-elimination/#eliminating-one-block), it stays in the row space
+through every elimination, and it folds into $b$, leaving $\eta = 0$. An earlier replacement among
+the retired terms has none, by the same argument, and so adds none.
+
+On a positive type the log-volume $\sum_i \log \point_i$ depends on the quantity, not on its
+tangent coordinate at the mean, and a linear term can remain. Let a positive quantity $\point$ of
+the blanket be scored by the normal on the positive type with the mean $e^\theta$, where $\theta$
+is a Euclidean quantity that is retired, with no other term on $\theta$. The exact replacement is
+
+$$
+	\logterm_B(\point) = \log \int \frac{1}{\point}\, \mathcal N(\log \point;\, \theta, \sigma^2) \, \dd \theta = -\log \point ,
+$$
+
+which in the logarithmic chart at the anchor is $-\tangent - \log \hat \point$: no rows, and the
+linear term $\eta = 1$. The linearization finds exactly this. The one row is $[-1/\sigma \;\,
+1/\sigma]$ over $(\theta, \tangent)$, and its linear term is $(0, 1)$, the gradient of
+$\log \point$. Eliminating $\theta$ leaves no rows on $\tangent$, and the linear term $1$, which
+cannot be folded. With a prior on $\theta$ among the retired terms, the rows determine $\tangent$, the linear term folds, and
+the replacement is the log-normal's density, a `Stacked` replacement.
+
+**How it meets the roles.** In the terms of [](eq:split), the factor [](eq:information-form)
+binds the whitened residual $A \delta - b$, which has $r$ components, fewer than $D$ when the
+blanket is not determined. Its remainder $\rho = c - \eta\transpose \delta$ has the constant
+normalizer $c$ and the varying part $\lambda = \eta\transpose \delta$. The linearization reads a
+term's linear part through the node bound under the log-volume role, so the factor binds
+$\eta\transpose \delta$ there, where $\eta \ne 0$. That node is not the log-volume of any measure.
+It is the varying part of the remainder, which is all that the linearization's reading of the role
+assumes. Whether the role keeps its name, or is named for what it is, is the implementation's
+question.
+
+> [!DECISION] Replacements are improper Gaussians
+> A retirement whose retired terms determine the retired quantities is replaced by
+> [](eq:information-form), whether or not they determine the blanket. Its parts are the rows $A$,
+> the right-hand side $b$, the linear term $\eta$ (nonzero only where a positive type leaves one)
+> and the constant $c$, at constant anchors. When the blanket is determined, it is written as the
+> normal's `Stacked` replacement, which binds the mean and the scale that a reader of a Gaussian
+> expects; otherwise, in the general form, which has no mean or covariance to bind. A retirement
+> whose terms do not determine a retired quantity is refused, naming it: the integral over that
+> quantity diverges on a Euclidean type, and a Gaussian does not approximate it on a curved one.
+> The entry is not finished without the general form.
+
 
 ## Information roots
 
@@ -641,14 +765,22 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   with an extended Kalman filter in its predicted mean to second order in the update's step, and
   in its predicted covariance to first order, and the replacement at the retired terms' mode with
   an iterated extended Kalman filter.
+- **An improper replacement keeps what it is given**, [](eq:information-form): on the planar
+  example of [Blanket quantities the rows do not determine](#blanket-quantities-the-rows-do-not-determine),
+  each retirement leaves one row on $\ell$, and the sum of the two equals the replacement of
+  retiring both poses at once, constants included, and gives the exact posterior of $\ell$ when
+  queried; on a nonlinear bearing it agrees with a dense computation of the same linearized
+  integral; on the positive example it is $-\log \point$ exactly, with no rows and $\eta = 1$; on
+  Euclidean and rotation quantities its linear term is zero.
 - **Batch rows share the plan**: a batch of points has one order and one elimination tree, and
   each row's step is the step of that row linearized alone.
 - **The linear term is exactly zero where no log-volume is bound**: on a model of Euclidean normals
   with fixed scales the step is the least-squares solution, bit for bit independent of the
   query's gradient pass.
 - **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
-  is free, a quantity the rows do not determine, and an integral over a quantity whose type has no
-  volume, each naming what it names.
+  is free, a quantity the rows do not determine, a retirement whose terms do not determine a
+  retired quantity, and an integral over a quantity whose type has no volume, each naming what it
+  names.
 
 ## In skoro's terms
 
@@ -675,14 +807,18 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   or the log-volumes, and on a curved quantity it is reported with an error of order $\sigma^2$.
 - **A retirement's replacement** is the linearized integral of [%full](statement:replacement),
   computed from the retired terms alone, free in the retired quantities to integrate and in the
-  blanket's quantities to keep, at a point the caller chooses, and written as the normal's
-  `Stacked` replacement with the anchors at that point, the mean, the whitening and the constant
-  of [](eq:stacked). It is exact for linear-Gaussian terms, where it is the Kalman filter, and
-  otherwise an iterated extended Kalman filter or, at the prediction, an approximation of the
-  extended one.
+  blanket's quantities to keep, at a point the caller chooses. It is the improper Gaussian
+  [](eq:information-form) at anchors at that point: rows, a right-hand side, a linear term only
+  where a positive type leaves one, and a constant. When it determines the blanket, it is written
+  as the normal's `Stacked` replacement with the mean, the whitening and the constant of
+  [](eq:stacked). It binds the residual $A \delta - b$ and, where $\eta \ne 0$, the varying part
+  of its remainder under the log-volume role. It is exact for linear-Gaussian terms, where it is
+  the Kalman filter, and otherwise an iterated extended Kalman filter or, at the prediction, an
+  approximation of the extended one. A retirement whose terms do not determine a retired quantity
+  is refused.
 
 ## Open questions
 
-Two questions above remain open: a replacement the rows do not determine, and whether information
-roots belong to this entry. The curvature of the log-volumes is decided: the precision is the rows'
-alone.
+One question above remains open: whether information roots belong to this entry. The curvature of
+the log-volumes is decided, the precision being the rows' alone, and so is a replacement the rows
+do not determine, which is an improper Gaussian.
