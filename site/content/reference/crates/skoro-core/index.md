@@ -13,7 +13,8 @@ publishes snapshots, branches and readers, addresses and namespaces, and the
 [terms](../../../concepts/terms/) that make the probabilistic graph, with their samplers, proposals
 and roles; the `Distribution` trait, by which a distribution scores a quantity; and `sample`, which
 makes a quantity and scores it by a distribution in one call. It compiles [queries](../../../concepts/queries/) for a target into programs, whose passes
-give values, tangents, gradients and Hessian-vector products in tangent charts, and it holds
+give values, tangents, gradients and Hessian-vector products in tangent charts, for values of any
+number of entries, none included, as a `Vector(0)` or a `Matrix(0, n)`, and it holds
 generation, which draws a model's free quantities from explicit random keys and weighs the draw, and
 retirement, which removes the quantities at a collection of addresses, named one by one or as
 the namespaces they lie under, and keeps what they said about the rest as a likelihood factor over

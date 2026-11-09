@@ -12,6 +12,11 @@ observes, either shared by every row of a batch or given row by row, and loaded 
 program runs. The crate re-exports burn's tensor module, for the kernels a later crate writes for an
 operation of its own.
 
+Its `broadcast` and `reshape` stand for burn's `expand` and `reshape`, which the rest of skoro
+calls through them: where a shape has a dimension of zero, which `expand` refuses and `reshape`
+reads as the source's size, each gives the tensor of no entries of that shape, so that a value of
+no entries, a factor's residual of no components among them, runs through every pass.
+
 The point of the layer is containment. A burn upgrade touches this crate and the kernels, and
 nothing else; and the precision a computation runs at is chosen by each query's
 [target](../../../concepts/queries/#a-target), not fixed by the model.
