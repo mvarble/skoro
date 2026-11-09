@@ -418,6 +418,78 @@ skoro_core::precision_tests! {
     }
 }
 
+skoro_core::precision_tests! {
+    fn no_rows_is_its_linear_part(target) {
+        let relative = tolerance(&target);
+        let rows = XS.len();
+        let xs: Vec<f64> = XS.iter().flatten().copied().collect();
+        let ys: Vec<f64> = YS.iter().flatten().copied().collect();
+        let v = [0.4, -0.7, 1.1, 0.2, 0.5, -0.3, -1.0, 0.8, 0.6];
+        let vx: Vec<f64> = (0..rows).flat_map(|r| [v[3 * r], v[3 * r + 1]]).collect();
+        let vy: Vec<f64> = (0..rows).map(|r| v[3 * r + 2]).collect();
+        for eta in [None, Some(ETA)] {
+            let mut writer = Writer::new();
+            let (x, y, log_density, residual) = writer
+                .build(|| {
+                    let x = quantity("x", Vector::<2>);
+                    let y = quantity("y", Positive::<1>);
+                    let improper = Stacked::new()
+                        .block(x, Vector::<2>, P)
+                        .block(y, Positive::<1>, [Q])
+                        .improper(0, &[] as &[f64], &[] as &[f64], C);
+                    let improper = match eta {
+                        Some(eta) => improper.linear(&eta[..]),
+                        None => improper,
+                    };
+                    (x, y, improper.log_density(), improper.residual())
+                })
+                .unwrap();
+            let at = Values::new()
+                .with(x, loaded(&xs, rows, 2, &target))
+                .with(y, loaded(&ys, rows, 1, &target));
+            let frames = Frames::new()
+                .with(x, Frame::from_host(&vx, rows, 2, 1, &target))
+                .with(y, Frame::from_host(&vy, rows, 1, 1, &target));
+            let eta = eta.unwrap_or([0.0; 3]);
+            let deltas: Vec<[f64; 3]> = (0..rows)
+                .map(|r| [XS[r][0] - P[0], XS[r][1] - P[1], (YS[r][0] / Q).ln()])
+                .collect();
+            let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(a, b)| a * b).sum::<f64>();
+
+            // Forward: -ηᵀδ + c, and a residual of no components.
+            let program = writer
+                .snapshot()
+                .compile(&Query::of([log_density.untyped(), residual.untyped()]), &target)
+                .unwrap();
+            let out = program.forward(&at).unwrap();
+            let want: Vec<f64> = deltas.iter().map(|d| C - dot(&eta, d)).collect();
+            close(&common::host(&out, log_density.untyped().id()), &want, relative);
+            assert!(common::host(&out, residual.untyped().id()).is_empty());
+
+            // Tangent: -ηᵀv.
+            let (_, tangents) = program.tangent(&at, &frames).unwrap();
+            let want: Vec<f64> = (0..rows).map(|r| -dot(&eta, &v[3 * r..3 * r + 3])).collect();
+            close(&tangents.get(log_density).unwrap().to_host(), &want, relative);
+            assert!(tangents.get(residual).unwrap().to_host().is_empty());
+
+            // Cotangent and Hessian: the gradient -η, and no curvature.
+            let program = writer
+                .snapshot()
+                .compile(&Query::of([log_density.untyped()]), &target)
+                .unwrap();
+            let (_, gradient) = program.gradient(&at).unwrap();
+            let gx: Vec<f64> = (0..rows).flat_map(|_| [-eta[0], -eta[1]]).collect();
+            let gy: Vec<f64> = (0..rows).map(|_| -eta[2]).collect();
+            close(&gradient.get(x).unwrap().to_host(), &gx, relative);
+            close(&gradient.get(y).unwrap().to_host(), &gy, relative);
+            let second = program.hessian_products(&at, &frames).unwrap();
+            close(&second.alpha.get(x).unwrap().to_host(), &gx, relative);
+            close(&second.beta.get(x).unwrap().to_host(), &vec![0.0; 2 * rows], relative);
+            close(&second.beta.get(y).unwrap().to_host(), &vec![0.0; rows], relative);
+        }
+    }
+}
+
 #[test]
 fn numbers_that_do_not_fit_are_refused() {
     let line = line!() + 6;

@@ -37,7 +37,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 - [x] The tests of the mathematics' statements and examples on the flat-in-disguise types. Tests:
       `full_rank_is_the_stacked_normal`, `forms_give_one_function`, `positive_example_is_exact`,
       `gauss_newton_is_the_hessian_on_flat_types`.
-- [ ] The factor of no rows, with and without a linear part, through every pass. Tests:
+- [x] The factor of no rows, with and without a linear part, through every pass. Tests:
       `no_rows_is_its_linear_part`.
 - [ ] The descriptions of the module, `RESIDUAL` and `LOG_VOLUME` in `roles.rs`, as the
       implementation gives them. Tests: none; `cargo doc` resolves the link to `Improper`.
