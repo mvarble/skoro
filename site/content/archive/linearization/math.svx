@@ -149,7 +149,9 @@ $$
 $$
 
 The linearization keeps the first sum. The second is what every Gauss–Newton method omits: it is
-small where the residuals are, and it is what makes the Hessian indefinite far from a mode. The
+small where the residuals are, and it is what makes the Hessian indefinite far from a mode. On a
+curved type it is of the same order as the third, even at a mode
+([What the covariance leaves out](#what-the-covariance-leaves-out)). The
 third is the curvature of the log-volumes: zero on the Euclidean types, zero on the positive ones,
 whose log-volume is linear in their chart, and on a curved type of the relative order of the
 noise's variance, by the bound of [the normal's Gauss–Newton reading](../normal/math.svx#the-roles).
@@ -315,27 +317,117 @@ type whose chart is not, the Gaussian's mass outside its domain is the error of
 [the note on chart volumes](../../math/chart-volume/) and is not part of this approximation's
 accounting.
 
-Its precision is the rows', $J\transpose J$, which omits from the chart objective's Hessian the
-second sum of [](eq:hessian), which vanishes at a zero residual, and the curvature
-$\sum_t \nabla^2 \lambda_t - \nabla^2 \lambda_{\hat \point}$ of the terms' log-volumes and the
-chart's. On the Euclidean and the positive types, with fixed scales, both are zero. On a curved
-type they are of opposite signs and of the same order: near $\tangent = 0$ the Cayley and
-stereographic log-volumes are $-\tfrac12 \lVert \tangent \rVert^2$, so a term's log-volume adds a
-negative curvature of the order of $\Sigma$ against its $\Lambda$, and the chart's adds a positive
-one. For a single normal with a fixed mean, linearized at the mean, the two cancel exactly, since
-the chart objective is then the Gaussian part alone.
+### What the covariance leaves out
+
+The Gaussian's precision is the rows', $J\transpose J$. The Hessian of the chart objective at the
+centre is that and
+
+$$
+	D = \sum_t \sum_i (r_t)_i\, \nabla^2 (r_t)_i + \sum_t \nabla^2 \lambda_t - \nabla^2 \lambda_{\hat \point}(0) , @tag(omitted)
+$$
+
+the curvature of the residuals, of the terms' log-volumes and of the chart's log-volume: the
+omitted part of [](eq:hessian), with the chart's term added. For linear-Gaussian terms $D = 0$, by
+[%full](statement:exact). Otherwise, on the Euclidean and positive types, only the first sum
+remains, the curvature that every Gauss–Newton method leaves out. On a curved type all three parts
+are of the same order. Each is of order one, while $J\transpose J$ is of the order of the precisions
+$\Lambda_t$, so each changes the covariance by a relative amount of the order of the noise's
+variance, $\sigma^2$.
+
+- **The chart's part is positive.** On every curved type the library has, the chart's log-volume is
+  $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$, whose Hessian at zero is $-I$. So the chart adds $+I$
+  on each curved quantity that is integrated over.
+- **The terms' part is negative.** Let $G_t$ be the derivative of the term's tangent coordinate
+  $\point \ominus \mu$ with respect to $\tangent$. A term's log-volume adds about
+  $-G_t\transpose G_t$, against the $G_t\transpose \Lambda_t G_t$ that its rows keep. This is the
+  replacement of $\Lambda$ by $\Lambda - I$ that
+  [the normal's properties](../normal/math.svx#properties) describe for a measurement.
+- **The residuals' part is not small, even at the mode.** Along the retraction, the second
+  derivative of $\point \ominus \mu$ is of first order in the residual. The first sum of
+  [](eq:omitted) is therefore quadratic in the residuals, of order one like the others, and it
+  vanishes only where the residuals do. For a rotation measured in the Cayley chart, it averages
+  about $+\tfrac12 I$ over the noise, against the log-volume's $-I$. This was computed numerically,
+  from 4000 draws at $\sigma = 0.1$.
+
+**The sign is not fixed.** One covariance is smaller than another exactly when its precision is
+larger, and then every marginal of it is smaller too. So the rows' covariance is smaller than the
+second-order Laplace covariance $(J\transpose J + D)^{-1}$ in every direction when $D$ is negative
+semidefinite, and larger in every direction when $D$ is positive semidefinite. Neither holds in
+general: the chart's part is positive, the terms' log-volumes negative, and the residuals' part
+can be of either sign.
+
+What a covariance is meant to describe, though, is the posterior, and the second-order Laplace
+approximation is itself in error on a curved type, at the same relative order $\sigma^2$. Two
+examples on the rotations, in the Cayley chart with an isotropic $\sigma$, show how the three
+covariances compare with the posterior's. Both were computed numerically: the posterior's
+covariance in the chart at the mode by importance sampling, or exactly from the chain that
+generates it.
+
+The first example is a rotation with a prior of fixed mean and $k$ measurements of it, linearized
+at the posterior mode. The table gives the trace of each covariance divided by the posterior's,
+averaged over six data sets:
+
+| $\sigma$ | $k$ | rows | rows and log-volumes | full Hessian |
+| --- | --- | --- | --- | --- |
+| $0.3$ | $1$ | $0.976$ | $1.021$ | $1.004$ |
+| $0.3$ | $3$ | $0.971$ | $1.038$ | $1.003$ |
+| $0.15$ | $1$ | $0.993$ | $1.004$ | $1.000$ |
+| $0.15$ | $3$ | $0.992$ | $1.008$ | $0.999$ |
+
+The rows are over-confident by about half of the $\sigma^2 k / (k + 1)$ that the log-volumes alone
+would predict. Adding the log-volumes' curvature overshoots, to an under-confidence of about the
+same size, because the residuals' curvature cancels about half of it. The full Hessian is close to
+the posterior.
+
+The second example is a chain: $\randomPoint_0$ with a prior of fixed mean, and
+$\randomPoint_1 = \randomPoint_0 \oplus \varepsilon$, with nothing observed. It is linearized at its
+mode, where every residual is zero. The residuals' curvature therefore vanishes, and the rows with
+the log-volumes' curvature are the full Hessian. The variance of $\randomPoint_1$, per axis, is:
+
+| $\sigma$ | rows | full Hessian | posterior |
+| --- | --- | --- | --- |
+| $0.3$ | $0.180$ | $0.159$ | $0.194$ |
+| $0.15$ | $0.0450$ | $0.0435$ | $0.0457$ |
+
+Both approximations are over-confident here, and the rows are the closer. They are exact on
+$\randomPoint_0$, where the full Hessian gives $0.083$ against $0.09$ at $\sigma = 0.3$. The
+second-order approximation matches the curvature at the mode exactly, and that does not match the
+spread: the posterior is a Gaussian in the chart of $\randomPoint_0$ and in that of the transition,
+not in the joint chart at the mode.
+
+So, on a curved quantity:
+
+- **Confidence.** Compared with the second-order Laplace approximation, the rows' covariance may be
+  over- or under-confident, depending on the direction. Compared with the posterior, it was slightly
+  over-confident in every case computed here: by $1$ to $2\,\%$ at $\sigma = 0.15$ rad and $3$ to
+  $7\,\%$ at $\sigma = 0.3$ rad. No argument shows that it must be. On the Euclidean and positive
+  types with linear-Gaussian terms, it is exact.
+- **Consistency.** Adding the log-volumes' curvature to the kept marginal is not the consistent
+  choice. It adds one of three parts of the same order and leaves out the residuals', which in the
+  first example cancels about half of it. Added on the kept quantities alone, it also leaves out the
+  curvature on the eliminated ones, which reaches the marginal through their conditionals. To first
+  order in $D$, the marginal precision on $K$ changes by $P\transpose D P$, not by $D_{KK}$. Here
+  $P$ lifts a tangent vector on $K$ to the whole tangent by the conditionals of the eliminated
+  quantities $E$, with the right-hand sides set to zero: with $\Lambda = J\transpose J$ in blocks,
+  $P = (I, -\Lambda_{EE}^{-1} \Lambda_{EK})$.
+  The consistent second-order approximation is the full Hessian. It needs Hessian passes, it can
+  be indefinite, and in the second example it is no closer to the posterior.
+- **Definiteness.** The rows' precision is positive definite whenever the rows determine every
+  direction. With the log-volumes' curvature, the terms' and the chart's parts sum to about
+  $\sum_t G_t\transpose (\Lambda_t - I) G_t + I$ on the curved blocks. That is positive definite
+  whenever every $\Lambda_t - I$ is, that is, when every curved term's noise is less than one in
+  its chart's coordinates. This is the condition under which a normal's mean is a mode of its
+  density. Definiteness is lost only where the normals themselves are broad, and the residuals'
+  part can still move this boundary.
 
 > [!TODO] The curvature of the log-volumes
-> The rows cannot carry the terms' and the chart's log-volume curvature: on a curved type the first is
-> negative semidefinite, and a negative curvature is not a sum of squares; adding it to
-> $R\transpose R$ is a downdate of the factor, which can lose definiteness and is not stable in the
-> way the rest of the elimination is. As written, this document leaves both out, so that the covariance on a curved
-> quantity is wrong by a relative error of the order of its noise's variance, $\sigma^2$, which is
-> $10^{-2}$ at $\sigma = 0.1$ rad, and exact on the Euclidean and positive types. The alternative
-> is to add the curvature of the log-volumes to the marginal's precision after the elimination, on
-> the few quantities kept, where it is a small dense matrix, and to refuse when the sum is not
-> positive definite. Should the entry leave the curvature out, add it to the kept marginals only,
-> or carry it through the elimination?
+> Leaving the curvature out keeps every precision a sum of squares, positive definite by
+> construction, and errs on a curved quantity by a relative amount of order $\sigma^2$. In the
+> examples above, it was over-confident and never further from the posterior than the alternatives.
+> Adding the log-volumes' curvature alone is no more accurate. The full second-order approximation
+> needs Hessian passes and is not reliably closer. This document recommends leaving the curvature
+> out, stating its order where the covariance of a curved quantity is reported, and leaving a
+> second-order Laplace approximation to an entry that needs one. Is that the decision?
 
 ## A retirement's replacement
 
