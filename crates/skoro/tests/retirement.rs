@@ -991,3 +991,386 @@ fn stacked_replacement_binds_the_normal_roles() {
         );
     }
 }
+
+/// The planar bearing of the improper factor's mathematics: a landmark `l` with no prior, poses
+/// `x_k ~ N(p_k, σ_p² I)`, and `z_k | l, x_k ~ N(a_kᵀ(l - x_k), σ²)`.
+mod bearings {
+    pub const SIGMA: f64 = 0.3;
+    pub const POSE_SD: f64 = 0.5;
+    pub const DIRECTIONS: [[f64; 2]; 2] = [[0.6, 0.8], [1.0, 0.0]];
+    pub const POSES: [[f64; 2]; 2] = [[0.0, -1.0], [2.0, 0.5]];
+    pub const MEASURED: [f64; 2] = [1.2, -0.7];
+    /// The landmark's anchor.
+    pub const ANCHOR: [f64; 2] = [0.5, 0.5];
+
+    pub fn dot(a: [f64; 2], b: [f64; 2]) -> f64 {
+        a[0] * b[0] + a[1] * b[1]
+    }
+
+    /// `s_k`, the scale of `a_kᵀ l - z_k` once the pose is integrated out.
+    pub fn s() -> f64 {
+        (SIGMA * SIGMA + POSE_SD * POSE_SD).sqrt()
+    }
+
+    /// The row `a_kᵀ / s_k`, its right-hand side `(ẑ_k + a_kᵀp_k - a_kᵀq) / s_k`, and the constant
+    /// `-½ log 2π s_k²`.
+    pub fn row(k: usize) -> ([f64; 2], f64, f64) {
+        let (a, s) = (DIRECTIONS[k], s());
+        let b = (MEASURED[k] + dot(a, POSES[k]) - dot(a, ANCHOR)) / s;
+        let c = -0.5 * (2.0 * std::f64::consts::PI * s * s).ln();
+        ([a[0] / s, a[1] / s], b, c)
+    }
+
+    /// `log ∫ N(x; p_k, σ_p² I) N(ẑ_k; a_kᵀ(l - x), σ²) dx`, in closed form.
+    pub fn integral(k: usize, l: [f64; 2]) -> f64 {
+        let a = DIRECTIONS[k];
+        super::log_normal(MEASURED[k], dot(a, l) - dot(a, POSES[k]), s())
+    }
+}
+
+struct Bearings {
+    writer: Writer,
+    landmark: Q<skoro::Vector<2>>,
+    measurements: [Q<Real>; 2],
+}
+
+fn bearings() -> Bearings {
+    use skoro::Vector;
+    use skoro_normal::{Normal, Scale};
+    let mut writer = Writer::new();
+    let (landmark, measurements) = writer
+        .build(|| {
+            let landmark = quantity("landmark", Vector::<2>);
+            let measurements = [0, 1].map(|k| {
+                let pose = quantity(format!("pose/{k}/x").as_str(), Vector::<2>);
+                let p = constant(Vector::<2>, bearings::POSES[k]);
+                Normal::on(Vector::<2>, p, Scale::sd(bearings::POSE_SD)).score(pose);
+                let a = constant(Vector::<2>, bearings::DIRECTIONS[k]);
+                let mean = (a * (landmark - pose)).sum();
+                let z = quantity(format!("pose/{k}/z").as_str(), Real);
+                Normal::on(Real, mean, Scale::sd(bearings::SIGMA)).score(z);
+                z
+            });
+            (landmark, measurements)
+        })
+        .unwrap();
+    Bearings {
+        writer,
+        landmark,
+        measurements,
+    }
+}
+
+/// The improper replacement of the retired poses `ks`, one row each, over the landmark.
+fn bearing_replacement(landmark: Q<skoro::Vector<2>>, ks: &[usize]) -> Replacement {
+    use skoro::Vector;
+    use skoro_normal::Stacked;
+    let rows: Vec<_> = ks.iter().map(|&k| bearings::row(k)).collect();
+    // A, stored column by column.
+    let a: Vec<f64> = (0..2)
+        .flat_map(|j| rows.iter().map(move |r| r.0[j]))
+        .collect();
+    let b: Vec<f64> = rows.iter().map(|r| r.1).collect();
+    let c: f64 = rows.iter().map(|r| r.2).sum();
+    Stacked::new()
+        .block(landmark, Vector::<2>, bearings::ANCHOR)
+        .improper(ks.len(), a.as_slice(), b.as_slice(), c)
+        .replacement()
+}
+
+/// The model's log-density at each of `points` of the landmark, everything else as given.
+fn density_at_landmarks(
+    snapshot: &Snapshot,
+    landmark: Q<skoro::Vector<2>>,
+    points: &[[f64; 2]],
+) -> Vec<f64> {
+    let given = Observations::new().observe(landmark, skoro::Rows(points.to_vec()));
+    let program = snapshot
+        .compile(&Query::log_density().given(given), &Target::host())
+        .unwrap();
+    host(&program.forward(&Values::new()).unwrap(), NodeId::DENSITY)
+}
+
+#[test]
+fn bearings_accumulate() {
+    let points = [[0.5, 0.5], [-1.0, 2.0], [3.0, -0.5], [1.7, 1.1]];
+    let close = |found: &[f64], want: &[f64]| {
+        for (f, w) in found.iter().zip(want) {
+            assert!(
+                (f - w).abs() < 1e-12 * w.abs().max(1.0),
+                "{found:?} against {want:?}"
+            );
+        }
+    };
+
+    // One pose retired: the factor is the integral of its terms, the landmark's other terms
+    // those of the second pose.
+    let mut model = bearings();
+    let landmark = model.landmark;
+    let observed = Observations::new().observe(model.measurements[0], bearings::MEASURED[0]);
+    let first = model
+        .writer
+        .retire(Addresses::new().under("pose/0"), observed)
+        .unwrap()
+        .replace(|_| bearing_replacement(landmark, &[0]))
+        .unwrap()
+        .expect("a retirement of something adds a factor");
+    let snapshot = model.writer.snapshot();
+    let given = Observations::new().observe(landmark, skoro::Rows(points.to_vec()));
+    let program = snapshot
+        .compile(
+            &Query::of([QDyn::from(first)]).given(given),
+            &Target::host(),
+        )
+        .unwrap();
+    let found = host(&program.forward(&Values::new()).unwrap(), first.id());
+    let want: Vec<f64> = points.iter().map(|&l| bearings::integral(0, l)).collect();
+    close(&found, &want);
+
+    // The second retired: two factors, which the model reads as their sum.
+    let observed = Observations::new().observe(model.measurements[1], bearings::MEASURED[1]);
+    model
+        .writer
+        .retire(Addresses::new().under("pose/1"), observed)
+        .unwrap()
+        .replace(|_| bearing_replacement(landmark, &[1]))
+        .unwrap();
+    let one_at_a_time = density_at_landmarks(&model.writer.snapshot(), landmark, &points);
+    let want: Vec<f64> = points
+        .iter()
+        .map(|&l| bearings::integral(0, l) + bearings::integral(1, l))
+        .collect();
+    close(&one_at_a_time, &want);
+
+    // Both at once, by one factor of two rows: the same, constants included.
+    let mut both = bearings();
+    let landmark = both.landmark;
+    let observed = Observations::new()
+        .observe(both.measurements[0], bearings::MEASURED[0])
+        .observe(both.measurements[1], bearings::MEASURED[1]);
+    both.writer
+        .retire(Addresses::new().under("pose"), observed)
+        .unwrap()
+        .replace(|_| bearing_replacement(landmark, &[0, 1]))
+        .unwrap();
+    close(
+        &density_at_landmarks(&both.writer.snapshot(), landmark, &points),
+        &one_at_a_time,
+    );
+
+    // Of rank two, the sum is a normal whose mean is where the two lines a_kᵀ l = ẑ_k + a_kᵀp_k
+    // cross: the model's gradient in the landmark vanishes there.
+    let [a0, a1] = bearings::DIRECTIONS;
+    let r = [0, 1].map(|k| {
+        bearings::MEASURED[k] + bearings::dot(bearings::DIRECTIONS[k], bearings::POSES[k])
+    });
+    let det = a0[0] * a1[1] - a0[1] * a1[0];
+    let crossing = [
+        (r[0] * a1[1] - r[1] * a0[1]) / det,
+        (a0[0] * r[1] - a1[0] * r[0]) / det,
+    ];
+    let target = Target::host();
+    let program = model
+        .writer
+        .snapshot()
+        .compile(&Query::log_density(), &target)
+        .unwrap();
+    let at = Values::new().with(
+        model.landmark,
+        Value::Continuous(skoro::tensor::Points::from_host(&crossing, 1, 2, &target)),
+    );
+    let (_, gradient) = program.gradient(&at).unwrap();
+    for g in gradient.get(model.landmark).unwrap().to_host() {
+        assert!(g.abs() < 1e-12, "the gradient at the crossing: {g}");
+    }
+}
+
+/// The positive example of the improper factor's mathematics: `θ ~ N(0, 1)`, a parameter `φ`,
+/// and a positive `x` scored by the normal with the mean `e^(θ + φ)` and the scale `σ`.
+mod positive {
+    pub const SIGMA: f64 = 0.6;
+    pub const PHI_HAT: f64 = 0.4;
+    pub const X_HAT: f64 = 1.7;
+}
+
+/// The positive example's model, and its quantities `φ` and `x`.
+fn positive_model() -> (Writer, Q<Real>, Q<skoro::Positive<1>>) {
+    use skoro::Positive;
+    use skoro_normal::{Normal, Scale};
+    let mut writer = Writer::new();
+    let (phi, x) = writer
+        .build(|| {
+            let theta = quantity("theta", Real);
+            Normal::on(Real, constant(Real, 0.0), Scale::sd(1.0)).score(theta);
+            let phi = quantity("phi", Real);
+            let x = quantity("x", Positive::<1>);
+            let mean = (theta + phi).exp_positive();
+            Normal::on(Positive::<1>, mean, Scale::sd(positive::SIGMA)).score(x);
+            (phi, x)
+        })
+        .unwrap();
+    (writer, phi, x)
+}
+
+/// The exact replacement of retiring `θ`: one row and the linear part `(0, 1)`.
+fn positive_replacement(phi: Q<Real>, x: Q<skoro::Positive<1>>) -> Replacement {
+    use skoro::Positive;
+    use skoro_normal::Stacked;
+    let s = (1.0 + positive::SIGMA * positive::SIGMA).sqrt();
+    let b = -(positive::X_HAT.ln() - positive::PHI_HAT) / s;
+    let c = -positive::X_HAT.ln() - 0.5 * (2.0 * std::f64::consts::PI * s * s).ln();
+    Stacked::new()
+        .block(phi, Real, positive::PHI_HAT)
+        .block(x, Positive::<1>, [positive::X_HAT])
+        .improper(1, &[-1.0 / s, 1.0 / s][..], &[b][..], c)
+        .linear(&[0.0, 1.0][..])
+        .replacement()
+}
+
+#[test]
+fn improper_replacement_binds_its_roles() {
+    use skoro_normal::roles;
+    // The bearing's factor binds its residual, and no log-volume.
+    let mut model = bearings();
+    let landmark = model.landmark;
+    let observed = Observations::new().observe(model.measurements[0], bearings::MEASURED[0]);
+    let factor = model
+        .writer
+        .retire(Addresses::new().under("pose/0"), observed)
+        .unwrap()
+        .replace(|_| bearing_replacement(landmark, &[0]))
+        .unwrap()
+        .expect("a retirement of something adds a factor");
+    let snapshot = model.writer.snapshot();
+    assert_eq!(snapshot.term(factor.id()).unwrap().scores, None);
+    snapshot.bound(factor.id(), &roles::RESIDUAL).unwrap();
+    assert!(
+        snapshot
+            .bound(factor.id(), &roles::LOG_VOLUME)
+            .unwrap()
+            .is_none()
+    );
+    assert!(snapshot.bound(factor.id(), &roles::MEAN).is_err());
+
+    // The positive example's binds its linear part under the log-volume role, whose value is ηᵀδ.
+    let (mut writer, phi, x) = positive_model();
+    let factor = writer
+        .retire(Addresses::new().at("theta"), Observations::new())
+        .unwrap()
+        .replace(|_| positive_replacement(phi, x))
+        .unwrap()
+        .expect("a retirement of something adds a factor");
+    let snapshot = writer.snapshot();
+    snapshot.bound(factor.id(), &roles::RESIDUAL).unwrap();
+    let linear = snapshot
+        .bound(factor.id(), &roles::LOG_VOLUME)
+        .unwrap()
+        .expect("the linear part is bound");
+    let points = [(-0.3, 0.5), (1.2, 3.1)];
+    let given = Observations::new()
+        .observe(phi, skoro::Rows(points.iter().map(|p| p.0).collect()))
+        .observe(x, skoro::Rows(points.iter().map(|p| [p.1]).collect()));
+    let program = snapshot
+        .compile(
+            &Query::of([linear, QDyn::from(factor)]).given(given),
+            &Target::host(),
+        )
+        .unwrap();
+    let out = program.forward(&Values::new()).unwrap();
+    let s2 = 1.0 + positive::SIGMA * positive::SIGMA;
+    for (k, &(phi, x)) in points.iter().enumerate() {
+        let delta = (x / positive::X_HAT).ln();
+        assert!((host(&out, linear)[k] - delta).abs() < 1e-12);
+        let want = -x.ln()
+            - (x.ln() - phi).powi(2) / (2.0 * s2)
+            - 0.5 * (2.0 * std::f64::consts::PI * s2).ln();
+        assert!((host(&out, factor.id())[k] - want).abs() < 1e-12);
+    }
+}
+
+/// Draws a positive value `exp(m + sd Φ⁻¹(u))`, `m` its one input, from each row's key.
+#[derive(Debug)]
+struct LogNormal {
+    sd: f64,
+}
+
+impl skoro::Sample for LogNormal {
+    fn name(&self) -> &'static str {
+        "test.log_normal"
+    }
+
+    fn params(&self) -> Vec<skoro::Param> {
+        vec![skoro::Param::Float(self.sd)]
+    }
+
+    fn draw(&self, inputs: &[Value], keys: &[Key], target: &Target) -> Value {
+        let Value::Continuous(log_mean) = &inputs[0] else {
+            panic!("a real log-mean")
+        };
+        let log_mean = log_mean.to_host();
+        let normal = common::normal::Normal { sd: self.sd };
+        let draws: Vec<f64> = keys
+            .iter()
+            .enumerate()
+            .map(|(row, key)| normal.draw_one(key, log_mean[row]).exp())
+            .collect();
+        Value::Continuous(skoro::tensor::Points::from_host(
+            &draws,
+            keys.len(),
+            1,
+            target,
+        ))
+    }
+}
+
+#[test]
+fn undetermined_blanket_needs_a_proposal() {
+    use skoro::Positive;
+    use skoro_normal::{Normal, Scale};
+    let (key, rows, target) = (Key::from_seed(31), 6, Target::host());
+
+    // Retiring θ retires the normal that scored x, which a factor of rank one on D = 2 leaves
+    // undetermined: without a proposal, x cannot be drawn.
+    let (mut writer, phi, x) = positive_model();
+    writer
+        .retire(Addresses::new().at("theta"), Observations::new())
+        .unwrap()
+        .replace(|_| positive_replacement(phi, x))
+        .unwrap();
+    let given = Observations::new().observe(phi, positive::PHI_HAT);
+    let refused = writer.snapshot().generate(&given, &key, rows, &target);
+    assert!(
+        matches!(refused, Err(Error::CannotGenerate { quantity, .. }) if quantity == x.id()),
+        "{refused:?}"
+    );
+
+    // With a proposal given on the replacement, it is drawn.
+    let (mut writer, phi, x) = positive_model();
+    writer
+        .retire(Addresses::new().at("theta"), Observations::new())
+        .unwrap()
+        .replace(|_| {
+            let mean = constant(Positive::<1>, [positive::X_HAT]);
+            let log_density = Normal::on(Positive::<1>, mean, Scale::sd(1.0))
+                .log_density(x)
+                .log_density;
+            let proposal = skoro::Proposal {
+                sample: Arc::new(LogNormal { sd: 1.0 }),
+                inputs: vec![constant(Real, positive::X_HAT.ln()).untyped()],
+                log_density,
+            };
+            Replacement {
+                proposals: vec![(x.untyped(), proposal)],
+                ..positive_replacement(phi, x)
+            }
+        })
+        .unwrap();
+    let given = Observations::new().observe(phi, positive::PHI_HAT);
+    let generated = writer
+        .snapshot()
+        .generate(&given, &key, rows, &target)
+        .unwrap();
+    for weight in generated.log_weight.to_host() {
+        assert!(weight.is_finite(), "{weight}");
+    }
+}

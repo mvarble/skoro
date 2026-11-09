@@ -44,7 +44,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The umbrella's tests (`skoro`)
 
-- [ ] The improper factor in retirements: the planar bearings, the bindings on the factor a
+- [x] The improper factor in retirements: the planar bearings, the bindings on the factor a
       retirement adds, and a blanket quantity left undetermined. Tests:
       `retirement.rs::bearings_accumulate`, `retirement.rs::improper_replacement_binds_its_roles`,
       `retirement.rs::undetermined_blanket_needs_a_proposal`.
