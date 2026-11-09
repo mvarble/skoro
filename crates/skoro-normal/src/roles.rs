@@ -1,13 +1,15 @@
 //! The roles a normal's term binds, by which a reader in another crate finds its parts.
 //!
 //! The residual, the log-volume and the information root are named without the normal's prefix:
-//! they mean the same of any distribution with a whitened residual or a closed-form information.
+//! they mean the same of any term with a whitened residual or a closed-form information, the
+//! improper factor of [`Improper`](crate::Improper) among them.
 
 use skoro_core::{AtMostOne, ExactlyOne, Role};
 
 use crate::Form;
 
-/// The whitened residual `W (x ⊖ μ)` of a term, or `W (z ⊖ μ)` of a factor.
+/// The whitened residual: `W (x ⊖ μ)` of a normal's term, `W (z ⊖ μ)` of its factor, and
+/// `A δ - b` of an improper factor, of any number of components.
 pub const RESIDUAL: Role<ExactlyOne> = Role::new("skoro.residual");
 /// The mean `μ`.
 pub const MEAN: Role<ExactlyOne> = Role::new("skoro.normal.mean");
@@ -19,7 +21,11 @@ pub const DIAGONAL: Role<AtMostOne> = Role::new("skoro.normal.scale.diagonal");
 pub const COVARIANCE_FACTOR: Role<AtMostOne> = Role::new("skoro.normal.scale.covariance_factor");
 /// The scale given as `W`, with `Λ = WᵀW`.
 pub const WHITENING: Role<AtMostOne> = Role::new("skoro.normal.scale.whitening");
-/// The log-volume `λ_μ(x ⊖ μ)`, where it is not identically zero.
+/// The varying part of a term's remainder: what is left of its log-density after the squares of
+/// its residual and a normalizer constant in its free quantities, where that is not identically
+/// zero. On a normal it is the chart's log-volume `λ_μ(x ⊖ μ)`, and on an improper factor its
+/// linear part `ηᵀδ`. It is not the volume of a chart: a reader that needs a quantity's chart
+/// volume reads it from the quantity's type.
 pub const LOG_VOLUME: Role<AtMostOne> = Role::new("skoro.log_volume");
 /// The root `C` of the expected information, on a term that scores a quantity.
 pub const INFORMATION_ROOT: Role<AtMostOne> = Role::new("skoro.information_root");

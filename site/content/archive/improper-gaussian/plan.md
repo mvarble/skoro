@@ -39,7 +39,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
       `gauss_newton_is_the_hessian_on_flat_types`.
 - [x] The factor of no rows, with and without a linear part, through every pass. Tests:
       `no_rows_is_its_linear_part`.
-- [ ] The descriptions of the module, `RESIDUAL` and `LOG_VOLUME` in `roles.rs`, as the
+- [x] The descriptions of the module, `RESIDUAL` and `LOG_VOLUME` in `roles.rs`, as the
       implementation gives them. Tests: none; `cargo doc` resolves the link to `Improper`.
 
 ## The umbrella's tests (`skoro`)
