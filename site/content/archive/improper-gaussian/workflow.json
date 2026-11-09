@@ -1,13 +1,25 @@
 {
     "kind": "feature",
-    "stage": "math",
+    "stage": "implementation",
     "started": "2026-11-09",
     "events": [
         {
             "date": "2026-11-09",
             "action": "start",
             "stage": "math"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "approve",
+            "stage": "math",
+            "commit": "e500fce"
         }
     ],
-    "approvals": {}
+    "approvals": {
+        "math": {
+            "date": "2026-11-09",
+            "commit": "e500fce",
+            "hash": "9fcf107530d73cee2fc55fd8714e392ad095209933d7aebb73bd0ba063ebc982"
+        }
+    }
 }
