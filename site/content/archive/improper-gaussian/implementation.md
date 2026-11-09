@@ -556,3 +556,15 @@ For values of no entries, in the crates the fix changes:
 
 None remain. Whether the library reduces the rows is settled in [The factor](#the-factor), and where
 values of no entries are fixed in [A factor of no rows](#a-factor-of-no-rows).
+
+## Revisions
+
+**2026-11-09.** The build found that burn's `reshape` reads a dimension of zero in its target shape
+as "keep the source's size of this dimension", not as a size of zero, so that a reshape to a shape
+of no entries is wrong, and panics where the zero lies beyond the source's rank. The matrix
+product's reshapes in `crates/skoro-core/src/primitive/euclidean.rs` fail on a `Matrix(0, D)`, which
+a factor of no rows multiplies, and the body of `broadcast` given in
+[A factor of no rows](#a-factor-of-no-rows), which reshapes a tensor of no entries, fails for a
+valid broadcast whose zero lies beyond the tensor's rank, such as `[2, 1]` to `[3, 2, 0]`. The
+design is revised to reshape values of no entries by a function of the tensor layer, as it already
+broadcasts them, and to correct `broadcast`'s body.

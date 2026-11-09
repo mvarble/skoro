@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "build",
+    "stage": "implementation",
     "started": "2026-11-09",
     "events": [
         {
@@ -38,6 +38,13 @@
             "action": "approve",
             "stage": "plan",
             "commit": "7846700"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "burn's reshape reads a zero dimension as \"keep the source's size\", so the matrix product's reshapes and broadcast's own body fail on values of no entries.",
+            "commit": "e6e5017"
         }
     ],
     "approvals": {
@@ -49,12 +56,14 @@
         "implementation": {
             "date": "2026-11-09",
             "commit": "8287c3e",
-            "hash": "b0bed410611567fc9016dc66d3f61cf7cf77fe90ea8b18966b2c7395635b9ec6"
+            "hash": "b0bed410611567fc9016dc66d3f61cf7cf77fe90ea8b18966b2c7395635b9ec6",
+            "stale": true
         },
         "plan": {
             "date": "2026-11-09",
             "commit": "7846700",
-            "hash": "3ba7c91709fc9ba5e601f417b8705c2ef2b785ca1c5e920d320ab571ab603ef8"
+            "hash": "3ba7c91709fc9ba5e601f417b8705c2ef2b785ca1c5e920d320ab571ab603ef8",
+            "stale": true
         }
     }
 }
