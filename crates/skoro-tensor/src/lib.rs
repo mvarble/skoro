@@ -12,7 +12,7 @@ pub use ::burn::tensor::Device;
 pub use error::TensorError;
 pub use host::{HostData, HostValue};
 pub use target::{Precision, Target};
-pub use value::{Frame, Integers, Points, Value, broadcast};
+pub use value::{Frame, Integers, Points, Value, broadcast, reshape};
 
 /// Finds the wgpu device the tests run on, and fails naming the missing adapter when there is
 /// none, so that a run with the `wgpu` feature on and no adapter cannot pass with nothing run.

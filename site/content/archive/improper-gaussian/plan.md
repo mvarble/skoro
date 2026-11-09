@@ -13,7 +13,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The tensor layer (`skoro-tensor`)
 
-- [ ] `broadcast` and `reshape` in `value.rs`, both making a tensor of no entries with
+- [x] `broadcast` and `reshape` in `value.rs`, both making a tensor of no entries with
       `Tensor::empty`, exported from the crate's root, and the two calls of `expand` in `host.rs`
       replaced by `broadcast`. Tests: `broadcast_to_no_entries`, `reshape_to_no_entries`,
       `values_of_no_entries_load`.
