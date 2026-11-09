@@ -34,7 +34,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
       binding of the residual and the linear part; `Improper` exported from the crate's root, and
       the crate's documentation naming it. Tests: `value_is_the_definition`, `roles_are_bound`,
       `rows_differ_across_a_batch`, `no_blocks_is_refused`.
-- [ ] The tests of the mathematics' statements and examples on the flat-in-disguise types. Tests:
+- [x] The tests of the mathematics' statements and examples on the flat-in-disguise types. Tests:
       `full_rank_is_the_stacked_normal`, `forms_give_one_function`, `positive_example_is_exact`,
       `gauss_newton_is_the_hessian_on_flat_types`.
 - [ ] The factor of no rows, with and without a linear part, through every pass. Tests:
