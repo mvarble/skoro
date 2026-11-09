@@ -395,13 +395,53 @@ second-order approximation matches the curvature at the mode exactly, and that d
 spread: the posterior is a Gaussian in the chart of $\randomPoint_0$ and in that of the transition,
 not in the joint chart at the mode.
 
+**The replacement's covariance.** A retirement's replacement differs in two ways. The chart's
+part of [](eq:omitted) is there only for the integrated quantities $E_F$, so nothing offsets the
+terms' log-volumes on the blanket's $B_F$. And the replacement is a log-density with respect to the
+blanket's reference measure, not a Gaussian in its chart, so a later query that reads it applies
+the chart's volume to it again. The second example, read as a retirement of $\randomPoint_0$ that
+keeps $\randomPoint_1$, shows both. The exact replacement is the logarithm of the marginal density
+of $\randomPoint_1$, whose curvature at the anchor was computed numerically from draws of
+$\randomPoint_0$:
+
+| $\sigma$ | rows | with [](eq:omitted) | with [](eq:omitted) and the log-determinant | exact |
+| --- | --- | --- | --- | --- |
+| $0.3$ | $5.556$ | $5.294$ | $5.457$ | $5.455$ |
+| $0.15$ | $22.22$ | $21.97$ | $22.10$ | $22.10$ |
+
+These are precisions per axis. The rows are over-confident at the anchor, by $2\,\%$ at
+$\sigma = 0.3$ and $0.6\,\%$ at $0.15$. The second-order Schur complement overshoots, by about as
+much, the other way. The exact curvature needs one more term: how the log-determinant of the
+eliminated block's Hessian varies with $\tangent_B$, the correction of Laplace's method of the next
+order. So at the anchor the pattern is that of the first example.
+
+The larger cost lies elsewhere. The exact replacement is not a Gaussian in the anchor's chart,
+whatever its curvature, and the departure is of the order of the replacement's own variance. With
+the exact curvature, a later query that holds the replacement alone gives $\randomPoint_1$ the
+variance $0.159$ per axis, against the $0.193$ of the exact marginal at $\sigma = 0.3$, and $0.0435$
+against $0.0458$ at $\sigma = 0.15$. A filter that predicts without measuring retires one state
+after another, and its replacement's variance grows. Its error grows with it. At $\sigma = 0.15$,
+after $k$ retirements along the chain, the variance that the replacement gives the newest state,
+divided by the exact one, is:
+
+| $k$ | $1$ | $2$ | $3$ | $4$ | $5$ |
+| --- | --- | --- | --- | --- | --- |
+| rows | $0.94$ | $0.91$ | $0.88$ | $0.85$ | $0.82$ |
+| with [](eq:omitted) | $0.94$ | $0.90$ | $0.84$ | $0.77$ | $0.71$ |
+
+This is the over-confidence of an extended Kalman filter on a curved state, and it is a cost of the
+Gaussian form that `Stacked` takes, not of the omitted curvature. Adding the curvature makes it
+worse after the first step. Measurements bound the replacement's variance, and with it this error.
+
 So, on a curved quantity:
 
 - **Confidence.** Compared with the second-order Laplace approximation, the rows' covariance may be
   over- or under-confident, depending on the direction. Compared with the posterior, it was slightly
   over-confident in every case computed here: by $1$ to $2\,\%$ at $\sigma = 0.15$ rad and $3$ to
-  $7\,\%$ at $\sigma = 0.3$ rad. No argument shows that it must be. On the Euclidean and positive
-  types with linear-Gaussian terms, it is exact.
+  $7\,\%$ at $\sigma = 0.3$ rad. No argument shows that it must be. A replacement was over-confident
+  in every case computed, by a relative amount of the order of its own variance in rad$^2$, and
+  this grows over a sequence of retirements that measure nothing. On the Euclidean and positive types
+  with linear-Gaussian terms, both are exact.
 - **Consistency.** Adding the log-volumes' curvature to the kept marginal is not the consistent
   choice. It adds one of three parts of the same order and leaves out the residuals', which in the
   first example cancels about half of it. Added on the kept quantities alone, it also leaves out the
@@ -418,16 +458,20 @@ So, on a curved quantity:
   whenever every $\Lambda_t - I$ is, that is, when every curved term's noise is less than one in
   its chart's coordinates. This is the condition under which a normal's mean is a mode of its
   density. Definiteness is lost only where the normals themselves are broad, and the residuals'
-  part can still move this boundary.
+  part can still move this boundary. On a replacement's $B_F$ there is no $+I$, so the margin is
+  smaller there: the sum is $\sum_t G_t\transpose (\Lambda_t - I) G_t$ alone.
 
 > [!TODO] The curvature of the log-volumes
 > Leaving the curvature out keeps every precision a sum of squares, positive definite by
-> construction, and errs on a curved quantity by a relative amount of order $\sigma^2$. In the
-> examples above, it was over-confident and never further from the posterior than the alternatives.
-> Adding the log-volumes' curvature alone is no more accurate. The full second-order approximation
-> needs Hessian passes and is not reliably closer. This document recommends leaving the curvature
-> out, stating its order where the covariance of a curved quantity is reported, and leaving a
-> second-order Laplace approximation to an entry that needs one. Is that the decision?
+> construction. On a curved quantity it errs by a relative amount of order $\sigma^2$ at the
+> linearization point, over-confident in every example above. Adding the log-volumes' curvature
+> alone is no more accurate. The full second-order approximation needs Hessian passes and is not
+> reliably closer; for a replacement, it also needs the log-determinant term of the next order. A
+> replacement's larger error, of the order of its own variance and growing along a filter that does
+> not measure, comes from its Gaussian form, and no curvature term removes it. This document
+> recommends leaving the curvature out. It would state the order of the error wherever the
+> covariance of a curved quantity is reported, and leave second-order Laplace approximations, and
+> replacements of another form, to entries that need them. Is that the decision?
 
 ## A retirement's replacement
 
