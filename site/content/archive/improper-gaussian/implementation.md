@@ -1,5 +1,5 @@
 ---
-summary: The improper Gaussian factor as `Stacked::improper` in skoro-normal, a builder of its rows, right-hand side, linear part and constant over a stacked tangent, which gives a retirement's replacement or a likelihood factor with its residual and its linear part bound, and the core's support for values of no entries that a factor of no rows needs.
+summary: The improper Gaussian factor as `Stacked::improper` in skoro-normal, a builder of its rows, right-hand side, linear part and constant over a stacked tangent, which gives a retirement's replacement or a likelihood factor with its residual and its linear part bound, and the core's support, through every pass, for the values of no entries that a factor of no rows needs.
 depends_on: [archive/improper-gaussian/math, archive/normal/math, archive/core/math]
 ---
 
@@ -402,46 +402,66 @@ refused at the caller's line. The math's blanket has at least one continuous qua
 retirement whose blanket has none has a replacement that is a constant, which a caller writes as
 `constant(Real, c)` with no factor to build.
 
-The fix this entry recommends is in the tensor layer: one function that broadcasts a tensor to a
-shape, in `crates/skoro-tensor/src/value.rs`,
+> [!DECISION] The core is fixed in this entry
+> The entry that needs values of no entries is the one that makes the core carry them. Its build
+> changes `skoro-tensor` and `skoro-core` as well as `skoro-normal`, its `crates` list all three at
+> publish, and it is pushed only after a run with an adapter. A chore entry for the core first would
+> have set this entry aside for a change of a few lines; padding a factor of no rows with one zero
+> row, which part 2 of [%full](statement:archive/improper-gaussian/math/forms) allows on shapes
+> alone, would leave the core as it is but give a reader a residual of one component where the math
+> says it has none, and the `linearization` entry a row it does not count.
+
+The fix is in the tensor layer: one function that broadcasts a tensor of any kind to a shape, in
+`crates/skoro-tensor/src/value.rs`, exported from the crate's root beside `Points` and `Frame`:
 
 ```rust
-/// `tensor` broadcast to `shape`: burn's `expand`, and, where `shape` has a dimension of zero,
-/// the tensor of no entries of that shape, which `expand` refuses.
-pub fn broadcast<const D: usize>(tensor: Tensor<D>, shape: [usize; D]) -> Tensor<D> {
+use burn::tensor::kind::Basic;
+
+/// `tensor` broadcast to `shape`, as burn's `expand` does; where `shape` has a dimension of zero,
+/// which `expand` refuses, the tensor of no entries of that shape, of `tensor`'s kind, element
+/// type and device.
+pub fn broadcast<const D: usize, K: Basic>(tensor: Tensor<D, K>, shape: [usize; D]) -> Tensor<D, K> {
     if shape.contains(&0) {
-        Tensor::zeros(shape, (&tensor.device(), tensor.dtype()))
+        // No entries in, none out: slicing every dimension to nothing keeps the kind, the element
+        // type and the device, and a tensor of no entries reshapes to any shape of none.
+        tensor.slice(std::array::from_fn::<_, D, _>(|_| 0..0)).reshape(shape)
     } else {
         tensor.expand(shape)
     }
 }
 ```
 
-called at the sixteen places that call `expand` today, and nothing else changed. Whether the rest of
-the passes then carry a value of no entries is what the tests below find out. The experiment above
-ran the forward pass only, on the host device, before the first `expand` of the reverse pass
-stopped it; the tangent, cotangent and Hessian passes beyond the places that call `expand` are
-untried. A change to `skoro-tensor` and to the primitives' kernels is
-pushed only after `cargo test --workspace --features wgpu` passes on a machine with an adapter, and
-its commit says so; wgpu's handling of empty buffers is the part least known.
+A scratch run of this body on the host device, at double precision, gave tensors of no entries of
+shapes `[3, 0]`, `[4, 2, 0]` and `[5, 0]` from float, integer and boolean tensors, with the float
+element type kept, and the sum of a `[3, 0]` tensor over its second dimension was three zeros. The
+alternative, `Tensor::zeros` of the shape, exists for float and integer tensors with an explicit
+element type, but not alike for every kind, and would need the dtype read back from the tensor.
 
-> [!TODO] Where values of no entries are fixed
-> A factor of no rows, which the math and the `linearization` entry both rely on, cannot be built
-> until the core carries values of no entries. Three ways forward:
->
-> 1. **Fix the core in this entry's build**, with `broadcast` as above. The entry then changes
->    `skoro-tensor` and `skoro-core` as well as `skoro-normal`, lists them in its `crates` at
->    publish, and is pushed only after a run with an adapter. The fix is small and the entry is the
->    one that needs it.
-> 2. **A chore entry for the core first**, on its own branch, merged before this one is built. The
->    core's change is then reviewed as a change to the core, at the cost of setting this entry aside
->    until it lands.
-> 3. **Pad a factor of no rows with one zero row**, which part 2 of
->    [%full](statement:archive/improper-gaussian/math/forms) allows on shapes alone. The core is not touched, but the residual a reader finds then has
->    one component where the math says it has none, which contradicts the approved math and the
->    `linearization` entry's count of rows, and needs `/wf-reopen math`.
->
-> This document recommends the first. Which should it be?
+Every call of `expand` in `crates/` becomes a call of `broadcast`, each with the shape it has today,
+reshaped first where it expands to more dimensions than it has:
+
+| file | line at `19b4b35` | what it broadcasts |
+| --- | --- | --- |
+| `skoro-tensor/src/host.rs` | 68, 75 | a shared host value to its batch |
+| `skoro-core/src/program.rs` | 775, 780, 793 | a shared value or frame to the batch of a pass |
+| `skoro-core/src/primitive/rule.rs` | 176, 182 | a value, and a cotangent, across a frame's columns |
+| `skoro-core/src/primitive/euclidean.rs` | 489, 502, 532, 563, 619, 625, 646 | a scalar across a vector in `Product` and `Scaling`, and across a frame's columns; a matrix across columns in `MatrixProduct`; the cotangent in `Summation`'s pullback |
+| `skoro-core/src/primitive/positive.rs` | 157, 165 | `Selection`'s mask, in its value and across a frame's columns |
+
+At `rule.rs:176` and `euclidean.rs:563` (`repeat`), `expand` follows an `unsqueeze_dim`, which
+keeps its place: `broadcast(x.unsqueeze_dim::<3>(2), [n, d, k])`. `burn::tensor::kind::Basic` is the bound of
+burn's own `Tensor` methods, so the function takes every tensor `expand` takes.
+
+The experiment ran the forward pass only, on the host device, before the first `expand` of the
+reverse pass stopped it; the tangent, cotangent and Hessian passes beyond the places that call
+`expand` are untried. The test `values_of_no_entries_through_every_pass` below is what finds out.
+A further failure it finds in a kernel is fixed in that kernel, in the same way: an operation with
+no entries has the value of no entries, or a sum over none, zero. If a fix needs more than a guard
+around one burn call, the build stops and says so, since the design would then be incomplete.
+A change to `skoro-tensor` and to the primitives' kernels is pushed only after
+`cargo test --workspace --features wgpu` passes on a machine with an adapter, and its commit says
+so; wgpu's handling of empty buffers is the part least known, and a failure there is reported the
+same way.
 
 ## Tests
 
@@ -509,8 +529,12 @@ In `crates/skoro/tests/`, where the retirements and the spheres are:
   and its gradient agrees with central differences in the sphere's chart. Shows the factor on a
   curved type, where $\D \delta$ moves with the point.
 
-For values of no entries, whichever entry carries the fix:
+For values of no entries, in the crates the fix changes:
 
+- `crates/skoro-tensor/tests/values.rs::broadcast_to_no_entries`: `broadcast` of a float, an
+  integer and a boolean tensor to shapes with a dimension of zero gives tensors of those shapes,
+  of the same kind and element type, at both precisions; to shapes without one, it equals
+  `expand`.
 - `crates/skoro-tensor/tests/values.rs::values_of_no_entries_load`: a shared constant of no entries
   loads at a batch of three, and a per-row one of three rows of no entries loads as itself.
 - `crates/skoro-core/tests/passes.rs::values_of_no_entries_through_every_pass`: a `Vector(0)`
@@ -521,5 +545,5 @@ For values of no entries, whichever entry carries the fix:
 
 ## Open questions
 
-The question of [where values of no entries are fixed](#a-factor-of-no-rows) is open. Whether the
-library reduces the rows is settled in [The factor](#the-factor): it does not.
+None remain. Whether the library reduces the rows is settled in [The factor](#the-factor), and where
+values of no entries are fixed in [A factor of no rows](#a-factor-of-no-rows).
