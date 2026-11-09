@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use rpds::HashTrieMapSync;
 use skoro_tensor::HostValue;
 
-use crate::{IntoHostValue, NodeId, Q, QDyn, Typed};
+use crate::{IntoHostValue, NodeId, Q, QDyn, Snapshot, Typed};
 
 /// Values for some quantities, under an identity of their own: a set that is extended is a new
 /// set. Reference-counted, so a caller keeps one and passes it to every `compile`.
@@ -117,6 +117,22 @@ impl Query {
         Query {
             observations,
             ..self
+        }
+    }
+
+    /// The observations the query is given.
+    pub fn observations(&self) -> &Observations {
+        &self.observations
+    }
+
+    /// The terms whose log-densities a density query sums, in the order they were added: every
+    /// term of `snapshot` for `log_density()`, the named ones for `log_density_of`; `None` for a
+    /// query of nodes.
+    pub fn terms(&self, snapshot: &Snapshot) -> Option<Vec<NodeId>> {
+        match &self.targets {
+            Targets::Nodes(_) => None,
+            Targets::Density => Some(snapshot.0.terms.keys().copied().collect()),
+            Targets::DensityOf(terms) => Some(terms.iter().copied().collect()),
         }
     }
 }
