@@ -14,6 +14,7 @@ depends_on: []
 	import * as eliminateOne from './statements/eliminate-one.md';
 	import * as marginal from './statements/marginal.md';
 	import { starFactors, starTree } from './star.graph';
+	import { mapFactors, mapTree, mapJunction } from './junction.graph';
 </script>
 
 Gauss–Newton and Levenberg–Marquardt steps, Laplace approximations and Kalman filters all end in
@@ -484,13 +485,74 @@ elimination tree, so disjoint subtrees can be eliminated independently.
 
 <ModelGraph spec={starTree} />
 
-The plan, the order and the elimination tree with the separators, is the *symbolic* factorization,
-and it is reused for as long as the factor structure is unchanged: by every iteration of an
-optimizer, whose numbers change but not which factor touches which block, and by every problem of
-one shape. Chains of blocks that each have one child and the child's separator less themselves can
-be eliminated together, as one dense block, with no more fill; such groups are the cliques of a
-*junction tree*, and eliminating each with one factorization does the same arithmetic in fewer,
-larger dense operations.
+The order, the elimination tree and the separators together are the *symbolic factorization*:
+everything about the elimination that does not depend on the numbers in the rows. It is computed
+once and reused for as long as the factor structure stays the same. An optimizer that relinearizes
+at every iteration changes the numbers in every factor but not which factors involve which blocks,
+so it plans the elimination once; so does a program that solves many problems of the same shape.
+
+### Cliques and the junction tree
+
+Eliminating one small block at a time does the arithmetic in many small pieces. Some blocks can be
+eliminated together, as one larger block, with no more fill and the same result.
+
+Call two blocks *joined* when some factor involves both, counting the new factors that elimination
+creates as well as the original ones. When a block $k$ is eliminated, its factors are joined to all
+of $S_k$, its separator, and they leave a new factor on the whole of $S_k$. So every two blocks of
+$\{k\} \cup S_k$ are joined: it is a *clique*, in the sense of graph theory, and it is the set of
+blocks that the rows of $k$'s conditional involve.
+
+Now let $c$ be a child of $k$ in the elimination tree. The new factor of $c$ involves all of $S_c$,
+which contains $k$, and is collected when $k$ is eliminated, so $S_c \setminus \{k\} \subseteq S_k$.
+When the two are equal,
+
+$$
+	S_k = S_c \setminus \{k\} , @tag(clique-chain)
+$$
+
+the clique of $k$, $\{k\} \cup S_k$, is the clique of $c$, $\{c\} \cup S_c$, without $c$. It adds
+no block to it. Eliminating $c$ and $k$ together, as one block $(c, k)$ by
+[%full](statement:eliminate-one), then has the separator $S_k$ and leaves the same new factor and
+the same conditionals as eliminating them in turn. In fact it performs the same reflections: those
+that triangularize $c$'s columns leave unchanged the rows that are zero there, and what remains in
+$k$'s columns afterwards is exactly the rows that $k$'s own elimination would have stacked. A chain
+of blocks, each related to the next by [](eq:clique-chain), is eliminated as one block in the same
+way. If two children of $k$ both satisfy [](eq:clique-chain), $k$ joins either one.
+
+Grouping the blocks along such chains gives the maximal cliques: each group, together with its
+separator, is a clique that no other contains. The *junction tree* has a node for each group and an
+edge from the group that contains the parent of its last block to the group. Each node eliminates
+its *frontal* blocks, the group, and shares its separator with its parent: a block that two cliques
+contain is contained in every clique on the path between them, so what a clique shares with any
+clique outside its own subtree lies in its separator. The groups must be eliminated in an order that keeps each
+one's blocks consecutive, children before parents, which a postorder of the junction tree does.
+
+For example, take a small map of three poses $x_1, x_2, x_3$ and two landmarks $l_1, l_2$. A prior
+fixes $x_1$, odometry joins consecutive poses, a loop closure joins $x_1$ to $x_3$, and each
+landmark is seen from two poses.
+
+<ModelGraph spec={mapFactors} />
+
+Eliminating in the order $l_1, l_2, x_1, x_2, x_3$ gives the separators and the elimination tree
+below. Eliminating $l_1$ joins $x_1$ and $x_2$, which already were, and $l_2$ joins $x_2$ and
+$x_3$, so the order creates no fill.
+
+<ModelGraph spec={mapTree} />
+
+Both $x_1$ and $l_2$ have the separator $\{x_2, x_3\}$, which is $\{x_2\} \cup S_{x_2}$, and
+$S_{x_2} = \{x_3\}$ is $\{x_3\} \cup S_{x_3}$ with $x_3$ removed, so [](eq:clique-chain) holds for
+$x_2$ with either child, and for $x_3$ with $x_2$. Taking the child $x_1$ makes the chain
+$x_1, x_2, x_3$ one group. The landmarks stay groups of one block. The junction tree has three
+cliques.
+
+<ModelGraph spec={mapJunction} />
+
+Eliminating it takes three factorizations instead of five. Each landmark's is unchanged: the rows
+of its two sightings, reduced to a conditional and a new factor on its separator. The
+root's stacks the prior, the odometry, the loop closure and the two new factors into rows over
+$(x_1, x_2, x_3)$, and triangularizes them in one dense factorization, where eliminating the poses
+one at a time would have taken three smaller ones. The arithmetic is the same; done in fewer,
+larger dense operations, it runs faster.
 
 ## What the eliminated problem answers
 
