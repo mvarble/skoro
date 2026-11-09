@@ -32,8 +32,8 @@ linearization at a mode, and its evidence off the determinant of the eliminated 
 ([the core's retirement](../core/math.svx#retirement)) needs a replacement for the terms it removes,
 an integral the core leaves to the caller, and eliminating the retired quantities from the
 linearization of those terms gives it as an improper Gaussian in the blanket's tangent
-coordinates. When the retired terms determine the whole blanket, that is the form the normal
-already writes, its `Stacked` replacement. When they do not, as for a landmark seen by bearing
+coordinates. When the retired terms determine the whole blanket, its value is that of the form
+the normal already writes, its `Stacked` replacement. When they do not, as for a landmark seen by bearing
 from one pose, it keeps what they say about a quantity that cannot yet be estimated, so that a
 model can accumulate information before it estimates. On a chain of states that replacement is the update and the prediction of a Kalman
 filter, exact for linear-Gaussian terms and, for others, an extended Kalman filter's.
@@ -121,11 +121,28 @@ $$
 
 The first holds by the choice of $c_0$. The second holds because $g = -\sum_t \nabla \logterm_t =
 \sum_t J_t\transpose r_t + \sum_t \nabla \lambda_t$ by [](eq:split), the normalizers being
-constant, and the gradient of the squares at $\tangent = 0$ is $\sum_t J_t\transpose r_t$.
+constant, while the gradient of $m$ at $\tangent = 0$ is $\sum_t J_t\transpose (r_t + \hat c_t) +
+\eta$. For a folded term, $\D r_t = W_t \D s_t$, so $\nabla \lambda_t = \D s_t\transpose \nabla
+\lambda_t(s_t) = J_t\transpose W_t^{-\top} \nabla \lambda_t(s_t) = J_t\transpose \hat c_t$.
+
+**Folding a log-volume into its rows.** A folded log-volume's gradient lies in the row space of its
+own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, rather than by a
+linear term. The normal's log-volume is folded on the Euclidean types, where it is zero, and on
+the curved ones, where it is a function of $s_t = \point \ominus \mu$ alone: $\lambda_e(s_t)$ on a
+group whose chart translates the identity's, and a function of $\lVert s_t \rVert$ on the sphere
+with orthonormal bases. On a positive type it is $\sum_i \log \point_i$, which depends on the
+quantity and not only on $s_t$, and it stays in $\eta$. Folding is decided by the term's type, not
+by any number, so every row of a batch folds the same terms. It costs nothing, since $\hat c_t$ is
+a gradient of the size of $s_t$'s own components, and it gains two things. A folded linear term is
+solved with the residuals, at $\kappa(J)$, rather than at $\kappa(J)^2$ as the note says a linear
+term is. And elimination keeps it in the rows: by
+[the note](../../math/square-root-elimination/#eliminating-one-block), a linear term in the row
+space stays in the row space of every new factor, so a model of Euclidean and curved quantities
+has $\eta = 0$ exactly, before and after any elimination.
 
 **Why $\eta$ is read off the log-volumes.** In exact arithmetic $\eta = g - \sum_t J_t\transpose
-r_t$, and both terms of that difference are passes the linearization runs anyway. It is not
-computed so. On a model of normals with fixed scales on the Euclidean types, $\eta$ is exactly zero,
+(r_t + \hat c_t)$, and both terms of that difference are passes the linearization runs anyway. It is not
+computed so. On a model of normals with fixed scales on the Euclidean and curved types, $\eta$ is exactly zero,
 while $g$ and $\sum_t J_t\transpose r_t$ are each of the size of $\lVert J \rVert \lVert r \rVert$
 and each rounded at the query's precision: their difference is rounding of that size, not zero.
 The note shows that a linear term is solved at $\kappa(J)^2$, so the noise is amplified by the
@@ -133,15 +150,16 @@ square of the condition number, which is the very loss that solving by the rows 
 normal equations exists to avoid. Where the Jacobians are computed in single precision on a device
 and the step solved in double on the host, as the charter allows, a unit roundoff of $6 \times
 10^{-8}$ times $\kappa(J)^2$ swamps the step for a moderate $\kappa(J)$. Read off the bound
-log-volumes, $\eta$ is exactly zero wherever none is bound, and otherwise only as large, and as
-rounded, as the log-volumes' own gradients. The constant $c_0$ is a difference of the same kind,
+log-volumes that are not folded, $\eta$ is exactly zero wherever there are none, and otherwise
+only as large, and as rounded, as their own gradients. The constant $c_0$ is a difference of the same kind,
 but it enters only additively, in an evidence or a replacement's constant
 ([](eq:stacked)), with an absolute error of the query's unit roundoff times $\sum_t \lVert r_t
 \rVert^2$, and no solve amplifies it.
 
 The linearization is the note's problem [](eq:math/square-root-elimination/factored) with one
 factor for each term, with the rows $A_t = J_t$, of the dimension of $r_t$, over the blocks of
-$K_t$, and the right-hand side $b_t = -r_t$, and the linear term $\eta$, split by block. Each
+$K_t$, and the right-hand side $b_t = -(r_t + \hat c_t)$, and the linear term $\eta$, split by
+block. Each
 piece of the linear term involves a single block, so the factor structure is that of the terms
 alone.
 
@@ -160,7 +178,7 @@ curved type it is of the same order as the third, even at a mode
 third is the curvature of the log-volumes: zero on the Euclidean types, zero on the positive ones,
 whose log-volume is linear in their chart, and on a curved type of the relative order of the
 noise's variance, by the bound of [the normal's Gauss–Newton reading](../normal/math.svx#the-roles).
-The linear term keeps the log-volumes' gradients exactly. So a step that minimizes the
+The folded right-hand sides and the linear term keep the log-volumes' gradients exactly. So a step that minimizes the
 linearization is the iteration of [%full](statement:archive/normal/math/gauss-newton), with
 $s = \sum_t \lambda_t$ there: it stops only where $g = 0$, at a stationary point of $f$ itself,
 log-volumes included, and it converges there at the linear rate the omitted curvature sets. When every direction is determined by the rows, the
@@ -171,9 +189,9 @@ $$
 $$
 
 and it is computed as the note computes [](eq:math/square-root-elimination/complete-square): the
-part from the residuals at $\kappa(J)$, and the part from $\eta$ at $\kappa(J)^2$, as the normal
-equations would. On a model of normals with fixed scales on the Euclidean types, $\eta = 0$ and the
-whole step is a least-squares solution.
+part from the right-hand sides, folded log-volumes included, at $\kappa(J)$, and the part from
+$\eta$ at $\kappa(J)^2$, as the normal equations would. On a model of normals with fixed scales on
+the Euclidean and curved types, $\eta = 0$ and the whole step is a least-squares solution.
 
 **What is refused.** The linearization is defined when every factor binds a residual, and when the
 omitted curvature is of the kind the iteration tolerates. Following the charter's rule that an
@@ -184,7 +202,10 @@ quantity or the term:
 1. **a free discrete quantity**, since no derivative is taken with respect to it and the gradient
    at given values is not the target's ([discrete quantities in a query](../core/math.svx#queries));
 2. **a factor that binds no residual**, since its curvature would be missing from the rows
-   altogether, not approximated, and nothing would say what its gradient is beyond its squares;
+   altogether, not approximated, and nothing would say what its gradient is beyond its squares. A
+   residual of no components is a residual: an improper replacement
+   ([](eq:information-form)) may bind one, and its remainder is then affine in the logarithmic
+   chart of the positive quantities where such a factor arises, so no curvature is missing;
 3. **a factor whose scale is reached from a free quantity**, read off the scale it binds under the
    normal's roles, since its normalizer then moves, which [](eq:split) excludes. Carrying the
    normalizer's gradient in $\eta$ would not save it. Its residual depends on the scale, and the
@@ -529,28 +550,31 @@ their constants $\gamma$, and $\phi_B(\tangent_B) = \tfrac12 \lVert A' \tangent_
 \eta'^\top \tangent_B$ is the sum of the factors left on $B_F$. This holds for every
 $\tangent_B$, and asks nothing of the rows on $B_F$.
 
-Two reductions bring $\phi_B$ to the form stated. First, an orthogonal factorization of $[A' \;\,
-b']$ that reveals the rank of $A'$, with its columns pivoted, gives rows $A$ of full row rank $r$
-and leaves a residual $e$ in the rows below, so that $\tfrac12 \lVert A' \tangent_B - b' \rVert^2
-= \tfrac12 \lVert A \tangent_B - b_0 \rVert^2 + \tfrac12 \lVert e \rVert^2$. The rank is decided
-against a tolerance of the order of the unit roundoff times the largest diagonal entry. Second, the
-linear term splits as $\eta' = A\transpose u + \eta$, with $u = (A A\transpose)^{-1} A \eta'$ and
-$\eta$ in the null space of $A$, computed from an orthogonal factorization of $A\transpose$
-without forming $A A\transpose$. The part in the row space folds into the right-hand side, as
-[the note's linear terms](../../math/square-root-elimination/#linear-terms) do:
-$\tfrac12 \lVert A \tangent_B - b_0 \rVert^2 + u\transpose A \tangent_B = \tfrac12 \lVert A
-\tangent_B - (b_0 - u) \rVert^2 + u\transpose b_0 - \tfrac12 \lVert u \rVert^2$. Collecting the
+One reduction brings $\phi_B$ to the form stated. An orthogonal factorization of $[A' \;\, b']$,
+with no pivoting and no decision of rank, leaves $\min(m', D)$ rows $[A \;\, b]$, with $m'$ the
+number of rows of $A'$, and, when $m' > D$, a residual $e$ in the rows below, so that
+$\tfrac12 \lVert A' \tangent_B - b' \rVert^2 = \tfrac12 \lVert A \tangent_B - b \rVert^2 +
+\tfrac12 \lVert e \rVert^2$. The linear term is kept as it is, $\eta = \eta'$. Collecting the
 constants,
 
 $$
-	b = b_0 - u , \qquad
 	c = \tfrac{d_E}{2} \log 2\pi - \sum_{i \in E_F} \log \lvert R_{ii} \rvert - c_0 - \Gamma
-	- \tfrac12 \lVert e \rVert^2 - u\transpose b_0 + \tfrac12 \lVert u \rVert^2 . @tag(improper)
+	- \tfrac12 \lVert e \rVert^2 . @tag(improper)
 $$
 
+The number of rows, $\min(m', D)$, and whether $\eta$ is present at all, are fixed by the terms and
+their types alone: $m'$ is the number of components of the retired residuals less $d_E$, and
+$\eta$ is present only where a log-volume is not folded or a chart's log-volume of $E_F$ has a
+gradient, which happens only on the positive types. The numbers decide neither, so every row of a
+batch has a replacement of one shape. A replacement whose rows are numerically singular is not
+a different shape. It is a quantity the rows do not determine, which a later query that needs it
+refuses.
+
 If the rows have rank $d_E + D$, the matrix of $\phi_B$ is the Schur complement of a positive
-definite matrix, so $A$ is square and nonsingular, its null space is zero, and $\eta = 0$. The right-hand side is then a
-Gaussian in $\tangent_B$ with the precision $A\transpose A$ and the mean $m = A^{-1} b$, which by
+definite matrix, so $A$ is square and nonsingular, and $\eta$, if present, lies in its row space
+and folds into $b$ as [the note's linear terms](../../math/square-root-elimination/#linear-terms)
+do. The right-hand side is then a Gaussian in $\tangent_B$ with the precision $A\transpose A$ and
+the mean $m = A^{-1} (b - A^{-\top} \eta)$, which by
 [%full](statement:math/square-root-elimination/marginal) are those of the marginal of the normal
 density proportional to $e^{-m_T}$, and integrating it over $\tangent_B$ gives $Z$.
 
@@ -574,9 +598,9 @@ with the quantities it summarizes, and its value and its derivatives at $\hat \p
 linearization's. The constant makes the replacement right in value as well as in shape, which the
 core's tests of retirement check ([What the tests check](#what-the-tests-check)).
 
-When the retired terms determine the whole blanket, $r = D$ and $\eta = 0$, and
-[](eq:information-form) is the normal's `Stacked` replacement [](eq:archive/normal/math/joint),
-with:
+The replacement is written in this form whatever the rank, so that its shape depends on the
+structure alone. When the retired terms determine the whole blanket, its value is that of the
+normal's `Stacked` replacement [](eq:archive/normal/math/joint), with:
 
 $$
 	p_i = \hat \point_i \ (i \in B_F), \qquad
@@ -588,8 +612,10 @@ $$
 where $\tangent^* = (\tangent_E^*, \tangent_B^*)$ is the minimizer of $m_T$, $R$ the triangular
 root of its rows, eliminated in any order, and $W$ the lower-triangular root of what is left on
 $B_F$ after $E_F$ is eliminated, brought to a positive diagonal as
-[the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. When the
-retired terms do not determine the blanket, the replacement keeps what they say about it, and
+[the note](../../math/square-root-elimination/#what-the-eliminated-problem-answers) says. A reader
+that wants the mean and the scale reads them off $A$, $b$ and $\eta$ by one more factorization, and
+the core's replacements in the tests below are compared in value. When the retired terms do not
+determine the blanket, the replacement keeps what they say about it, and
 [Blanket quantities the rows do not determine](#blanket-quantities-the-rows-do-not-determine) says
 what that buys and what it costs.
 
@@ -667,40 +693,40 @@ never linearized again, a poor guess is kept. A parametrization in which the und
 enters linearly, such as an inverse depth, reduces this. That is the model's choice, not the
 linearization's.
 
-**When there is a linear term.** On the Euclidean and the curved types, the replacement has none.
-A normal's log-volume on these types depends on its tangent coordinate $t = \point \ominus \mu$
-alone: it is zero on a Euclidean type, $\lambda_e(t)$ on a group with the Cayley chart, and a
-function of $\lVert t \rVert$ on the sphere. Its gradient is therefore $G_t\transpose \nabla
-\lambda(t) = J_t\transpose W_t^{-\top} \nabla \lambda(t)$, with $G_t$ the derivative of $t$, $W_t$
-the whitening and $J_t = W_t G_t$ the term's rows. It lies in the row space of the term's own rows.
-The chart's log-volume of $E_F$ is even on these types, so its gradient at zero is zero. The whole
-linear term of $m_T$ therefore lies in the row space of the rows. By
-[the note](../../math/square-root-elimination/#eliminating-one-block), it stays in the row space
-through every elimination, and it folds into $b$, leaving $\eta = 0$. An earlier replacement among
-the retired terms has none, by the same argument, and so adds none.
+**When there is a linear term.** On the Euclidean and the curved types, there is none. Every
+normal's log-volume on these types is folded into its rows, and the chart's log-volume of $E_F$ is
+even, so its gradient at zero is zero. The linear term of $m_T$ is therefore zero, and elimination
+creates none. An earlier replacement among the retired terms has none either, by the same
+argument, and so adds none.
 
-On a positive type the log-volume $\sum_i \log \point_i$ depends on the quantity, not on its
-tangent coordinate at the mean, and a linear term can remain. Let a positive quantity $\point$ of
-the blanket be scored by the normal on the positive type with the mean $e^\theta$, where $\theta$
-is a Euclidean quantity that is retired, with no other term on $\theta$. The exact replacement is
+On a positive type the log-volume $\sum_i \log \point_i$ depends on the quantity and not only on
+its tangent coordinate at the mean, so it is not folded, and a linear term remains. Let a positive
+quantity $\point$ be scored by the normal on the positive type with the mean $e^{\theta + \varphi}$,
+let the Euclidean $\theta$ have the prior $\mathcal N(0, 1)$, and retire $\theta$, keeping
+$\varphi$ and $\point$. The exact replacement is
 
 $$
-	\logterm_B(\point) = \log \int \frac{1}{\point}\, \mathcal N(\log \point;\, \theta, \sigma^2) \, \dd \theta = -\log \point ,
+	\logterm_B(\point, \varphi) = \log \int \mathcal N(\theta;\, 0, 1)\, \frac{1}{\point}\, \mathcal N(\log \point;\, \theta + \varphi, \sigma^2) \, \dd \theta
+	= -\log \point - \frac{(\log \point - \varphi)^2}{2 (1 + \sigma^2)} - \tfrac12 \log \bigl(2\pi (1 + \sigma^2)\bigr) .
 $$
 
-which in the logarithmic chart at the anchor is $-\tangent - \log \hat \point$: no rows, and the
-linear term $\eta = 1$. The linearization finds exactly this. The one row is $[-1/\sigma \;\,
-1/\sigma]$ over $(\theta, \tangent)$, and its linear term is $(0, 1)$, the gradient of
-$\log \point$. Eliminating $\theta$ leaves no rows on $\tangent$, and the linear term $1$, which
-cannot be folded. With a prior on $\theta$ among the retired terms, the rows determine $\tangent$, the linear term folds, and
-the replacement is the log-normal's density, a `Stacked` replacement.
+In the logarithmic chart at the anchor, $\log \point = \log \hat \point + \tangent$, it is one
+squared row in $\tangent - \varphi$ and the linear term $-\tangent$. The linearization finds exactly
+this. Its rows over $(\theta, \varphi, \tangent)$ are the prior's $[1 \;\, 0 \;\, 0]$ and the
+term's $[-1 \;\, -1 \;\, 1] / \sigma$, and its linear term is $(0, 0, 1)$, the gradient of
+$\log \point$. Eliminating $\theta$ leaves one row on $(\varphi, \tangent)$, along
+$\tangent - \varphi$, and the linear term $(0, 1)$, since $\theta$'s own linear term is zero. Here
+the blanket is not determined and the linear term is not in the row's span, so the factor carries
+both. Where the retired terms determine the blanket as well, the same form has the value of a
+`Stacked` replacement.
 
 **How it meets the roles.** In the terms of [](eq:split), the factor [](eq:information-form)
-binds the whitened residual $A \delta - b$, which has $r$ components, fewer than $D$ when the
-blanket is not determined. Its remainder $\rho = c - \eta\transpose \delta$ has the constant
+binds the whitened residual $A \delta - b$, which has $\min(m', D)$ components, possibly none. Its remainder $\rho = c - \eta\transpose \delta$ has the constant
 normalizer $c$ and the varying part $\lambda = \eta\transpose \delta$. The linearization reads a
 term's linear part through the node bound under the log-volume role, so the factor binds
-$\eta\transpose \delta$ there, where $\eta \ne 0$. That node is not the log-volume of any measure.
+$\eta\transpose \delta$ there, where a positive type leaves a linear term. The core lets a
+replacement bind roles ([the replacement's bindings](../replacement-bindings/)), so a later query,
+or a later retirement, finds the factor's rows as it finds any other term's. That node is not the log-volume of any measure.
 It is the varying part of the remainder, which is all that the linearization's reading of the role
 assumes. Whether the role keeps its name, or is named for what it is, is the implementation's
 question.
@@ -708,10 +734,12 @@ question.
 > [!DECISION] Replacements are improper Gaussians
 > A retirement whose retired terms determine the retired quantities is replaced by
 > [](eq:information-form), whether or not they determine the blanket. Its parts are the rows $A$,
-> the right-hand side $b$, the linear term $\eta$ (nonzero only where a positive type leaves one)
-> and the constant $c$, at constant anchors. When the blanket is determined, it is written as the
-> normal's `Stacked` replacement, which binds the mean and the scale that a reader of a Gaussian
-> expects; otherwise, in the general form, which has no mean or covariance to bind. A retirement
+> the right-hand side $b$, the linear term $\eta$ (present only where a positive type leaves one)
+> and the constant $c$, at constant anchors. It is written in this one form whatever the rank, so
+> that its shape, $\min(m', D)$ rows and whether $\eta$ is present, is fixed by the retired terms
+> and their types, and every row of a batch has the same; when the blanket is determined, its value
+> is the normal's `Stacked` replacement's. It binds the residual $A \delta - b$, and the varying
+> part $\eta\transpose \delta$ of its remainder under the log-volume role. A retirement
 > whose terms do not determine a retired quantity is refused, naming it: the integral over that
 > quantity diverges on a Euclidean type, and a Gaussian does not approximate it on a curved one.
 > The entry is not finished without the general form.
@@ -759,7 +787,8 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   model, against quadrature.
 - **The replacement is the core's**, [](eq:stacked): retiring from the core's scalar chain gives
   [](eq:archive/core/math/kalman) and [](eq:archive/core/math/joint-blanket), constants included,
-  as `Stacked` replacements whose retired models pass the core's checks of retirement; on a
+  equal in value to the `Stacked` replacements, and the retired models pass the core's checks of
+  retirement; on a
   linear-Gaussian chain of several states, retiring them one at a time gives the Kalman filter's
   means, covariances and evidence; on a nonlinear chain, the replacement at the prediction agrees
   with an extended Kalman filter in its predicted mean to second order in the update's step, and
@@ -770,13 +799,17 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   each retirement leaves one row on $\ell$, and the sum of the two equals the replacement of
   retiring both poses at once, constants included, and gives the exact posterior of $\ell$ when
   queried; on a nonlinear bearing it agrees with a dense computation of the same linearized
-  integral; on the positive example it is $-\log \point$ exactly, with no rows and $\eta = 1$; on
-  Euclidean and rotation quantities its linear term is zero.
+  integral; on the positive example it is the exact replacement, one row and the linear term
+  $(0, 1)$; on Euclidean and rotation quantities its linear term is absent; and its shape is the
+  same for every row of a batch, singular rows included.
 - **Batch rows share the plan**: a batch of points has one order and one elimination tree, and
   each row's step is the step of that row linearized alone.
 - **The linear term is exactly zero where no log-volume is bound**: on a model of Euclidean normals
   with fixed scales the step is the least-squares solution, bit for bit independent of the
   query's gradient pass.
+- **Folded log-volumes are in the right-hand sides**: on normals of rotations, $\eta = 0$ exactly,
+  $J_t\transpose \hat c_t$ equals the cotangent pass of $\lambda_t$, and iterated steps converge to
+  the same mode as with the log-volume's gradient carried as a linear term.
 - **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
   is free, a quantity the rows do not determine, a retirement whose terms do not determine a
   retired quantity, and an integral over a quantity whose type has no volume, each naming what it
@@ -788,10 +821,11 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
   are the variables, each a block of its tangent dimension, and every other quantity is fixed.
   Each term reached from a free quantity is a factor over its free quantities $K_t$, read off the
   compilation graph; the others are constants of the query.
-- **A factor's rows are its residual's Jacobian**, $J_t$, and its right-hand side $-r_t$, both
-  from the node it binds under the residual role. The linear term $\eta$ is the gradient of the
-  nodes the terms bind under the log-volume role, the log-volumes of normals on positive and curved
-  quantities, and is exactly zero where none is bound; it is not formed as the query's gradient
+- **A factor's rows are its residual's Jacobian**, $J_t$, and its right-hand side
+  $-(r_t + \hat c_t)$, from the node it binds under the residual role and, on a curved type, the
+  gradient of its log-volume with respect to that residual. The linear term $\eta$ is the gradient
+  of the log-volumes that are not folded, those of normals on positive quantities and an improper
+  replacement's linear part, and is exactly zero where there are none; it is not formed as the query's gradient
   less what the rows account for, a difference that rounding would fill. Everything is of
   first order, computed at the query's precision, and solved on the host in double precision.
 - **The linearization is refused** for a free discrete quantity, a factor without a residual, and
@@ -808,10 +842,10 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 - **A retirement's replacement** is the linearized integral of [%full](statement:replacement),
   computed from the retired terms alone, free in the retired quantities to integrate and in the
   blanket's quantities to keep, at a point the caller chooses. It is the improper Gaussian
-  [](eq:information-form) at anchors at that point: rows, a right-hand side, a linear term only
-  where a positive type leaves one, and a constant. When it determines the blanket, it is written
-  as the normal's `Stacked` replacement with the mean, the whitening and the constant of
-  [](eq:stacked). It binds the residual $A \delta - b$ and, where $\eta \ne 0$, the varying part
+  [](eq:information-form) at anchors at that point: $\min(m', D)$ rows, a right-hand side, a
+  linear term only where a positive type leaves one, and a constant, in one form whatever the
+  rank. When it determines the blanket, its value is the normal's `Stacked` replacement's, with the
+  mean, the whitening and the constant of [](eq:stacked). It binds the residual $A \delta - b$ and, where $\eta \ne 0$, the varying part
   of its remainder under the log-volume role. It is exact for linear-Gaussian terms, where it is
   the Kalman filter, and otherwise an iterated extended Kalman filter or, at the prediction, an
   approximation of the extended one. A retirement whose terms do not determine a retired quantity

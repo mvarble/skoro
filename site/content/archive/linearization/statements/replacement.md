@@ -17,12 +17,11 @@ $$
 	= -\tfrac12 \lVert A \tangent_B - b \rVert^2 - \eta\transpose \tangent_B + c ,
 $$
 
-where $A$ has full row rank $r \le D$, $\eta$ lies in the null space of $A$, and $A$, $b$,
-$\eta$ and $c$ are those of [](eq:improper). Replacing the integrand of the replacement
+where $A$ has $\min(m', D)$ rows, with $m'$ the number of components of the retired residuals
+less $d_E$, and $A$, $b$, $\eta$ and $c$ are those of [](eq:improper). Replacing the integrand of the replacement
 $\logterm_B$ by $e^{-m_T}$ gives $\logterm_B(\hat \point_B \oplus \tangent_B)$ approximately as
 this right-hand side.
 
-If the rows have rank $d_E + D$, the number of their columns, then $r = D$ and $\eta = 0$. The
-right-hand side is then $\logterm_{\mathcal N}(\tangent_B;\, m, W) + \log Z$, with
+If the rows have rank $d_E + D$, the number of their columns, then the right-hand side is $\logterm_{\mathcal N}(\tangent_B;\, m, W) + \log Z$, with
 $Z = \int e^{-m_T}$, and with $m$ the mean and $W$ the lower-triangular whitening, with a positive
 diagonal, of the marginal on $\tangent_B$ of the normal density proportional to $e^{-m_T}$.
