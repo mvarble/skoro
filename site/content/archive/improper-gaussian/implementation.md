@@ -35,8 +35,8 @@ let factor = writer
     })?;
 ```
 
-After it, the landmark is scored by no term and is a parameter of the model, which the factor
-constrains along $a_k$ alone. A second retirement along another direction adds a second factor,
+The landmark is scored by no term, before the retirement and after it, and so is a parameter of
+the model; the factor constrains it along $a_k$ alone. A second retirement along another direction adds a second factor,
 and the model's log-density is their sum, a normal in the landmark
 ([Accumulation](math.svx#accumulation)).
 
@@ -211,6 +211,11 @@ impl Stacked {
     /// `Vector(rows)`, and `c` the constant, and no linear part. Each may be shared or given per
     /// row of a batch with `Rows`. Any number of rows is a factor, none included; the rows are
     /// kept as given, and none is added or removed.
+    ///
+    /// **The order of the blocks is load-bearing.** The columns of `A`, and the entries of `η`,
+    /// follow the order of the `block` calls, factor by factor, each over its quantity's tangent
+    /// coordinates. Nothing checks that correspondence, because nothing can: a matrix of the right
+    /// width is the rows of a factor in any order.
     #[track_caller]
     pub fn improper(
         &self,
@@ -325,16 +330,37 @@ number changes what it builds.
 - *A struct of the numbers*, built by the caller and passed to `Stacked`. It holds nothing the
   arguments do not, and the numbers must become constants in the scope where the factor is built
   anyway, which the call does.
-- *A reduction of the rows to $\min(r, D)$* by a host QR of $[A \;\, b]$, which
-  [%full](statement:archive/improper-gaussian/math/forms) allows on shapes alone. The builder
-  applies none: it would read the numbers of every row on the host, it would change the residual a
-  reader finds from what the caller wrote, and the `linearization` entry, the one producer in
-  sight, already gives $\min(m', D)$ rows. A caller with more rows than the blanket has
-  coordinates reduces them itself, or keeps them, at no cost but their number.
 - *A conversion to `Stacked`'s mean, whitening and constant* when $A$ has full rank, by
   [%full](statement:archive/improper-gaussian/math/full-rank). The math keeps `Stacked` for a
   caller that has a mean and a scale and the improper factor for one that has rows, and chooses no
   form by the numbers; a conversion would read them, and only the tests need it.
+
+**Against the archive.** The archive's `JointNormal` (`crates/skoro-normal/src/joint.rs` on
+`archive`) was the replacement of its sliding windows, $-\tfrac12 \lVert W \delta - d \rVert^2 + n$
+over a stacked tangent at frozen anchors. Three things are kept. The anchors are frozen as
+constants, so that the factor does not follow the quantities it summarizes. The right-hand side is
+explicit, rather than folded into a moved anchor, which the archive noted is exact only on a flat
+type, and which keeps the factor's value and Jacobian at the anchors exactly its rows on any type.
+And the numbers are pinned to the batch, one set for each row. Three are not. The archive's `W` was
+triangular and of full rank, and the rows here are of any number, which is the point of the entry.
+Its normalizer was one `f64` shared by every row, and the constant here may differ from row to row,
+as a linearization's does. And it named its quantities by id, beside a map of their points, where
+`Stacked` names them by their handles, one block at a time, with each anchor beside its quantity.
+Its warning that the order of the blocks is load-bearing carries over unchanged, to the
+documentation of `improper`.
+
+> [!TODO] Whether the library reduces the rows
+> [In skoro's terms](math.svx#in-skoro-s-terms) says that "a reduction to $\min(r, D)$ rows is the
+> only one the library applies by itself", which reads plainly as a promise that it applies one.
+> This design applies none, by a host QR of $[A \;\, b]$ or otherwise: a reduction would read the
+> numbers of every row on the host, it would change the residual a reader finds from the one the
+> caller wrote, and the `linearization` entry, the one producer in sight, already gives
+> $\min(m', D)$ rows. A caller with more rows than the blanket has coordinates reduces them
+> itself, or keeps them, at no cost but their number. If the math's sentence means that a
+> reduction is the only change of form the library *may* apply, the design stands as written; if it
+> means that the library applies one, either the builder reduces when $r > D$, or the math is
+> reopened (`/wf-reopen math`) to say "may". This document recommends reading it as "may", which
+> leaves the math as it is. Which is it?
 
 ### The roles' descriptions
 
@@ -395,8 +421,10 @@ pub fn broadcast<const D: usize>(tensor: Tensor<D>, shape: [usize; D]) -> Tensor
 ```
 
 called at the sixteen places that call `expand` today, and nothing else changed. Whether the rest of
-the passes then carry a value of no entries is what the tests below find out; the experiment above
-suggests they do on the host device. A change to `skoro-tensor` and to the primitives' kernels is
+the passes then carry a value of no entries is what the tests below find out. The experiment above
+ran the forward pass only, on the host device, before the first `expand` of the reverse pass
+stopped it; the tangent, cotangent and Hessian passes beyond the places that call `expand` are
+untried. A change to `skoro-tensor` and to the primitives' kernels is
 pushed only after `cargo test --workspace --features wgpu` passes on a machine with an adapter, and
 its commit says so; wgpu's handling of empty buffers is the part least known.
 
@@ -464,20 +492,21 @@ compared, with the tolerances of `tests/common`:
 
 In `crates/skoro/tests/`, where the retirements and the spheres are:
 
-- `retirement.rs::bearings_accumulate_into_the_posterior`: the planar bearing of
-  [Two examples](math.svx#two-examples), a landmark with a prior and two poses with priors, each
+- `retirement.rs::bearings_accumulate`: the planar bearing of
+  [Two examples](math.svx#two-examples), a landmark with no prior and two poses with priors, each
   measured along its own direction. Retiring the first pose with the improper replacement of one
   row leaves a model whose log-density in the landmark equals, at several points, the integral of
   the retired terms computed in closed form; retiring the second leaves two factors whose sum
-  equals the replacement of retiring both at once, constants included, and whose posterior in the
-  landmark, with its prior, is the normal computed on the host. Shows
-  [Accumulation](math.svx#accumulation) without a sum.
+  equals the replacement of retiring both at once, constants included, and is the normal of
+  [%full](statement:archive/improper-gaussian/math/full-rank) whose mean is the point where the two
+  lines cross, computed on the host. Shows [Accumulation](math.svx#accumulation) without a sum.
 - `retirement.rs::improper_replacement_binds_its_roles`: the replacement of the first retirement
   above binds the residual on the factor the retirement adds, and the factor of the positive example
   binds its linear part under the log-volume role, as the same factors added with `factor` do.
-- `retirement.rs::undetermined_blanket_needs_a_proposal`: after the first retirement alone, the
-  landmark, scored by no term, is refused generation without a proposal, as the core refuses every
-  parameter, and is generated with one given on the replacement.
+- `retirement.rs::undetermined_blanket_needs_a_proposal`: the positive example, retiring $\theta$,
+  retires the normal that scored $\point$, so that $\point$, scored by no term after it and left
+  undetermined by a factor of rank one on $D = 2$, is refused generation without a proposal, as the
+  core refuses every parameter, and is generated with one given on the replacement.
 - `sphere.rs::improper_factor_on_the_sphere`: over a point of the acceptance-test sphere and a
   `Real`, the factor equals the definition with $\delta$ read by the sphere's inverse retraction,
   and its gradient agrees with central differences in the sphere's chart. Shows the factor on a
@@ -495,4 +524,5 @@ For values of no entries, whichever entry carries the fix:
 
 ## Open questions
 
-The question of [where values of no entries are fixed](#a-factor-of-no-rows) is open.
+Two questions are open: [where values of no entries are fixed](#a-factor-of-no-rows), and
+[whether the library reduces the rows](#the-factor).
