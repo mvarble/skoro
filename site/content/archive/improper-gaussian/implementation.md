@@ -404,8 +404,8 @@ retirement whose blanket has none has a replacement that is a constant, which a 
 
 > [!DECISION] The core is fixed in this entry
 > The entry that needs values of no entries is the one that makes the core carry them. Its build
-> changes `skoro-tensor` and `skoro-core` as well as `skoro-normal`, its `crates` list all three at
-> publish, and it is pushed only after a run with an adapter. A chore entry for the core first would
+> changes `skoro-tensor` and `skoro-core` as well as `skoro-normal`, and the tests of `skoro`; its
+> `crates` list all four at publish, and it is pushed only after a run with an adapter. A chore entry for the core first would
 > have set this entry aside for a change of a few lines; padding a factor of no rows with one zero
 > row, which part 2 of [%full](statement:archive/improper-gaussian/math/forms) allows on shapes
 > alone, would leave the core as it is but give a reader a residual of one component where the math
@@ -417,11 +417,17 @@ The fix is in the tensor layer: one function that broadcasts a tensor of any kin
 ```rust
 use burn::tensor::kind::Basic;
 
-/// `tensor` broadcast to `shape`, as burn's `expand` does; where `shape` has a dimension of zero,
-/// which `expand` refuses, the tensor of no entries of that shape, of `tensor`'s kind, element
-/// type and device.
-pub fn broadcast<const D: usize, K: Basic>(tensor: Tensor<D, K>, shape: [usize; D]) -> Tensor<D, K> {
+/// `tensor` broadcast to `shape`, of as many dimensions or more, as burn's `expand` does; where
+/// `shape` has a dimension of zero, which `expand` refuses, the tensor of no entries of that
+/// shape, of `tensor`'s kind, element type and device.
+pub fn broadcast<const D: usize, const D2: usize, K: Basic>(
+    tensor: Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
     if shape.contains(&0) {
+        // expand's rule, aligned from the last dimension: each of the tensor's is 1 or the shape's.
+        debug_assert!(D <= D2 && tensor.dims().iter().rev().zip(shape.iter().rev())
+            .all(|(&from, &to)| from == 1 || from == to));
         // No entries in, none out: slicing every dimension to nothing keeps the kind, the element
         // type and the device, and a tensor of no entries reshapes to any shape of none.
         tensor.slice(std::array::from_fn::<_, D, _>(|_| 0..0)).reshape(shape)
@@ -431,14 +437,16 @@ pub fn broadcast<const D: usize, K: Basic>(tensor: Tensor<D, K>, shape: [usize; 
 }
 ```
 
-A scratch run of this body on the host device, at double precision, gave tensors of no entries of
-shapes `[3, 0]`, `[4, 2, 0]` and `[5, 0]` from float, integer and boolean tensors, with the float
-element type kept, and the sum of a `[3, 0]` tensor over its second dimension was three zeros. The
+A scratch run of this body, without the assertion, on the host device at double precision, gave
+tensors of no entries of the shapes asked from float, integer and boolean tensors, `[1, 2]` to
+`[3, 0, 2]` and a `[1, 0, 1]` to `[2, 3, 0, 5]` among them, with the float element type kept; to
+`[3, 4, 2]` it was `expand`'s; and the sum of a `[3, 0]` tensor over its second dimension was three
+zeros. The
 alternative, `Tensor::zeros` of the shape, exists for float and integer tensors with an explicit
 element type, but not alike for every kind, and would need the dtype read back from the tensor.
 
-Every call of `expand` in `crates/` becomes a call of `broadcast`, each with the shape it has today,
-reshaped first where it expands to more dimensions than it has:
+Every call of `expand` in `crates/` becomes a call of `broadcast`, with the tensor and the shape it
+has today:
 
 | file | line at `19b4b35` | what it broadcasts |
 | --- | --- | --- |
@@ -448,12 +456,13 @@ reshaped first where it expands to more dimensions than it has:
 | `skoro-core/src/primitive/euclidean.rs` | 489, 502, 532, 563, 619, 625, 646 | a scalar across a vector in `Product` and `Scaling`, and across a frame's columns; a matrix across columns in `MatrixProduct`; the cotangent in `Summation`'s pullback |
 | `skoro-core/src/primitive/positive.rs` | 157, 165 | `Selection`'s mask, in its value and across a frame's columns |
 
-At `rule.rs:176` and `euclidean.rs:563` (`repeat`), `expand` follows an `unsqueeze_dim`, which
-keeps its place: `broadcast(x.unsqueeze_dim::<3>(2), [n, d, k])`. `burn::tensor::kind::Basic` is the bound of
-burn's own `Tensor` methods, so the function takes every tensor `expand` takes.
+Where `expand` follows an `unsqueeze_dim`, at `rule.rs:176` and `euclidean.rs:563` (`repeat`), the
+`unsqueeze_dim` keeps its place, `broadcast(x.unsqueeze_dim::<3>(2), [n, d, k])`.
+`burn::tensor::kind::Basic` is the bound of burn's own `Tensor` methods, so the function takes every
+tensor `expand` takes.
 
-The experiment ran the forward pass only, on the host device, before the first `expand` of the
-reverse pass stopped it; the tangent, cotangent and Hessian passes beyond the places that call
+The run of `x.slice(0..0)` in [Values of no entries](#values-of-no-entries) exercised the forward
+pass only, on the host device, before the first `expand` of the reverse pass stopped it; the tangent, cotangent and Hessian passes beyond the places that call
 `expand` are untried. The test `values_of_no_entries_through_every_pass` below is what finds out.
 A further failure it finds in a kernel is fixed in that kernel, in the same way: an operation with
 no entries has the value of no entries, or a sum over none, zero. If a fix needs more than a guard
@@ -532,9 +541,9 @@ In `crates/skoro/tests/`, where the retirements and the spheres are:
 For values of no entries, in the crates the fix changes:
 
 - `crates/skoro-tensor/tests/values.rs::broadcast_to_no_entries`: `broadcast` of a float, an
-  integer and a boolean tensor to shapes with a dimension of zero gives tensors of those shapes,
-  of the same kind and element type, at both precisions; to shapes without one, it equals
-  `expand`.
+  integer and a boolean tensor to shapes with a dimension of zero, of as many dimensions and of
+  more, gives tensors of those shapes, of the same kind and element type, at both precisions; to
+  shapes without one, it equals `expand`.
 - `crates/skoro-tensor/tests/values.rs::values_of_no_entries_load`: a shared constant of no entries
   loads at a batch of three, and a per-row one of three rows of no entries loads as itself.
 - `crates/skoro-core/tests/passes.rs::values_of_no_entries_through_every_pass`: a `Vector(0)`
