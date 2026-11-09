@@ -192,8 +192,8 @@ publishes, so that a reader finds the residual of a retired window as it finds a
 
 A `Stacked` replacement is a normal, so it determines every direction of the blanket. A retirement
 whose terms do not, such as a landmark seen by bearing from a single pose, which says in which
-direction the landmark lies and nothing of how far, has as its replacement an *improper Gaussian
-factor* in the same stacked tangent $\delta$: a sum of squared affine rows of any number, a linear
+direction the landmark lies and nothing of how far, has as its replacement an _improper Gaussian
+factor_ in the same stacked tangent $\delta$: a sum of squared affine rows of any number, a linear
 part and a constant,
 
 $$
