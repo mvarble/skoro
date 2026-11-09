@@ -23,13 +23,18 @@ blanket.
 
 Many retirements do not. A landmark seen by bearing from a single pose is the standard case. When
 the pose is retired, the bearing has said in which direction the landmark lies, and nothing about
-how far. The exact replacement is then Gaussian across the bearing and constant along it, and no
-covariance describes it. A filter that must write its replacement as a normal density has two bad
+how far. In the landmark's tangent coordinates, the replacement is then Gaussian across the
+bearing and constant along it, and no covariance describes it. A filter that must write its replacement as a normal density has two bad
 choices: refuse the retirement, or invent a depth. The first keeps the pose in the model until the
 landmark is seen again, so that the window grows. The second puts a prior on the landmark that the
 data never gave.
 
-This entry gives skoro the form that needs neither: the *improper Gaussian factor*, a sum of
+The archive's sliding windows wrote their replacement as a joint normal in the offset form
+$W (\point_B \ominus \hat \point_B) - d$, anchored at the point where it was computed so that its
+value and Jacobian there are exactly the eliminated rows, with a triangular $W$ of full rank. The
+anchoring carries over unchanged; the rank does not.
+
+This entry gives skoro a form that needs neither a refusal nor an invented depth: the *improper Gaussian factor*, a sum of
 squared affine rows of any number, a linear term and a constant, in the blanket's tangent
 coordinates at fixed anchors. It keeps exactly what the retired terms say and nothing more. Such
 factors add, so that a model can marginalize what it learns about a quantity it cannot yet
@@ -120,16 +125,22 @@ integrable, and adding $c$ gives $c_{\mathcal N}$.
 </Proof>
 
 So the improper Gaussian factor contains `Stacked` as its case of full rank, and adds every factor
-that `Stacked` cannot write. Integrability is the only difference, and a likelihood factor never
-needed it: [%full](statement:archive/core/math/retirement) asks of a replacement that it be a
-function of the blanket, which an improper factor is.
+that `Stacked` cannot write. Integrability in $\delta$ is the only difference, and a likelihood
+factor never needed it: [%full](statement:archive/core/math/retirement) asks of a replacement that it be a
+function of the blanket, which an improper factor is. Integrability in $\delta$ is not
+integrability against the blanket's reference measure, which carries the chart's volume
+$e^{\lambda}$: on a compact curved type such as the rotations, a bounded factor of any rank is
+integrable against the type's measure, and on a positive type the two differ by the factor
+$\point$. What matters below is the reading in $\delta$, where the factor is Gaussian or flat.
 
 What integrability does change is generation. A blanket quantity that becomes a parameter with an
-improper factor as its only score cannot be drawn from the factor, since no normalization makes the
-factor a density. It needs a proposal, as the core already asks of every parameter, and generation
-is refused for it without one. Where the factor determines the quantity, the normal of
-[%full](statement:full-rank) is the proposal that makes every draw's weight the same, as the Kalman
-prediction does for a replacement of full rank.
+improper factor as its only score is not drawn from the factor. It needs a proposal, as the core
+already asks of every parameter, and generation is refused for it without one. Where the factor
+determines a Euclidean blanket, drawing $\delta$ from the normal of [%full](statement:full-rank)
+and setting $\point_i = p_i \oplus \delta_i$ is a proposal that makes every draw's weight the same,
+as the Kalman prediction does for the core's replacement of full rank. On a positive or a curved
+type the draw has the density of that normal times $e^{-\lambda}$ with respect to the type's
+measure, and the weights then vary with the chart's volume.
 
 ## Two examples
 
@@ -184,9 +195,11 @@ $$
 
 The linear term is not in the row space of $A$: by part 3 of [%full](statement:forms), at most its
 projection onto that space, $(-\tfrac12, \tfrac12)$, can be moved into $b$, and $(\tfrac12, \tfrac12)$
-remains. Along the null direction $(1, 1)$, the factor falls linearly. On the Euclidean types and
-the curved ones, the normal's log-volume is a function of its tangent coordinate alone, and such a
-linear term does not arise. On the positive types it does, which is why the factor carries $\eta$.
+remains. Along the null direction $(1, 1)$, the factor falls linearly. A replacement computed by
+linearizing normals on the Euclidean and the curved types has no such term, since the normal's
+log-volume there is a function of its tangent coordinate alone and its gradient lies in the span of
+its own rows; the `linearization` entry shows it. On the positive types one remains, as here, which
+is why the factor carries $\eta$.
 
 ## Forms of one factor
 
@@ -208,7 +221,8 @@ $$
 
 and the new constant restores $c$. For the anchors,
 $\point_i \ominus p_i' = (\point_i \ominus p_i) - w_i$ by [](eq:archive/normal/math/translation),
-so $\delta = \delta' + w$ in the new stacked tangent $\delta'$, and substituting gives the new
+and the blocks of the anchors kept are unchanged, so $\delta = \delta' + w$ in the new stacked
+tangent $\delta'$, and substituting gives the new
 right-hand side and constant.
 
 </Proof>
@@ -238,9 +252,9 @@ sum of the values, at every point, by the definition alone. Its rows can then be
 
 The model does not need its factors summed: a model that holds several factors is their sum, and
 every reader of the model reads them as terms. Summing is a convenience, which keeps a model of many
-retirements small. It is exact when the anchors agree, and on a flat-in-disguise type it is always
-exact, since the last part of [%full](statement:forms) moves a factor to any other anchor without
-changing its value. On a curved type, the stacked tangent at one anchor is not an affine function
+retirements small. It is exact when the anchors agree, and whatever the anchors of the
+flat-in-disguise quantities, since the last part of [%full](statement:forms) moves those anchors
+without changing the factor's value. On a curved type, the stacked tangent at one anchor is not an affine function
 of the stacked tangent at another, and two factors anchored differently are kept as two terms.
 
 The example of the bearings shows what this buys. A filter retires each pose as it leaves the

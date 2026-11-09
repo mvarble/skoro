@@ -12,5 +12,7 @@ every $\point_B$:
    $A'$, $(A',\, b',\, \eta,\, c - \tfrac12 \lVert e \rVert^2)$;
 3. for any $u \in \R^r$, $(A,\, b - u,\, \eta - A\transpose u,\, c - u\transpose b + \tfrac12 \lVert u \rVert^2)$.
 
-On a flat-in-disguise type, moving the anchor $p_i$ to $p_i' = p_i \oplus w_i$ for every $i$, with
-$w = (w_1, \dots, w_k)$, also leaves it unchanged with $(A,\, b - A w,\, \eta,\, c - \eta\transpose w)$.
+Moving the anchor $p_i$ of each quantity $\point_i$ of a flat-in-disguise type to
+$p_i' = p_i \oplus w_i$, and keeping the anchors of the others, with $w \in \R^D$ stacked from the
+$w_i$ and zero in the blocks of the anchors kept, also leaves it unchanged with
+$(A,\, b - A w,\, \eta,\, c - \eta\transpose w)$.
