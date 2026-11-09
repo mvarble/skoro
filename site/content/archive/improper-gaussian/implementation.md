@@ -173,6 +173,22 @@ with another; only `expand` refuses. skoro calls `expand` at sixteen places, in 
 `host.rs` and in `skoro-core`'s `program.rs` and the primitives' `rule.rs`, `euclidean.rs` and
 `positive.rs`. What wgpu does with a buffer of no bytes has not been tried, and is not assumed.
 
+burn's `reshape` fails in another way. A dimension of zero in its target shape is read as "the
+source's size of this dimension", as some array libraries read it, and not as a size of zero
+(`ReshapeArgs`, in `cubecl-zspace`'s `shape.rs`): a reshape to a shape of no entries keeps whatever
+sizes the source had at those places, and panics where the zero lies beyond the source's rank, with
+
+```text
+index out of bounds: the len is 2 but the index is 2
+```
+
+burn's `unsqueeze` and `unsqueeze_dim` reshape too, and fail alike. The matrix product
+(`MatrixProduct`, in `euclidean.rs`) reshapes its operands into matrices, and its frames into
+matrices and back, at five places; a `Matrix(0, D)` panics in the first. Every pass of the product,
+the difference, the scaling, the sums, the slice and the concatenation of values of no entries
+gives the right values on the host device once `expand` is replaced, at both precisions; the
+matrix product does not.
+
 ## Design
 
 ### The factor
@@ -411,8 +427,11 @@ retirement whose blanket has none has a replacement that is a constant, which a 
 > alone, would leave the core as it is but give a reader a residual of one component where the math
 > says it has none, and the `linearization` entry a row it does not count.
 
-The fix is in the tensor layer: one function that broadcasts a tensor of any kind to a shape, in
-`crates/skoro-tensor/src/value.rs`, exported from the crate's root beside `Points` and `Frame`:
+The fix is in the tensor layer: two functions, one that broadcasts a tensor of any kind to a shape
+and one that reshapes it, in `crates/skoro-tensor/src/value.rs`, exported from the crate's root
+beside `Points` and `Frame`. Where the shape has a dimension of zero, each gives the tensor of no
+entries of that shape, made by burn's `Tensor::empty` with the tensor's own device and element
+type; elsewhere, each is the burn call it stands for.
 
 ```rust
 use burn::tensor::kind::Basic;
@@ -428,22 +447,46 @@ pub fn broadcast<const D: usize, const D2: usize, K: Basic>(
         // expand's rule, aligned from the last dimension: each of the tensor's is 1 or the shape's.
         debug_assert!(D <= D2 && tensor.dims().iter().rev().zip(shape.iter().rev())
             .all(|(&from, &to)| from == 1 || from == to));
-        // No entries in, none out: slicing every dimension to nothing keeps the kind, the element
-        // type and the device, and a tensor of no entries reshapes to any shape of none.
-        tensor.slice(std::array::from_fn::<_, D, _>(|_| 0..0)).reshape(shape)
+        no_entries(&tensor, shape)
     } else {
         tensor.expand(shape)
     }
 }
+
+/// `tensor` reshaped to `shape`, of any number of dimensions, its entries in order, as burn's
+/// `reshape` does; where `shape` has a dimension of zero, which `reshape` reads as the source's
+/// size there, the tensor of no entries of that shape, of `tensor`'s kind, element type and
+/// device.
+pub fn reshape<const D: usize, const D2: usize, K: Basic>(
+    tensor: Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    if shape.contains(&0) {
+        debug_assert_eq!(tensor.shape().num_elements(), 0, "{:?} has entries", tensor.dims());
+        no_entries(&tensor, shape)
+    } else {
+        tensor.reshape(shape)
+    }
+}
+
+/// The tensor of no entries of `shape`, of `like`'s kind, element type and device.
+fn no_entries<const D: usize, const D2: usize, K: Basic>(
+    like: &Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    Tensor::empty(shape, (&like.device(), like.dtype()))
+}
 ```
 
-A scratch run of this body, without the assertion, on the host device at double precision, gave
-tensors of no entries of the shapes asked from float, integer and boolean tensors, `[1, 2]` to
-`[3, 0, 2]` and a `[1, 0, 1]` to `[2, 3, 0, 5]` among them, with the float element type kept; to
-`[3, 4, 2]` it was `expand`'s; and the sum of a `[3, 0]` tensor over its second dimension was three
-zeros. The
-alternative, `Tensor::zeros` of the shape, exists for float and integer tensors with an explicit
-element type, but not alike for every kind, and would need the dtype read back from the tensor.
+This replaces the body of `broadcast` that the first approved design gave, which sliced the tensor
+to nothing and reshaped it, and so failed wherever a zero of the shape lay beyond the tensor's rank,
+as for the valid broadcast of `[2, 1]` to `[3, 2, 0]`. A scratch run of this body, without the
+assertions, on the host device at both precisions, gave the tensors of no entries asked, `[2, 0]`
+reshaped to `[2, 2, 0]` and back, a frame of no entries to `[2, 2, 0, 3]` and back, `[0, 0, 0]` to
+`[0, 5]`, and `[2, 1]` broadcast to `[3, 2, 0]`, with the element type of float, integer and boolean
+tensors kept; and the product of a `[2, 2, 0]` and a `[2, 0, 1]` tensor was zeros, as a sum over
+none should be. `Tensor::empty` is burn's constructor for every kind, so the function needs nothing
+of the kind beyond the bound `burn::tensor::kind::Basic` that burn's own `Tensor` methods take.
 
 Every call of `expand` in `crates/` becomes a call of `broadcast`, with the tensor and the shape it
 has today:
@@ -456,14 +499,26 @@ has today:
 | `skoro-core/src/primitive/euclidean.rs` | 489, 502, 532, 563, 619, 625, 646 | a scalar across a vector in `Product` and `Scaling`, and across a frame's columns; a matrix across columns in `MatrixProduct`; the cotangent in `Summation`'s pullback |
 | `skoro-core/src/primitive/positive.rs` | 157, 165 | `Selection`'s mask, in its value and across a frame's columns |
 
-Where `expand` follows an `unsqueeze_dim`, at `rule.rs:176` and `euclidean.rs:563` (`repeat`), the
-`unsqueeze_dim` keeps its place, `broadcast(x.unsqueeze_dim::<3>(2), [n, d, k])`.
-`burn::tensor::kind::Basic` is the bound of burn's own `Tensor` methods, so the function takes every
-tensor `expand` takes.
+Every call of `reshape`, `unsqueeze` or `unsqueeze_dim` in `skoro-core` becomes a call of
+`reshape`, with the shape it gives today written out:
 
-The run of `x.slice(0..0)` in [Values of no entries](#values-of-no-entries) exercised the forward
-pass only, on the host device, before the first `expand` of the reverse pass stopped it; the tangent, cotangent and Hessian passes beyond the places that call
-`expand` are untried. The test `values_of_no_entries_through_every_pass` below is what finds out.
+| file | line at `19b4b35` | what it reshapes |
+| --- | --- | --- |
+| `skoro-core/src/primitive/euclidean.rs` | 542, 547 | a value into matrices and back, in `matrix` and `unmatrix` |
+| `skoro-core/src/primitive/euclidean.rs` | 553, 558 | a frame into matrices and back, in `matrices` and `unmatrices` |
+| `skoro-core/src/primitive/euclidean.rs` | 563 | matrices to one more dimension, in `repeat`: `reshape(x, [n, 1, rows, cols])` |
+| `skoro-core/src/primitive/rule.rs` | 176 | a value to one more dimension, in `columns`: `reshape(x, [n, d, 1])` |
+| `skoro-core/src/primitive/positive.rs` | 164 | `Selection`'s mask to one more dimension: `reshape(chosen, [n, d, 1])` |
+
+The last two add a dimension at the end, which keeps every zero of the source at its place, so that
+burn's `unsqueeze_dim` would give the right shape there; they go through `reshape` all the same, so
+that the rule is one: no tensor that may have no entries is broadcast or reshaped by burn directly.
+The `reshape` calls of `skoro-spatial` reshape rows of fixed shapes of three by three, which never
+have a dimension of zero, and stay as they are.
+
+Every pass but the matrix product's has been run on values of no entries, as
+[Values of no entries](#values-of-no-entries) says; the matrix product's passes beyond its reshapes
+are untried, and the test `values_of_no_entries_through_every_pass` below is what finds out.
 A further failure it finds in a kernel is fixed in that kernel, in the same way: an operation with
 no entries has the value of no entries, or a sum over none, zero. If a fix needs more than a guard
 around one burn call, the build stops and says so, since the design would then be incomplete.
@@ -542,13 +597,17 @@ For values of no entries, in the crates the fix changes:
 
 - `crates/skoro-tensor/tests/values.rs::broadcast_to_no_entries`: `broadcast` of a float, an
   integer and a boolean tensor to shapes with a dimension of zero, of as many dimensions and of
-  more, gives tensors of those shapes, of the same kind and element type, at both precisions; to
-  shapes without one, it equals `expand`.
+  more, `[2, 1]` to `[3, 2, 0]` among them, gives tensors of those shapes, of the same kind and
+  element type, at both precisions; to shapes without one, it equals `expand`.
+- `crates/skoro-tensor/tests/values.rs::reshape_to_no_entries`: `reshape` of tensors of no entries
+  of each kind to shapes with a dimension of zero, of fewer dimensions, as many and more, gives
+  tensors of those shapes, of the same kind and element type, at both precisions; to shapes without
+  one, it equals burn's `reshape`.
 - `crates/skoro-tensor/tests/values.rs::values_of_no_entries_load`: a shared constant of no entries
   loads at a batch of three, and a per-row one of three rows of no entries loads as itself.
 - `crates/skoro-core/tests/passes.rs::values_of_no_entries_through_every_pass`: a `Vector(0)`
-  constant and `x.slice(0..0)` of a `Vector(2)` quantity, through a product, a difference, a matrix
-  product with a `Matrix(0, 2)`, a sum and a concatenation, give the right values in the forward,
+  constant and `x.slice(0..0)` of a `Vector(2)` quantity, through a product, a difference, a
+  scaling, matrix products with a `Matrix(0, 2)` and a `Matrix(2, 0)`, sums and a concatenation, give the right values in the forward,
   tangent, cotangent and Hessian passes, at both precisions, and under the `wgpu` feature on a
   machine with an adapter.
 
@@ -566,5 +625,10 @@ product's reshapes in `crates/skoro-core/src/primitive/euclidean.rs` fail on a `
 a factor of no rows multiplies, and the body of `broadcast` given in
 [A factor of no rows](#a-factor-of-no-rows), which reshapes a tensor of no entries, fails for a
 valid broadcast whose zero lies beyond the tensor's rank, such as `[2, 1]` to `[3, 2, 0]`. The
-design is revised to reshape values of no entries by a function of the tensor layer, as it already
-broadcasts them, and to correct `broadcast`'s body.
+design now reshapes values of no entries by a function of the tensor layer, `reshape`, as it
+broadcasts them, and both make a tensor of no entries with burn's `Tensor::empty`, which corrects
+`broadcast`'s body ([A factor of no rows](#a-factor-of-no-rows)). [Values of no entries](#values-of-no-entries)
+records the finding; a second table lists the five reshapes of the matrix product and the two
+`unsqueeze_dim`s that go through `reshape`; and `reshape_to_no_entries` tests the new function,
+while `broadcast_to_no_entries` and `values_of_no_entries_through_every_pass` cover the cases that
+failed.
