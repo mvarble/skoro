@@ -1,2 +1,3 @@
 minimumReleaseAgeExclude:
     - '@mvarble/mesearch-cms@0.2.1 || 0.3.0'
+    - '@mvarble/mesearch-ui@0.2.1'
