@@ -461,17 +461,19 @@ So, on a curved quantity:
   part can still move this boundary. On a replacement's $B_F$ there is no $+I$, so the margin is
   smaller there: the sum is $\sum_t G_t\transpose (\Lambda_t - I) G_t$ alone.
 
-> [!TODO] The curvature of the log-volumes
-> Leaving the curvature out keeps every precision a sum of squares, positive definite by
-> construction. On a curved quantity it errs by a relative amount of order $\sigma^2$ at the
-> linearization point, over-confident in every example above. Adding the log-volumes' curvature
-> alone is no more accurate. The full second-order approximation needs Hessian passes and is not
-> reliably closer; for a replacement, it also needs the log-determinant term of the next order. A
-> replacement's larger error, of the order of its own variance and growing along a filter that does
-> not measure, comes from its Gaussian form, and no curvature term removes it. This document
-> recommends leaving the curvature out. It would state the order of the error wherever the
-> covariance of a curved quantity is reported, and leave second-order Laplace approximations, and
-> replacements of another form, to entries that need them. Is that the decision?
+> [!DECISION] The precision is the rows' alone
+> Every precision this entry computes, a Laplace approximation's and a replacement's, is the rows'
+> $J\transpose J$ and what elimination leaves of it. The curvature [](eq:omitted) of the residuals
+> and of the log-volumes is left out. The rows keep three things: a precision that is a sum of
+> squares, positive definite by construction whenever the rows determine every direction; one
+> elimination with no downdate; and first-order passes only. On a curved quantity the rows err by a
+> relative amount of order $\sigma^2$ at the linearization point. In every example above they were
+> slightly over-confident. Adding the log-volumes' curvature alone overshoots by about as much the
+> other way, and the full second-order approximation is not reliably closer to the posterior, so
+> including the curvature buys no consistency that the rows lack. A replacement's larger error comes
+> from its Gaussian form and is untouched by either choice. Wherever the covariance of a curved
+> quantity is reported, the order of its error is stated with it. Second-order Laplace
+> approximations, and replacements of another form, are left to the entries that need them.
 
 ## A retirement's replacement
 
@@ -669,6 +671,8 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 - **A step** is the minimizer, retracted quantity by quantity; damping appends a factor per
   quantity; a Laplace approximation uses the chart linearization, with the log-volume of the
   quantities integrated over, and reads its marginals, draws and evidence off the eliminated rows.
+  Its precision, and a replacement's, is the rows' alone, without the curvature of the residuals
+  or the log-volumes, and on a curved quantity it is reported with an error of order $\sigma^2$.
 - **A retirement's replacement** is the linearized integral of [%full](statement:replacement),
   computed from the retired terms alone, free in the retired quantities to integrate and in the
   blanket's quantities to keep, at a point the caller chooses, and written as the normal's
@@ -679,5 +683,6 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 
 ## Open questions
 
-The three questions above, the curvature of the log-volumes, a replacement the rows do not
-determine, and whether information roots belong to this entry, remain open.
+Two questions above remain open: a replacement the rows do not determine, and whether information
+roots belong to this entry. The curvature of the log-volumes is decided: the precision is the rows'
+alone.
