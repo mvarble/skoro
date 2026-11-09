@@ -3,9 +3,10 @@
 //! say. Each check runs on the Flex device at both precisions and, with the `wgpu` feature, on the
 //! test adapter at single precision.
 
-use skoro_tensor::burn::{DType, Int, Tensor};
+use skoro_tensor::burn::{Bool, DType, Int, Tensor};
 use skoro_tensor::{
     Device, Frame, HostData, HostValue, Integers, Points, Precision, Target, TensorError, Value,
+    broadcast,
 };
 
 fn targets() -> Vec<Target> {
@@ -239,4 +240,62 @@ fn host_value_holds_rows_times_storage() {
     assert!(HostValue::new(Some(2), 2, HostData::Discrete(vec![1, 2, 3])).is_none());
     let value = HostValue::new(Some(2), 0, HostData::Continuous(Vec::new())).unwrap();
     assert_eq!((value.rows(), value.storage()), (Some(2), 0));
+}
+
+#[test]
+fn broadcast_to_no_entries() {
+    for target in targets() {
+        let x = points(&[1.5, -2.0], 1, 2, &target);
+        let dtype = x.dtype();
+
+        // To as many dimensions, and to more, with a dimension of zero: no entries, of the kind
+        // and element type given.
+        let none = points(&[], 1, 0, &target);
+        let empty = broadcast(none.clone(), [3, 0]);
+        assert_eq!((empty.dims(), empty.dtype()), ([3, 0], dtype));
+        let empty: Tensor<3> = broadcast(x.clone(), [0, 4, 2]);
+        assert_eq!((empty.dims(), empty.dtype()), ([0, 4, 2], dtype));
+        let empty: Tensor<4> = broadcast(none.clone().unsqueeze_dim::<3>(2), [2, 3, 0, 5]);
+        assert_eq!(empty.dims(), [2, 3, 0, 5]);
+        let sums = Points::from_burn(broadcast(none.clone(), [3, 0]).sum_dim(1), &target).unwrap();
+        assert_eq!(sums.to_host(), vec![0.0; 3]);
+
+        let integers: Tensor<2, Int> = x.clone().int();
+        let int_dtype = integers.dtype();
+        let empty: Tensor<3, Int> = broadcast(integers, [0, 5, 2]);
+        assert_eq!((empty.dims(), empty.dtype()), ([0, 5, 2], int_dtype));
+        let mask: Tensor<2, Bool> = none.clone().greater_elem(0.0);
+        let empty = broadcast(mask, [5, 0]);
+        assert_eq!(empty.dims(), [5, 0]);
+
+        // Without a dimension of zero, it is expand.
+        let found: Tensor<3> = broadcast(x.clone(), [2, 3, 2]);
+        let expected: Tensor<3> = x.expand([2, 3, 2]);
+        assert_eq!(found.dims(), expected.dims());
+        let read = |t: Tensor<3>| t.into_data().iter::<f64>().collect::<Vec<_>>();
+        assert_eq!(read(found), read(expected));
+    }
+}
+
+#[test]
+fn values_of_no_entries_load() {
+    for target in targets() {
+        let shared = HostValue::new(None, 0, HostData::Continuous(Vec::new())).unwrap();
+        let Some(Value::Continuous(points)) = shared.load(3, &target).unwrap() else {
+            panic!("a continuous value");
+        };
+        assert_eq!((points.rows(), points.storage()), (3, 0));
+        assert!(points.to_host().is_empty());
+
+        let shared = HostValue::new(None, 0, HostData::Discrete(Vec::new())).unwrap();
+        let Some(Value::Discrete(integers)) = shared.load(2, &target).unwrap() else {
+            panic!("a discrete value");
+        };
+        assert_eq!((integers.rows(), integers.storage()), (2, 0));
+
+        let rows = HostValue::new(Some(3), 0, HostData::Continuous(Vec::new())).unwrap();
+        let value = rows.load(3, &target).unwrap().unwrap();
+        assert_eq!((value.rows(), value.storage()), (3, 0));
+        assert!(rows.load(2, &target).unwrap().is_none());
+    }
 }

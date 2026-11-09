@@ -12,7 +12,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The tensor layer (`skoro-tensor`)
 
-- [ ] `broadcast` in `value.rs`, exported from the crate's root, and the two calls of `expand` in
+- [x] `broadcast` in `value.rs`, exported from the crate's root, and the two calls of `expand` in
       `host.rs` replaced by it. Tests: `broadcast_to_no_entries`, `values_of_no_entries_load`.
 
 ## The core (`skoro-core`)

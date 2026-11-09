@@ -1,3 +1,4 @@
+use burn::tensor::kind::Basic;
 use burn::tensor::{Bool, DType, FloatDType, Int, IntDType, Tensor, TensorData};
 
 use crate::{Target, TensorError};
@@ -215,6 +216,36 @@ impl Value {
             Value::Continuous(points) => points.storage(),
             Value::Discrete(integers) => integers.storage(),
         }
+    }
+}
+
+/// `tensor` broadcast to `shape`, of as many dimensions or more, as burn's `expand` does; where
+/// `shape` has a dimension of zero, which `expand` refuses, the tensor of no entries of that shape,
+/// of `tensor`'s kind, element type and device.
+pub fn broadcast<const D: usize, const D2: usize, K: Basic>(
+    tensor: Tensor<D, K>,
+    shape: [usize; D2],
+) -> Tensor<D2, K> {
+    if shape.contains(&0) {
+        // expand's rule, aligned from the last dimension: each of the tensor's is 1 or the shape's.
+        debug_assert!(
+            D <= D2
+                && tensor
+                    .dims()
+                    .iter()
+                    .rev()
+                    .zip(shape.iter().rev())
+                    .all(|(&from, &to)| from == 1 || from == to),
+            "{:?} does not broadcast to {shape:?}",
+            tensor.dims()
+        );
+        // No entries in, none out: slicing every dimension to nothing keeps the kind, the element
+        // type and the device, and a tensor of no entries reshapes to any shape of none.
+        tensor
+            .slice(std::array::from_fn::<_, D, _>(|_| 0..0))
+            .reshape(shape)
+    } else {
+        tensor.expand(shape)
     }
 }
 
