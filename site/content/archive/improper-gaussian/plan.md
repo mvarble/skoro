@@ -4,7 +4,8 @@ depends_on: [archive/improper-gaussian/implementation]
 ---
 
 The build has two parts, in this order. First the core carries values of no entries, by a
-`broadcast` in the tensor layer that every call of burn's `expand` goes through
+`broadcast` and a `reshape` in the tensor layer that every call of burn's `expand`, and every
+reshape of a tensor that may have no entries, goes through
 ([A factor of no rows](implementation.md#a-factor-of-no-rows)). Then `skoro-normal` gains
 `Improper`, built by `Stacked::improper`, and the roles' descriptions say what the math decided
 ([The factor](implementation.md#the-factor), [The roles' descriptions](implementation.md#the-roles-descriptions)).
@@ -12,14 +13,17 @@ The umbrella's tests then check the factor in retirements and on the sphere.
 
 ## The tensor layer (`skoro-tensor`)
 
-- [x] `broadcast` in `value.rs`, exported from the crate's root, and the two calls of `expand` in
-      `host.rs` replaced by it. Tests: `broadcast_to_no_entries`, `values_of_no_entries_load`.
+- [ ] `broadcast` and `reshape` in `value.rs`, both making a tensor of no entries with
+      `Tensor::empty`, exported from the crate's root, and the two calls of `expand` in `host.rs`
+      replaced by `broadcast`. Tests: `broadcast_to_no_entries`, `reshape_to_no_entries`,
+      `values_of_no_entries_load`.
 
 ## The core (`skoro-core`)
 
 - [ ] The fourteen calls of `expand` in `program.rs` and in the primitives' `rule.rs`,
-      `euclidean.rs` and `positive.rs` replaced by `broadcast`, as the implementation's table lists
-      them, and any further kernel that fails on values of no entries fixed where it fails, or the
+      `euclidean.rs` and `positive.rs` replaced by `broadcast`, and the seven reshapes of
+      `euclidean.rs`, `rule.rs` and `positive.rs` replaced by `reshape`, as the implementation's two
+      tables list them, and any further kernel that fails on values of no entries fixed where it fails, or the
       build stopped and the failure reported if a fix needs more than a guard around one burn call.
       Tests: `values_of_no_entries_through_every_pass`.
 
@@ -67,3 +71,11 @@ cargo test --workspace --features wgpu
 
 passes on a machine with an adapter, and the commit that records it says so. A failure there on
 values of no entries is reported, as one on the host is, rather than worked around.
+
+## Revisions
+
+**2026-11-09.** The implementation was reopened when the build found that burn's `reshape` reads a
+dimension of zero as the source's size. The first task, built and ticked with the first body of
+`broadcast`, is unticked and now adds `reshape` too, with `broadcast`'s corrected body and the test
+`reshape_to_no_entries`; the second replaces the seven reshapes of the core as well as its calls of
+`expand`.
