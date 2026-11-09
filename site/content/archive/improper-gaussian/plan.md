@@ -48,7 +48,7 @@ The umbrella's tests then check the factor in retirements and on the sphere.
       retirement adds, and a blanket quantity left undetermined. Tests:
       `retirement.rs::bearings_accumulate`, `retirement.rs::improper_replacement_binds_its_roles`,
       `retirement.rs::undetermined_blanket_needs_a_proposal`.
-- [ ] The improper factor on the acceptance-test sphere. Tests:
+- [x] The improper factor on the acceptance-test sphere. Tests:
       `sphere.rs::improper_factor_on_the_sphere`.
 
 ## Done when

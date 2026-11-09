@@ -605,3 +605,101 @@ fn pushed_density_integrates_to_one_on_the_sphere() {
         );
     }
 }
+
+/// `R(μ, t)` on the host: `((1 - s) μ + B(μ) t) / (1 + s)`, `s = |t|² / 4`.
+fn retract_on_host(mu: [f64; 3], t: [f64; 2]) -> [f64; 3] {
+    let b = basis(mu);
+    let s = (t[0] * t[0] + t[1] * t[1]) / 4.0;
+    [0, 1, 2].map(|i| ((1.0 - s) * mu[i] + b[i][0] * t[0] + b[i][1] * t[1]) / (1.0 + s))
+}
+
+/// `y ⊖ μ` on the host: `2 B(μ)ᵀ y / (1 + μᵀ y)`.
+fn local_on_host(mu: [f64; 3], y: [f64; 3]) -> [f64; 2] {
+    let b = basis(mu);
+    let dot = mu[0] * y[0] + mu[1] * y[1] + mu[2] * y[2];
+    let bty = |c: usize| (0..3).map(|i| b[i][c] * y[i]).sum::<f64>();
+    [2.0 * bty(0) / (1.0 + dot), 2.0 * bty(1) / (1.0 + dot)]
+}
+
+#[test]
+fn improper_factor_on_the_sphere() {
+    use skoro_normal::Stacked;
+    let target = Target::host();
+    let anchor = {
+        let v = [0.3f64, 0.5, 0.8];
+        let n = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        [v[0] / n, v[1] / n, v[2] / n]
+    };
+    let real_anchor = 0.4;
+    // Two rows over D = 3, row by row, with a linear part.
+    let a = [[1.0, -0.5, 0.3], [0.2, 0.7, -1.1]];
+    let (b, eta, c) = ([0.4, -0.6], [0.1, -0.2, 0.5], -1.3);
+    let columns: Vec<f64> = (0..3)
+        .flat_map(|j| a.iter().map(move |row| row[j]))
+        .collect();
+    let factor = |delta: [f64; 3]| {
+        let squares: f64 = (0..2)
+            .map(|i| (0..3).map(|j| a[i][j] * delta[j]).sum::<f64>() - b[i])
+            .map(|r| r * r)
+            .sum();
+        -0.5 * squares - (0..3).map(|j| eta[j] * delta[j]).sum::<f64>() + c
+    };
+    let at_host = |s: [f64; 3], r: f64| {
+        let t = local_on_host(anchor, s);
+        factor([t[0], t[1], r - real_anchor])
+    };
+
+    let mut writer = Writer::new();
+    let (s, r, log_density) = writer
+        .build(|| {
+            let s = quantity("s", Sphere);
+            let r = quantity("r", skoro::Real);
+            let improper = Stacked::new()
+                .block(s, Sphere, anchor)
+                .block(r, skoro::Real, real_anchor)
+                .improper(2, columns.as_slice(), &b[..], c)
+                .linear(&eta[..]);
+            (s, r, improper.log_density())
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&Query::of([log_density.untyped()]), &target)
+        .unwrap();
+    let ts = [[0.3, -0.2], [-0.5, 0.4], [0.9, 0.7]];
+    let spheres: Vec<[f64; 3]> = ts.iter().map(|&t| retract_on_host(anchor, t)).collect();
+    let reals = [1.1, -0.3, 0.6];
+    let rows = ts.len();
+    let flat: Vec<f64> = spheres.iter().flatten().copied().collect();
+    let at = Values::new()
+        .with(s, value(&flat, rows, &target))
+        .with(r, value(&reals, rows, &target));
+
+    // The value is the definition, with δ read by the sphere's inverse retraction.
+    let (values, gradient) = program.gradient(&at).unwrap();
+    let found = host(&values, log_density.id());
+    for row in 0..rows {
+        let want = at_host(spheres[row], reals[row]);
+        assert!((found[row] - want).abs() < 1e-12, "{found:?} at row {row}");
+    }
+
+    // The gradient, in the sphere's chart at each point, against central differences, where
+    // D δ moves with the point.
+    let gs = gradient.get(s).unwrap().to_host();
+    let gr = gradient.get(r).unwrap().to_host();
+    let h = 1e-6;
+    for row in 0..rows {
+        let (point, real) = (spheres[row], reals[row]);
+        for j in 0..2 {
+            let mut t = [0.0; 2];
+            t[j] = h;
+            let up = at_host(retract_on_host(point, t), real);
+            t[j] = -h;
+            let down = at_host(retract_on_host(point, t), real);
+            let want = (up - down) / (2.0 * h);
+            assert!((gs[row * 2 + j] - want).abs() < 1e-6, "∂s{j} at row {row}");
+        }
+        let want = (at_host(point, real + h) - at_host(point, real - h)) / (2.0 * h);
+        assert!((gr[row] - want).abs() < 1e-6, "∂r at row {row}");
+    }
+}
