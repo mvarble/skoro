@@ -1,5 +1,5 @@
 ---
-summary: How a query of a model is linearized at a point into factors of whitened rows and linear terms over its free quantities' tangent coordinates, and how eliminating those factors gives the step of a Gauss–Newton or Levenberg–Marquardt method, a Laplace approximation's marginals, and a retirement's replacement, an improper Gaussian that is the update and prediction of a Kalman filter when it determines the blanket.
+summary: How a query of a model is linearized at a point into factors of whitened rows and linear terms over its free quantities' tangent coordinates, and how eliminating those factors gives the step of a Gauss–Newton or Levenberg–Marquardt method, a Laplace approximation's marginals, and a retirement's replacement, an improper Gaussian that is the update and prediction of a Kalman filter when it determines the blanket; and how the roots of the expected information give a second assembly, for Fisher scoring of free scales.
 depends_on: [square-root-elimination, retraction, derivatives-in-charts, product-manifold, chart-volume, archive/core/math, archive/normal/math]
 ---
 
@@ -10,6 +10,7 @@ depends_on: [square-root-elimination, retraction, derivatives-in-charts, product
 	import * as linearization from './statements/linearization.md';
 	import * as exact from './statements/exact.md';
 	import * as replacement from './statements/replacement.md';
+	import * as fisher from './statements/fisher.md';
 	import { factors, tree } from './tree.graph';
 </script>
 
@@ -22,7 +23,9 @@ into a step, a covariance or a summary. Every method that does is built on the s
 
 - **Linearization** replaces a query's negative log-density, near a point, by a sum of squared
   affine residuals and a linear term in the tangent coordinates of its free quantities: the rows
-  that the residuals' Jacobians give, one block of rows for each term.
+  that the residuals' Jacobians give, one block of rows for each term. A second assembly, for a
+  model whose scales are free, takes its rows from the roots of the terms' expected information
+  instead, as Fisher scoring does.
 - **Elimination** solves the linear problem those rows pose, or removes some of its variables from
   it, one at a time, by orthogonal factorizations of the rows rather than by the normal equations.
 
@@ -747,22 +750,114 @@ question.
 
 ## Information roots
 
-Fisher scoring uses the expected information in place of the Gauss–Newton matrix, and the normal
-binds a root $C$ of it on every term that scores a quantity
-([the expected information](../normal/math.svx#the-expected-information)). Its rows are $C_t$
-composed with the Jacobians of the term's scored quantity, mean and scale coordinates, and it is the
-estimator that handles a free scale, which the residual linearization refuses. In the note's terms
-it is the same problem with the right-hand side $b = 0$ and the linear term $\eta = g$: its minimizer
-solves the normal equations with the gradient on the right, at $\kappa(A)^2$, and its elimination,
-damping, marginals and plan are the ones above. Only its rows differ, and the passes that compute
-them: Jacobians of the mean and the scale's coordinates as well as of the residual.
+The residual linearization refuses a factor whose scale is free, since its omitted curvature in
+the scale is as large as what its rows keep. Fisher scoring keeps the scale. It replaces the
+Hessian by the *expected information*, the expectation over the scored quantity of the Hessian of
+its negative log-density, which is positive semidefinite by construction. The normal binds a root
+$C$ of it on every term that scores a quantity
+([the expected information](../normal/math.svx#the-expected-information)). This entry linearizes
+with those roots as a second assembly of the same factored problem. It shares no rows with the
+residual linearization's assembly, and shares all of the elimination.
 
-> [!TODO] Whether information roots belong to this entry
-> The elimination accepts the information root's rows unchanged, so including them costs only their
-> assembly and their tests, and gives a free scale a linearization now. Leaving them to a Fisher
-> scoring entry keeps this one to the residual linearization that Gauss–Newton,
-> Levenberg–Marquardt, the Laplace approximation and the filters need. Should this entry also
-> linearize with information roots?
+<Statement {...fisher} />
+
+**It is a root of the expected information.** The root [](eq:archive/normal/math/root) composed
+with the Jacobians of the term's scored quantity, mean and scale coordinates is
+
+$$
+	C_t \begin{bmatrix} \D \point \\ \D \mu \\ \D \theta_t \end{bmatrix}
+	= \begin{bmatrix} W_t (\D \point - \D \mu) \\ C_{\theta, t} \D \theta_t \end{bmatrix} ,
+$$
+
+since its blocks are $\pm W_t$, the derivatives of $s_t = \point \ominus \mu$ at a zero residual.
+On the flat-in-disguise types those derivatives are $\pm I$ everywhere, so the first block row is
+$W_t \D s_t = J^\mu_t$ exactly, and $m_F$'s matrix,
+
+$$
+	\nabla^2 m_F = \sum_t J^{\mu\top}_t J^\mu_t + \sum_{t \text{ free scale}} K_t\transpose K_t , @tag(fisher-matrix)
+$$
+
+is the model's expected information. On a curved type the derivatives of $\ominus$ at the current
+residual stand where the root has their values at zero. The two differ at first order in the
+residual, and in a quadratic form at second order, the accuracy
+[the normal](../normal/math.svx#the-expected-information) states for the root's blocks of the
+quantity and the mean. The mixed blocks, which the root sets to zero, are exact in expectation on
+the flat-in-disguise types and, on a curved type, of first order for a scale that is neither
+isotropic nor diagonal, as the normal also states. The residual's own Jacobian is the better choice
+of the two derivatives, for the reason that follows.
+
+**Its gradient is exact.** The gradient of $m_F$ at zero is
+
+$$
+	\nabla m_F(0) = \sum_t J^{\mu\top}_t (r_t + \hat c_t) + \sum_{t \text{ free scale}} K_t\transpose u_t + \eta = g .
+$$
+
+The first sum and $\eta$ are the gradients of the squares through the quantity and the mean, and of
+the log-volumes, as in [](eq:agreement). The second is the gradient through the scale. With
+$T_i = L\transpose\, \partial_i \Lambda\, L$ as for the root, $z = r_t$ and
+$\varepsilon = L z$, the negative log-density's derivative in $\theta_i$ is
+
+$$
+	\tfrac12 \varepsilon\transpose \partial_i \Lambda\, \varepsilon - \tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda)
+	= \tfrac12 \bigl(z\transpose T_i z - \operatorname{tr} T_i\bigr)
+	= \sum_a \frac{(T_i)_{aa}}{\sqrt 2} \cdot \frac{z_a^2 - 1}{\sqrt 2} + \sum_{a > b} (T_i)_{ab}\, z_a z_b ,
+$$
+
+which is $(C_{\theta, t}\transpose u_t)_i$. So the scale's score lies in the row space of its root,
+and the scale residual carries it, as $\hat c_t$ carries a folded log-volume. Had the first block
+row used $\pm W_t$ on a curved type, the gradient through the quantity and the mean would have
+missed a term of first order in the residual, and the iteration would have stopped short of the
+stationary point. With $J^\mu_t$, a Fisher scoring step
+
+$$
+	\tangent^*_F = -\Bigl(\nabla^2 m_F\Bigr)^{-1} g @tag(scoring-step)
+$$
+
+stops only where $g = 0$, at a stationary point of $f$, log-volumes included. It converges there at
+the linear rate that the difference between the Hessian and the expected information sets.
+
+**Where the expected information is exact.** For an isotropic scale in its logarithmic chart,
+$u = \log \sigma$, the root's scale block is $-\sqrt 2$ in each of the $\dimension$ diagonal rows,
+and the scale's information is $2 \dimension$. The Hessian of the term in $u$ is
+$2 \lVert r_t \rVert^2$, which at a stationary point of the scale alone, $\lVert r_t \rVert^2 =
+\dimension$, is $2 \dimension$ too. The case that makes the residual linearization's rate one, its third refusal in
+[Linearizing a query](#linearizing-a-query), has a rate of zero in the scale's own direction here.
+The scale residual's diagonal rows are $((r_t)_a^2 - 1) / \sqrt 2$, and the step in $u$ is $(\lVert r_t \rVert^2 - \dimension) / 2\dimension$, the first-order step toward
+$\tfrac12 \log (\lVert r_t \rVert^2 / \dimension)$.
+
+**With every scale fixed, it is the residual linearization.** No term then has a scale block, every
+$J^\mu_t$ is $J_t$, and $m_F = m$, on every type. The two assemblies differ only where a scale is
+free, which the residual linearization refuses. They are kept separate all the same, since they
+answer to different readers. The residual linearization is the Gauss–Newton model of $f$, whose
+curvature at a mode is a Laplace approximation's. The Fisher linearization is the expected
+information, whose inverse is the asymptotic covariance of an estimator.
+
+**What it gives, and what it does not.** The Fisher linearization is eliminated as the residual
+linearization is. Its factor structure is the same: a term's variables $K_t$ are the free quantities
+it involves, whether through its quantity, its mean or its scale. So one plan serves both, and its
+steps, damping and marginals are computed as above. Its marginal covariances are those of the
+inverse expected information, a free scale's among them. It gives no evidence and no replacement.
+Those approximate an integral of the model's density, whose curvature in a free scale is not the
+expected information. A query with a free scale, retired or integrated over, is refused by both
+assemblies, naming the term.
+
+**What it refuses.** The Fisher linearization refuses, naming the term or the quantity:
+
+1. **a free discrete quantity**, as the residual linearization does;
+2. **a term whose scale is free and which binds no information root**, since nothing then says what
+   the scale's information is. A likelihood factor binds none, since it scores no quantity, so its
+   scale must be fixed, and it contributes its residual's rows, as
+   [the normal](../normal/math.svx#the-roles) says a reader that needs a positive semidefinite
+   matrix from one should;
+3. **a factor that binds no residual**, as the residual linearization does.
+
+> [!DECISION] Information roots belong to this entry, as a second assembly
+> The entry assembles the factored problem in two ways: from the residuals
+> ([%full](statement:linearization)), and from the residuals and the information roots
+> ([%full](statement:fisher)). The two are separate estimators with their own refusals, the second
+> being the one for a free scale. They meet only in the factored problem they produce, rows,
+> right-hand sides, a linear term and a constant per term over the same factor structure, which
+> one elimination, one plan and one damping serve.
 
 ## What the tests check
 
@@ -810,6 +905,13 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 - **Folded log-volumes are in the right-hand sides**: on normals of rotations, $\eta = 0$ exactly,
   $J_t\transpose \hat c_t$ equals the cotangent pass of $\lambda_t$, and iterated steps converge to
   the same mode as with the log-volume's gradient carried as a linear term.
+- **The Fisher linearization is a root of the expected information**, [](eq:fisher-matrix): its
+  matrix equals the normal's closed form on Euclidean and positive quantities, and a Monte Carlo
+  estimate of the expected Hessian; its gradient equals the query's cotangent pass, a free
+  scale's included; with every scale fixed it equals the residual linearization row for row;
+  Fisher scoring on normals with free means and an isotropic or a diagonal scale converges to the
+  maximum-likelihood estimate; its marginal covariances equal the corresponding blocks of the
+  inverse expected information; and it shares the residual linearization's plan.
 - **What is refused**: a free discrete quantity, a factor without a residual, a factor whose scale
   is free, a quantity the rows do not determine, a retirement whose terms do not determine a
   retired quantity, and an integral over a quantity whose type has no volume, each naming what it
@@ -831,6 +933,12 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 - **The linearization is refused** for a free discrete quantity, a factor without a residual, and
   a factor whose bound scale is reached from a free quantity; an integral, for a quantity whose
   type declares no volume.
+- **Fisher linearization** is a second assembly of the same factored problem: a term with a free
+  scale contributes the rows of its residual's Jacobian with the scale held, and the rows of its
+  information root's scale block composed with the Jacobian of the scale's coordinates, with the
+  scale residual on the right; every other term contributes as above. It is refused for a free
+  scale whose term binds no information root, and gives steps and covariances, not evidence or
+  replacements.
 - **Elimination** is the note's, by blocks that are the free quantities, with an order and an
   elimination tree that depend on the factor structure alone and so serve every row of a batch, and
   with a refusal for a quantity the rows do not determine.
@@ -853,6 +961,6 @@ them: Jacobians of the mean and the scale's coordinates as well as of the residu
 
 ## Open questions
 
-One question above remains open: whether information roots belong to this entry. The curvature of
-the log-volumes is decided, the precision being the rows' alone, and so is a replacement the rows
-do not determine, which is an improper Gaussian.
+None remains. The three questions this document raised are decided: the precision is the rows'
+alone, a replacement the rows do not determine is an improper Gaussian, and information roots
+belong to this entry as a second assembly.
