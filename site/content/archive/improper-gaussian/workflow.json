@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "implementation",
+    "stage": "math",
     "started": "2026-11-09",
     "events": [
         {
@@ -13,13 +13,21 @@
             "action": "approve",
             "stage": "math",
             "commit": "e500fce"
+        },
+        {
+            "date": "2026-11-09",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The math said a reduction to min(r, D) rows is the only one the library applies by itself, which reads as a promise that it applies one; it should say the library may apply it.",
+            "commit": "25dc103"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-09",
             "commit": "e500fce",
-            "hash": "9fcf107530d73cee2fc55fd8714e392ad095209933d7aebb73bd0ba063ebc982"
+            "hash": "9fcf107530d73cee2fc55fd8714e392ad095209933d7aebb73bd0ba063ebc982",
+            "stale": true
         }
     }
 }

@@ -352,3 +352,10 @@ factor to bind a residual accepts such a factor, whose remainder is then all it 
 
 None remain. Which role binds the linear part is settled in [The roles](#the-roles), and whether
 the library sums factors in [Accumulation](#accumulation).
+
+## Revisions
+
+**2026-11-09.** In [In skoro's terms](#in-skoro-s-terms), the sentence saying that a reduction to
+$\min(r, D)$ rows "is the only one the library applies by itself" read as a promise that the library
+applies one, which the implementation does not. It is reworded to say that the library may apply
+it, and applies no other change of form.
