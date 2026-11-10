@@ -134,7 +134,10 @@ test('pages show the entries that changed them, newest first', () => {
 });
 
 test('a page that moved answers to the keys it had', () => {
-    assert.deepEqual(doc('archive/normal-v2', 'entry').pages, ['concepts/graph', 'guide/estimation']);
+    assert.deepEqual(doc('archive/normal-v2', 'entry').pages, [
+        'concepts/graph',
+        'guide/estimation',
+    ]);
     assert.deepEqual(doc('guide/estimation', 'page').entries, ['archive/normal-v2']);
     assert.ok(!messages.some((m) => m.includes("'guide/estimating'")));
 });
