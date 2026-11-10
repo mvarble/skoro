@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use skoro_elimination::{Error, Matrix, Problem, Rows, Schedule, Structure};
+use skoro_elimination::{Damping, Error, Matrix, Problem, Rows, Schedule, Structure};
 
 const DOUBLE: f64 = f64::EPSILON / 2.0;
 
@@ -805,5 +805,54 @@ fn marginal_whitening_is_lower_triangular() {
         &[0.5 * log_det(&inverse(&rows))],
         1e-10,
         "log det",
+    );
+}
+
+#[test]
+fn damping_appends_rows_and_keeps_the_schedule() {
+    let structure = random_structure(6, 5, 67);
+    let problem = random_problem(&structure, 1, true, 71);
+    let schedule = Schedule::all(&structure).unwrap();
+    let before = schedule.clone();
+    let d = structure.dimension();
+    let mut stream = Stream(73);
+    let damping = Damping {
+        lambda: 0.3,
+        diagonal: stream.take(d).iter().map(|x| 1.0 + x.abs()).collect(),
+    };
+    let elimination = problem.eliminate(&schedule, Some(&damping)).unwrap();
+    assert_eq!(
+        elimination.schedule(),
+        &before,
+        "the schedule is the one it was"
+    );
+    assert_eq!(schedule, before);
+    // (AᵀA + λD) τ = Aᵀb - η.
+    let tau = elimination.minimizer().unwrap();
+    let (a, b) = dense(&problem);
+    let (mut gram, atb) = normal_equations(&a, &b, d);
+    for i in 0..d {
+        gram[i][i] += damping.lambda * damping.diagonal[i];
+    }
+    let eta = problem.linear().unwrap();
+    let rhs: Vec<f64> = atb.iter().zip(eta).map(|(a, e)| a - e).collect();
+    close(&tau, &solve(&gram, &rhs), 1e-10, "the damped minimizer");
+    // The promised decrease is that of the undamped problem.
+    let zero = vec![0.0; d];
+    let decrease = problem.value(&zero) - problem.value(&tau);
+    close(
+        &[problem.promised(&tau, &damping)],
+        &[decrease],
+        1e-10,
+        "the promised decrease",
+    );
+    // A diagonal of the wrong length is refused.
+    let short = Damping {
+        lambda: 1.0,
+        diagonal: vec![1.0; d - 1],
+    };
+    assert_eq!(
+        problem.eliminate(&schedule, Some(&short)).unwrap_err(),
+        Error::Shape { factor: None }
     );
 }

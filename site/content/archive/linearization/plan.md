@@ -36,7 +36,7 @@ depends_on: [archive/linearization/implementation]
 - [x] `Elimination::{log_integral, solve, log_determinant, marginal}` and `Marginal`. Tests:
       `orders_agree`, `the_integral_is_the_determinant`, `solve_is_the_inverse_root`,
       `marginal_whitening_is_lower_triangular`.
-- [ ] Damping rows appended at each block's front. Tests:
+- [x] Damping rows appended at each block's front. Tests:
       `damping_appends_rows_and_keeps_the_schedule`.
 - [ ] `Elimination::reduced` and `Reduced`, with no decision of rank. Tests:
       `replacing_from_some_factors_is_the_split`, `reduced_rows_have_their_shape`.
