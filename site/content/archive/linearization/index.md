@@ -8,10 +8,6 @@ pages:
     - concepts/the-normal
     - guide/least-squares
     - reference/crates
-    - reference/crates/skoro-core
-    - reference/crates/skoro-elimination
-    - reference/crates/skoro-linearize
-    - reference/crates/skoro-normal
 crates: [skoro-core, skoro-elimination, skoro-linearize, skoro-normal, skoro-spatial]
 ---
 

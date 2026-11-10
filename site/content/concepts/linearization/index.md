@@ -111,9 +111,13 @@ whose omitted curvature is as large as what its rows keep:
 
 Every factor's rows come from one tangent pass of one program, whose targets are the nodes the
 factors bind. A pass's frames are dense in their columns, and the identity frame of every free
-quantity would carry the whole Jacobian, mostly zeros. So the seeds are compressed: two quantities
-that share a factor get different colours, and each colour owns a few columns, so that a factor's
-Jacobian is cut from its quantities' colours:
+quantity would carry the whole Jacobian, mostly zeros. So the seeds are compressed by colouring the
+_factor structure_, the bipartite graph of
+[the note](../../math/square-root-elimination/#order-fill-and-the-elimination-tree) whose nodes are
+the free quantities and the factors, with an edge between a factor and each quantity it involves:
+two quantities joined to a common factor get different colours, and each colour owns a few columns.
+A node a term binds is reached from no quantity outside the term, so a factor's Jacobian is cut,
+unmixed, from its quantities' colours:
 
 ```rust
 {../../../../crates/skoro-linearize/src/linearizer.rs:352..386}
