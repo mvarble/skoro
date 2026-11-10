@@ -43,7 +43,7 @@ depends_on: [archive/linearization/implementation]
 
 ## `skoro-linearize`
 
-- [ ] Add the crate, with `Assembly`, `Error`, and `Linearizer::new` up to the factors and their
+- [x] Add the crate, with `Assembly`, `Error`, and `Linearizer::new` up to the factors and their
       refusals: the density program, the free discrete quantities, the residuals, the scales
       reached from free quantities, the structure. Tests: `a_free_discrete_quantity_is_refused`,
       `a_factor_without_a_residual_is_refused`,

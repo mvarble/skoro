@@ -5543,6 +5543,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "skoro-linearize"
+version = "0.1.0"
+dependencies = [
+ "skoro-core",
+ "skoro-elimination",
+ "skoro-normal",
+ "skoro-spatial",
+ "skoro-tensor",
+]
+
+[[package]]
 name = "skoro-normal"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,21 @@
+[package]
+name = "skoro-linearize"
+description = "Linearization of skoro's queries into factored least-squares problems, by their residuals or their information roots, and a retirement's replacement as an improper Gaussian."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+skoro-tensor.workspace = true
+skoro-core.workspace = true
+skoro-normal.workspace = true
+skoro-elimination.workspace = true
+
+[dev-dependencies]
+skoro-spatial.workspace = true
+
+[lints]
+workspace = true

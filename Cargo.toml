@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/skoro-tensor", "crates/skoro-core", "crates/skoro-normal", "crates/skoro-spatial", "crates/skoro-elimination", "crates/skoro"]
+members = ["crates/skoro-tensor", "crates/skoro-core", "crates/skoro-normal", "crates/skoro-spatial", "crates/skoro-elimination", "crates/skoro-linearize", "crates/skoro"]
 
 [workspace.package]
 version = "0.1.0"

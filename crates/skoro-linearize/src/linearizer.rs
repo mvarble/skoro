@@ -1,0 +1,178 @@
+//! The linearizer: a density query's factors, read off its terms and refused by structure, the
+//! factor structure over its free quantities, and the programs and seeds of its passes.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use skoro_core::{Layout, NodeId, Program, QDyn, Query, Snapshot, Term};
+use skoro_elimination::{Schedule, Structure};
+use skoro_normal::{Form, roles};
+use skoro_tensor::Target;
+
+use crate::Error;
+
+/// Which rows a linearization is assembled from.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Assembly {
+    /// Each factor's residual: the linearization of the query's negative log-density.
+    Residual,
+    /// Each factor's residual and, where the scale is free, its information root's scale rows:
+    /// the Fisher linearization.
+    Fisher,
+}
+
+/// A term reached from a free quantity, and what the assembly reads of it.
+#[derive(Clone, Debug)]
+pub(crate) struct Factor {
+    pub(crate) term: NodeId,
+    /// The blocks of its variables, increasing.
+    pub(crate) blocks: Vec<usize>,
+}
+
+/// A density query of a snapshot, ready to be linearized at any batch of points: its factors, its
+/// structure, its programs and its seeds, all fixed by the model and the query.
+pub struct Linearizer {
+    pub(crate) snapshot: Snapshot,
+    pub(crate) target: Target,
+    pub(crate) assembly: Assembly,
+    /// The query's density program: `f`, and the layout.
+    pub(crate) density: Arc<Program>,
+    pub(crate) factors: Vec<Factor>,
+    pub(crate) structure: Arc<Structure>,
+}
+
+impl std::fmt::Debug for Linearizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Linearizer")
+            .field("assembly", &self.assembly)
+            .field("quantities", &self.layout().quantities())
+            .field("factors", &self.factors.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The scale a term binds under one of the normal's four roles, if any.
+pub(crate) fn bound_scale(term: &Term) -> Result<Option<QDyn>, Error> {
+    for form in [
+        Form::Isotropic,
+        Form::Diagonal,
+        Form::CovarianceFactor,
+        Form::Whitening,
+    ] {
+        if let Some(scale) = term.bound(roles::scale(form))? {
+            return Ok(Some(scale));
+        }
+    }
+    Ok(None)
+}
+
+impl Linearizer {
+    /// The linearizer of `query`, a density query of `snapshot`, on `target`. Refuses a query of
+    /// nodes (`NotADensity`), a free discrete quantity (the core's `FreeDiscrete`), a factor that
+    /// binds no residual (`NoResidual`), with `Assembly::Residual` a factor whose scale is reached
+    /// from a free quantity (`ScaleNotFixed`), and with `Assembly::Fisher` such a factor that
+    /// binds no information root or no tangent (`NoInformationRoot`).
+    pub fn new(
+        snapshot: &Snapshot,
+        query: &Query,
+        target: &Target,
+        assembly: Assembly,
+    ) -> Result<Linearizer, Error> {
+        let terms = query.terms(snapshot).ok_or(Error::NotADensity)?;
+        let density = snapshot.compile(query, target)?;
+        density.refuse_free_discrete()?;
+        let layout = density.layout();
+        let index: HashMap<NodeId, usize> = layout
+            .quantities()
+            .iter()
+            .enumerate()
+            .map(|(i, &q)| (q, i))
+            .collect();
+        let mut factors = Vec::new();
+        for id in terms {
+            let term = snapshot
+                .term(id)
+                .ok_or(skoro_core::Error::NotATerm { id })?;
+            let mut blocks: Vec<usize> = term
+                .involves
+                .iter()
+                .filter_map(|q| index.get(q).copied())
+                .collect();
+            if blocks.is_empty() {
+                continue;
+            }
+            blocks.sort_unstable();
+            term.bound(&roles::RESIDUAL)
+                .map_err(|_| Error::NoResidual { term: id })?;
+            if let Some(scale) = bound_scale(term)? {
+                let free = snapshot
+                    .reached_from(scale)
+                    .into_iter()
+                    .find(|q| index.contains_key(q));
+                if let Some(quantity) = free {
+                    match assembly {
+                        Assembly::Residual => {
+                            return Err(Error::ScaleNotFixed { term: id, quantity });
+                        }
+                        Assembly::Fisher => {
+                            let root = term.bound(&roles::INFORMATION_ROOT)?;
+                            let tangent = term.bound(&roles::TANGENT)?;
+                            if root.is_none() || tangent.is_none() {
+                                return Err(Error::NoInformationRoot { term: id, quantity });
+                            }
+                        }
+                    }
+                }
+            }
+            factors.push(Factor { term: id, blocks });
+        }
+        let dimensions = layout
+            .blocks()
+            .iter()
+            .map(|block| block.tangent.len())
+            .collect();
+        let structure = Arc::new(Structure::new(
+            dimensions,
+            factors.iter().map(|f| f.blocks.clone()).collect(),
+        )?);
+        Ok(Linearizer {
+            snapshot: snapshot.clone(),
+            target: target.clone(),
+            assembly,
+            density,
+            factors,
+            structure,
+        })
+    }
+
+    /// The free continuous quantities, in the order of the blocks.
+    pub fn layout(&self) -> &Layout {
+        self.density.layout()
+    }
+
+    pub fn structure(&self) -> &Arc<Structure> {
+        &self.structure
+    }
+
+    pub fn assembly(&self) -> Assembly {
+        self.assembly
+    }
+
+    pub fn snapshot(&self) -> &Snapshot {
+        &self.snapshot
+    }
+
+    pub fn target(&self) -> &Target {
+        &self.target
+    }
+
+    /// Each factor's term, in the order of the structure's factors.
+    pub fn terms(&self) -> Vec<NodeId> {
+        self.factors.iter().map(|f| f.term).collect()
+    }
+
+    /// `Schedule::all` of the structure.
+    pub fn schedule(&self) -> Result<Schedule, Error> {
+        Ok(Schedule::all(&self.structure)?)
+    }
+}
