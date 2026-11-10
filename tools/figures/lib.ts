@@ -225,7 +225,7 @@ function tile(x: number, y: number, w: number, value: string, label: string, not
     return [
         `<rect x="${x}" y="${y}" width="${w}" height="92" rx="12" fill="${INK.panel}"/>`,
         text(x + 18, y + 42, value, { size: 27, fill: INK.primary, weight: 650 }),
-        text(x + 18, y + 66, label, { size: 13, fill: INK.secondary }),
+        text(x + 18, y + 66, label, { size: 12, fill: INK.secondary }),
         text(x + 18, y + 83, note, { size: 12, fill: INK.muted }),
     ];
 }
@@ -240,6 +240,54 @@ function scaleBar(x: number, y: number, metres: number, scale: number, label: st
 
 const percent = (x: number) => `${(100 * x).toFixed(1)}%`;
 
+/**
+ * A side view: each series' height against its index along the path, in a panel of its own. A top
+ * view hides height, and a drift in height is as real an error as a drift across the path, so each
+ * map comes with one. The height axis is stretched to fill the panel, and says so.
+ */
+function heightStrip(
+    box: { x: number; y: number; w: number; h: number },
+    title: string,
+    series: { heights: number[]; color: string; width: number; dash?: string }[],
+): string[] {
+    const plot = { x: box.x + 70, y: box.y + 46, w: box.w - 110, h: box.h - 82 };
+    const all = series.flatMap((s) => s.heights);
+    const span = Math.max(...all) - Math.min(...all) || 1;
+    const [lo, hi] = [Math.min(...all) - 0.08 * span, Math.max(...all) + 0.08 * span];
+    const n = Math.max(...series.map((s) => s.heights.length));
+    const sx = (k: number) => plot.x + (k / (n - 1)) * plot.w;
+    const sy = (z: number) => plot.y + plot.h - ((z - lo) / (hi - lo)) * plot.h;
+    const step = hi - lo > 4 ? 1 : 0.5;
+    const out: string[] = [
+        `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="14" fill="${INK.panel}"/>`,
+        text(box.x + 22, box.y + 28, title, { size: 15, fill: INK.primary, weight: 600 }),
+        text(box.x + box.w - 22, box.y + 28, 'side view: the height axis is stretched', {
+            size: 12,
+            fill: INK.muted,
+            anchor: 'end',
+        }),
+    ];
+    for (let z = Math.ceil(lo / step) * step; z <= hi; z += step) {
+        out.push(`<path d="M${f(plot.x)} ${f(sy(z))}H${f(plot.x + plot.w)}" stroke="${INK.grid}" stroke-width="1"/>`);
+        out.push(text(plot.x - 10, sy(z) + 4, `${z > 0 ? '+' : ''}${f(z)} m`, { size: 12, fill: INK.muted, anchor: 'end' }));
+    }
+    for (let k = 0; k < n; k += 10) {
+        out.push(text(sx(k), plot.y + plot.h + 18, `${k}`, { size: 12, fill: INK.muted, anchor: 'middle' }));
+    }
+    out.push(text(plot.x + plot.w + 8, plot.y + plot.h + 18, 'tick', { size: 12, fill: INK.muted }));
+    for (const s of series) {
+        out.push(
+            polyline(
+                s.heights.map((z, k) => [sx(k), sy(z)]),
+                s.color,
+                s.width,
+                s.dash ? `stroke-dasharray="${s.dash}"` : '',
+            ),
+        );
+    }
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // The figures
 
@@ -247,7 +295,7 @@ const percent = (x: number) => `${(100 * x).toFixed(1)}%`;
  * scale on where the circuit closes. */
 export function poseGraphFigure(data: PoseGraph): string {
     const W = 1200;
-    const H = 760;
+    const H = 980;
     const poses = data.poses;
     const all = [...poses.flatMap((p) => [p.truth, p.start, p.mode]), ...data.landmarks.flatMap((l) => [l.truth, l.mode])];
     const mapBox = { x: 36, y: 104, w: 620, h: 620 };
@@ -281,6 +329,14 @@ export function poseGraphFigure(data: PoseGraph): string {
     body.push(`<circle cx="${f(ex)}" cy="${f(ey)}" r="4" fill="${SERIES.reckoning}" stroke="${INK.panel}" stroke-width="1.5"/>`);
     body.push(text(ex - 10, ey - 12, `dead reckoning ends ${distance(end.start, end.truth).toFixed(2)} m off`, { size: 13, fill: INK.primary, anchor: 'end' }));
     body.push(...scaleBar(mapBox.x + 24, mapBox.y + mapBox.h - 24, 5, map.scale, '5 m'));
+    body.push(text(mapBox.x + 20, mapBox.y + 30, 'Top view (x, y)', { size: 15, fill: INK.primary, weight: 600 }));
+    body.push(
+        ...heightStrip({ x: 36, y: 744, w: 1128, h: 200 }, 'Height along the circuit, which the top view hides', [
+            { heights: poses.map((p) => p.start[2]), color: SERIES.reckoning, width: 2.2 },
+            { heights: poses.map((p) => p.truth[2]), color: INK.secondary, width: 1.6, dash: '5 5' },
+            { heights: poses.map((p) => p.mode[2]), color: SERIES.estimate, width: 2.4 },
+        ]),
+    );
 
     // The zoom: the last poses, where the circuit closes, at true scale.
     const last = poses.slice(-9);
@@ -309,7 +365,7 @@ export function poseGraphFigure(data: PoseGraph): string {
         clipped.push(cross(zoom(p.truth), 3.5, INK.primary));
     }
     body.push(`<g clip-path="url(#zoom)">${clipped.join('')}</g>`);
-    body.push(text(zoomBox.x + 4, zoomBox.y - 12, 'Where the circuit closes, at true scale', { size: 15, fill: INK.primary, weight: 600 }));
+    body.push(text(zoomBox.x + 4, zoomBox.y - 12, 'Where the circuit closes: top view, at true scale', { size: 15, fill: INK.primary, weight: 600 }));
     body.push(...scaleBar(zoomBox.x + 20, zoomBox.y + zoomBox.h - 22, 0.25, zoom.scale, '25 cm'));
 
     // The legend and the figures.
@@ -324,7 +380,7 @@ export function poseGraphFigure(data: PoseGraph): string {
     );
     const startError = Math.max(...poses.map((p) => distance(p.start, p.truth)));
     const modeError = Math.max(...poses.map((p) => distance(p.mode, p.truth)));
-    body.push(...tile(690, 590, 232, `${startError.toFixed(2)} m → ${(100 * modeError).toFixed(0)} cm`, 'largest position error', 'dead reckoning → estimate'));
+    body.push(...tile(690, 590, 232, `${startError.toFixed(2)} m → ${(100 * modeError).toFixed(0)} cm`, 'largest error, height included', 'dead reckoning → estimate'));
     body.push(
         ...tile(
             932,
@@ -436,7 +492,7 @@ export function calibrationFigure(data: PoseGraph): string {
 /** The sliding window: one dataset's path, and each tick's position error. */
 export function slidingWindowFigure(data: SlidingWindow): string {
     const W = 1200;
-    const H = 800;
+    const H = 1020;
     const all = [...data.truth, ...data.start, ...data.batch, ...data.filtered.map((x) => x.mode), ...data.landmark_truth];
     const mapBox = { x: 36, y: 104, w: 1128, h: 250 };
     const map = project(all, mapBox, 0.02);
@@ -459,6 +515,15 @@ export function slidingWindowFigure(data: SlidingWindow): string {
         body.push(`<circle cx="${f(cx)}" cy="${f(cy)}" r="2.4" fill="${SERIES.estimate}"/>`);
     }
     body.push(...scaleBar(mapBox.x + 24, mapBox.y + mapBox.h - 22, 10, map.scale, '10 m'));
+    body.push(text(mapBox.x + 20, mapBox.y + 30, 'Top view (x, y)', { size: 15, fill: INK.primary, weight: 600 }));
+    body.push(
+        ...heightStrip({ x: 36, y: 372, w: 1128, h: 200 }, 'Height along the path, which the top view hides', [
+            { heights: data.start.map((p) => p[2]), color: SERIES.reckoning, width: 2.2 },
+            { heights: data.truth.map((p) => p[2]), color: INK.secondary, width: 1.6, dash: '5 5' },
+            { heights: data.batch.map((p) => p[2]), color: SERIES.landmark, width: 2 },
+            { heights: data.filtered.map((x) => x.mode[2]), color: SERIES.estimate, width: 2.2 },
+        ]),
+    );
     // Direct labels at the end of the path.
     const label = (p: Vec3, content: string, color: string, dy: number) => {
         const [x, y] = map(p);
@@ -467,9 +532,9 @@ export function slidingWindowFigure(data: SlidingWindow): string {
     body.push(...label(data.start[data.start.length - 1]!, 'dead reckoning', SERIES.reckoning, 4));
 
     // Each tick's position error, on a logarithmic axis, with the filter's 90% radius.
-    const plot = { x: 110, y: 430, w: 920, h: 240 };
-    body.push(`<rect x="36" y="380" width="1128" height="340" rx="14" fill="${INK.panel}"/>`);
-    body.push(text(58, 408, 'Position error at each tick', { size: 16, fill: INK.primary, weight: 600 }));
+    const plot = { x: 110, y: 650, w: 920, h: 240 };
+    body.push(`<rect x="36" y="600" width="1128" height="340" rx="14" fill="${INK.panel}"/>`);
+    body.push(text(58, 628, 'Position error at each tick, in all three dimensions', { size: 16, fill: INK.primary, weight: 600 }));
     const ticks = data.truth.length;
     const [lo, hi] = [0.003, 5];
     const sx = (k: number) => plot.x + (k / (ticks - 1)) * plot.w;
@@ -509,11 +574,11 @@ export function slidingWindowFigure(data: SlidingWindow): string {
     body.push(endLabel(data.batch, 'batch', -6));
 
     body.push(
-        ...legend(58, 744, [{ label: 'Truth', mark: swatch.line(INK.secondary, '5 5') }]),
-        ...legend(170, 744, [{ label: 'Dead reckoning', mark: swatch.line(SERIES.reckoning) }]),
-        ...legend(350, 744, [{ label: 'Window, filtering: each pose as it arrives', mark: swatch.line(SERIES.estimate) }]),
-        ...legend(700, 744, [{ label: 'Batch, every measurement', mark: swatch.line(SERIES.landmark) }]),
-        ...legend(950, 744, [
+        ...legend(58, 964, [{ label: 'Truth', mark: swatch.line(INK.secondary, '5 5') }]),
+        ...legend(170, 964, [{ label: 'Dead reckoning', mark: swatch.line(SERIES.reckoning) }]),
+        ...legend(350, 964, [{ label: 'Window, filtering: each pose as it arrives', mark: swatch.line(SERIES.estimate) }]),
+        ...legend(700, 964, [{ label: 'Batch, every measurement', mark: swatch.line(SERIES.landmark) }]),
+        ...legend(950, 964, [
             {
                 label: 'Window’s 90% radius',
                 mark: (x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" rx="3" fill="${SERIES.estimate}" fill-opacity="0.3"/>`,

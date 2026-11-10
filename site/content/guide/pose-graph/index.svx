@@ -25,7 +25,7 @@ cargo run --release -p skoro --example pose_graph
 <ExampleFigure
 	name="pose-graph"
 	alt="A closed circuit of 73 poses and 24 landmarks. Dead reckoning on the odometry drifts by up to 1.49 m; the estimate follows the dashed truth to within 34 cm, and a zoom at true scale shows each estimated pose with its 90% ellipse around the truth."
-	caption="One of the hundred datasets: the truth, the start dead reckoning gives, and the estimate with its 90% ellipses."
+	caption="One of the hundred datasets: the truth, the start dead reckoning gives, and the estimate with its 90% ellipses, from above and from the side."
 />
 
 ## The model, tick by tick

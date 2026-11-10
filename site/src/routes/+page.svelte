@@ -63,7 +63,7 @@
             <div>
                 <ExampleFigure
                     name="sliding-window"
-                    alt="A sliding window over an open path of 80 poses: dead reckoning drifts by 3 m, while the window's filtered estimates and the batch stay within about a metre of the truth."
+                    alt="A sliding window over an open path of 80 poses, from above and from the side: dead reckoning drifts by 3 m, almost all of it in height, while the window's filtered estimates and the batch stay within about a metre of the truth."
                 />
                 <p class="showcase-link">
                     <a href={slidingWindow.href}>A sliding window, retiring as it goes →</a>

@@ -21,7 +21,7 @@ a linearized factor, filters an open path:
 [`sliding_window`](crates/skoro/examples/sliding_window.rs).
 
 <p align="center">
-  <a href="https://skoro.dev/guide/sliding-window/"><img src="site/static/figures/sliding-window.svg" alt="A sliding window over an open path of 80 poses: dead reckoning drifts by 3 m, while the window's filtered estimates and the batch stay within about a metre of the truth." width="100%"></a>
+  <a href="https://skoro.dev/guide/sliding-window/"><img src="site/static/figures/sliding-window.svg" alt="A sliding window over an open path of 80 poses, from above and from the side: dead reckoning drifts by 3 m, almost all of it in height, while the window's filtered estimates and the batch stay within about a metre of the truth." width="100%"></a>
 </p>
 
 ```sh

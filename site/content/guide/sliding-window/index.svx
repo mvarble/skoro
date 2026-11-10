@@ -24,8 +24,8 @@ cargo run --release -p skoro --example sliding_window
 
 <ExampleFigure
 	name="sliding-window"
-	alt="An open path of 80 poses. Dead reckoning drifts by about 3 m; the window's filtered estimates and the batch's both stay within about a metre of the truth, the window's error mostly under its 90% radius."
-	caption="One of the hundred datasets: the path, and each tick's position error for dead reckoning, the window as each pose arrives, and the batch with every measurement."
+	alt="An open path of 80 poses, from above and from the side. Dead reckoning drifts by about 3 m, almost all of it in height; the window's filtered estimates and the batch's both stay within about a metre of the truth, the window's error mostly under its 90% radius."
+	caption="One of the hundred datasets: the path from above and from the side, and each tick's position error in all three dimensions, for dead reckoning, the window as each pose arrives, and the batch with every measurement. Dead reckoning drifts mostly in height, which only the side view shows."
 />
 
 ## A tick
