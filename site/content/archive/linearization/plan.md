@@ -53,7 +53,7 @@ depends_on: [archive/linearization/implementation]
       the linear term from the log-volumes that are not folded, and `c_0`. Tests:
       `linear_gaussian_terms_are_exact`, `the_linear_term_is_zero_without_log_volumes`,
       `positive_log_volumes_are_a_linear_term`.
-- [ ] `Linearized::eliminate`, `Solved::minimizer`, `Linearizer::schedule`, and the mapping of an
+- [x] `Linearized::eliminate`, `Solved::minimizer`, `Linearizer::schedule`, and the mapping of an
       undetermined block to its quantity. Tests: `the_step_is_gauss_newton`,
       `the_step_keeps_its_digits`, `batch_rows_share_the_schedule`,
       `damping_promises_the_decrease`, `an_undetermined_quantity_is_refused`.

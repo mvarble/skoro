@@ -1,12 +1,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // a test crate
+#![allow(clippy::needless_range_loop)] // dense linear algebra, by index
 //! The linearization of a query, against the query itself and the statements of its mathematics.
 
 mod common;
 
-use common::{close, f_at, points, tolerance};
+use common::{close, f_at, gradient, gram, points, row, solve, tolerance};
 use skoro_core::scope::{constant, quantity};
-use skoro_core::{Matrix, Observations, Positive, Query, Values, Vector, Writer};
-use skoro_elimination::{Problem, Schedule};
+use skoro_core::{Matrix, Observations, Positive, Query, Real, Values, Vector, Writer};
+use skoro_elimination::{Damping, Problem, Schedule};
 use skoro_linearize::{Assembly, Linearizer};
 use skoro_normal::{Normal, Scale};
 use skoro_tensor::Target;
@@ -142,4 +143,159 @@ skoro_core::precision_tests! {
             close(problem.linear().unwrap(), &[1.0, 1.0], tolerance(&target), "η");
         }
     }
+}
+
+/// A nonlinear model of vectors: `x ~ N(0, I)`, an observed `z ~ N(x ⊙ x, 0.3²)` and an observed
+/// `u ~ N(M x, 0.5²)`, with a batch of `rows` points.
+fn squares(rows: usize, target: &Target) -> (Writer, Query, Values) {
+    let mut writer = Writer::new();
+    let (x, z, u) = writer
+        .build(|| {
+            let x = quantity("x", Vector::<2>);
+            Normal::on(
+                Vector::<2>,
+                constant(Vector::<2>, [0.0, 0.0]),
+                Scale::sd(1.0),
+            )
+            .score(x);
+            let z = quantity("z", Vector::<2>);
+            Normal::on(Vector::<2>, x * x, Scale::sd(0.3)).score(z);
+            let u = quantity("u", Vector::<2>);
+            let m = constant(Matrix::<2, 2>, [[0.8, -0.2], [0.4, 1.1]]);
+            Normal::on(Vector::<2>, m.matmul(x), Scale::sd(0.5)).score(u);
+            (x, z, u)
+        })
+        .unwrap();
+    let given = Observations::new()
+        .observe(z, [0.6, 1.4])
+        .observe(u, [0.3, -0.5]);
+    let data: Vec<f64> = (0..rows)
+        .flat_map(|r| [0.4 + 0.1 * r as f64, -0.7 + 0.2 * r as f64])
+        .collect();
+    let point = Values::new().with(x, points(&data, rows, 2, target));
+    (writer, Query::log_density().given(given), point)
+}
+
+#[test]
+fn the_step_is_gauss_newton() {
+    let target = Target::host();
+    let (writer, query, point) = squares(2, &target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let linearized = linearizer.at(&point).unwrap();
+    let solved = linearized.eliminate(&schedule, None).unwrap();
+    let g = gradient(&snapshot, &query, linearizer.layout(), &point, &target);
+    for (r, problem) in linearized.problems().iter().enumerate() {
+        let minus: Vec<f64> = g[r].iter().map(|g| -g).collect();
+        let expected = solve(&gram(problem), &minus);
+        close(
+            &solved.eliminations()[r].minimizer().unwrap(),
+            &expected,
+            1e-10,
+            "(JᵀJ) τ = -g",
+        );
+    }
+}
+
+#[test]
+fn the_step_keeps_its_digits() {
+    // Free reals x₁ and x₂, measured as x₁ + x₂ = 2, ε x₁ = ε and ε x₂ = ε with unit noise: the
+    // rows of the note's example, whose normal equations are singular as computed.
+    let e = 1e-8;
+    let target = Target::host();
+    let mut writer = Writer::new();
+    let (x1, x2, z) = writer
+        .build(|| {
+            let x1 = quantity("x1", Real);
+            let x2 = quantity("x2", Real);
+            let z: Vec<_> = (0..3).map(|i| quantity(format!("z/{i}"), Real)).collect();
+            Normal::on(Real, x1 + x2, Scale::sd(1.0)).score(z[0]);
+            Normal::on(Real, x1 * e, Scale::sd(1.0)).score(z[1]);
+            Normal::on(Real, x2 * e, Scale::sd(1.0)).score(z[2]);
+            (x1, x2, z)
+        })
+        .unwrap();
+    let given = Observations::new()
+        .observe(z[0], 2.0)
+        .observe(z[1], e)
+        .observe(z[2], e);
+    let query = Query::log_density().given(given);
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let point = Values::new()
+        .with(x1, points(&[0.0], 1, 1, &target))
+        .with(x2, points(&[0.0], 1, 1, &target));
+    let schedule = linearizer.schedule().unwrap();
+    let solved = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap();
+    close(
+        &solved.eliminations()[0].minimizer().unwrap(),
+        &[1.0, 1.0],
+        1e-14,
+        "the step",
+    );
+}
+
+#[test]
+fn batch_rows_share_the_schedule() {
+    let target = Target::host();
+    let (writer, query, point) = squares(5, &target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let batch = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap();
+    let x = linearizer.layout().quantities()[0];
+    for r in 0..5 {
+        let alone = Values::new().with(x, points(&row(point.get(x).unwrap(), r), 1, 2, &target));
+        let one = linearizer
+            .at(&alone)
+            .unwrap()
+            .eliminate(&schedule, None)
+            .unwrap();
+        close(
+            &batch.eliminations()[r].minimizer().unwrap(),
+            &one.eliminations()[0].minimizer().unwrap(),
+            1e-12,
+            "the row alone",
+        );
+    }
+}
+
+#[test]
+fn damping_promises_the_decrease() {
+    let target = Target::host();
+    let (writer, query, point) = squares(1, &target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let linearized = linearizer.at(&point).unwrap();
+    let damping = Damping {
+        lambda: 0.7,
+        diagonal: vec![1.5, 0.5],
+    };
+    let solved = linearized.eliminate(&schedule, Some(&damping)).unwrap();
+    let step = solved.eliminations()[0].minimizer().unwrap();
+    let problem = &linearized.problems()[0];
+    let mut damped = gram(problem);
+    for i in 0..2 {
+        damped[i][i] += damping.lambda * damping.diagonal[i];
+    }
+    let g = gradient(&snapshot, &query, linearizer.layout(), &point, &target);
+    let minus: Vec<f64> = g[0].iter().map(|g| -g).collect();
+    close(&step, &solve(&damped, &minus), 1e-10, "(JᵀJ + λD) τ = -g");
+    let decrease = problem.value(&[0.0, 0.0]) - problem.value(&step);
+    close(
+        &[problem.promised(&step, &damping)],
+        &[decrease],
+        1e-10,
+        "the promised decrease",
+    );
 }

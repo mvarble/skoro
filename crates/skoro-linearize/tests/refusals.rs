@@ -126,3 +126,72 @@ fn a_free_scale_is_refused_by_the_residual_linearization() {
         .is_ok()
     );
 }
+
+#[test]
+fn an_undetermined_quantity_is_refused() {
+    use skoro_core::{Values, scope::constant as c};
+    let target = Target::host();
+    // A landmark in the plane seen along one direction alone: a linear stand-in for a bearing.
+    let mut writer = Writer::new();
+    let (landmark, z) = writer
+        .build(|| {
+            let landmark = quantity("landmark", Vector::<2>);
+            let along = c(skoro_core::Matrix::<1, 2>, [[0.6, 0.8]]).matmul(landmark);
+            let z = quantity("z", Vector::<1>);
+            Normal::on(Vector::<1>, along, Scale::sd(0.1)).score(z);
+            (landmark, z)
+        })
+        .unwrap();
+    let query = Query::log_density().given(skoro_core::Observations::new().observe(z, [1.0]));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let point = Values::new().with(
+        landmark,
+        skoro_tensor::Value::Continuous(skoro_tensor::Points::from_host(
+            &[0.0, 0.0],
+            1,
+            2,
+            &target,
+        )),
+    );
+    let schedule = linearizer.schedule().unwrap();
+    let error = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap_err();
+    assert_eq!(
+        error,
+        Error::Undetermined {
+            quantity: landmark.id()
+        }
+    );
+    // A gauge freedom: two positions joined by their difference alone.
+    let mut writer = Writer::new();
+    let (a, b, d) = writer
+        .build(|| {
+            let a = quantity("a", Vector::<2>);
+            let b = quantity("b", Vector::<2>);
+            let d = quantity("d", Vector::<2>);
+            Normal::on(Vector::<2>, b - a, Scale::sd(0.2)).score(d);
+            (a, b, d)
+        })
+        .unwrap();
+    let query = Query::log_density().given(skoro_core::Observations::new().observe(d, [1.0, 0.0]));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let value = |x: [f64; 2]| {
+        skoro_tensor::Value::Continuous(skoro_tensor::Points::from_host(&x, 1, 2, &target))
+    };
+    let point = Values::new()
+        .with(a, value([0.0, 0.0]))
+        .with(b, value([0.5, 0.5]));
+    let schedule = linearizer.schedule().unwrap();
+    let second = linearizer.layout().quantities()[schedule.order()[1]];
+    let error = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap_err();
+    assert_eq!(error, Error::Undetermined { quantity: second });
+}
