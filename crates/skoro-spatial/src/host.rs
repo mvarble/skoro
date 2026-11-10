@@ -23,6 +23,20 @@ pub fn compose(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
     ]
 }
 
+/// `T₁ * T₂ = (P(q₁ ⊗ q₂), p₁ + R₁ p₂)` on poses in storage order, `(w, x, y, z)` then the
+/// position: as `Q<Pose> * Q<Pose>` computes it, with no choice of the quaternion's sign.
+pub fn pose_compose(a: [f64; 7], b: [f64; 7]) -> [f64; 7] {
+    let q = compose([a[0], a[1], a[2], a[3]], [b[0], b[1], b[2], b[3]]);
+    let p = pose_transform(a, [b[4], b[5], b[6]]);
+    [q[0], q[1], q[2], q[3], p[0], p[1], p[2]]
+}
+
+/// `T * x = R x + p`: as `Q<Pose> * Q<Vector<3>>` computes it.
+pub fn pose_transform(t: [f64; 7], x: [f64; 3]) -> [f64; 3] {
+    let r = matrix([t[0], t[1], t[2], t[3]]);
+    std::array::from_fn(|i| t[4 + i] + r[i][0] * x[0] + r[i][1] * x[1] + r[i][2] * x[2])
+}
+
 /// The rotation of the Euler angles of `convention`, listed in the order of its axes.
 pub fn from_euler(angles: [f64; 3], convention: Euler) -> [f64; 4] {
     let (sequence, reversed) = convention.intrinsic();

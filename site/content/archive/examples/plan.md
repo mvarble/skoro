@@ -5,7 +5,7 @@ depends_on: [archive/examples/implementation]
 
 ## `skoro-spatial`
 
-- [ ] Add `host::pose_compose` and `host::pose_transform`, written with the module's `compose` and `matrix`, with the graph's sign convention for the quaternion. Tests: `host_pose_maps_agree_with_the_graph`.
+- [x] Add `host::pose_compose` and `host::pose_transform`, written with the module's `compose` and `matrix`, with the graph's sign convention for the quaternion. Tests: `host_pose_maps_agree_with_the_graph`.
 
 ## `skoro-core`
 
