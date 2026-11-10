@@ -15,7 +15,7 @@ depends_on: [archive/linearization/implementation]
 
 ## The normal
 
-- [ ] Add the role `roles::TANGENT`, bound by `Normal::score` and not by `factor_at`, and extend
+- [x] Add the role `roles::TANGENT`, bound by `Normal::score` and not by `factor_at`, and extend
       `roles_are_bound` with it. Tests: `score_binds_the_tangent`.
 - [ ] Add `Stacked::block_in`. Tests: `block_in_is_block`.
 

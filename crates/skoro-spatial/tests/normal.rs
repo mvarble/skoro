@@ -255,3 +255,33 @@ fn normal_draws_on_rotations() {
         );
     }
 }
+
+skoro_core::precision_tests! {
+    fn score_binds_the_tangent_on_rotations(target) {
+        // The normal's `TANGENT` on a curved type is `x ⊖ μ`, and its residual `W` times it.
+        let (mean, at, sigma) = (common::unit([0.4, -0.3, 0.8, 0.2]), common::unit([0.5, -0.2, 0.7, 0.3]), 0.4);
+        let mut writer = Writer::new();
+        let (x, term, local) = writer
+            .build(|| {
+                let x = quantity("x", Rotation);
+                let mu = constant(Rotation, mean);
+                let term = Normal::on(Rotation, mu, Scale::sd(sigma)).score(x);
+                (x, term, x.local(mu).untyped())
+            })
+            .unwrap();
+        let snapshot = writer.snapshot();
+        let tangent = snapshot
+            .bound(term, &skoro_normal::roles::TANGENT)
+            .unwrap()
+            .unwrap();
+        let residual = snapshot.bound(term, &skoro_normal::roles::RESIDUAL).unwrap();
+        let given = Observations::new().observe(x, at);
+        let query = skoro_core::Query::of([tangent, residual, local]).given(given);
+        let program = snapshot.compile(&query, &target).unwrap();
+        let out = program.forward(&skoro_core::Values::new()).unwrap();
+        let read = |q: skoro_core::QDyn| continuous(out.get(q).unwrap());
+        close(&read(tangent), &read(local), tolerance(&target));
+        let whitened: Vec<f64> = read(local).iter().map(|t| t / sigma).collect();
+        close(&read(residual), &whitened, tolerance(&target));
+    }
+}
