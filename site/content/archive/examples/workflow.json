@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "implementation",
+    "stage": "math",
     "started": "2026-11-10",
     "events": [
         {
@@ -13,13 +13,21 @@
             "action": "approve",
             "stage": "math",
             "commit": "17d6a14"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The stopping rule stopped a row only on an accepted step, so a converged row whose next gain is rounding can be rejected until its damping passes the limit.",
+            "commit": "3aad1cf"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-10",
             "commit": "17d6a14",
-            "hash": "e560e55254820e44be929622efc3ae2c6f6e4b16384ffa09cc354522528f9876"
+            "hash": "e560e55254820e44be929622efc3ae2c6f6e4b16384ffa09cc354522528f9876",
+            "stale": true
         }
     }
 }

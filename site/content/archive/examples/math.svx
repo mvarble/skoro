@@ -467,3 +467,14 @@ nats, with stationarity checked apart from it; the batch's calibration checked b
 tolerance fixed by the statistics and the approximation's expected error; each replacement
 linearized at the window's mode; and the window's calibration and its gap [](eq:gap) reported, with
 only its stationarity checked.
+
+## Revisions
+
+**2026-11-09: the stopping rule.** The rule stopped a row only on an accepted step that promised
+$\Delta \le \epsilon$. The implementation showed that this fails rows that have converged: with
+$\lvert f \rvert$ in the thousands, the step after one promising just over $\epsilon$ promises
+little more than the rounding of $f$, its gain [](eq:gain) has a random sign (or is $0/0$ for a
+step promising nothing), and a run of rejections carries $\lambda$ past $\lambda_{\max}$. The rule
+becomes: a row stops when a step promises $\Delta \le \epsilon$, whether or not it is accepted,
+the step being taken if it is, with stationarity still checked apart from it by the undamped
+decrement.
