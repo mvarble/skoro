@@ -11,7 +11,7 @@ depends_on: [archive/linearization/implementation]
 - [x] Make `roots` public as `Snapshot::reached_from`. Tests: `reached_from_is_what_a_term_involves`.
 - [x] Add `Composite::reads` and `Space::volume_reads_point`. Tests: `composites_read_their_inputs`,
       `volume_reads_point_by_space`.
-- [ ] Add `scope::constant_in`. Tests: `constant_in_is_constant`.
+- [x] Add `scope::constant_in`. Tests: `constant_in_is_constant`.
 
 ## The normal
 

@@ -425,3 +425,52 @@ fn widening_is_free_and_narrowing_checks_the_space() {
     assert_eq!(failure.location.line(), line);
     let _: &dyn Operation = &Add;
 }
+
+#[test]
+fn constant_in_is_constant() {
+    use skoro_core::{IntoHostValue, Positive, Query};
+    use skoro_tensor::HostValue;
+    let host = |value: &dyn Fn() -> Option<HostValue>| value().unwrap();
+    let shared = [0.5, 2.0];
+    let per_row = Rows(vec![[0.5, 2.0], [1.5, 3.0], [2.5, 4.0]]);
+    let mut writer = Writer::new();
+    let made = writer
+        .build(|| {
+            let space = Space::Positive(2);
+            [
+                (
+                    constant(Positive::<2>, shared).untyped(),
+                    scope::constant_in(
+                        space.clone(),
+                        host(&|| IntoHostValue::<Positive<2>>::into_host_value(shared)),
+                    ),
+                ),
+                (
+                    constant(Positive::<2>, per_row.clone()).untyped(),
+                    scope::constant_in(
+                        space,
+                        host(&|| IntoHostValue::<Positive<2>>::into_host_value(per_row.clone())),
+                    ),
+                ),
+            ]
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    for (typed, dynamic) in made {
+        assert_eq!(snapshot.space(dynamic), snapshot.space(typed));
+        let program = snapshot
+            .compile(&Query::of([typed, dynamic]), &Target::host())
+            .unwrap();
+        let values = program.forward(&skoro_core::Values::new()).unwrap();
+        let read = |q: QDyn| match values.get(q) {
+            Some(Value::Continuous(points)) => points.to_host(),
+            _ => panic!("a continuous value"),
+        };
+        assert_eq!(read(typed), read(dynamic));
+    }
+    let misfit = HostValue::new(None, 3, HostData::Continuous(vec![1.0, 2.0, 3.0])).unwrap();
+    let failure = writer
+        .build(|| scope::constant_in(Space::Positive(2), misfit))
+        .unwrap_err();
+    assert!(matches!(failure.error, Error::ValueShape { .. }));
+}
