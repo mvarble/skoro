@@ -3,9 +3,9 @@
 
 mod common;
 
-use common::{close, gradient, gram, host, points, rotations, solve};
+use common::{close, gradient, gram, host, points, rotations, row, solve};
 use skoro_core::scope::{constant, quantity};
-use skoro_core::{NodeId, Observations, Query, Real, Values, Writer};
+use skoro_core::{NodeId, Observations, Query, Real, Values, Vector, Writer};
 use skoro_elimination::Damping;
 use skoro_linearize::{Assembly, Error, LevenbergMarquardt, Linearizer, Status, decrement};
 use skoro_normal::{Normal, Scale};
@@ -197,4 +197,178 @@ fn levenberg_marquardt_finds_the_linear_gaussian_mean() {
             .map(|r| (0..3).map(|c| e[r] * precision[r][c] * e[c]).sum::<f64>())
             .sum::<f64>();
     assert!(excess <= 10.0 * method.tolerance, "excess {excess}");
+}
+
+/// Two iterates equal to rounding.
+fn same(a: &skoro_linearize::Iterate, b: &skoro_linearize::Iterate) -> bool {
+    let near = |x: f64, y: f64| (x - y).abs() <= 1e-9 * x.abs().max(y.abs()).max(1e-12);
+    a.accepted == b.accepted
+        && near(a.objective, b.objective)
+        && near(a.damping, b.damping)
+        && near(a.promised, b.promised)
+}
+
+#[test]
+fn rows_are_minimized_independently() {
+    let target = Target::host();
+    let (writer, query, point) = rotations(&target);
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let layout = linearizer.layout().clone();
+    let schedule = linearizer.schedule().unwrap();
+    let method = LevenbergMarquardt::default();
+    let batch = method.minimize(&linearizer, &schedule, &point).unwrap();
+    assert_eq!(batch.rows.len(), 2);
+    assert_ne!(batch.rows[0].iterations, 0);
+    for r in 0..2 {
+        let mut alone = Values::new();
+        for &q in layout.quantities() {
+            let data = row(point.get(q).unwrap(), r);
+            alone.insert(q, points(&data, 1, data.len(), &target));
+        }
+        let single = method.minimize(&linearizer, &schedule, &alone).unwrap();
+        let (a, b) = (&batch.rows[r], &single.rows[0]);
+        assert_eq!(a.status, b.status, "row {r}");
+        assert_eq!(a.history.len(), b.history.len(), "row {r}");
+        for (x, y) in a.history.iter().zip(&b.history) {
+            assert!(same(x, y), "row {r}: {x:?} against {y:?}");
+        }
+        for &q in layout.quantities() {
+            close(
+                &row(batch.point.get(q).unwrap(), r),
+                &host(&single.point, q),
+                1e-12,
+                "the row's mode",
+            );
+        }
+    }
+}
+
+#[test]
+fn a_rejected_step_keeps_the_point() {
+    let target = Target::host();
+    // x ~ N(0, 1) and z ~ N(x³, 0.1²) observed at 1: from x = 0.1, where x³ is flat, an undamped
+    // step overshoots far past the mode.
+    let mut writer = Writer::new();
+    let (x, z) = writer
+        .build(|| {
+            let x = quantity("x", Real);
+            Normal::on(Real, constant(Real, 0.0), Scale::sd(1.0)).score(x);
+            let z = quantity("z", Real);
+            Normal::on(Real, x * x * x, Scale::sd(0.1)).score(z);
+            (x, z)
+        })
+        .unwrap();
+    let query = Query::log_density().given(Observations::new().observe(z, 1.0));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let start = Values::new().with(x, points(&[0.1], 1, 1, &target));
+    let minimized = LevenbergMarquardt {
+        initial_damping: 1e-8,
+        ..LevenbergMarquardt::default()
+    }
+    .minimize(&linearizer, &schedule, &start)
+    .unwrap();
+    let row = &minimized.rows[0];
+    assert_eq!(row.status, Status::Converged, "{row:?}");
+    let history = &row.history;
+    assert!(history.iter().any(|it| !it.accepted), "{history:?}");
+    let mut beta = 2.0;
+    for pair in history.windows(2) {
+        let (now, next) = (&pair[0], &pair[1]);
+        if now.accepted {
+            beta = 2.0;
+        } else {
+            // The point is kept, and the damping grows by β, which doubles.
+            assert_eq!(next.objective, now.objective, "{history:?}");
+            assert!(
+                (next.damping - beta * now.damping).abs() <= 1e-15 * next.damping,
+                "{history:?}"
+            );
+            beta *= 2.0;
+        }
+    }
+}
+
+#[test]
+fn rows_at_rounding_converge() {
+    let target = Target::host();
+    // x ~ N(0, I) on R³ and 2 000 observations z_i ~ N(x + 0.01 x ⊙ x, I): |f| in the thousands, and
+    // nearly linear, so that Gauss–Newton contracts fast and the step after one promising just over
+    // ε promises little more than the rounding of f.
+    let n = 2000;
+    let truth = [0.4, -0.7, 1.1];
+    let mut state: u64 = 0x2026_1110;
+    let mut uniform = || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((state >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+    };
+    let mut normal = || {
+        let (u, v) = (uniform(), uniform());
+        (-2.0 * u.ln()).sqrt() * (2.0 * std::f64::consts::PI * v).cos()
+    };
+    let observed: Vec<[f64; 3]> = (0..n)
+        .map(|_| std::array::from_fn(|i| truth[i] + 0.01 * truth[i] * truth[i] + normal()))
+        .collect();
+    let mut writer = Writer::new();
+    let (x, zs) = writer
+        .build(|| {
+            let x = quantity("x", Vector::<3>);
+            Normal::on(Vector::<3>, constant(Vector::<3>, [0.0; 3]), Scale::sd(1.0)).score(x);
+            let mean = x + x * x * 0.01;
+            let zs: Vec<_> = (0..n)
+                .map(|i| {
+                    let z = quantity(format!("z/{i}").as_str(), Vector::<3>);
+                    Normal::on(Vector::<3>, mean, Scale::sd(1.0)).score(z);
+                    z
+                })
+                .collect();
+            (x, zs)
+        })
+        .unwrap();
+    let given = zs
+        .iter()
+        .zip(&observed)
+        .fold(Observations::new(), |o, (&z, v)| o.observe(z, *v));
+    let query = Query::log_density().given(given);
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let method = LevenbergMarquardt::default();
+    // The mode, from one row; then 1 000 rows of starts near it.
+    let one = method
+        .minimize(
+            &linearizer,
+            &schedule,
+            &Values::new().with(x, points(&[0.0; 3], 1, 3, &target)),
+        )
+        .unwrap();
+    let mode = host(&one.point, x);
+    assert!(linearizer.objective(&one.point).unwrap()[0].abs() > 1000.0);
+    let rows = 1000;
+    let starts: Vec<f64> = (0..rows)
+        .flat_map(|_| {
+            let offsets: [f64; 3] = std::array::from_fn(|_| 1e-3 * normal());
+            [
+                mode[0] + offsets[0],
+                mode[1] + offsets[1],
+                mode[2] + offsets[2],
+            ]
+        })
+        .collect();
+    let minimized = method
+        .minimize(
+            &linearizer,
+            &schedule,
+            &Values::new().with(x, points(&starts, rows, 3, &target)),
+        )
+        .unwrap();
+    for (r, outcome) in minimized.rows.iter().enumerate() {
+        assert_eq!(outcome.status, Status::Converged, "row {r}: {outcome:?}");
+        let last = outcome.history.last().unwrap();
+        assert!(last.promised <= method.tolerance, "row {r}: {last:?}");
+    }
 }
