@@ -15,7 +15,7 @@ depends_on: [archive/examples/implementation]
 ## `skoro-linearize`
 
 - [x] Add `Linearizer::objective`, the negated density program's forward pass at a point, per row. Tests: `the_objective_is_the_negative_log_density`.
-- [ ] Add `minimize.rs` with `LevenbergMarquardt`, `Status`, `Iterate`, `RowOutcome`, `Minimized`, the private `marquardt`, `nielsen` and `select_rows`, and `minimize` itself: per-row damping by row-wise elimination, the trial batched and the decision per row, a row stopping on a step's promise before its acceptance, and the Fisher assembly refused. Re-export them at the crate's root. Tests: `the_marquardt_diagonal_is_the_column_norms`, `the_schedule_is_nielsens`, `the_fisher_assembly_is_refused`, `non_convergence_is_an_outcome`.
+- [x] Add `minimize.rs` with `LevenbergMarquardt`, `Status`, `Iterate`, `RowOutcome`, `Minimized`, the private `marquardt`, `nielsen` and `select_rows`, and `minimize` itself: per-row damping by row-wise elimination, the trial batched and the decision per row, a row stopping on a step's promise before its acceptance, and the Fisher assembly refused. Re-export them at the crate's root. Tests: `the_marquardt_diagonal_is_the_column_norms`, `the_schedule_is_nielsens`, `the_fisher_assembly_is_refused`, `non_convergence_is_an_outcome`.
 - [ ] Add `decrement`, the undamped promise per row. Tests: `levenberg_marquardt_finds_the_mode_on_rotations`, `levenberg_marquardt_finds_the_linear_gaussian_mean`.
 - [ ] Test the method's behaviour across rows and rejections, on the crate's own models. Tests: `rows_are_minimized_independently`, `a_rejected_step_keeps_the_point`, `rows_at_rounding_converge`.
 
