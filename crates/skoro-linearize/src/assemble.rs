@@ -2,7 +2,7 @@
 
 use skoro_core::{Frames, Layout, NodeId, QDyn, Space, Values};
 use skoro_elimination::{Matrix, Problem, Rows};
-use skoro_tensor::Value;
+use skoro_tensor::{Points, Target, Value};
 
 use crate::{Assembly, Error, Linearizer};
 
@@ -136,6 +136,7 @@ impl Linearizer {
             .iter()
             .map(|f| f.log_volume.map(|v| frame(&pass.frames, v)).transpose())
             .collect::<Result<_, Error>>()?;
+        let folds = self.folds(&pass)?;
         let mut problems = Vec::with_capacity(pass.rows);
         for row in 0..pass.rows {
             let mut factors = Vec::with_capacity(self.factors.len());
@@ -144,7 +145,12 @@ impl Linearizer {
             for (f, factor) in self.factors.iter().enumerate() {
                 let d = factor.components;
                 let (values, jacobian) = &residuals[f];
-                let r = &values[row * d..(row + 1) * d];
+                let mut r = values[row * d..(row + 1) * d].to_vec();
+                if let Some(c) = &folds[f] {
+                    for (r, c) in r.iter_mut().zip(&c[row * d..(row + 1) * d]) {
+                        *r += c;
+                    }
+                }
                 squares += r.iter().map(|r| r * r).sum::<f64>();
                 let a = self.cut(jacobian, row, d, &factor.blocks);
                 factors.push(Rows {
@@ -177,6 +183,75 @@ impl Linearizer {
             layout: self.layout().clone(),
             curved: self.curved_quantities(),
         })
+    }
+
+    /// Each folded factor's `ĉ = W⁻ᵀ ∇λ_μ(s)`, row by row: the gradient of its space's chart
+    /// log-volume at `(μ̂, ŝ)`, for every folded factor of the space and every row at once, and
+    /// `W` the top-left block of the information root's value.
+    pub(crate) fn folds(&self, pass: &Pass) -> Result<Vec<Option<Vec<f64>>>, Error> {
+        let mut folds: Vec<Option<Vec<f64>>> = vec![None; self.factors.len()];
+        for (space, program) in &self.volumes {
+            let members: Vec<usize> = (0..self.factors.len())
+                .filter(|&f| {
+                    self.factors[f]
+                        .fold
+                        .as_ref()
+                        .is_some_and(|g| g.space == *space)
+                })
+                .collect();
+            let (Some(storage), Some(d)) = (Some(space.storage()), space.dimension()) else {
+                continue;
+            };
+            let (mut means, mut tangents) = (Vec::new(), Vec::new());
+            let mut roots = Vec::new();
+            for &f in &members {
+                let Some(fold) = &self.factors[f].fold else {
+                    continue;
+                };
+                means.extend(host(&pass.values, fold.mean)?);
+                tangents.extend(host(&pass.values, fold.tangent)?);
+                roots.push(host(&pass.values, fold.root)?);
+            }
+            let n = members.len() * pass.rows;
+            let host_target = Target::host();
+            let free = program.free();
+            let (Some(point), Some(tangent)) = (free.first(), free.get(1)) else {
+                continue;
+            };
+            let at = Values::new()
+                .with(
+                    point.node,
+                    Value::Continuous(Points::from_host(&means, n, storage, &host_target)),
+                )
+                .with(
+                    tangent.node,
+                    Value::Continuous(Points::from_host(&tangents, n, d, &host_target)),
+                );
+            let (_, gradients) = program.gradient(&at)?;
+            let gradient = frame(&gradients, tangent.node)?;
+            for (m, &f) in members.iter().enumerate() {
+                let root = &roots[m];
+                let size = root.len() / pass.rows.max(1);
+                // The root's rows: the residual's `d`, then the scale's `d(d + 1)/2`.
+                let height = d + d * (d + 1) / 2;
+                let mut c = Vec::with_capacity(pass.rows * d);
+                for row in 0..pass.rows {
+                    let entries = &root[row * size..(row + 1) * size];
+                    // `C` is stored column by column: entry (i, j) at `j × height + i`.
+                    let w = |i: usize, j: usize| entries[j * height + i];
+                    let g = &gradient[(m * pass.rows + row) * d..(m * pass.rows + row + 1) * d];
+                    // `Wᵀ ĉ = g`, `W` lower triangular: back substitution.
+                    let mut x = vec![0.0; d];
+                    for i in (0..d).rev() {
+                        let rest: f64 = (i + 1..d).map(|j| w(j, i) * x[j]).sum();
+                        x[i] = (g[i] - rest) / w(i, i);
+                    }
+                    c.extend(x);
+                }
+                folds[f] = Some(c);
+            }
+        }
+        Ok(folds)
     }
 
     /// The quantities of a curved type among the free ones.

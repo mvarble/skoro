@@ -4,13 +4,17 @@
 
 mod common;
 
-use common::{close, f_at, gradient, gram, points, row, solve, tolerance};
+use common::{
+    close, f_at, factor_rows, gradient, gram, host, node_gradient, nodes_at, points, row, solve,
+    tolerance,
+};
 use skoro_core::scope::{constant, quantity};
 use skoro_core::{Matrix, Observations, Positive, Query, Real, Values, Vector, Writer};
 use skoro_elimination::{Damping, Problem, Schedule};
 use skoro_linearize::{Assembly, Linearizer};
-use skoro_normal::{Normal, Scale};
-use skoro_tensor::Target;
+use skoro_normal::{Normal, Scale, roles};
+use skoro_spatial::Rotation;
+use skoro_tensor::{Points, Precision, Target};
 
 /// A linear-Gaussian model of vectors: `x ~ N(x₀, diag(1, 2)²)`, `y ~ N(M x + c, Σ)`, and an
 /// observed `z ~ N(y, 0.5²)`, with its query and a batch of two points that are not its mode.
@@ -298,4 +302,261 @@ fn damping_promises_the_decrease() {
         1e-10,
         "the promised decrease",
     );
+}
+
+/// A chain of rotations: `r₀ ~ N(μ₀, 0.3²)`, `r₁ ~ N(r₀, diag(0.2, 0.25, 0.15)²)`, and an observed
+/// measurement `z ~ N(r₁, 0.1²)`, each a normal on the rotations, whose log-volume is folded; with
+/// a batch of two points.
+fn rotations(target: &Target) -> (Writer, Query, Values) {
+    let unit = |q: [f64; 4]| {
+        let n = q.iter().map(|x| x * x).sum::<f64>().sqrt();
+        q.map(|x| x / n)
+    };
+    let mut writer = Writer::new();
+    let (r0, r1, z) = writer
+        .build(|| {
+            let r0 = quantity("r0", Rotation);
+            Normal::on(
+                Rotation,
+                constant(Rotation, unit([0.9, 0.1, -0.3, 0.2])),
+                Scale::sd(0.3),
+            )
+            .score(r0);
+            let r1 = quantity("r1", Rotation);
+            Normal::on(Rotation, r0, Scale::sds(&[0.2, 0.25, 0.15])).score(r1);
+            let z = quantity("z", Rotation);
+            Normal::on(Rotation, r1, Scale::sd(0.1)).score(z);
+            (r0, r1, z)
+        })
+        .unwrap();
+    let query =
+        Query::log_density().given(Observations::new().observe(z, unit([0.7, 0.3, -0.4, 0.5])));
+    let a = [unit([0.8, 0.2, -0.3, 0.1]), unit([0.95, 0.0, -0.2, 0.25])].concat();
+    let b = [
+        unit([0.75, 0.25, -0.35, 0.45]),
+        unit([0.6, 0.35, -0.3, 0.6]),
+    ]
+    .concat();
+    let point = Values::new()
+        .with(r0, points(&a, 2, 4, target))
+        .with(r1, points(&b, 2, 4, target));
+    (writer, query, point)
+}
+
+type Model = fn(&Target) -> (Writer, Query, Values);
+
+skoro_core::precision_tests! {
+    fn the_linearization_agrees_with_the_query(target) {
+        let models: [(&str, Model); 3] = [
+            ("vectors", |t| squares(2, t)),
+            ("positives", positives),
+            ("rotations", rotations),
+        ];
+        let (h, relative) = match target.precision() {
+            Precision::Double => (1e-6, 1e-7),
+            Precision::Single => (1e-2, 2e-3),
+        };
+        for (name, model) in models {
+            let (writer, query, point) = model(&target);
+            let snapshot = writer.snapshot();
+            let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+            let layout = linearizer.layout();
+            let d = layout.dimension();
+            let linearized = linearizer.at(&point).unwrap();
+            let rows = linearized.problems().len();
+            // m(0) = f(p̂), and ∇m(0) = -Jᵀb + η = g.
+            let f = f_at(&snapshot, &query, layout, &point, &vec![vec![0.0; d]; rows], &target);
+            let g = gradient(&snapshot, &query, layout, &point, &target);
+            for (r, problem) in linearized.problems().iter().enumerate() {
+                close(&[problem.value(&vec![0.0; d])], &[f[r]], tolerance(&target), name);
+                let (a, b) = common::dense_rows(problem);
+                let eta = problem.linear().map_or(vec![0.0; d], <[f64]>::to_vec);
+                let at_zero: Vec<f64> = (0..d)
+                    .map(|c| eta[c] - a.iter().zip(&b).map(|(row, b)| row[c] * b).sum::<f64>())
+                    .collect();
+                close(&at_zero, &g[r], tolerance(&target), name);
+            }
+            // Each J_t against central differences of r_t along p̂ ⊕ h e_c, and against the dense
+            // Jacobian of an identity frame, zero outside the factor's variables.
+            let residuals: Vec<_> = linearizer
+                .terms()
+                .iter()
+                .map(|&t| snapshot.term(t).unwrap().bound(&roles::RESIDUAL).unwrap())
+                .collect();
+            let program = snapshot
+                .compile(&Query::of(residuals.clone()).given(query.observations().clone()), &target)
+                .unwrap();
+            assert_eq!(program.layout().quantities(), layout.quantities());
+            let (_, identity) = program.tangent(&point, &skoro_core::Frames::identity(program.layout())).unwrap();
+            for (f, &residual) in residuals.iter().enumerate() {
+                let components = snapshot.space(residual).unwrap().dimension().unwrap();
+                let dense = identity.get(residual).unwrap().to_host();
+                for c in 0..d {
+                    let step = |s: f64| (0..rows).map(|_| (0..d).map(|j| if j == c { s } else { 0.0 }).collect()).collect::<Vec<Vec<f64>>>();
+                    let plus = host(&nodes_at(&snapshot, &query, &[residual], layout, &point, Some(&step(h)), &target), residual);
+                    let minus = host(&nodes_at(&snapshot, &query, &[residual], layout, &point, Some(&step(-h)), &target), residual);
+                    for (r, problem) in linearized.problems().iter().enumerate() {
+                        let rows_of = factor_rows(problem, f);
+                        let column: Vec<f64> = rows_of.iter().map(|row| row[c]).collect();
+                        let differences: Vec<f64> = (0..components)
+                            .map(|i| (plus[r * components + i] - minus[r * components + i]) / (2.0 * h))
+                            .collect();
+                        close(&column, &differences, relative, name);
+                        let identity_column: Vec<f64> =
+                            (0..components).map(|i| dense[(r * components + i) * d + c]).collect();
+                        close(&column, &identity_column, tolerance(&target), name);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn folded_log_volumes_are_in_the_right_hand_sides() {
+    let target = Target::host();
+    let (writer, query, point) = rotations(&target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let layout = linearizer.layout().clone();
+    let d = layout.dimension();
+    let linearized = linearizer.at(&point).unwrap();
+    let terms = linearizer.terms();
+    let bound = |t, role| snapshot.term(t).unwrap().bound(role).unwrap();
+    let residuals: Vec<_> = terms.iter().map(|&t| bound(t, &roles::RESIDUAL)).collect();
+    let volumes: Vec<_> = terms
+        .iter()
+        .map(|&t| {
+            snapshot
+                .term(t)
+                .unwrap()
+                .bound(&roles::LOG_VOLUME)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let values = nodes_at(
+        &snapshot, &query, &residuals, &layout, &point, None, &target,
+    );
+    for (r, problem) in linearized.problems().iter().enumerate() {
+        assert!(
+            problem.linear().is_none(),
+            "every log-volume folded, the observed z's too"
+        );
+        for (f, (&residual, &volume)) in residuals.iter().zip(&volumes).enumerate() {
+            // ĉ_t = -b_t - r̂_t, and J_tᵀ ĉ_t is the log-volume's gradient.
+            let rows_of = factor_rows(problem, f);
+            let n = rows_of.len();
+            let r_hat = &host(&values, residual)[r * n..(r + 1) * n];
+            let c: Vec<f64> = problem.factors()[f]
+                .b
+                .iter()
+                .zip(r_hat)
+                .map(|(b, r)| -b - r)
+                .collect();
+            let jtc: Vec<f64> = (0..d)
+                .map(|j| rows_of.iter().zip(&c).map(|(row, c)| row[j] * c).sum())
+                .collect();
+            let expected = &node_gradient(&snapshot, &query, volume, &layout, &point, &target)[r];
+            close(&jtc, expected, 1e-10, "J_tᵀ ĉ_t");
+        }
+    }
+    // Iterated from one start, the folded steps and steps that carry the same gradients as a
+    // linear term reach the same mode.
+    let schedule = linearizer.schedule().unwrap();
+    let mut folded = point.clone();
+    let mut unfolded = point.clone();
+    for _ in 0..40 {
+        let step = linearizer
+            .at(&folded)
+            .unwrap()
+            .eliminate(&schedule, None)
+            .unwrap()
+            .minimizer(&target)
+            .unwrap();
+        folded = layout.retract(&folded, &step, &target).unwrap();
+        let at = linearizer.at(&unfolded).unwrap();
+        let values = nodes_at(
+            &snapshot, &query, &residuals, &layout, &unfolded, None, &target,
+        );
+        let mut data = Vec::new();
+        for (r, problem) in at.problems().iter().enumerate() {
+            let mut eta = vec![0.0; d];
+            for &volume in &volumes {
+                let g = &node_gradient(&snapshot, &query, volume, &layout, &unfolded, &target)[r];
+                for (e, g) in eta.iter_mut().zip(g) {
+                    *e += g;
+                }
+            }
+            let factors: Vec<_> = problem
+                .factors()
+                .iter()
+                .zip(&residuals)
+                .map(|(rows, &residual)| {
+                    let n = rows.b.len();
+                    let r_hat = &host(&values, residual)[r * n..(r + 1) * n];
+                    skoro_elimination::Rows {
+                        a: rows.a.clone(),
+                        b: r_hat.iter().map(|x| -x).collect(),
+                    }
+                })
+                .collect();
+            let plain = Problem::new(
+                problem.structure().clone(),
+                factors,
+                Some(eta),
+                0.0,
+                problem.roundoff(),
+            )
+            .unwrap();
+            data.extend(
+                plain
+                    .eliminate(&schedule, None)
+                    .unwrap()
+                    .minimizer()
+                    .unwrap(),
+            );
+        }
+        let step = Points::from_host(&data, 2, d, &target);
+        unfolded = layout.retract(&unfolded, &step, &target).unwrap();
+    }
+    for &q in layout.quantities() {
+        let (a, b) = (
+            row(folded.get(q).unwrap(), 0),
+            row(unfolded.get(q).unwrap(), 0),
+        );
+        let sign = if a.iter().zip(&b).map(|(x, y)| x * y).sum::<f64>() < 0.0 {
+            -1.0
+        } else {
+            1.0
+        };
+        let b: Vec<f64> = b.iter().map(|x| sign * x).collect();
+        close(&a, &b, 1e-9, "the same mode");
+    }
+}
+
+#[test]
+fn steps_converge_on_rotations() {
+    let target = Target::host();
+    let (writer, query, point) = rotations(&target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let layout = linearizer.layout().clone();
+    let schedule = linearizer.schedule().unwrap();
+    let mut at = point;
+    for _ in 0..60 {
+        let step = linearizer
+            .at(&at)
+            .unwrap()
+            .eliminate(&schedule, None)
+            .unwrap()
+            .minimizer(&target)
+            .unwrap();
+        at = layout.retract(&at, &step, &target).unwrap();
+    }
+    // A stationary point of f itself, log-volumes included: the query's gradient vanishes.
+    for g in gradient(&snapshot, &query, &layout, &at, &target) {
+        let norm = g.iter().map(|g| g * g).sum::<f64>().sqrt();
+        assert!(norm < 1e-9, "|g| = {norm}");
+    }
 }

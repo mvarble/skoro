@@ -159,3 +159,86 @@ pub fn row(value: &Value, r: usize) -> Vec<f64> {
         Value::Discrete(_) => panic!("a continuous value"),
     }
 }
+
+/// The values of `nodes`, given the observations of `query`, at `point` retracted along `steps`,
+/// one step per row; with no steps, at `point` itself.
+pub fn nodes_at(
+    snapshot: &Snapshot,
+    query: &Query,
+    nodes: &[skoro_core::QDyn],
+    layout: &Layout,
+    point: &Values,
+    steps: Option<&[Vec<f64>]>,
+    target: &Target,
+) -> Values {
+    let program = snapshot
+        .compile(
+            &Query::of(nodes.iter().copied()).given(query.observations().clone()),
+            target,
+        )
+        .unwrap();
+    let at = match steps {
+        Some(steps) => {
+            let data: Vec<f64> = steps.concat();
+            let tangent = Points::from_host(&data, steps.len(), layout.dimension(), target);
+            layout.retract(point, &tangent, target).unwrap()
+        }
+        None => point.clone(),
+    };
+    program.forward(&at).unwrap()
+}
+
+/// Factor `f`'s rows over all of `D`.
+pub fn factor_rows(problem: &skoro_elimination::Problem, f: usize) -> Vec<Vec<f64>> {
+    let structure = problem.structure();
+    let rows = &problem.factors()[f];
+    (0..rows.b.len())
+        .map(|r| {
+            let mut row = vec![0.0; structure.dimension()];
+            let mut column = 0;
+            for &k in &structure.factors()[f] {
+                for c in structure.range(k) {
+                    row[c] = rows.a.get(r, column);
+                    column += 1;
+                }
+            }
+            row
+        })
+        .collect()
+}
+
+/// The chart gradient of the single `Real` node `node`, given the observations of `query`, at
+/// `point`, per row, over the layout's coordinates: zero at the quantities it is not reached from.
+pub fn node_gradient(
+    snapshot: &Snapshot,
+    query: &Query,
+    node: skoro_core::QDyn,
+    layout: &Layout,
+    point: &Values,
+    target: &Target,
+) -> Vec<Vec<f64>> {
+    let program = snapshot
+        .compile(
+            &Query::of([node]).given(query.observations().clone()),
+            target,
+        )
+        .unwrap();
+    let (values, frames) = program.gradient(point).unwrap();
+    let rows = host(&values, node).len();
+    (0..rows)
+        .map(|r| {
+            layout
+                .quantities()
+                .iter()
+                .zip(layout.blocks())
+                .flat_map(|(&q, block)| {
+                    let d = block.tangent.len();
+                    match frames.get(q) {
+                        Some(frame) => frame.to_host()[r * d..(r + 1) * d].to_vec(),
+                        None => vec![0.0; d],
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}

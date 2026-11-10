@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use skoro_core::{Frames, Layout, NodeId, Program, QDyn, Query, Snapshot, Term};
+use skoro_core::{Frames, Layout, NodeId, Program, QDyn, Query, Snapshot, Space, Term};
 use skoro_elimination::{Schedule, Structure};
 use skoro_normal::{Form, roles};
 use skoro_tensor::{Frame, Precision, Target};
@@ -32,6 +32,18 @@ pub(crate) struct Factor {
     pub(crate) components: usize,
     /// The node bound under the log-volume role, where it is carried by the linear term.
     pub(crate) log_volume: Option<QDyn>,
+    /// What folding the log-volume into the right-hand side reads, where it is folded.
+    pub(crate) fold: Option<Fold>,
+}
+
+/// A folded log-volume: the nodes bound under the tangent, mean and information-root roles, and
+/// the scored quantity's space, whose chart's log-volume is differentiated at `(μ̂, ŝ)`.
+#[derive(Clone, Debug)]
+pub(crate) struct Fold {
+    pub(crate) tangent: QDyn,
+    pub(crate) mean: QDyn,
+    pub(crate) root: QDyn,
+    pub(crate) space: Space,
 }
 
 /// A density query of a snapshot, ready to be linearized at any batch of points: its factors, its
@@ -52,6 +64,8 @@ pub struct Linearizer {
     pub(crate) columns: Vec<usize>,
     /// The seeds' number of columns.
     pub(crate) width: usize,
+    /// The chart's log-volume of each folded factor's space, compiled alone on the host.
+    pub(crate) volumes: HashMap<Space, Program>,
 }
 
 impl std::fmt::Debug for Linearizer {
@@ -122,7 +136,11 @@ impl Linearizer {
                 .space(residual)
                 .and_then(|space| space.dimension())
                 .unwrap_or(0);
-            let log_volume = term.bound(&roles::LOG_VOLUME)?;
+            let mut log_volume = term.bound(&roles::LOG_VOLUME)?;
+            let fold = folding(snapshot, term, log_volume)?;
+            if fold.is_some() {
+                log_volume = None;
+            }
             if let Some(scale) = bound_scale(term)? {
                 let free = snapshot
                     .reached_from(scale)
@@ -149,6 +167,7 @@ impl Linearizer {
                 residual,
                 components,
                 log_volume,
+                fold,
             });
         }
         let dimensions: Vec<usize> = layout
@@ -161,11 +180,10 @@ impl Linearizer {
             factors.iter().map(|f| f.blocks.clone()).collect(),
         )?);
         // The rows program: every node the assembly reads, under the query's observations.
-        let targets = crate::assemble::targets(
-            factors
-                .iter()
-                .flat_map(|f| std::iter::once(f.residual).chain(f.log_volume)),
-        );
+        let targets = crate::assemble::targets(factors.iter().flat_map(|f| {
+            let fold = f.fold.iter().flat_map(|g| [g.tangent, g.mean, g.root]);
+            std::iter::once(f.residual).chain(f.log_volume).chain(fold)
+        }));
         let rows_query = Query::of(targets).given(query.observations().clone());
         let rows = snapshot.compile(&rows_query, target)?;
         let (columns, width) = colouring(&dimensions, &factors);
@@ -183,6 +201,13 @@ impl Linearizer {
             }
             seeds.insert(free.node, Frame::from_host(&data, 1, d, width, target));
         }
+        let mut volumes = HashMap::new();
+        for fold in factors.iter().filter_map(|f| f.fold.as_ref()) {
+            if !volumes.contains_key(&fold.space) {
+                let program = fold.space.log_volume()?.compile(&Target::host())?;
+                volumes.insert(fold.space.clone(), program);
+            }
+        }
         Ok(Linearizer {
             snapshot: snapshot.clone(),
             target: target.clone(),
@@ -194,6 +219,7 @@ impl Linearizer {
             seeds,
             columns,
             width,
+            volumes,
         })
     }
 
@@ -235,6 +261,38 @@ impl Linearizer {
     pub fn schedule(&self) -> Result<Schedule, Error> {
         Ok(Schedule::all(&self.structure)?)
     }
+}
+
+/// The fold of a term's log-volume, when it binds the tangent, the log-volume and the information
+/// root, and scores a quantity of a space whose chart's log-volume does not read its point: then
+/// its residual is `W s` and its log-volume `λ(s)`, a function of the tangent alone. The scale is
+/// held by every assembly that reaches here, fixed by the residual linearization's refusal or held
+/// at the point by Fisher's.
+fn folding(
+    snapshot: &Snapshot,
+    term: &Term,
+    log_volume: Option<QDyn>,
+) -> Result<Option<Fold>, Error> {
+    let (Some(_), Some(tangent), Some(root), Some(scored)) = (
+        log_volume,
+        term.bound(&roles::TANGENT)?,
+        term.bound(&roles::INFORMATION_ROOT)?,
+        term.scores,
+    ) else {
+        return Ok(None);
+    };
+    let Some(space) = snapshot.space(scored).cloned() else {
+        return Ok(None);
+    };
+    if space.volume_reads_point() != Ok(false) {
+        return Ok(None);
+    }
+    Ok(Some(Fold {
+        tangent,
+        mean: term.bound(&roles::MEAN)?,
+        root,
+        space,
+    }))
 }
 
 /// A greedy colouring of the free quantities, in the layout's order: two quantities joined to a

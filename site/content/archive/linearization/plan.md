@@ -57,7 +57,7 @@ depends_on: [archive/linearization/implementation]
       undetermined block to its quantity. Tests: `the_step_is_gauss_newton`,
       `the_step_keeps_its_digits`, `batch_rows_share_the_schedule`,
       `damping_promises_the_decrease`, `an_undetermined_quantity_is_refused`.
-- [ ] Folding: the fold condition, the targets bound under `TANGENT`, `MEAN` and
+- [x] Folding: the fold condition, the targets bound under `TANGENT`, `MEAN` and
       `INFORMATION_ROOT`, and `ĉ_t` from the space's log-volume on the host. Tests:
       `the_linearization_agrees_with_the_query`, `folded_log_volumes_are_in_the_right_hand_sides`,
       `steps_converge_on_rotations`.
