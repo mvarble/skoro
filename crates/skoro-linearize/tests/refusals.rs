@@ -265,6 +265,16 @@ fn an_integral_without_a_volume_is_refused() {
             quantity: Some(x.id())
         })
     );
+    // A replacement would integrate x out against a measure it does not have: the retirement
+    // itself refuses it, before any replacement is linearized.
+    let error = writer
+        .retire(
+            skoro_core::Addresses::new().at("x"),
+            skoro_core::Observations::new(),
+        )
+        .err()
+        .unwrap();
+    assert!(matches!(error, CoreError::NoVolume { quantity: Some(q), .. } if q == x.id()));
 }
 
 #[test]

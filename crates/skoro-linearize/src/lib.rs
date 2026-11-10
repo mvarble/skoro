@@ -20,5 +20,5 @@ mod solved;
 pub use assemble::Linearized;
 pub use error::Error;
 pub use linearizer::{Assembly, Linearizer};
-pub use replacing::Replacing;
+pub use replacing::{LinearizedReplacement, Replacing};
 pub use solved::{QuantityMarginal, Solved};

@@ -74,7 +74,7 @@ depends_on: [archive/linearization/implementation]
       `a_free_scale_without_a_root_is_refused_by_fisher`.
 - [x] `Replacing::new`, with its checks of the blanket and the union of the retirement's values
       with the caller's. Tests: `a_mismatched_blanket_is_refused`.
-- [ ] `Replacing::at`, `LinearizedReplacement` and `build`, on the linear-Gaussian chains. Tests:
+- [x] `Replacing::at`, `LinearizedReplacement` and `build`, on the linear-Gaussian chains. Tests:
       `retiring_the_scalar_chain_is_the_kalman_filter`,
       `retiring_a_chain_one_state_at_a_time_is_the_kalman_filter`,
       `an_undetermined_retired_quantity_is_refused`.
