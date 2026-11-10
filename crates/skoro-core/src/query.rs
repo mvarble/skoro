@@ -49,27 +49,6 @@ impl Observations {
         }
     }
 
-    /// This set with the values of `other` for the quantities this set does not observe: a new
-    /// set. Where both observe a quantity, this set's value is kept. When `other` adds nothing,
-    /// the set is this one, of the same identity.
-    pub fn union(self, other: &Observations) -> Observations {
-        let mut values = (*self.values).clone();
-        let mut added = false;
-        for (id, value) in other.values.iter() {
-            if !values.contains_key(id) {
-                values.insert_mut(*id, value.clone());
-                added = true;
-            }
-        }
-        if !added {
-            return self;
-        }
-        Observations {
-            identity: fresh(),
-            values: Arc::new(values),
-        }
-    }
-
     /// The set's identity, by which a compiled program is cached.
     pub fn identity(&self) -> u64 {
         self.identity
@@ -154,6 +133,29 @@ impl Query {
             Targets::Nodes(_) => None,
             Targets::Density => Some(snapshot.0.terms.keys().copied().collect()),
             Targets::DensityOf(terms) => Some(terms.iter().copied().collect()),
+        }
+    }
+}
+
+impl Observations {
+    /// This set with the values of `other` for the quantities this set does not observe: a new
+    /// set. Where both observe a quantity, this set's value is kept. When `other` adds nothing,
+    /// the set is this one, of the same identity.
+    pub fn union(self, other: &Observations) -> Observations {
+        let mut values = (*self.values).clone();
+        let mut added = false;
+        for (id, value) in other.values.iter() {
+            if !values.contains_key(id) {
+                values.insert_mut(*id, value.clone());
+                added = true;
+            }
+        }
+        if !added {
+            return self;
+        }
+        Observations {
+            identity: fresh(),
+            values: Arc::new(values),
         }
     }
 }

@@ -27,10 +27,6 @@ pub const WHITENING: Role<AtMostOne> = Role::new("skoro.normal.scale.whitening")
 /// linear part `ηᵀδ`. It is not the volume of a chart: a reader that needs a quantity's chart
 /// volume reads it from the quantity's type.
 pub const LOG_VOLUME: Role<AtMostOne> = Role::new("skoro.log_volume");
-/// The tangent `s = x ⊖ μ` of a normal's term, which scores a quantity: its residual is `W s`,
-/// with `W` the whitening of the bound scale, and its log-volume, where it binds one, is
-/// `λ_μ(s)`, the chart's log-volume of the scored quantity's space at `μ`.
-pub const TANGENT: Role<AtMostOne> = Role::new("skoro.normal.tangent");
 /// The root `C` of the expected information, on a term that scores a quantity.
 pub const INFORMATION_ROOT: Role<AtMostOne> = Role::new("skoro.information_root");
 
@@ -43,3 +39,8 @@ pub fn scale(form: Form) -> &'static Role<AtMostOne> {
         Form::Whitening => &WHITENING,
     }
 }
+
+/// The tangent `s = x ⊖ μ` of a normal's term, which scores a quantity: its residual is `W s`,
+/// with `W` the whitening of the bound scale, and its log-volume, where it binds one, is
+/// `λ_μ(s)`, the chart's log-volume of the scored quantity's space at `μ`.
+pub const TANGENT: Role<AtMostOne> = Role::new("skoro.normal.tangent");

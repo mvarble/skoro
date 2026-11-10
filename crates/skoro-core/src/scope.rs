@@ -372,16 +372,6 @@ pub fn constant<T: Declares>(marker: T, value: impl IntoHostValue<T>) -> Q<T> {
     Q::from_id(build(location, |draft, _| draft.constant(space, value)))
 }
 
-/// A constant of `space` (`ValueShape` when the value does not fit it), for a space known only at
-/// run time.
-#[track_caller]
-pub fn constant_in(space: Space, value: HostValue) -> QDyn {
-    let location = Location::caller();
-    QDyn::from_id(build(location, |draft, _| {
-        draft.constant(space, Some(value))
-    }))
-}
-
 /// Runs `body` with `prefix` prefixed to the addresses of the quantities it makes and looks up.
 pub fn namespace<R>(prefix: impl Into<Address>, body: impl FnOnce() -> R) -> R {
     open(Frame::Namespace(prefix.into()), body).0
@@ -442,4 +432,14 @@ pub(crate) fn literal(draft: &mut Draft, space: Space, c: f64) -> Result<NodeId,
         .then(|| HostValue::new(None, storage, HostData::Continuous(vec![c; storage])))
         .flatten();
     draft.constant(space, value)
+}
+
+/// A constant of `space` (`ValueShape` when the value does not fit it), for a space known only at
+/// run time.
+#[track_caller]
+pub fn constant_in(space: Space, value: HostValue) -> QDyn {
+    let location = Location::caller();
+    QDyn::from_id(build(location, |draft, _| {
+        draft.constant(space, Some(value))
+    }))
 }
