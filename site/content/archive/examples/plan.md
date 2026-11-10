@@ -31,7 +31,7 @@ depends_on: [archive/examples/implementation]
 
 ## CI and the checks
 
-- [ ] Add `cargo run --release -p skoro --example pose_graph` and `... --example sliding_window` to the Rust job of `.github/workflows/ci.yml` after `cargo test`, and the same two lines to the `## Checks` list of `AGENTS.md`.
+- [x] Add `cargo run --release -p skoro --example pose_graph` and `... --example sliding_window` to the Rust job of `.github/workflows/ci.yml` after `cargo test`, and the same two lines to the `## Checks` list of `AGENTS.md`.
 
 ## Done when
 
