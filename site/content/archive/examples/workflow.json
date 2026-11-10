@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "build",
+    "stage": "implementation",
     "started": "2026-11-10",
     "events": [
         {
@@ -57,6 +57,13 @@
             "action": "approve",
             "stage": "plan",
             "commit": "fa9b277"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The open path's landmarks at ±5 m with a range of 7 m leave ten landmarks never sighted, which the window requires of every one.",
+            "commit": "20b26dc"
         }
     ],
     "approvals": {
@@ -68,12 +75,14 @@
         "implementation": {
             "date": "2026-11-10",
             "commit": "225c466",
-            "hash": "fcdca42ddf95ef2b90424166d1eaf82f1465f09210e21d64a2ce3d5d584fbf57"
+            "hash": "fcdca42ddf95ef2b90424166d1eaf82f1465f09210e21d64a2ce3d5d584fbf57",
+            "stale": true
         },
         "plan": {
             "date": "2026-11-10",
             "commit": "fa9b277",
-            "hash": "5e79e39d56946d9027d3bb29aeea4e732d9155d5189d41a3956362e673415518"
+            "hash": "5e79e39d56946d9027d3bb29aeea4e732d9155d5189d41a3956362e673415518",
+            "stale": true
         }
     }
 }

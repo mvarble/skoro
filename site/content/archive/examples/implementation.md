@@ -818,3 +818,10 @@ test does not reach the integration tests' models; `local_inverts_retract` uses 
 in its file, since the core has no test sphere; and `generated_values_are_observed_row_by_row`
 lives in the umbrella crate's generation tests and uses their chain of scalars, since the guide's
 model needs the normal, which the core's tests do not have.
+
+**2026-11-10: the open path's range.** The build showed that the open path, with its landmarks at
+$(2j, \pm 5, 0)$ and a range of $h = 7$ m, sights ten of its forty landmarks never: the path swings
+$3$ m to either side, and a landmark on the side it has swung away from stays $7.5$ to $8$ m from
+every pose. [The window](math.svx#a-sliding-window) needs every landmark sighted, its sightings an
+interval of ticks, and `Scenario::open_path` refuses itself otherwise, as designed. The scenario's
+constants are revised so that every landmark is sighted over one interval.
