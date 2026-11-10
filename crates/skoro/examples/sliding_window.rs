@@ -15,7 +15,8 @@ use std::time::Instant;
 use skoro::{Observations, QDyn, Query, Target, Values, Writer};
 use skoro_linearize::{Assembly, LevenbergMarquardt, Linearizer, Replacing, decrement};
 
-use common::batch::{Dataset, dataset, value};
+use common::batch::{Dataset, dataset, rows, value};
+use common::figures::{self, Json};
 use common::laplace::{CHI2_6_90, SLOPE_6, calibration, normalized_errors};
 use common::live::Live;
 use common::model::tick;
@@ -30,6 +31,9 @@ const SEED: u64 = 20_261_110;
 
 /// `w`, the poses the window keeps.
 const W: usize = 5;
+
+/// The row whose path the figure draws.
+const FIGURE_ROW: usize = 0;
 
 fn main() -> Result {
     let started = Instant::now();
@@ -47,6 +51,7 @@ fn main() -> Result {
     let mut filtering: Vec<Vec<f64>> = Vec::new();
     let mut variance: f64 = 0.0;
     let mut iterations: Vec<f64> = Vec::new();
+    let mut filtered: Vec<Json> = Vec::new();
     for k in 0..=scenario.last() {
         // 1. Append, and start what was appended.
         let previous = live.newest();
@@ -78,10 +83,21 @@ fn main() -> Result {
         );
         let quantities = linearizer.layout().quantities().to_vec();
         let chart = linearizer.at_in_chart(&live.point, &quantities)?;
-        let (errors, spread) =
+        let marginal =
             normalized_errors(&linearizer, &chart, &live.point, &truth, appended.pose.id())?;
-        variance = spread.into_iter().flatten().fold(variance, f64::max);
-        filtering.push(errors);
+        variance = marginal
+            .spread
+            .into_iter()
+            .flatten()
+            .fold(variance, f64::max);
+        filtering.push(marginal.errors);
+        if figures::wanted() {
+            let at = rows(&live.point, appended.pose)?;
+            filtered.push(Json::Object(vec![
+                ("mode", figures::position(&at, 7, FIGURE_ROW)),
+                ("covariance", Json::numbers(&marginal.position[FIGURE_ROW])),
+            ]));
+        }
 
         // 4. Retire the oldest pose once the window holds more than W, with the landmarks only it
         // still sees, replacing their terms by their linearization at the window's mode.
@@ -109,9 +125,51 @@ fn main() -> Result {
     let newest = live.newest().ok_or("an empty window")?;
     let windowed_last = Values::new().with(pose, value(&live.point, newest)?.clone());
     let chart = linearizer.at_in_chart(&batch.point, linearizer.layout().quantities())?;
-    let (gaps, _) =
-        normalized_errors(&linearizer, &chart, &batch.point, &windowed_last, pose.id())?;
-    let gaps: Vec<f64> = gaps.into_iter().map(f64::sqrt).collect();
+    let gaps = normalized_errors(&linearizer, &chart, &batch.point, &windowed_last, pose.id())?;
+    let gaps: Vec<f64> = gaps.errors.into_iter().map(f64::sqrt).collect();
+    let filtering_calibration = calibration(&filtering, CHI2_6_90);
+
+    // The figures' data: one row's path, truth, dead reckoning, the window's filtered poses and
+    // the batch's smoothed ones, and every filtering error.
+    if figures::wanted() {
+        let path = |values: &Values, storage: usize, ids: Vec<skoro::NodeId>| {
+            ids.into_iter()
+                .map(|id| Ok(figures::position(&rows(values, id)?, storage, FIGURE_ROW)))
+                .collect::<Result<Vec<Json>>>()
+                .map(Json::Array)
+        };
+        let poses: Vec<skoro::NodeId> = whole.ticks.iter().map(|t| t.pose.id()).collect();
+        let landmarks: Vec<skoro::NodeId> = whole
+            .ticks
+            .iter()
+            .flat_map(|t| t.new_landmarks.iter().map(|(_, m)| m.id()))
+            .collect();
+        figures::write(
+            "sliding_window",
+            &Json::Object(vec![
+                ("rows", Json::Number(N as f64)),
+                ("window", Json::Number(W as f64)),
+                ("truth", path(&whole.truth, 7, poses.clone())?),
+                ("start", path(&whole.start, 7, poses.clone())?),
+                ("batch", path(&batch.point, 7, poses)?),
+                ("filtered", Json::Array(std::mem::take(&mut filtered))),
+                ("landmark_truth", path(&whole.truth, 3, landmarks.clone())?),
+                ("landmark_batch", path(&batch.point, 3, landmarks)?),
+                ("filtering_errors", Json::numbers(&filtering.concat())),
+                (
+                    "filtering_calibration",
+                    Json::Object(vec![
+                        ("coverage", Json::Number(filtering_calibration.mean)),
+                        (
+                            "tolerance",
+                            Json::Number(filtering_calibration.sampling + SLOPE_6 * variance),
+                        ),
+                    ]),
+                ),
+                ("gaps", Json::numbers(&gaps)),
+            ]),
+        )?;
+    }
 
     // The report: the window's calibration beside the batch's tolerance, and its gap.
     println!(
@@ -124,11 +182,7 @@ fn main() -> Result {
         "every tick of every row converged, in {:.2} iterations on average",
         mean(&iterations)
     );
-    print_calibration(
-        "filtering",
-        &calibration(&filtering, CHI2_6_90),
-        SLOPE_6 * variance,
-    );
+    print_calibration("filtering", &filtering_calibration, SLOPE_6 * variance);
     println!(
         "largest rotational standard deviation of a filtering marginal: {:.4} rad",
         variance.sqrt()

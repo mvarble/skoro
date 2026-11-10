@@ -11,12 +11,15 @@ mod common;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use skoro::{Q, Query, Target, Vector};
+use skoro::{NodeId, Q, Query, Target, Vector};
 use skoro_linearize::{Assembly, LevenbergMarquardt, Linearizer, decrement};
 use skoro_spatial::Pose;
 
-use common::batch::{Dataset, dataset};
-use common::laplace::{CHI2_3_90, CHI2_6_90, SLOPE_3, SLOPE_6, calibration, normalized_errors};
+use common::batch::{Dataset, dataset, rows};
+use common::figures::{self, Json};
+use common::laplace::{
+    CHI2_3_90, CHI2_6_90, Calibration, SLOPE_3, SLOPE_6, calibration, normalized_errors,
+};
 use common::report::{self, Result, calibrated, check, converged, mean, stationary};
 use common::scenario::Scenario;
 
@@ -28,6 +31,9 @@ const SEED: u64 = 20_261_109;
 
 /// The largest rotational standard deviation the check's tolerance was designed for.
 const SIGMA_PHI: f64 = 0.05;
+
+/// The row whose map the figure draws.
+const FIGURE_ROW: usize = 0;
 
 fn main() -> Result {
     let started = Instant::now();
@@ -73,22 +79,100 @@ fn main() -> Result {
     let chart = linearizer.at_in_chart(&mode, linearizer.layout().quantities())?;
     let mut pose_errors = Vec::new();
     let mut start_pose_errors = Vec::new();
+    let mut pose_covariances = Vec::new();
     let mut variance: f64 = 0.0;
     for &pose in &poses {
-        let (errors, spread) = normalized_errors(&linearizer, &chart, &mode, &truth, pose.id())?;
-        let (at_start, _) = normalized_errors(&linearizer, &chart, &start, &truth, pose.id())?;
-        variance = spread.into_iter().flatten().fold(variance, f64::max);
-        pose_errors.push(errors);
-        start_pose_errors.push(at_start);
+        let at_mode = normalized_errors(&linearizer, &chart, &mode, &truth, pose.id())?;
+        let at_start = normalized_errors(&linearizer, &chart, &start, &truth, pose.id())?;
+        variance = at_mode
+            .spread
+            .into_iter()
+            .flatten()
+            .fold(variance, f64::max);
+        pose_errors.push(at_mode.errors);
+        pose_covariances.push(at_mode.position[FIGURE_ROW]);
+        start_pose_errors.push(at_start.errors);
     }
     let mut landmark_errors = Vec::new();
     let mut start_landmark_errors = Vec::new();
+    let mut landmark_covariances = Vec::new();
     for &landmark in landmarks.values() {
         let id = landmark.id();
-        landmark_errors.push(normalized_errors(&linearizer, &chart, &mode, &truth, id)?.0);
-        start_landmark_errors.push(normalized_errors(&linearizer, &chart, &start, &truth, id)?.0);
+        let at_mode = normalized_errors(&linearizer, &chart, &mode, &truth, id)?;
+        landmark_errors.push(at_mode.errors);
+        landmark_covariances.push(at_mode.position[FIGURE_ROW]);
+        start_landmark_errors
+            .push(normalized_errors(&linearizer, &chart, &start, &truth, id)?.errors);
     }
     let marginals = started.elapsed() - solved;
+
+    let pose_calibration = calibration(&pose_errors, CHI2_6_90);
+    let landmark_calibration = calibration(&landmark_errors, CHI2_3_90);
+
+    // The figures' data: one row's map, and every normalized error.
+    if figures::wanted() {
+        let quantities = |ids: Vec<NodeId>, storage: usize, covariances: &[[f64; 9]]| {
+            ids.iter()
+                .zip(covariances)
+                .map(|(&id, covariance)| {
+                    Ok(Json::Object(vec![
+                        (
+                            "truth",
+                            figures::position(&rows(&truth, id)?, storage, FIGURE_ROW),
+                        ),
+                        (
+                            "start",
+                            figures::position(&rows(&start, id)?, storage, FIGURE_ROW),
+                        ),
+                        (
+                            "mode",
+                            figures::position(&rows(&mode, id)?, storage, FIGURE_ROW),
+                        ),
+                        ("covariance", Json::numbers(covariance)),
+                    ]))
+                })
+                .collect::<Result<Vec<Json>>>()
+        };
+        let pose_ids: Vec<NodeId> = poses.iter().map(|q| q.id()).collect();
+        let landmark_ids: Vec<NodeId> = landmarks.values().map(|q| q.id()).collect();
+        let flat = |e: &[Vec<f64>]| Json::numbers(&e.concat());
+        let summary = |c: &Calibration, delta: f64| {
+            Json::Object(vec![
+                ("coverage", Json::Number(c.mean)),
+                ("tolerance", Json::Number(c.sampling + delta)),
+            ])
+        };
+        let sightings = scenario
+            .sightings
+            .iter()
+            .map(|&(k, j)| Json::numbers(&[k as f64, j as f64]))
+            .collect();
+        figures::write(
+            "pose_graph",
+            &Json::Object(vec![
+                ("rows", Json::Number(N as f64)),
+                (
+                    "poses",
+                    Json::Array(quantities(pose_ids, 7, &pose_covariances)?),
+                ),
+                (
+                    "landmarks",
+                    Json::Array(quantities(landmark_ids, 3, &landmark_covariances)?),
+                ),
+                ("sightings", Json::Array(sightings)),
+                ("pose_errors", flat(&pose_errors)),
+                ("landmark_errors", flat(&landmark_errors)),
+                (
+                    "pose_calibration",
+                    summary(&pose_calibration, SLOPE_6 * variance),
+                ),
+                (
+                    "landmark_calibration",
+                    summary(&landmark_calibration, SLOPE_3 * variance),
+                ),
+            ]),
+        )?;
+    }
 
     // 6. The report, printed before the checks so that a failure shows its figures.
     let objective = linearizer.objective(&mode)?;
@@ -138,16 +222,8 @@ fn main() -> Result {
     })?;
     // 5. The calibrations, each against its tolerance.
     let kappa = variance;
-    calibrated(
-        "poses",
-        &calibration(&pose_errors, CHI2_6_90),
-        SLOPE_6 * kappa,
-    )?;
-    calibrated(
-        "landmarks",
-        &calibration(&landmark_errors, CHI2_3_90),
-        SLOPE_3 * kappa,
-    )?;
+    calibrated("poses", &pose_calibration, SLOPE_6 * kappa)?;
+    calibrated("landmarks", &landmark_calibration, SLOPE_3 * kappa)?;
     println!("every check passed");
     Ok(())
 }

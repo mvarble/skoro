@@ -11,21 +11,29 @@ pub const CHI2_3_90: f64 = 6.251_388_631_170_324;
 pub const SLOPE_6: f64 = 0.367_975;
 pub const SLOPE_3: f64 = 0.273_781;
 
-/// Each row's normalized error, and for a pose each row's largest rotational variance.
-pub type Errors = (Vec<f64>, Option<Vec<f64>>);
+/// A quantity's Laplace marginals, row by row: what the check reads, and what a figure draws.
+pub struct Marginals {
+    /// Each row's normalized error.
+    pub errors: Vec<f64>,
+    /// For a pose, each row's largest rotational variance.
+    pub spread: Option<Vec<f64>>,
+    /// Each row's covariance of the position in the world's axes, by rows: a landmark's own, and
+    /// a pose's `R Σ_ρ Rᵀ`, its tangent `ρ` being along the pose's own axes.
+    pub position: Vec<[f64; 9]>,
+}
 
 /// Each row's normalized error of `quantity`, `|W (q* ⊖ q̂ - μ)|²`: `chart`, the chart
 /// linearization at `mode` computed once for every quantity, eliminated along the schedule
 /// keeping `quantity`; its marginal's whitening `W` and mean `μ` per row; and `q* ⊖ q̂` from
 /// `Layout::local`. For a pose, also the largest eigenvalue of the marginal covariance's rotation
-/// block, per row.
+/// block, per row; and each row's covariance of the position.
 pub fn normalized_errors(
     linearizer: &Linearizer,
     chart: &Linearized,
     mode: &Values,
     truth: &Values,
     quantity: NodeId,
-) -> Result<Errors, Box<dyn std::error::Error>> {
+) -> Result<Marginals, Box<dyn std::error::Error>> {
     let schedule = linearizer.schedule_keeping(&[quantity])?;
     let marginals = chart.eliminate(&schedule, None)?.marginal()?;
     let layout = Layout::new(linearizer.snapshot(), &[quantity])?;
@@ -35,6 +43,12 @@ pub fn normalized_errors(
     let pose = layout.product().storage() == 7;
     let mut errors = Vec::with_capacity(marginals.len());
     let mut spreads = Vec::new();
+    let mut position = Vec::with_capacity(marginals.len());
+    let at = match mode.get(quantity) {
+        Some(skoro::tensor::Value::Continuous(points)) => points.to_host(),
+        _ => return Err(format!("no mode for {quantity:?}").into()),
+    };
+    let storage = layout.product().storage();
     for (r, marginal) in marginals.iter().enumerate() {
         let marginal = &marginal.marginal;
         let tau = if tangent.len() == d {
@@ -45,8 +59,24 @@ pub fn normalized_errors(
         let centred: Vec<f64> = tau.iter().zip(&marginal.mean).map(|(t, m)| t - m).collect();
         let whitened = marginal.whitening.apply(&centred);
         errors.push(whitened.iter().map(|v| v * v).sum());
+        let covariance = marginal.covariance();
+        let offset = if pose { 3 } else { 0 };
+        let sigma = |i: usize, j: usize| covariance.get(offset + i, offset + j);
+        position.push(if pose {
+            let row = if at.len() == storage { 0 } else { r };
+            let q = &at[row * storage..row * storage + 4];
+            let rot = skoro_spatial::host::matrix([q[0], q[1], q[2], q[3]]);
+            std::array::from_fn(|n| {
+                let (i, j) = (n / 3, n % 3);
+                (0..3)
+                    .flat_map(|a| (0..3).map(move |b| (a, b)))
+                    .map(|(a, b)| rot[i][a] * sigma(a, b) * rot[j][b])
+                    .sum()
+            })
+        } else {
+            std::array::from_fn(|n| sigma(n / 3, n % 3))
+        });
         if pose {
-            let covariance = marginal.covariance();
             let block = Mat::from_fn(3, 3, |i, j| covariance.get(i, j));
             let eigenvalues = block
                 .self_adjoint_eigenvalues(Side::Lower)
@@ -54,7 +84,11 @@ pub fn normalized_errors(
             spreads.push(eigenvalues.into_iter().fold(0.0, f64::max));
         }
     }
-    Ok((errors, pose.then_some(spreads)))
+    Ok(Marginals {
+        errors,
+        spread: pose.then_some(spreads),
+        position,
+    })
 }
 
 /// The calibration statistic of a set of quantities: per row the fraction `c_r` of them whose
