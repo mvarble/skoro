@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -59,7 +63,8 @@ const quantity = (x: number, y: number): Estimated => ({
     covariance: [0.01, 0, 0, 0, 0.004, 0, 0, 0, 0.01],
 });
 
-test('each figure renders as one SVG with its title', () => {
+/** A small pose graph and window, as the examples' data would describe them. */
+function sample(): { graph: PoseGraph; window: SlidingWindow } {
     const poses = Array.from({ length: 12 }, (_, k) => quantity(Math.cos(k / 2), Math.sin(k / 2)));
     const graph: PoseGraph = {
         rows: 2,
@@ -87,6 +92,11 @@ test('each figure renders as one SVG with its title', () => {
         filtering_calibration: { coverage: 0.92, tolerance: 0.04 },
         gaps: [0.1, 0.2],
     };
+    return { graph, window };
+}
+
+test('each figure renders as one SVG with its title', () => {
+    const { graph, window } = sample();
     for (const svg of [poseGraphFigure(graph), calibrationFigure(graph), slidingWindowFigure(window)]) {
         assert.match(svg, /^<svg [^>]*viewBox="0 0 \d+ \d+"/);
         assert.match(svg, /<title>[^<]+<\/title>/);
@@ -111,4 +121,36 @@ test("the site's stylesheet sets every role in both themes", () => {
         }
     }
     assert.match(css, /^:root\.dark svg\.skoro-figure \{/m);
+});
+
+test('bin/figures draws the figures of whichever examples wrote their data', () => {
+    const main = path.join(import.meta.dirname, 'main.ts');
+    const run = (data: string, out: string) =>
+        spawnSync(process.execPath, [main, data, out], { encoding: 'utf8' });
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'figures-data-'));
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'figures-out-'));
+    try {
+        // Neither example's data: an error, and nothing written.
+        const none = run(data, out);
+        assert.equal(none.status, 1, none.stderr);
+        assert.deepEqual(fs.readdirSync(out), []);
+        // The pose graph's alone: its two figures, and the window's skipped with how to make it.
+        fs.writeFileSync(path.join(data, 'pose_graph.json'), JSON.stringify(sample().graph));
+        const one = run(data, out);
+        assert.equal(one.status, 0, one.stderr);
+        assert.deepEqual(fs.readdirSync(out).sort(), ['calibration.svg', 'pose-graph.svg']);
+        assert.match(one.stdout, /skipped sliding-window\.svg: no sliding_window\.json/);
+        // Both: all three.
+        fs.writeFileSync(path.join(data, 'sliding_window.json'), JSON.stringify(sample().window));
+        const both = run(data, out);
+        assert.equal(both.status, 0, both.stderr);
+        assert.deepEqual(fs.readdirSync(out).sort(), [
+            'calibration.svg',
+            'pose-graph.svg',
+            'sliding-window.svg',
+        ]);
+    } finally {
+        fs.rmSync(data, { recursive: true, force: true });
+        fs.rmSync(out, { recursive: true, force: true });
+    }
 });

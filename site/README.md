@@ -323,7 +323,7 @@ under `crates/`.
 `<ExampleFigure name="…" alt="…" caption="…" />` shows one of the examples' figures from
 `static/figures/`, inlined so that the page's stylesheet reaches it, and opens it in a dialog when
 it is clicked. `bin/figures` draws the figures from the data the examples write with
-`SKORO_FIGURES` set, and colours every mark through a `--fig-*` variable. Each figure carries its
+`SKORO_FIGURES` set, each example's from its own data, skipping an example that was not run, and colours every mark through a `--fig-*` variable. Each figure carries its
 own light and dark values for use on its own (the README shows them as images), and
 `styles/utils/figures.css`, which `bin/figures` writes from the same palette, sets them from the
 site's theme instead. Do not edit that file: change the palette in `tools/figures/lib.ts` and draw
