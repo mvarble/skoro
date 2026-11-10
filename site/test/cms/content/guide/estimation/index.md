@@ -1,6 +1,7 @@
 ---
 title: Estimation
 order: 2
+formerly: [guide/estimating]
 created: 2026-01-02
 ---
 

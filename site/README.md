@@ -21,7 +21,7 @@ taken to be the parent of the working directory.
 | Path                                     | What it is                                                                                                                            |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `content/landing.md`                     | The prose on the home page.                                                                                                           |
-| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. |
+| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. A page that moves lists the keys it had under `formerly`, so that entries naming it still resolve. |
 | `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note.                                                                                            |
 | `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                 |
 | `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                            |

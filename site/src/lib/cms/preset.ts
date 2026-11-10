@@ -102,7 +102,9 @@ type Place =
 //
 // Frontmatter: every document takes `title`, `summary`, `depends_on` and
 // `katex_macros`. A page also needs an `order` within its track; an entry may
-// list the `pages` it changed and the earlier entries it `revises`. A bare slug
+// list the `pages` it changed and the earlier entries it `revises`. A page that
+// moved lists the keys it had under `formerly`, so that an entry, frozen once
+// done, still names it by the key it had then. A bare slug
 // in `depends_on` names a math note, in `revises` an entry; anything else is
 // written as a key, such as `concepts/graph` or `archive/normal/math`.
 //
@@ -202,6 +204,7 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
             dependsOn: fm.optionalStrings('depends_on') ?? [],
             pages: fm.optionalStrings('pages') ?? [],
             revises: fm.optionalStrings('revises') ?? [],
+            formerly: fm.optionalStrings('formerly') ?? [],
         });
         numberContents(store, file, entry.key);
         reportProblems(store, fm);
@@ -360,6 +363,14 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
         const key = cleaned.includes('/') ? cleaned : `${folder}/${cleaned}`;
         const target = documents(store).get(key);
         if (target && kinds.includes(target.kind)) return key;
+        // A page that moved answers to the keys it had.
+        if (!target && kinds.includes('page')) {
+            for (const [moved, raw] of written(store)) {
+                if (raw.formerly.includes(key) && documents(store).get(moved)?.kind == 'page') {
+                    return moved;
+                }
+            }
+        }
         store.error(
             from.filename,
             `${from.filename}: \`${field}\` entry '${ref}' names no ${kinds.join(' or ')}.`,
@@ -391,7 +402,14 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
                         )
                         .filter((key): key is string => !!key && key != record.key),
                 );
-            } else if (raw.pages.length || raw.revises.length) {
+            }
+            if (raw.formerly.length && record.kind != 'page') {
+                store.error(
+                    record.filename,
+                    `${record.filename}: only a page lists the keys it had under \`formerly\`.`,
+                );
+            }
+            if (record.kind != 'entry' && (raw.pages.length || raw.revises.length)) {
                 store.error(
                     record.filename,
                     `${record.filename}: only an entry's \`index\` lists \`pages\` or \`revises\`.`,
@@ -508,6 +526,8 @@ interface Written {
     dependsOn: string[];
     pages: string[];
     revises: string[];
+    /** A page's keys before it moved. */
+    formerly: string[];
 }
 
 // The frontmatter's `summary`, or else the first paragraph, flattened once its

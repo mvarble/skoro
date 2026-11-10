@@ -60,6 +60,8 @@ katex_macros:
   else a key (`concepts/graph`, `archive/normal/math`). These are the solid arrows of the map on
   the Mathematics page, so list real prerequisites, not everything mentioned.
 - A page also needs `order`, its place in its track.
+- A page that moves lists the keys it had under `formerly` (`formerly: [start/old-slug]`), so
+  that the entries that name it, frozen once done, still resolve to it.
 - An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`) and
   the entries it `revises` (given to `wf start`).
 
