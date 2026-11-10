@@ -14,12 +14,14 @@
 //! the integral, draws, marginals and the factor left on the blocks it kept. The factorizations
 //! are faer's, run on the host in double precision; no faer type is public.
 
+mod answers;
 mod eliminate;
 mod error;
 mod matrix;
 mod problem;
 mod structure;
 
+pub use answers::Marginal;
 pub use eliminate::{Conditional, Elimination};
 pub use error::Error;
 pub use matrix::Matrix;

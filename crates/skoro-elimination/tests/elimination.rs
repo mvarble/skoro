@@ -595,3 +595,215 @@ fn an_undetermined_block_is_refused() {
         Error::Undetermined { block: 0 }
     );
 }
+
+/// A random sparse structure of `n` blocks of dimensions 1 to 3: a prior on each block, so that
+/// every block is determined, and factors over random pairs and triples.
+fn random_structure(n: usize, factors: usize, seed: u64) -> Arc<Structure> {
+    let mut stream = Stream(seed);
+    let dimensions: Vec<usize> = (0..n)
+        .map(|_| 1 + ((stream.next() + 1.0) * 1.5) as usize % 3)
+        .collect();
+    let mut list: Vec<Vec<usize>> = (0..n).map(|k| vec![k]).collect();
+    for _ in 0..factors {
+        let size = 2 + ((stream.next() + 1.0) * 0.99) as usize;
+        let mut blocks: Vec<usize> = (0..size)
+            .map(|_| (((stream.next() + 1.0) / 2.0) * n as f64) as usize % n)
+            .collect();
+        blocks.sort_unstable();
+        blocks.dedup();
+        list.push(blocks);
+    }
+    Arc::new(Structure::new(dimensions, list).unwrap())
+}
+
+/// `log det M`, by Gaussian elimination with partial pivoting.
+fn log_det(m: &[Vec<f64>]) -> f64 {
+    let n = m.len();
+    let mut a = m.to_vec();
+    let mut total = 0.0;
+    for c in 0..n {
+        let p = (c..n)
+            .max_by(|&i, &j| a[i][c].abs().total_cmp(&a[j][c].abs()))
+            .unwrap();
+        a.swap(c, p);
+        total += a[c][c].abs().ln();
+        for r in c + 1..n {
+            let f = a[r][c] / a[c][c];
+            for k in c..n {
+                a[r][k] -= f * a[c][k];
+            }
+        }
+    }
+    total
+}
+
+/// The kept coordinates' block of the dense inverse of `AᵀA`, in the marginal's order.
+fn dense_covariance(problem: &Problem, blocks: &[usize]) -> Vec<f64> {
+    let structure = problem.structure();
+    let d = structure.dimension();
+    let (a, b) = dense(problem);
+    let (gram, _) = normal_equations(&a, &b, d);
+    let inverse = inverse(&gram);
+    let coordinates: Vec<usize> = blocks.iter().flat_map(|&k| structure.range(k)).collect();
+    coordinates
+        .iter()
+        .flat_map(|&i| coordinates.iter().map(move |&j| (i, j)))
+        .map(|(i, j)| inverse[i][j])
+        .collect()
+}
+
+#[test]
+fn orders_agree() {
+    for seed in 0..6 {
+        let structure = random_structure(7, 6, 100 + seed);
+        let problem = random_problem(&structure, 1, seed % 2 == 0, 200 + seed);
+        let n = structure.blocks().len();
+        let mut stream = Stream(300 + seed);
+        let mut shuffled: Vec<usize> = (0..n).collect();
+        for i in (1..n).rev() {
+            let j = (((stream.next() + 1.0) / 2.0) * (i + 1) as f64) as usize % (i + 1);
+            shuffled.swap(i, j);
+        }
+        let schedules = [
+            Schedule::all(&structure).unwrap(),
+            Schedule::in_order(&structure, (0..n).rev().collect()).unwrap(),
+            Schedule::in_order(&structure, shuffled).unwrap(),
+        ];
+        let tau = dense_minimizer(&problem);
+        let (a, b) = dense(&problem);
+        let (gram, _) = normal_equations(&a, &b, structure.dimension());
+        for schedule in &schedules {
+            let elimination = problem.eliminate(schedule, None).unwrap();
+            close(
+                &elimination.minimizer().unwrap(),
+                &tau,
+                1e-10,
+                "the minimizer",
+            );
+            close(
+                &[elimination.minimum().unwrap()],
+                &[problem.value(&tau)],
+                1e-10,
+                "the minimum",
+            );
+            close(
+                &[2.0 * elimination.log_determinant()],
+                &[log_det(&gram)],
+                1e-10,
+                "log det",
+            );
+        }
+        // Every marginal on one block, and on a pair, is the block of the dense inverse, with the
+        // minimizer's coordinates for its mean.
+        let mut sets: Vec<Vec<usize>> = (0..n).map(|k| vec![k]).collect();
+        sets.push(vec![n - 1, 0]);
+        for keep in sets {
+            let schedule = Schedule::keeping(&structure, &keep).unwrap();
+            let marginal = problem
+                .eliminate(&schedule, None)
+                .unwrap()
+                .marginal()
+                .unwrap();
+            assert_eq!(marginal.blocks, keep);
+            close(
+                marginal.covariance().data(),
+                &dense_covariance(&problem, &keep),
+                1e-10,
+                "covariance",
+            );
+            let mean: Vec<f64> = keep
+                .iter()
+                .flat_map(|&k| tau[structure.range(k)].to_vec())
+                .collect();
+            close(&marginal.mean, &mean, 1e-10, "mean");
+        }
+    }
+}
+
+#[test]
+fn the_integral_is_the_determinant() {
+    let structure = random_structure(6, 5, 41);
+    for linear in [false, true] {
+        let problem = random_problem(&structure, 2, linear, 43);
+        let elimination = problem
+            .eliminate(&Schedule::all(&structure).unwrap(), None)
+            .unwrap();
+        let d = structure.dimension();
+        let (a, b) = dense(&problem);
+        let (gram, _) = normal_equations(&a, &b, d);
+        let minimum = problem.value(&dense_minimizer(&problem));
+        let expected =
+            0.5 * d as f64 * (2.0 * std::f64::consts::PI).ln() - 0.5 * log_det(&gram) - minimum;
+        close(
+            &[elimination.log_integral().unwrap()],
+            &[expected],
+            1e-10,
+            "log ∫ e^-φ",
+        );
+    }
+}
+
+#[test]
+fn solve_is_the_inverse_root() {
+    let structure = random_structure(6, 5, 47);
+    let problem = random_problem(&structure, 1, true, 53);
+    let elimination = problem
+        .eliminate(&Schedule::all(&structure).unwrap(), None)
+        .unwrap();
+    let d = structure.dimension();
+    // The columns of R⁻¹, so that R⁻¹R⁻ᵀ = Σ_i (R⁻¹eᵢ)(R⁻¹eᵢ)ᵀ = (AᵀA)⁻¹ exactly.
+    let columns: Vec<Vec<f64>> = (0..d)
+        .map(|i| {
+            elimination
+                .solve(
+                    &(0..d)
+                        .map(|j| if i == j { 1.0 } else { 0.0 })
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap()
+        })
+        .collect();
+    let product: Vec<f64> = (0..d)
+        .flat_map(|p| (0..d).map(move |q| (p, q)))
+        .map(|(p, q)| columns.iter().map(|c| c[p] * c[q]).sum())
+        .collect();
+    let all: Vec<usize> = (0..structure.blocks().len()).collect();
+    close(&product, &dense_covariance(&problem, &all), 1e-10, "R⁻¹R⁻ᵀ");
+}
+
+#[test]
+fn marginal_whitening_is_lower_triangular() {
+    let structure = random_structure(6, 6, 59);
+    let problem = random_problem(&structure, 1, true, 61);
+    let keep = [4, 1];
+    let marginal = problem
+        .eliminate(&Schedule::keeping(&structure, &keep).unwrap(), None)
+        .unwrap()
+        .marginal()
+        .unwrap();
+    let w = &marginal.whitening;
+    let n = w.rows();
+    for i in 0..n {
+        assert!(w.get(i, i) > 0.0, "a positive diagonal");
+        for j in i + 1..n {
+            assert_eq!(w.get(i, j), 0.0, "lower triangular");
+        }
+    }
+    // WᵀW is the Schur complement: the inverse of the kept block of the inverse.
+    let covariance = dense_covariance(&problem, &keep);
+    let rows: Vec<Vec<f64>> = (0..n)
+        .map(|i| covariance[i * n..(i + 1) * n].to_vec())
+        .collect();
+    let precision: Vec<f64> = inverse(&rows).concat();
+    let wtw: Vec<f64> = (0..n)
+        .flat_map(|i| (0..n).map(move |j| (i, j)))
+        .map(|(i, j)| (0..n).map(|k| w.get(k, i) * w.get(k, j)).sum())
+        .collect();
+    close(&wtw, &precision, 1e-10, "WᵀW");
+    close(
+        &[marginal.log_determinant()],
+        &[0.5 * log_det(&inverse(&rows))],
+        1e-10,
+        "log det",
+    );
+}

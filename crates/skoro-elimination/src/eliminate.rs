@@ -37,6 +37,8 @@ pub struct Elimination {
     pub(crate) log_determinant: f64,
     /// The dimension of the eliminated blocks.
     pub(crate) eliminated: usize,
+    /// The unit roundoff of the precision the rows were computed at, for the rank test.
+    pub(crate) roundoff: f64,
 }
 
 impl Elimination {
@@ -327,6 +329,7 @@ impl Problem {
             constant,
             log_determinant,
             eliminated,
+            roundoff: self.roundoff(),
         })
     }
 

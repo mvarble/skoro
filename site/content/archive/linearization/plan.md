@@ -33,7 +33,7 @@ depends_on: [archive/linearization/implementation]
       `eliminating_one_block_is_the_lemma`, `two_scalars`,
       `a_linear_term_in_the_row_space_stays_there`.
 - [x] The rank test at `u^{3/4}` of the problem's roundoff. Tests: `an_undetermined_block_is_refused`.
-- [ ] `Elimination::{log_integral, solve, log_determinant, marginal}` and `Marginal`. Tests:
+- [x] `Elimination::{log_integral, solve, log_determinant, marginal}` and `Marginal`. Tests:
       `orders_agree`, `the_integral_is_the_determinant`, `solve_is_the_inverse_root`,
       `marginal_whitening_is_lower_triangular`.
 - [ ] Damping rows appended at each block's front. Tests:
