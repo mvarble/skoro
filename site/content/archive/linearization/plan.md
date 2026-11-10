@@ -6,7 +6,7 @@ depends_on: [archive/linearization/implementation]
 ## The core
 
 - [x] Add `Query::observations` and `Query::terms`. Tests: `query_gives_its_terms_and_observations`.
-- [ ] Add `Observations::union`, keeping this set's value where both observe a quantity. Tests:
+- [x] Add `Observations::union`, keeping this set's value where both observe a quantity. Tests:
       none named for it; the replacement's tasks below exercise it.
 - [ ] Make `roots` public as `Snapshot::reached_from`. Tests: `reached_from_is_what_a_term_involves`.
 - [ ] Add `Composite::reads` and `Space::volume_reads_point`. Tests: `composites_read_their_inputs`,

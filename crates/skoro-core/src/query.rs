@@ -49,6 +49,27 @@ impl Observations {
         }
     }
 
+    /// This set with the values of `other` for the quantities this set does not observe: a new
+    /// set. Where both observe a quantity, this set's value is kept. When `other` adds nothing,
+    /// the set is this one, of the same identity.
+    pub fn union(self, other: &Observations) -> Observations {
+        let mut values = (*self.values).clone();
+        let mut added = false;
+        for (id, value) in other.values.iter() {
+            if !values.contains_key(id) {
+                values.insert_mut(*id, value.clone());
+                added = true;
+            }
+        }
+        if !added {
+            return self;
+        }
+        Observations {
+            identity: fresh(),
+            values: Arc::new(values),
+        }
+    }
+
     /// The set's identity, by which a compiled program is cached.
     pub fn identity(&self) -> u64 {
         self.identity
@@ -134,5 +155,47 @@ impl Query {
             Targets::Density => Some(snapshot.0.terms.keys().copied().collect()),
             Targets::DensityOf(terms) => Some(terms.iter().copied().collect()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn value(x: f64) -> HostValue {
+        HostValue::new(None, 1, skoro_tensor::HostData::Continuous(vec![x])).unwrap()
+    }
+
+    #[test]
+    fn union_keeps_this_sets_values() {
+        let (a, b, c) = (
+            QDyn::from_id(NodeId::fresh()),
+            QDyn::from_id(NodeId::fresh()),
+            QDyn::from_id(NodeId::fresh()),
+        );
+        let this = Observations::new()
+            .observe_dyn(a, value(1.0))
+            .observe_dyn(b, value(2.0));
+        let other = Observations::new()
+            .observe_dyn(b, value(20.0))
+            .observe_dyn(c, value(30.0));
+        let identity = this.identity();
+        let joined = this.union(&other);
+        assert_ne!(joined.identity(), identity);
+        assert_eq!(joined.get(a.id()), Some(Some(&value(1.0))));
+        assert_eq!(
+            joined.get(b.id()),
+            Some(Some(&value(2.0))),
+            "this set's value is kept"
+        );
+        assert_eq!(joined.get(c.id()), Some(Some(&value(30.0))));
+        let same = joined
+            .clone()
+            .union(&Observations::new().observe_dyn(a, value(5.0)));
+        assert_eq!(
+            same.identity(),
+            joined.identity(),
+            "nothing added, the same set"
+        );
     }
 }
