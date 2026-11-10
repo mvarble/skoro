@@ -1,0 +1,13 @@
+{
+    "kind": "feature",
+    "stage": "math",
+    "started": "2026-11-10",
+    "events": [
+        {
+            "date": "2026-11-10",
+            "action": "start",
+            "stage": "math"
+        }
+    ],
+    "approvals": {}
+}
