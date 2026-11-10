@@ -22,4 +22,4 @@ mod structure;
 pub use error::Error;
 pub use matrix::Matrix;
 pub use problem::{Damping, Problem, Rows};
-pub use structure::Structure;
+pub use structure::{Schedule, Structure};

@@ -24,7 +24,7 @@ depends_on: [archive/linearization/implementation]
 - [x] Add the crate to the workspace, with `faer` 0.24.4 among the workspace's dependencies:
       `Matrix`, `Structure`, `Rows`, `Problem` with `value`, `Damping` and `Problem::promised`,
       and `Error`. Tests: none of its own; the crate compiles and passes clippy.
-- [ ] The schedule: COLAMD on the block pattern, `Schedule::{all, keeping, eliminating,
+- [x] The schedule: COLAMD on the block pattern, `Schedule::{all, keeping, eliminating,
       in_order}`, the elimination tree and the junction tree of its cliques. Tests:
       `the_star_eliminates_its_leaves_first`, `the_map_has_three_cliques`.
 - [ ] The numeric elimination, `Problem::eliminate`, with the pushes of the linear terms, the
