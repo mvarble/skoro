@@ -22,7 +22,7 @@ depends_on: [archive/examples/implementation]
 ## `skoro` (the examples)
 
 - [x] Declare the examples' dev-dependencies (`skoro-normal`, `skoro-spatial`, `skoro-linearize`, `skoro-elimination`, `faer`) and an `[[example]]` for each of `pose_graph` and `sliding_window` with `test = true`, with `examples/common/mod.rs` opening with `#![allow(dead_code)]`. Both examples compile as empty programs returning `Ok(())`.
-- [ ] Write `common/scenario.rs`: `Scenario`, `Scales`, `circuit`, `open_path` (refusing a landmark whose sightings are not an interval) and `first_sightings`.
+- [ ] Write `common/scenario.rs`: `Scenario`, `Scales`, `circuit`, `open_path` with the range of 8.5 m (refusing a landmark whose sightings are not an interval) and `first_sightings`. Tests: `the_scenarios_are_sighted`.
 - [ ] Write `common/model.rs`: `Tick` and `tick`, every term of the model as one `Normal::on(...).score(...)`, the odometry addressed under the tick it retires with.
 - [ ] Write `common/laplace.rs`: `normalized_errors`, `Calibration`, `calibration`, and the constants `CHI2_6_90`, `CHI2_3_90`, `SLOPE_6` and `SLOPE_3`. Tests: `the_chi_squared_constants`.
 - [ ] Write `common/report.rs`: the printing, and the checks as errors that name the figures.
