@@ -318,6 +318,17 @@ not rewritten; its folder lies as deep as the page's URL, so a link written the 
 on disk works as it is. The crate map links each crate to its page, so a crate it lists must be one
 under `crates/`.
 
+## The examples' figures
+
+`<ExampleFigure name="…" alt="…" caption="…" />` shows one of the examples' figures from
+`static/figures/`, inlined so that the page's stylesheet reaches it, and opens it in a dialog when
+it is clicked. `bin/figures` draws the figures from the data the examples write with
+`SKORO_FIGURES` set, and colours every mark through a `--fig-*` variable. Each figure carries its
+own light and dark values for use on its own (the README shows them as images), and
+`styles/utils/figures.css`, which `bin/figures` writes from the same palette, sets them from the
+site's theme instead. Do not edit that file: change the palette in `tools/figures/lib.ts` and draw
+the figures again.
+
 ## For language models
 
 Every document is also served as Markdown at its URL with `.md` in place of the trailing slash

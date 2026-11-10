@@ -1,7 +1,9 @@
 <!--
     One of the examples' figures, drawn by `bin/figures` from the data the examples write and kept in
-    `static/figures/`. The figure is a self-contained card with its own surface, so it reads the
-    same in both themes; the caption says what it shows in words, for a reader who cannot see it.
+    `static/figures/`. The figure is inlined rather than loaded as an image, so that the page's
+    stylesheet reaches it: it colours every mark through `--fig-*` variables, which
+    `styles/utils/figures.css` sets from the site's theme. The caption says what it shows in words,
+    for a reader who cannot see it.
 
     The figure is a button: clicked, or pressed with Enter or Space, it opens the figure at the
     size of the window in a modal dialog, which Escape, the close button or a click outside it
@@ -9,21 +11,36 @@
     can be opened before trying.
 -->
 <script lang="ts">
-    import { asset } from '$app/paths';
     import Icon from './Icon.svelte';
 
     let { name, alt, caption }: { name: string; alt: string; caption?: string } = $props();
 
-    const src = $derived(asset(`/figures/${name}.svg`));
-    let dialog: HTMLDialogElement | undefined = $state();
-    // The figure's width over its height, read when it loads, so that the enlarged figure is as
-    // large as the window allows without being letterboxed.
-    let aspect = $state(1200 / 760);
+    // Every figure's markup, read when the site is built.
+    const figures = import.meta.glob<string>('../../../static/figures/*.svg', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+    });
 
-    function measure(event: Event) {
-        const img = event.currentTarget as HTMLImageElement;
-        if (img.naturalWidth && img.naturalHeight) aspect = img.naturalWidth / img.naturalHeight;
+    const markup = $derived(figures[`../../../static/figures/${name}.svg`] ?? '');
+    // The figure's width over its height, from its view box, so that the enlarged figure is as
+    // large as the window allows without being letterboxed.
+    const aspect = $derived.by(() => {
+        const box = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(markup);
+        return box ? Number(box[1]) / Number(box[2]) : 1200 / 760;
+    });
+
+    // Each copy of a figure on a page, in place and in the dialog, gets its own ids, so that its
+    // clip paths refer to its own.
+    let copies = 0;
+    function own(svg: string): string {
+        const prefix = `${name}-${(copies += 1)}-`;
+        return svg.replaceAll('id="', `id="${prefix}`).replaceAll('url(#', `url(#${prefix}`);
     }
+    const inPlace = $derived(own(markup).replace('<svg ', '<svg aria-hidden="true" '));
+    const enlarged = $derived(own(markup));
+
+    let dialog: HTMLDialogElement | undefined = $state();
 
     function open() {
         dialog?.showModal();
@@ -43,7 +60,8 @@
         aria-haspopup="dialog"
         aria-label={`Enlarge the figure: ${alt}`}
     >
-        <img {src} alt="" loading="lazy" decoding="async" onload={measure} />
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- a build-time file from bin/figures -->
+        <span class="figure">{@html inPlace}</span>
         <span class="badge" aria-hidden="true"><Icon name="expand" size={16} /> Enlarge</span>
     </button>
     {#if caption}<figcaption>{caption}</figcaption>{/if}
@@ -51,7 +69,8 @@
 
 <dialog bind:this={dialog} class="figure-dialog" aria-label={alt} onclick={closeOnBackdrop}>
     <div class="frame" style:--aspect={aspect}>
-        <img {src} {alt} />
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- a build-time file from bin/figures -->
+        <div class="enlarged">{@html enlarged}</div>
         {#if caption}<p class="dialog-caption">{caption}</p>{/if}
         <form method="dialog">
             <button class="close" aria-label="Close"><Icon name="close" size={20} /></button>
@@ -79,11 +98,18 @@
             box-shadow 160ms ease;
     }
 
-    .opener img {
+    .figure,
+    .enlarged {
+        display: block;
+        overflow: hidden;
+        border-radius: 18px;
+    }
+
+    .figure :global(svg),
+    .enlarged :global(svg) {
         display: block;
         width: 100%;
         height: auto;
-        border-radius: 18px;
     }
 
     .badge {
@@ -164,10 +190,8 @@
         position: relative;
     }
 
-    .frame img {
-        display: block;
+    .enlarged {
         width: min(96vw, 1600px, calc(86vh * var(--aspect)));
-        height: auto;
         border-radius: 18px;
         box-shadow: 0 24px 64px rgb(0 0 0 / 0.35);
     }

@@ -3,9 +3,11 @@ import test from 'node:test';
 
 import {
     CHI2_90,
+    PALETTE,
     calibrationFigure,
     chiSquaredDensity,
     ellipse90,
+    figureStyles,
     histogram,
     largestEigenvalue,
     poseGraphFigure,
@@ -90,5 +92,23 @@ test('each figure renders as one SVG with its title', () => {
         assert.match(svg, /<title>[^<]+<\/title>/);
         assert.ok(svg.trimEnd().endsWith('</svg>'));
         assert.doesNotMatch(svg, /NaN|undefined/);
+        // Every colour of a mark is a variable; hexadecimal colours appear only in the figure's
+        // own stylesheet, which defines every variable a mark uses, in both themes.
+        const style = /<style>([\s\S]*?)<\/style>/.exec(svg)?.[1] ?? '';
+        const marks = svg.replace(/<style>[\s\S]*?<\/style>/, '');
+        assert.doesNotMatch(marks, /#[0-9a-f]{3,6}\b/i);
+        for (const used of new Set(marks.match(/--fig-[a-z]+/g))) {
+            assert.equal(style.split(`${used}:`).length, 3, `${used} in both themes`);
+        }
     }
+});
+
+test("the site's stylesheet sets every role in both themes", () => {
+    const css = figureStyles();
+    for (const theme of ['light', 'dark'] as const) {
+        for (const [name, value] of Object.entries(PALETTE[theme])) {
+            assert.ok(css.includes(`--fig-${name}: ${value};`), `${theme} ${name}`);
+        }
+    }
+    assert.match(css, /^:root\.dark svg\.skoro-figure \{/m);
 });

@@ -1,10 +1,11 @@
 // The entry point `bin/figures` runs: `bin/figures <data directory> [<output directory>]`. It reads
 // `pose_graph.json` and `sliding_window.json`, which the examples write when run with
-// `SKORO_FIGURES=<data directory>`, and writes the figures, by default to `site/static/figures/`.
+// `SKORO_FIGURES=<data directory>`, and writes the figures, by default to `site/static/figures/`,
+// with the site's stylesheet for them.
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { calibrationFigure, poseGraphFigure, slidingWindowFigure } from './lib.ts';
+import { calibrationFigure, figureStyles, poseGraphFigure, slidingWindowFigure } from './lib.ts';
 import type { PoseGraph, SlidingWindow } from './lib.ts';
 
 const [data, out = path.join(import.meta.dirname, '../../site/static/figures')] = process.argv.slice(2);
@@ -23,3 +24,11 @@ const poseGraph = read<PoseGraph>('pose_graph');
 write('pose-graph', poseGraphFigure(poseGraph));
 write('calibration', calibrationFigure(poseGraph));
 write('sliding-window', slidingWindowFigure(read<SlidingWindow>('sliding_window')));
+
+// The site's stylesheet for the figures, from the same palette, unless the figures were written
+// somewhere else.
+if (process.argv[3] === undefined) {
+    const styles = path.join(import.meta.dirname, '../../site/src/styles/utils/figures.css');
+    fs.writeFileSync(styles, figureStyles());
+    process.stdout.write(`wrote ${styles}\n`);
+}
