@@ -78,7 +78,7 @@ depends_on: [archive/linearization/implementation]
       `retiring_the_scalar_chain_is_the_kalman_filter`,
       `retiring_a_chain_one_state_at_a_time_is_the_kalman_filter`,
       `an_undetermined_retired_quantity_is_refused`.
-- [ ] The replacement on nonlinear, positive, rotation and undetermined blankets. Tests:
+- [x] The replacement on nonlinear, positive, rotation and undetermined blankets. Tests:
       `a_nonlinear_chain_is_the_extended_kalman_filter`, `improper_replacements_accumulate`,
       `a_bearing_replacement_is_the_linearized_integral`, `the_positive_replacement_is_exact`,
       `rotations_and_vectors_leave_no_linear_term`, `a_batch_of_replacements_has_one_shape`.
