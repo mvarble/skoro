@@ -726,9 +726,10 @@ crate's own models in `tests/common`.
 
 **The examples**, run by CI in release. Their checks are the tests of the whole:
 
-- `the_chi_squared_constants`: `CHI2_6_90` and `CHI2_3_90` against the closed forms
-  $1 - e^{-x/2}(1 + x/2 + x^2/8)$ and $\operatorname{erf}\sqrt{x/2} - \sqrt{2x/\pi}\, e^{-x/2}$
-  at $0.9$, and the slopes against $x f_d(x)$, to $10^{-6}$. (A unit test in the examples' `common`;
+- `the_chi_squared_constants`: the distribution function at `CHI2_6_90` by its closed form
+  $1 - e^{-x/2}(1 + x/2 + x^2/8)$, and at `CHI2_3_90` by Simpson's rule on the density
+  $\sqrt{x}\, e^{-x/2} / \sqrt{2\pi}$ (the standard library has no $\operatorname{erf}$), each
+  $0.9$ to $10^{-9}$; and the slopes against $x f_d(x)$ at them, to $10^{-6}$. (A unit test in the examples' `common`;
   each example is declared in `Cargo.toml` with `test = true`, so `cargo test` builds it as a
   test harness and runs its unit tests, not its `main`.)
 - `pose_graph`: every row converged; every decrement at most $10\, \epsilon$; the bound on
