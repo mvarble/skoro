@@ -31,6 +31,16 @@ export const CRATES: Crate[] = [
         deps: ['skoro-core'],
     },
     {
+        name: 'skoro-elimination',
+        purpose: 'Elimination in square-root form: factored least squares on the host',
+        deps: [],
+    },
+    {
+        name: 'skoro-linearize',
+        purpose: "Linearization of a query, and a retirement's linearized replacement",
+        deps: ['skoro-normal', 'skoro-elimination'],
+    },
+    {
         name: 'skoro',
         purpose: 'The umbrella: re-exports the core and the tensor layer',
         deps: ['skoro-core'],

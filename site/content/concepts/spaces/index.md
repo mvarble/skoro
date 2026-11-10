@@ -68,7 +68,12 @@ A marker is a zero-sized type that says which spaces its handles may name: `Real
 `Matrix<M, N>`, `Positive<N>`, `Categorical<N>`, `Boolean` and `Integer`, each checked at compile
 time, and `VectorDyn`, `MatrixDyn`, `PositiveDyn`, `CategoricalDyn` and `ProductDyn`, whose size is
 fixed by the value instead. A marker that fixes its space (every one but `ProductDyn`) also
-`Declares` it, which is what lets a quantity be made from it.
+`Declares` it, which is what lets a quantity be made from it. Where the space is known only at run time, as when an algorithm builds
+nodes for whatever quantities it is given, `constant_in` makes a constant of the space itself:
+
+```rust
+{../../../../crates/skoro-core/src/scope.rs:437..445}
+```
 
 `QDyn` is the handle with no static type. A handle moves between the two: `untyped` forgets the
 marker; `widen` turns a fixed size into a dynamic one, which cannot fail; and `narrow` claims a
@@ -110,6 +115,17 @@ that a density through the chart at `mu` is written
 ```rust
 let t = x.local(mu);
 let log_density = gaussian(t) - mu.log_volume(t);
+```
+
+Whether $\lambda_x$ depends on the point $x$ at all is a property of the space, read off its
+structure rather than its numbers: on an embedded type, from whether its declared log-volume's
+composite reads its first input, by `Composite::reads`. Where it does not, as on the rotations and
+the spheres, a log-volume written through the chart at a mean is a function of the tangent alone,
+which is what lets [the linearization](../linearization/#folding-a-log-volume) fold it into its
+rows.
+
+```rust
+{../../../../crates/skoro-core/src/retraction.rs:119..143}
 ```
 
 > [!DECISION] The positive orthant keeps Lebesgue measure

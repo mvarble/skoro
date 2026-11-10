@@ -1,6 +1,6 @@
 ---
 title: The normal distribution
-summary: skoro's normal is the law of a point moved by normal noise through its space's chart, on every space whose chart is global, with an exact density and sampler, a scale in four forms, roles that estimators read, and the Gaussian and improper Gaussian replacements of a retirement.
+summary: skoro's normal is the law of a point moved by normal noise through its space's chart, on every space whose chart is global, with an exact density and sampler, a scale in four forms, roles that estimators read, its tangent among them, and the Gaussian and improper Gaussian replacements of a retirement.
 order: 6
 depends_on: [concepts/terms, concepts/spaces, chart-volume]
 ---
@@ -44,11 +44,11 @@ operations, as any value of a model is: the tangent by the space's inverse retra
 and the normalizer by composites of the scale's form, and the log-volume by the core's:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:150..176}
+{../../../../crates/skoro-normal/src/normal.rs:151..177}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:118..134}
+{../../../../crates/skoro-normal/src/normal.rs:119..135}
 ```
 
 On a Euclidean space the log-volume is identically zero and left out. On the positive orthant it is
@@ -65,7 +65,7 @@ query and drawn in another.
 `score` adds the term, an exact sampler, and the roles:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:74..116}
+{../../../../crates/skoro-normal/src/normal.rs:74..117}
 ```
 
 It refuses what it cannot be exact on, at the caller's line, with the core's own errors: a discrete
@@ -76,7 +76,7 @@ quantity and scores it by a normal in one call, `sample("x", Real, normal)`, bui
 `quantity("x", Real)` and `normal.score(x)` build:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:179..185}
+{../../../../crates/skoro-normal/src/normal.rs:180..186}
 ```
 
 > [!DECISION] The normal requires a global chart
@@ -132,14 +132,23 @@ leaves the importance weight to the likelihoods.
 
 ## The roles
 
-A term binds the nodes an estimator needs, under [roles](../terms/) a reader in another crate looks
-up by name:
+A term binds the nodes an estimator needs, under [roles](../terms/) a reader in another crate, such
+as [`skoro-linearize`](../linearization/), looks up by name:
 
 ```rust
 {../../../../crates/skoro-normal/src/roles.rs:11..31}
 ```
 
+and, on a term that scores a quantity, its tangent at the mean:
+
+```rust
+{../../../../crates/skoro-normal/src/roles.rs:43..46}
+```
+
 The scale is bound under the role of its form, so a reader learns the form from which is bound. The
+tangent says how the residual and the log-volume are made of it, which is what lets the
+[linearization](../linearization/#folding-a-log-volume) fold a curved type's log-volume into its
+rows, and what the Fisher rows of a free scale read their Jacobian from. The
 root $C$ of the expected information has $C\transpose C$ equal to the expected negative Hessian of
 the term over $(\point, \mu, \theta)$, exact on the core's spaces. On a curved type it is exact in
 the scale's block and holds to second order in the dispersion elsewhere. The log-volume's role lets
@@ -223,5 +232,7 @@ A blanket quantity the factor leaves undetermined is scored by no term after the
 a parameter: generation draws it from a proposal given with the replacement, and refuses it
 otherwise. Factors over the same quantity accumulate as terms of their own, and the model reads them
 as their sum: once the bearings of two poses have been retired, along different directions, the
-landmark is determined, at the point where the two lines cross. The mathematics, its forms and its
+landmark is determined, at the point where the two lines cross. The
+[linearization](../linearization/#a-retirement-s-replacement) computes such a replacement from the
+retired terms themselves. The mathematics, its forms and its
 examples are in [the entry](../../archive/improper-gaussian/math.svx).
