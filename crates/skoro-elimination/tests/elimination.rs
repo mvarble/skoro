@@ -856,3 +856,237 @@ fn damping_appends_rows_and_keeps_the_schedule() {
         Error::Shape { factor: None }
     );
 }
+
+/// `log ∫ e^{-φ(τ_E, τ_K)} dτ_E` at `kept`, the kept coordinates' values, computed densely:
+/// `(d_E/2) log 2π - ½ log det Λ_EE - φ(τ_E*, τ_K)`.
+fn dense_log_integral(problem: &Problem, eliminated: &[usize], kept: &[f64]) -> f64 {
+    let structure = problem.structure();
+    let e: Vec<usize> = eliminated
+        .iter()
+        .flat_map(|&k| structure.range(k))
+        .collect();
+    let k: Vec<usize> = (0..structure.dimension())
+        .filter(|c| !e.contains(c))
+        .collect();
+    let (a, b) = dense(problem);
+    let mut tau = vec![0.0; structure.dimension()];
+    for (&c, v) in k.iter().zip(kept) {
+        tau[c] = *v;
+    }
+    // Λ_EE x = A_Eᵀ (b - A_K τ_K) - η_E.
+    let n = e.len();
+    let mut gram = vec![vec![0.0; n]; n];
+    let mut rhs = vec![0.0; n];
+    for (row, bi) in a.iter().zip(&b) {
+        let rest: f64 = k.iter().map(|&c| row[c] * tau[c]).sum();
+        for (i, &ci) in e.iter().enumerate() {
+            rhs[i] += row[ci] * (bi - rest);
+            for (j, &cj) in e.iter().enumerate() {
+                gram[i][j] += row[ci] * row[cj];
+            }
+        }
+    }
+    if let Some(eta) = problem.linear() {
+        for (i, &c) in e.iter().enumerate() {
+            rhs[i] -= eta[c];
+        }
+    }
+    let x = solve(&gram, &rhs);
+    for (&c, v) in e.iter().zip(&x) {
+        tau[c] = *v;
+    }
+    0.5 * n as f64 * (2.0 * std::f64::consts::PI).ln() - 0.5 * log_det(&gram) - problem.value(&tau)
+}
+
+/// The problem of `structure`'s factors at `which`, with the same blocks, linear term and constant.
+fn restricted(problem: &Problem, which: &[usize], linear: bool, constant: f64) -> Problem {
+    let structure = problem.structure();
+    let factors: Vec<Vec<usize>> = which
+        .iter()
+        .map(|&f| structure.factors()[f].clone())
+        .collect();
+    let restricted = Arc::new(Structure::new(structure.blocks().to_vec(), factors).unwrap());
+    let rows = which
+        .iter()
+        .map(|&f| problem.factors()[f].clone())
+        .collect();
+    let eta = if linear {
+        problem.linear().map(<[f64]>::to_vec)
+    } else {
+        None
+    };
+    Problem::new(restricted, rows, eta, constant, DOUBLE).unwrap()
+}
+
+#[test]
+fn replacing_from_some_factors_is_the_split() {
+    // Blocks 0 and 1 are eliminated from the factors joined to them; blocks 2 to 4 are kept.
+    let structure = Arc::new(
+        Structure::new(
+            vec![2, 1, 2, 1, 2],
+            vec![
+                vec![0],
+                vec![0, 2],
+                vec![0, 1, 3],
+                vec![1, 3],
+                vec![2],
+                vec![3, 4],
+                vec![4],
+                vec![2, 4],
+            ],
+        )
+        .unwrap(),
+    );
+    let whole = random_problem(&structure, 1, true, 79);
+    let joined = restricted(&whole, &[0, 1, 2, 3], true, whole.constant());
+    let schedule = Schedule::eliminating(joined.structure(), &[0, 1]).unwrap();
+    let reduced = joined.eliminate(&schedule, None).unwrap().reduced();
+    assert_eq!(reduced.blocks, [2, 3, 4]);
+    // ∫ e^{-φ} dτ_E = e^{-φ_∌E} ∫ e^{-φ_∋E} dτ_E, at random kept values.
+    let mut stream = Stream(83);
+    for _ in 0..4 {
+        let kept = stream.take(5);
+        close(
+            &[reduced.value(&kept)],
+            &[dense_log_integral(&joined, &[0, 1], &kept)],
+            1e-10,
+            "the replacement",
+        );
+    }
+    // The replacement and the factors not joined to E: a problem over the kept blocks whose
+    // integral and minimizer are the whole's.
+    let mut factors = vec![reduced.a.clone()];
+    let mut rights = vec![reduced.b.clone()];
+    let mut blocks = vec![vec![0, 1, 2]];
+    for f in 4..8 {
+        factors.push(whole.factors()[f].a.clone());
+        rights.push(whole.factors()[f].b.clone());
+        blocks.push(structure.factors()[f].iter().map(|k| k - 2).collect());
+    }
+    let kept_structure = Arc::new(Structure::new(vec![2, 1, 2], blocks).unwrap());
+    let rows: Vec<Rows> = factors
+        .into_iter()
+        .zip(rights)
+        .map(|(a, b)| Rows { a, b })
+        .collect();
+    let summed = Problem::new(
+        kept_structure.clone(),
+        rows,
+        reduced.linear.clone(),
+        -reduced.constant,
+        DOUBLE,
+    )
+    .unwrap();
+    let all = Schedule::all(&kept_structure).unwrap();
+    let summed = summed.eliminate(&all, None).unwrap();
+    let full = whole
+        .eliminate(&Schedule::all(&structure).unwrap(), None)
+        .unwrap();
+    close(
+        &[summed.log_integral().unwrap()],
+        &[full.log_integral().unwrap()],
+        1e-10,
+        "the integral",
+    );
+    close(
+        &summed.minimizer().unwrap(),
+        &full.minimizer().unwrap()[3..8],
+        1e-10,
+        "the minimizer",
+    );
+    // Two disjoint replacements on one kept block add to the replacement of both: E₁ of
+    // dimension 1 and E₂ of dimension 2, each with factors of its own, and the kept block K of
+    // dimension 2.
+    let one = Arc::new(Structure::new(vec![1, 2], vec![vec![0], vec![0, 1]]).unwrap());
+    let two = Arc::new(Structure::new(vec![2, 2], vec![vec![0], vec![0, 1]]).unwrap());
+    let (first, second) = (
+        random_problem(&one, 1, false, 89),
+        random_problem(&two, 1, false, 91),
+    );
+    let joint_structure = Arc::new(
+        Structure::new(
+            vec![1, 2, 2],
+            vec![vec![0], vec![0, 2], vec![1], vec![1, 2]],
+        )
+        .unwrap(),
+    );
+    let rows = [first.factors(), second.factors()].concat();
+    let joint = Problem::new(
+        joint_structure,
+        rows,
+        None,
+        first.constant() + second.constant(),
+        DOUBLE,
+    )
+    .unwrap();
+    let reduce = |problem: &Problem, eliminate: &[usize]| {
+        let schedule = Schedule::eliminating(problem.structure(), eliminate).unwrap();
+        problem.eliminate(&schedule, None).unwrap().reduced()
+    };
+    let (one, two, joint) = (
+        reduce(&first, &[0]),
+        reduce(&second, &[0]),
+        reduce(&joint, &[0, 1]),
+    );
+    for _ in 0..4 {
+        let kept = stream.take(2);
+        close(
+            &[one.value(&kept) + two.value(&kept)],
+            &[joint.value(&kept)],
+            1e-10,
+            "the sum",
+        );
+    }
+}
+
+#[test]
+fn reduced_rows_have_their_shape() {
+    // One eliminated block of dimension 2 and one kept of dimension 3, with m' = m - 2 rows left.
+    let structure = Arc::new(Structure::new(vec![2, 3], vec![vec![0, 1]]).unwrap());
+    let mut stream = Stream(97);
+    for m in [3, 4, 5, 9] {
+        let factor = Rows {
+            a: Matrix::new(m, 5, stream.take(5 * m)).unwrap(),
+            b: stream.take(m),
+        };
+        let problem = Problem::new(
+            structure.clone(),
+            vec![factor],
+            Some(stream.take(5)),
+            0.7,
+            DOUBLE,
+        )
+        .unwrap();
+        let schedule = Schedule::eliminating(&structure, &[0]).unwrap();
+        let reduced = problem.eliminate(&schedule, None).unwrap().reduced();
+        assert_eq!(
+            reduced.a.rows(),
+            (m - 2).min(3),
+            "min(m', D) rows for m = {m}"
+        );
+        assert_eq!(reduced.a.columns(), 3);
+        for _ in 0..3 {
+            let kept = stream.take(3);
+            close(
+                &[reduced.value(&kept)],
+                &[dense_log_integral(&problem, &[0], &kept)],
+                1e-10,
+                "the value",
+            );
+        }
+    }
+    // Rows that are singular on the kept block keep their number: two copies of one row.
+    let row: Vec<f64> = stream.take(5);
+    let mut a = vec![1.0, 0.5, 0.0, 0.0, 0.0, 0.2, -1.0, 0.0, 0.0, 0.0];
+    a.extend(&row);
+    a.extend(&row);
+    let factor = Rows {
+        a: Matrix::new(4, 5, a).unwrap(),
+        b: stream.take(4),
+    };
+    let problem = Problem::new(structure.clone(), vec![factor], None, 0.0, DOUBLE).unwrap();
+    let schedule = Schedule::eliminating(&structure, &[0]).unwrap();
+    let reduced = problem.eliminate(&schedule, None).unwrap().reduced();
+    assert_eq!(reduced.a.rows(), 2, "no decision of rank");
+    assert!(reduced.linear.is_none());
+}

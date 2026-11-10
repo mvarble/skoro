@@ -21,7 +21,7 @@ mod matrix;
 mod problem;
 mod structure;
 
-pub use answers::Marginal;
+pub use answers::{Marginal, Reduced};
 pub use eliminate::{Conditional, Elimination};
 pub use error::Error;
 pub use matrix::Matrix;

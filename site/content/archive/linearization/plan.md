@@ -38,7 +38,7 @@ depends_on: [archive/linearization/implementation]
       `marginal_whitening_is_lower_triangular`.
 - [x] Damping rows appended at each block's front. Tests:
       `damping_appends_rows_and_keeps_the_schedule`.
-- [ ] `Elimination::reduced` and `Reduced`, with no decision of rank. Tests:
+- [x] `Elimination::reduced` and `Reduced`, with no decision of rank. Tests:
       `replacing_from_some_factors_is_the_split`, `reduced_rows_have_their_shape`.
 
 ## `skoro-linearize`

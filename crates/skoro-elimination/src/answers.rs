@@ -46,7 +46,80 @@ impl Marginal {
     }
 }
 
+/// `-½|A τ - b|² - ηᵀτ + c` over the kept blocks: what integrating the eliminated blocks out
+/// leaves, in numbers.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Reduced {
+    pub blocks: Vec<usize>,
+    /// `min(m', D)` rows by the kept blocks' `D` columns, in their order.
+    pub a: Matrix,
+    pub b: Vec<f64>,
+    /// `η` over the kept coordinates, in their order, where the problem had a linear term.
+    pub linear: Option<Vec<f64>>,
+    pub constant: f64,
+}
+
+impl Reduced {
+    /// `-½|A τ - b|² - ηᵀτ + c` at `tangent`, over the kept coordinates.
+    pub fn value(&self, tangent: &[f64]) -> f64 {
+        let squares: f64 = self
+            .a
+            .apply(tangent)
+            .iter()
+            .zip(&self.b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum();
+        let linear: f64 = self
+            .linear
+            .as_ref()
+            .map_or(0.0, |eta| eta.iter().zip(tangent).map(|(e, t)| e * t).sum());
+        -0.5 * squares - linear + self.constant
+    }
+}
+
 impl Elimination {
+    /// What is left of a `Schedule::eliminating` elimination, reduced by one more QR with no
+    /// pivoting and no decision of rank, with the constant of integrating the eliminated blocks
+    /// out: `c = (d_E/2) log 2π - Σ log R_ii - c₀ - Γ - ½|e|²`.
+    pub fn reduced(&self) -> Reduced {
+        let (stacked, coordinates) = self.stacked(false);
+        let n = coordinates.len();
+        let m = stacked.nrows();
+        let reduced = if m == 0 {
+            Matrix::zeros(0, n + 1)
+        } else {
+            Matrix::from_faer(Qr::new(stacked.as_ref()).thin_R())
+        };
+        let rows = m.min(n);
+        let a = Matrix::new(
+            rows,
+            n,
+            (0..rows)
+                .flat_map(|i| (0..n).map(move |j| (i, j)))
+                .map(|(i, j)| reduced.get(i, j))
+                .collect(),
+        )
+        .unwrap_or_else(|| Matrix::zeros(rows, n));
+        let b = (0..rows).map(|i| reduced.get(i, n)).collect();
+        let residual = if m > n { reduced.get(n, n) } else { 0.0 };
+        let linear = self
+            .left_linear
+            .as_ref()
+            .map(|eta| coordinates.iter().map(|&c| eta[c]).collect());
+        let d_e = self.eliminated as f64;
+        let constant = 0.5 * d_e * (2.0 * PI).ln()
+            - self.log_determinant
+            - self.constant
+            - 0.5 * residual * residual;
+        Reduced {
+            blocks: self.schedule.kept.clone(),
+            a,
+            b,
+            linear,
+            constant,
+        }
+    }
+
     /// `log ∫ e^{-φ}` of a complete elimination: `(D/2) log 2π - Σ log R_ii - min φ`
     /// (`Incomplete` when blocks were kept).
     pub fn log_integral(&self) -> Result<f64, Error> {
