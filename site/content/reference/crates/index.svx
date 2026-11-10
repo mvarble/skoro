@@ -31,4 +31,4 @@ linearization and elimination the first pieces of the estimators built on them. 
 later entries (other distributions, spheres, linear algebra, the estimators' own loops,
 serialization and bindings among them)
 is listed in the repository's
-[`REVISIT.md`](https://github.com/mvarble/skoro/blob/main/REVISIT.md).
+[`PLAN.md`](https://github.com/mvarble/skoro/blob/main/PLAN.md).
