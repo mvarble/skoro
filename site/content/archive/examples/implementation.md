@@ -216,7 +216,7 @@ impl Default for LevenbergMarquardt { /* the values above */ }
 /// How a row's minimization ended.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
-    /// An accepted step promised at most `tolerance`.
+    /// A step, accepted or not, promised at most `tolerance`.
     Converged,
     /// `λ` passed `max_damping`: no step decreased `f`.
     DampingExceeded,
@@ -312,11 +312,9 @@ pub fn minimize(&self, linearizer: &Linearizer, schedule: &Schedule, start: &Val
             let gain = (before[r] - after[r]) / promised[r];      // ρ_λ
             let accept = gain > 0.0;
             row.history.push(Iterate { objective: before[r], damping: row.lambda, promised: promised[r], gain, accepted: accept });
+            if accept { accepted[r] = true; }                     // taken, converged or not
+            if promised[r] <= self.tolerance { row.done = Some(Status::Converged); continue; }
             nielsen(&mut row.lambda, &mut row.beta, gain);        // [](eq:archive/examples/math/schedule)
-            if accept {
-                accepted[r] = true;
-                if promised[r] <= self.tolerance { row.done = Some(Status::Converged); }
-            }
         }
         at = select_rows(&at, &trial, &accepted, layout, target)?;
     }
@@ -360,9 +358,13 @@ A few choices in that body:
   linearized again at the same point on the next iteration, which repeats work the row has
   already done; caching it would split a batch's problems between two points, for no change in
   any result.
-- **A rejected step's $\Delta$** is compared with the tolerance only on acceptance, as the
-  stopping rule of the mathematics says. That rule fails rows that have converged; see
-  [Open questions](#open-questions), which proposes to amend it.
+- **$\Delta$ is compared with the tolerance before the acceptance**, as
+  [the stopping rule](math.svx#a-levenberg-marquardt-method) says: a row stops on a step that
+  promises at most $\epsilon$, taken if its gain is positive and refused if not. Once $\Delta$ is
+  rounding the gain has a random sign, or is $0/0$ (which `gain > 0.0` refuses, being false for
+  `NaN`), so no gain is formed from it into the schedule: a stopped row does not update $\lambda$.
+  Stopping only on an accepted step would let a converged row be rejected until its damping passed
+  `max_damping`.
 - **A step is refused, not skipped,** when the elimination refuses a block. Damping makes every
   block determined for $\lambda > 0$, so a refusal is a malformed problem, and the error names its
   quantity.
@@ -709,10 +711,10 @@ crate's own models in `tests/common`.
 - `rows_at_rounding_converge`: a model with many terms, so that $\lvert f \rvert$ is in the
   thousands, and nearly linear, $x \sim \mathcal N(0, 1)$ on $\R^3$ with 2 000 observed
   $z_i \sim \mathcal N(x + 0.01\, x \odot x, I)$, minimized from 1 000 rows of starts near the
-  mode: every row ends `Converged`. Under the rule of the mathematics as written, rows whose last
-  accepted step promised just over $\epsilon$ take a next step whose gain is rounding, and some
-  reach `max_damping`; this test is what shows the amended rule of
-  [Open questions](#open-questions) right.
+  mode: every row ends `Converged`. Rows whose last accepted step promised just over $\epsilon$ take
+  a next step whose gain is rounding; a rule that stopped only on an accepted step would send some
+  to `max_damping`, and this test is what shows that the rule of the mathematics, which stops on
+  the promise, does not. Also checks that a row's final `Iterate` has `promised` at most $\epsilon$.
 - `the_fisher_assembly_is_refused`: `minimize` with a Fisher linearizer is `NotAnIntegral`.
 - `the_objective_is_the_negative_log_density`: `Linearizer::objective` against the negated
   `DENSITY` of the query's own compiled program, per row, and against `value(0)` of the
@@ -756,28 +758,17 @@ crate's own models in `tests/common`.
 
 ## Open questions
 
-> [!TODO] The stopping rule of the mathematics fails rows that have converged
-> [The stopping rule](math.svx#a-levenberg-marquardt-method) stops a row only on an *accepted* step
-> that promised $\Delta \le \epsilon$. In these models $\lvert f \rvert$ is in the thousands, so each
-> of the two values of $f$ in the gain [](eq:archive/examples/math/gain) carries rounding of about
-> $10^{-12}$. Gauss–Newton contracts fast here: an accepted step promising, say, $5 \times 10^{-9}$,
-> just over $\epsilon$, is followed by one promising $10^{-12}$ or less, whose gain is rounding of
-> either sign, and a step promising exactly zero has the gain $0/0$, not a number, which is never
-> positive. Each rejection multiplies $\lambda$ by $\beta$ and doubles $\beta$, so some ten
-> rejections in a row, a chance of about one in a thousand, carry $\lambda$ past $\lambda_{\max}$ and
-> end a converged row as `DampingExceeded`. The window runs some 8 000 row-solves and fails unless
-> every one converges, so it would fail. The mathematics's own paragraph on precision argues that
-> $\Delta$ must stay above $u \lvert f \rvert$ for the gain to mean anything, which is the case for
-> stopping as soon as it does not, accepted or not.
->
-> The amendment proposed is: *a row stops when a step promises $\Delta \le \epsilon$, whether or not
-> it is accepted, the step being taken if it is*; stationarity is still checked apart from it by
-> the undamped decrement at most $10\, \epsilon$, which is what bounds the point. This changes the
-> approved mathematics, so it is the user's to reopen (`/wf-reopen math`); the design above then
-> moves the comparison with the tolerance before the acceptance, and the test
-> `rows_at_rounding_converge` pins it.
-
-The rest is decided. The method is the library's, in `skoro-linearize`, with per-row damping by
+None. The rest is decided. The method is the library's, in `skoro-linearize`, with per-row damping by
 row-wise elimination; the examples are the umbrella crate's, sharing one model builder; the inverse
 retraction, the observation of generated values and the host maps of the motions are added where a
 user would look for them.
+
+## Revisions
+
+**2026-11-10: the stopping rule.** The mathematics was reopened because a row stopped only on an
+accepted step that promised $\Delta \le \epsilon$, which fails rows that have converged when
+$\lvert f \rvert$ is in the thousands. This document had proposed the amendment as an open
+question, and the mathematics now states it. What changed here: `Status::Converged` is a step's
+promise, accepted or not; `minimize` compares $\Delta$ with the tolerance before the acceptance,
+takes the step if its gain is positive, and does not update $\lambda$ for a row that stops; the
+test `rows_at_rounding_converge` pins it; and the open question is closed.
