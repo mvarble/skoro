@@ -9,7 +9,7 @@ depends_on: [archive/examples/implementation]
 
 ## `skoro-core`
 
-- [ ] Add `Layout::local`, with the compiled inverse retraction cached per target in a `locals` field that `Layout::of` initializes empty and `Clone` leaves empty. Tests: `local_inverts_retract`, `local_refuses_as_retract_does`.
+- [x] Add `Layout::local`, with the compiled inverse retraction cached per target in a `locals` field that `Layout::of` initializes empty and `Clone` leaves empty. Tests: `local_inverts_retract`, `local_refuses_as_retract_does`.
 - [ ] Add `Observations::observe_value`, which reads a `Points` to the host and observes it one value per row, deferring a discrete value or a storage of the wrong size to `ValueShape` when the set is used. Tests: `generated_values_are_observed_row_by_row`, `a_discrete_generated_value_is_refused`.
 
 ## `skoro-linearize`
