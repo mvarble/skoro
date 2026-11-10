@@ -266,3 +266,45 @@ fn an_integral_without_a_volume_is_refused() {
         })
     );
 }
+
+#[test]
+fn a_free_scale_without_a_root_is_refused_by_fisher() {
+    // A normal's likelihood factor over data scores no quantity, binds no information root, and
+    // so must have its scale fixed.
+    let mut writer = Writer::new();
+    let (sigma, term) = writer
+        .build(|| {
+            let sigma = quantity("sigma", Positive::<1>);
+            Normal::on(
+                Positive::<1>,
+                constant(Positive::<1>, [1.0]),
+                Scale::sd(0.5),
+            )
+            .score(sigma);
+            let x = quantity("x", Vector::<2>);
+            Normal::on(
+                Vector::<2>,
+                constant(Vector::<2>, [0.0, 0.0]),
+                Scale::sd(1.0),
+            )
+            .score(x);
+            let term = Normal::on(Vector::<2>, x, Scale::isotropic(sigma))
+                .factor_at(constant(Vector::<2>, [0.4, -0.2]));
+            (sigma, term)
+        })
+        .unwrap();
+    let error = Linearizer::new(
+        &writer.snapshot(),
+        &Query::log_density(),
+        &Target::host(),
+        Assembly::Fisher,
+    )
+    .unwrap_err();
+    assert_eq!(
+        error,
+        Error::NoInformationRoot {
+            term: term.id(),
+            quantity: sigma.id()
+        }
+    );
+}

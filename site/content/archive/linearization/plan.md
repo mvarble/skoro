@@ -65,7 +65,7 @@ depends_on: [archive/linearization/implementation]
       `QuantityMarginal`. Tests: `the_laplace_approximation_is_centred_in_the_chart`,
       `draws_have_the_marginal_covariance`, `marginals_name_their_curved_quantities`,
       `an_integral_without_a_volume_is_refused`.
-- [ ] The Fisher assembly: the scale rows `J^θ_t` and `u_t`, `J^μ_t = W_t D s_t` for a free scale,
+- [x] The Fisher assembly: the scale rows `J^θ_t` and `u_t`, `J^μ_t = W_t D s_t` for a free scale,
       `c_F`, and its refusals. Tests: `fisher_rows_are_a_root_of_the_expected_information`,
       `fisher_gradient_is_the_query_gradient`,
       `fisher_with_fixed_scales_is_the_residual_linearization`,

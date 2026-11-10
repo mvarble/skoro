@@ -34,6 +34,18 @@ pub(crate) struct Factor {
     pub(crate) log_volume: Option<QDyn>,
     /// What folding the log-volume into the right-hand side reads, where it is folded.
     pub(crate) fold: Option<Fold>,
+    /// What the Fisher assembly reads of a free scale.
+    pub(crate) free_scale: Option<FreeScale>,
+}
+
+/// A free scale of the Fisher assembly: the scale's node, of dimension `k`, the tangent and the
+/// information root.
+#[derive(Clone, Debug)]
+pub(crate) struct FreeScale {
+    pub(crate) scale: QDyn,
+    pub(crate) k: usize,
+    pub(crate) tangent: QDyn,
+    pub(crate) root: QDyn,
 }
 
 /// A folded log-volume: the nodes bound under the tangent, mean and information-root roles, and
@@ -141,6 +153,7 @@ impl Linearizer {
             if fold.is_some() {
                 log_volume = None;
             }
+            let mut free_scale = None;
             if let Some(scale) = bound_scale(term)? {
                 let free = snapshot
                     .reached_from(scale)
@@ -154,9 +167,19 @@ impl Linearizer {
                         Assembly::Fisher => {
                             let root = term.bound(&roles::INFORMATION_ROOT)?;
                             let tangent = term.bound(&roles::TANGENT)?;
-                            if root.is_none() || tangent.is_none() {
+                            let (Some(root), Some(tangent)) = (root, tangent) else {
                                 return Err(Error::NoInformationRoot { term: id, quantity });
-                            }
+                            };
+                            let k = snapshot
+                                .space(scale)
+                                .and_then(|space| space.dimension())
+                                .unwrap_or(0);
+                            free_scale = Some(FreeScale {
+                                scale,
+                                k,
+                                tangent,
+                                root,
+                            });
                         }
                     }
                 }
@@ -168,6 +191,7 @@ impl Linearizer {
                 components,
                 log_volume,
                 fold,
+                free_scale,
             });
         }
         let dimensions: Vec<usize> = layout
@@ -182,7 +206,14 @@ impl Linearizer {
         // The rows program: every node the assembly reads, under the query's observations.
         let targets = crate::assemble::targets(factors.iter().flat_map(|f| {
             let fold = f.fold.iter().flat_map(|g| [g.tangent, g.mean, g.root]);
-            std::iter::once(f.residual).chain(f.log_volume).chain(fold)
+            let scale = f
+                .free_scale
+                .iter()
+                .flat_map(|g| [g.scale, g.tangent, g.root]);
+            std::iter::once(f.residual)
+                .chain(f.log_volume)
+                .chain(fold)
+                .chain(scale)
         }));
         let rows_query = Query::of(targets).given(query.observations().clone());
         let rows = snapshot.compile(&rows_query, target)?;
