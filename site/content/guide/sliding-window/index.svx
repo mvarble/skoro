@@ -7,6 +7,8 @@ depends_on: [guide/pose-graph]
 
 <script>
 	import ExampleFigure from '$lib/components/ExampleFigure.svelte';
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { window } from './window.walk';
 </script>
 
 A robot that drives on cannot keep every pose it has had. The example `sliding_window` keeps a
@@ -32,9 +34,13 @@ The truth and the measurements come from the whole path's model, drawn as the ba
 window is a second model, written by its own `Writer`, which observes the measurements as they
 arrive:
 
+<Walkthrough spec={window}>
+
 ```rust
 {../../../../crates/skoro/examples/sliding_window.rs:55..114}
 ```
+
+</Walkthrough>
 
 Each tick builds itself with the same `tick` as the batch, and starts from the window's previous
 mode, so a solve takes six or seven iterations. The newest pose's marginal is the window's estimate
