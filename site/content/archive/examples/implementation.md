@@ -682,23 +682,43 @@ mathematics settled, and has no line search.
 **`skoro-linearize`, `tests/minimize.rs`.** These test the method apart from the examples, on the
 crate's own models in `tests/common`.
 
-- `the_marquardt_diagonal_is_the_column_norms`: on the linearization of the rotations chain at a
-  point, `marquardt` against the column norms computed from a dense $J$ assembled from the
-  factors, and the floor taking effect on a column scaled to zero. Pins
-  [](eq:archive/examples/math/marquardt). (A unit test in `minimize.rs`, since `marquardt` is
-  private.)
+- `the_marquardt_diagonal_is_the_column_norms`: on a problem written by hand over two blocks,
+  of dimensions 2 and 1, with one factor on both and one on the second alone, `marquardt` against
+  the column norms summed over the factors, and the floor taking a coordinate whose column is zero
+  in every factor. Pins [](eq:archive/examples/math/marquardt), and the mapping of a factor's
+  columns to the stacked coordinates through `Structure::range`. (A unit test in `minimize.rs`,
+  since `marquardt` is private.)
 - `the_schedule_is_nielsens`: `nielsen` at $\varrho_\lambda = 1$ divides $\lambda$ by $3$, at
   $\tfrac12$ keeps it, at $0.9$ multiplies it by $1 - 0.8^3$, and at $0$ and $-1$ multiplies it by
   $\beta$ and doubles $\beta$, which an acceptance resets to $2$. Pins
   [](eq:archive/examples/math/schedule). (A unit test.)
 - `levenberg_marquardt_finds_the_mode_on_rotations`: from the chain of rotations' two starting
-  points, every row converges, the decrement is at most $10\, \epsilon$, the query's gradient by
-  the cotangent pass is below $10^{-6}$, and the mode equals the undamped loop's of
-  `steps_converge_on_rotations` to $10^{-8}$. Shows the method stops at a stationary point of $f$,
-  log-volumes included, and at the same one Gauss–Newton reaches.
+  points, every row converges and its decrement $\delta$ is at most $10\, \epsilon$. Then two
+  checks in the terms the rule bounds, both in nats or derived from them:
+  - the query's gradient $g$ by the cotangent pass satisfies
+    $\lVert g \rVert^2 \le 2 \cdot 10\, \epsilon \cdot \operatorname{tr}(J\transpose J)$, with
+    $J\transpose J$ from the linearization at the mode. The decrement is
+    $\tfrac12 g\transpose (J\transpose J)^{-1} g \ge \lVert g \rVert^2 / (2 h_{\max})$, and the
+    largest eigenvalue $h_{\max}$ is at most the trace, so this is what a decrement of $10\, \epsilon$
+    allows. A fixed bound on $\lVert g \rVert$ would depend on the curvature and on the units of
+    the coordinates, as [the stopping rule](math.svx#a-levenberg-marquardt-method) says of a
+    gradient's norm.
+  - the undamped loop of `steps_converge_on_rotations`, run from the same points, reaches a mode
+    whose decrement is also at most $10\, \epsilon$. With $\tangent$ = `Layout::local` of the loop's
+    mode at the method's, $\tfrac12 \lVert J \tangent \rVert^2$, which is `promised(τ, 0)` of the
+    method's linearization, is at most $40\, \epsilon$: each point is within its decrement of the
+    mode in the metric of $J$, and the triangle inequality gives
+    $\tfrac12 \lVert J \tangent \rVert^2 \le 2 (\delta_1 + \delta_2)$.
+
+  Shows the method stops at a stationary point of $f$, log-volumes included, to its tolerance, and
+  at the point Gauss–Newton reaches.
 - `levenberg_marquardt_finds_the_linear_gaussian_mean`: on a linear-Gaussian chain of three
-  scalars, the mode against the closed-form posterior mean to $10^{-10}$. Shows the method is
-  exact where the linearization is.
+  scalars, the row converges, and with $\mu$ and $\Lambda = J\transpose J$ the closed-form
+  posterior mean and precision, $\tfrac12 (x - \mu)\transpose \Lambda (x - \mu) \le 10\,
+  \epsilon$ at the mode $x$. In a linear model that quadratic is exactly $f(x) - f(\mu)$, so the
+  check is the tolerance itself, in nats; computed from $\Lambda$ on the host, it does not rest on
+  the difference of two values of $f$, which rounding would swamp. Shows the method finds the mode
+  where the linearization is exact, to its tolerance.
 - `rows_are_minimized_independently`: a batch of two rows of different starts gives each row the
   mode and the history that the row alone gives, step for step. Shows that rows share passes and
   nothing else: no row's damping, acceptance or stop leaks into another's.
@@ -723,16 +743,20 @@ crate's own models in `tests/common`.
 **`skoro-core`.**
 
 - `local_inverts_retract` (`tests/layout.rs`): on a layout of a real, a vector, a positive vector and
-  the test sphere, `local(retract(at, τ), at)` equals `τ` to rounding, row by row, for a batch of
+  a circle, an embedded type declared in the test file as `tests/embedded.rs` declares its own
+  (the core has no sphere of its own), `local(retract(at, τ), at)` equals `τ` to rounding, row by row, for a batch of
   three; and `local(at, at)` is zero. Shows the stacking and the inputs' order are right on every
   kind of factor, flat, positive and curved.
 - `local_refuses_as_retract_does`: a missing quantity is `MissingValue`, a discrete one
   `NotContinuous`.
-- `generated_values_are_observed_row_by_row` (`tests/generation.rs`): generate four rows of the
-  guide's model, observe `ρ` with `observe_value`, and the query's log-density per row equals the
-  closed form at each row's own `ρ`. Shows the rows are kept apart, not broadcast.
-- `a_discrete_generated_value_is_refused`: `observe_value` of a discrete value is refused with
-  `ValueShape` when the set is used.
+- `generated_values_are_observed_row_by_row` (`crates/skoro/tests/generation.rs`, beside the
+  generation tests and their normal helpers, which the core's own tests do not have): generate
+  four rows of that file's chain of three scalars, observe the two drawn quantities with
+  `observe_value`, and the query's log-density per row equals the closed form at each row's own
+  values. Shows the rows are kept apart, not broadcast.
+- `a_discrete_generated_value_is_refused`: `observe_value` of a discrete value, and of a
+  continuous one of another storage than the quantity's, is refused with `ValueShape` when the set
+  is used.
 
 **`skoro-spatial`, `tests/host.rs`.**
 
@@ -782,4 +806,15 @@ up to about $\sqrt{2 \delta h}$ for a curvature $h$, which in these models is of
 $10^2$, and the last step, damped by $\lambda \approx 10^{-4}$, leaves the point some $10^{-10}$
 from the mode. Run, every row converged without a rejection, with a final decrement near
 $10^{-13}$, a gradient of $4 \times 10^{-6}$ to $8 \times 10^{-6}$ and the linear mean within
-$5 \times 10^{-10}$. The checks are restated in terms the rule bounds.
+$5 \times 10^{-10}$. The checks are restated in terms the rule bounds: on rotations, the gradient
+against $2 \cdot 10\, \epsilon \cdot \operatorname{tr}(J\transpose J)$, which a decrement of
+$10\, \epsilon$ allows, and the Gauss–Newton loop's mode within $40\, \epsilon$ in the metric of
+$J$; in the linear model, the mode's excess of $f$ over the mean's, computed in closed form, at
+most $10\, \epsilon$.
+
+Three tests were described in ways the build could not or did not follow, and are described here
+as built: `the_marquardt_diagonal_is_the_column_norms` uses a problem written by hand, since a unit
+test does not reach the integration tests' models; `local_inverts_retract` uses a circle declared
+in its file, since the core has no test sphere; and `generated_values_are_observed_row_by_row`
+lives in the umbrella crate's generation tests and uses their chain of scalars, since the guide's
+model needs the normal, which the core's tests do not have.
