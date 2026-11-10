@@ -6,7 +6,7 @@ import { defineGraph } from '$lib/graph/spec';
 
 export const retirement = defineGraph({
     title: 'The window at a retirement',
-    caption: String.raw`The factor structure of a window of three poses, $\randomPoint_a$, $\randomPoint_{a+1}$ and $\randomPoint_{a+2}$, with the odometry and the sightings observed. $\randomPoint_a$ retires together with $\bfm_1$, which no other pose of the window sees; the factors joined to them (the earlier replacement $\psi_a$, the motion and odometry terms $t^u_a$ and $t^y_a$, the sightings $t^z_{a1}$ and $t^z_{a2}$ and the prior $t^m_1$ of $\bfm_1$) are integrated, and the replacement they leave is joined to their blanket $\{\randomPoint_{a+1}, \bfm_2\}$. The factors of the later poses stay as they are.`,
+    caption: String.raw`The factor structure of a window of three poses, $\randomPoint_a$, $\randomPoint_{a+1}$ and $\randomPoint_{a+2}$, with the odometry and the sightings observed. $\randomPoint_a$ retires together with $\bfm_1$, which no other pose of the window sees; the factors joined to them (the earlier replacement $\psi_a$, the motion and odometry terms $t^u_a$ and $t^y_a$, the sightings $t^z_{a1}$ and $t^z_{a2}$ and the prior $t^m_1$ of $\bfm_1$) are integrated, and the replacement they leave is joined to their blanket $\{\randomPoint_{a+1}, \bfm_2\}$. The odometry $\otherRandomPoint_a$ and the sightings from $\randomPoint_a$, observed, are not variables of the query and are not drawn; they retire with $\randomPoint_a$ at their observed values. The factors of the later poses stay as they are.`,
     width: 640,
     height: 320,
     nodeKinds: {

@@ -33,8 +33,8 @@ would recognize. This entry works out two such programs, which run as examples o
    smoother, and its newest pose's marginal is a filter's.
 
 Both draw the truth and the measurements from the model itself, so that what an estimate should be
-is known, and they check it: that the estimate is a stationary point, and that its uncertainty is
-calibrated in the sense of [Calibration](#calibration).
+is known, and they check it: that the estimate is a stationary point, and, in the batch, that its
+uncertainty is calibrated in the sense of [Calibration](#calibration).
 
 What has to be worked out is what the linearization entry left to the methods that use it: the
 damping, the schedule and the stopping rule of a Levenberg–Marquardt method
@@ -48,7 +48,7 @@ implementation's question.
 **Poses and landmarks.** A pose is a point of the rigid motions $SE(3)$, stored as a unit quaternion
 and a position and retracted by the left-translated chart of
 [the rotations' entry](../rotations/math.svx#the-rigid-motions): $\point \oplus (\phi, \rho)$ turns
-$\point$ by the Cayley chart of $\phi$ and moves it by $\rho$ along its own axes. The chart is
+$\point$ by the stereographic chart of $\phi$ and moves it by $\rho$ along its own axes. The chart is
 global, so the [normal](../normal/math.svx#the-definition) is defined on it, and $\point \ominus
 \mu$ is its inverse ([the retraction note](../../math/retraction/)). A pose has dimension $6$. A
 landmark is a point $m \in \R^3$. Composition $\point \circ \otherPoint$, the inverse
@@ -82,11 +82,11 @@ depends on:
 
 $$
 	\begin{aligned}
-		\randomPoint_0 &\sim \mathcal N(\bar \point_0, \Sigma_0), &
-		\randomPoint_{k+1} \mid \randomPoint_k &\sim \mathcal N(\randomPoint_k \circ u_k, \Sigma_u), \\
-		\bfm_j &\sim \mathcal N(\bar m_j, \Sigma_m), &
-		\otherRandomPoint_k \mid \randomPoint_k, \randomPoint_{k+1} &\sim \mathcal N(\randomPoint_k^{-1} \circ \randomPoint_{k+1}, \Sigma_y), \\
-		& & \bfz_{kj} \mid \randomPoint_k, \bfm_j &\sim \mathcal N(\randomPoint_k^{-1} \cdot \bfm_j, \Sigma_z), \quad (k, j) \in V .
+		\randomPoint_0 &\sim \mathcal N(\bar \point_0, \Sigma_0) , \\
+		\randomPoint_{k+1} \mid \randomPoint_k &\sim \mathcal N(\randomPoint_k \circ u_k, \Sigma_u) , \\
+		\bfm_j &\sim \mathcal N(\bar m_j, \Sigma_m) , \\
+		\otherRandomPoint_k \mid \randomPoint_k, \randomPoint_{k+1} &\sim \mathcal N(\randomPoint_k^{-1} \circ \randomPoint_{k+1}, \Sigma_y) , \\
+		\bfz_{kj} \mid \randomPoint_k, \bfm_j &\sim \mathcal N(\randomPoint_k^{-1} \cdot \bfm_j, \Sigma_z) , \quad (k, j) \in V .
 	\end{aligned} @tag(model)
 $$
 
@@ -105,8 +105,12 @@ $$
 	f(\point, m) = \tfrac12 \lVert r_0 \rVert^2 + \sum_k \bigl( \tfrac12 \lVert r^u_k \rVert^2 + \tfrac12 \lVert r^y_k \rVert^2 \bigr) + \sum_j \tfrac12 \lVert r^m_j \rVert^2 + \sum_{(k,j) \in V} \tfrac12 \lVert r^z_{kj} \rVert^2 + \sum_t \lambda_t + \text{const} , @tag(objective)
 $$
 
-with whitened residuals such as $r^y_k = W_y \bigl( y_k \ominus (\point_k^{-1} \circ \point_{k+1})
-\bigr)$ and $r^z_{kj} = W_z (z_{kj} - \point_k^{-1} \cdot m_j)$, and the log-volumes $\lambda_t$ of
+with the whitened residuals of [](eq:archive/normal/math/term), each the whitening of its term
+applied to the scored quantity less its mean in the mean's chart: $r_0 = W_0 (\point_0 \ominus
+\bar \point_0)$ for the first pose, and likewise $r^u_k$, $r^m_j$, $r^y_k = W_y \bigl( y_k \ominus
+(\point_k^{-1} \circ \point_{k+1}) \bigr)$ for the odometry and $r^z_{kj} = W_z (z_{kj} -
+\point_k^{-1} \cdot m_j)$ for a sighting, with $W_0 \transpose W_0 = \Sigma_0^{-1}$ and so on; and the
+log-volumes $\lambda_t$ of
 the terms on $SE(3)$, which the linearization [folds](../linearization/math.svx#linearizing-a-query)
 into the right-hand sides. Every term is a normal with a fixed scale, so every term binds a residual
 and no linear term arises: each step of the method below is a least-squares solution.
@@ -171,12 +175,12 @@ is one where the linearization is exact, and falls as it stops being trustworthy
 length. Here $f$ is the query's own negative log-density, log-volumes included, evaluated by one
 pass of the query's program at the trial point; the linearization's constant is not needed.
 
-**The schedule.** The schedule is Nielsen's, with $\lambda_0 = 10^{-3}$ and $\nu = 2$:
+**The schedule.** The schedule is Nielsen's, with $\lambda_0 = 10^{-3}$ and $\beta = 2$:
 
 $$
 	\begin{gathered}
-		\varrho_\lambda > 0 : \quad \hat \point \leftarrow \hat \point \oplus \tangent, \quad \lambda \leftarrow \lambda \max\bigl(\tfrac13,\ 1 - (2 \varrho_\lambda - 1)^3\bigr), \quad \nu \leftarrow 2 , \\
-		\varrho_\lambda \le 0 : \quad \lambda \leftarrow \nu \lambda, \quad \nu \leftarrow 2 \nu .
+		\varrho_\lambda > 0 : \quad \hat \point \leftarrow \hat \point \oplus \tangent, \quad \lambda \leftarrow \lambda \max\bigl(\tfrac13,\ 1 - (2 \varrho_\lambda - 1)^3\bigr), \quad \beta \leftarrow 2 , \\
+		\varrho_\lambda \le 0 : \quad \lambda \leftarrow \beta \lambda, \quad \beta \leftarrow 2 \beta .
 	\end{gathered} @tag(schedule)
 $$
 
@@ -214,7 +218,7 @@ rows have full rank and $\tangent_0 = 0$ exactly where $g = 0$
 
 At the mode $\hat \point$, $\hat m$, the [Laplace approximation](../linearization/math.svx#the-laplace-approximation)
 replaces the posterior by the law of $(\hat \point, \hat m) \oplus \tangent$, with $\tangent$ normal
-of mean zero and precision $J\transpose J$ from the chart linearization. On $SE(3)$ the Cayley
+of mean zero and precision $J\transpose J$ from the chart linearization. On $SE(3)$ the stereographic
 chart's log-volume is even, so its gradient at zero vanishes and the approximation is centred at the
 mode itself. Its marginal on one quantity $q$, a pose or a landmark, is a normal in the chart at
 $\hat q$ with a whitening $W_q$, which elimination gives without forming the covariance
@@ -257,25 +261,58 @@ rather than $\alpha$, with $e(z)$ the approximation's error on that set, so over
 contains the truth with probability $\alpha + \E[e(\bfz)]$. The check estimates that probability
 and compares it with $\alpha$.
 
+**The expected error.** The Laplace approximation is not exact here, so $\E[e(\bfz)]$ is not zero,
+and a check against $\alpha$ alone would pass or fail according to how many datasets it is given:
+with enough of them, any error at all is resolved. What the error should be is known to its order.
+The approximation's precision omits the residuals' curvature and the log-volumes', each of a
+relative size of the order of the noise's variance in the curved coordinates
+([what the covariance leaves out](../linearization/math.svx#what-the-covariance-leaves-out)); on the
+rotations the log-volume's part is $\tfrac38 \sigma_\phi^2$
+([the normal on these types](../rotations/math.svx#the-normal-on-these-types)), with $\sigma_\phi$
+the rotational standard deviation. Write $\bar\kappa = \sigma_\phi^2$ for that order, with
+$\sigma_\phi$ the largest rotational standard deviation of the posterior marginals. If the exact
+posterior's covariance is the approximation's times $1 + \kappa$, then $\varepsilon_q$ is
+$1 + \kappa$ times a chi-squared variable, and the ellipsoid holds
+
+$$
+	\Pr\bigl( \chi^2_{d} \le \chi^2_{d}(\alpha) / (1 + \kappa) \bigr)
+	= \alpha - \kappa\, \chi^2_{d}(\alpha)\, f_{d}\bigl(\chi^2_{d}(\alpha)\bigr) + O(\kappa^2) , @tag(coverage-error)
+$$
+
+with $f_d$ the chi-squared density. At $\alpha = 0.9$ the slope $\chi^2_d(\alpha) f_d(\chi^2_d(\alpha))$
+is $0.37$ for $d = 6$ and $0.27$ for $d = 3$, so the expected error is within
+$\delta_d = 0.37\, \bar\kappa$ for a pose and $0.27\, \bar\kappa$ for a landmark. An error that is
+not a multiple of the covariance lies between the extremes of its eigenvalues, and is bounded the
+same way.
+
 **The check.** Take $\alpha = 0.9$. In row $r$ of a batch of $N$ datasets, let $c_r$ be the
-fraction of the row's poses whose normalized error is at most $\chi^2_6(\alpha)$. By
+fraction of the row's $K + 1$ poses whose normalized error is at most $\chi^2_6(\alpha)$. By
 [%full](statement:calibration) and linearity of expectation, $\E[c_r] = \alpha + \bar e$, with
 $\bar e$ the mean error over the row's poses, whether or not the poses' errors are dependent
 within a row, which they are. The rows are independent, so the mean $\bar c$ of the $c_r$ has a
-standard error estimated by $s / \sqrt N$, with $s$ the sample standard deviation of the $c_r$.
-The example passes when
+standard error estimated by $s_* / \sqrt N$, with $s_* = \max\bigl(s, 1 / (K + 1)\bigr)$ and $s$
+the sample standard deviation of the $c_r$: the floor is the resolution of one $c_r$, and keeps the
+tolerance from collapsing when every row happens to give the same fraction. The example passes when
 
 $$
-	\lvert \bar c - \alpha \rvert \le 4\, s / \sqrt N , @tag(check)
+	\lvert \bar c - \alpha \rvert \le 4\, s_* / \sqrt N + \delta_6 , @tag(check)
 $$
 
-and likewise for the landmarks with $\chi^2_3(\alpha)$. Under exact calibration the check fails
-with probability about $6 \times 10^{-5}$, by the normal approximation to the mean of $N$
-independent rows. It detects a calibration error $\lvert \bar e \rvert$ only above its own
-resolution $4 s / \sqrt N$, which falls as $N^{-1/2}$; an error below it is not seen, and the check
-says nothing about it. With the noise small against the scale on which the maps curve, $\bar e$ is
-small and the check is expected to pass. The tolerance is fixed by the statistics before the
-example runs, not tuned to its result, and the seed makes each run of the example the same run.
+and likewise for the landmarks, with $\chi^2_3(\alpha)$, $J$ in place of $K + 1$, and $\delta_3$.
+
+The two parts of the tolerance answer different things. The first is sampling: with $N \ge 100$,
+enough for the normal approximation to the mean of independent rows, an approximation that erred
+by exactly $\delta$ would fail with probability about $6 \times 10^{-5}$. The second is the
+approximation's own expected error, which is known only to its order. So that the verdict does not
+hinge on that order's constant, the scenario's scales are chosen to make it small against the
+first: $\sigma_\phi \le 0.05$ rad gives $\bar\kappa \le 2.5 \times 10^{-3}$ and
+$\delta_6 \le 10^{-3}$, a tenth or less of the sampling part when the rows' fractions spread by a
+few hundredths, as fractions over a hundred correlated poses do. The check
+then tests the method, not the approximation. It cannot resolve a calibration error below its
+tolerance, and says nothing about one; it does resolve the errors a mistake would make, such as a
+covariance off by a tenth, which by [](eq:coverage-error) moves the coverage by $0.04$. The
+tolerance is fixed by these figures before the example runs, not tuned to its result, and the seed
+makes each run of the example the same run.
 
 Two other things are *reported* rather than checked: each row's iterations, $f$, $\lambda$ and the
 decrement per step, and the start's normalized errors beside the mode's, which show what the
@@ -307,12 +344,17 @@ that loop needs the batch.
 3. **Report.** Record the mode of $\randomPoint_k$ and its Laplace marginal: the window's estimate
    of the filtering law of $\randomPoint_k$ given the measurements up to tick $k$.
 4. **Retire.** If the window holds more than $w$ poses, retire the oldest, $\randomPoint_a$ with
-   $a = k - w$, together with every landmark that no other pose of the window sees. The
-   [retirement](../core/math.svx#retirement) integrates these quantities out of the terms joined to
-   them, among them the replacement left by the previous retirement, which was joined to
-   $\randomPoint_a$, and replaces those terms by one factor over their Markov blanket: the next pose
-   $\randomPoint_{a+1}$ and the landmarks joined to the retired terms that a pose of the window
-   still sees.
+   $a = k - w$, together with every landmark that no other pose of the window sees, and with the
+   measurements taken from $\randomPoint_a$: the odometry $\otherRandomPoint_a$ and the sightings
+   $\bfz_{aj}$. In the terms of [the core's retirement](../core/math.svx#retirement), the pose and
+   the landmarks are $E_F$, integrated out, and the measurements are $E_O$, fixed at their observed
+   values, which the retirement is given. Every term joined to them is replaced: the motion and
+   odometry terms between $\randomPoint_a$ and $\randomPoint_{a+1}$, the sightings from
+   $\randomPoint_a$, the retired landmarks' priors, and the replacement left by the previous
+   retirement, which was joined to $\randomPoint_a$. What replaces them is one factor over their
+   Markov blanket [](eq:archive/core/math/blanket): the next pose $\randomPoint_{a+1}$ and the
+   landmarks joined to the retired terms that a pose of the window still sees. No measurement is
+   in the blanket, since each is scored by one term and retires with it.
 
 <ModelGraph spec={retirement} />
 
@@ -325,6 +367,12 @@ from $\randomPoint_a$, and each landmark of the blanket through a sighting from 
 has three components. So the replacement is a proper Gaussian, as in a filter, and the retired
 quantities are determined in turn, $\randomPoint_a$ by the previous replacement (or, at the first
 retirement, its prior) and each retired landmark by its prior and its sightings.
+
+The motion term $t^u_a$ scores $\randomPoint_{a+1}$, which stays, and the retirement removes it all
+the same: it is joined to $\randomPoint_a$, and the replacement stands in for it. The window model is
+then left with no term that generates $\randomPoint_{a+1}$, which the core allows, a blanket
+quantity left unscored taking a proposal if the model is to generate it. The window never generates:
+its truth comes from the model of the whole path, and the window only queries.
 
 **The point of linearization.** Each replacement is linearized once, at the window's mode just
 computed in step 2, restricted to the retired quantities and the blanket. That mode uses every
@@ -348,7 +396,7 @@ the window overconfident. First-estimate linearization of every term joined to a
 usual remedy and costs accuracy elsewhere; this entry linearizes at the window's mode and measures
 what that gives.
 
-**What is measured.** The calibration of the filtering marginals, by the check of [](eq:check) over
+**What is measured.** The calibration of the filtering marginals, the $\bar c$ of [](eq:check) over
 the ticks of each row, and the gap between the window and the batch at the last tick, where both
 estimate the last pose from every measurement: the batch's mode $\hat \point_K$ on the same path and
 data, and the window's $\tilde \point_K$, compared in the batch marginal's whitening,
@@ -357,11 +405,16 @@ and otherwise says how far, in standard deviations, the window's approximations 
 
 > [!TODO] Checked or reported
 > Is the window's calibration *checked*, failing the example as the batch's does, or *reported*
-> beside the gap to the batch? Checking it is the stronger claim, and if it fails, the finding is
-> the linearization point of the replacements, which a later entry on first-estimate linearization
-> would take up. Reporting it keeps the example from asserting what the mathematics does not
-> guarantee. This draft proposes checking it, with the tolerance of [](eq:check), and reporting the
-> gap.
+> beside the gap to the batch? The batch's tolerance [](eq:check) has two parts, sampling and the
+> Laplace approximation's expected error $\delta$, and the second is known to its order. The window
+> adds a third error, from replacements linearized at anchors the blanket later leaves, whose size
+> nothing above predicts: it depends on how far the blanket moves, and on the information the
+> replacements claim in the directions only $\Sigma_0$ holds. Checking the window with the batch's
+> tolerance asserts that this error is below it, which is the stronger claim; if it fails, the
+> finding is the linearization point of the replacements, which a later entry on first-estimate
+> linearization would take up. Reporting it keeps the example from asserting what the mathematics
+> does not guarantee. This draft proposes reporting the window's calibration and its gap to the
+> batch, and checking only that each tick's solve is stationary.
 
 ## In skoro's terms
 
@@ -384,14 +437,15 @@ respect to a constant, and nothing to second order.
 
 **The window.** The window is a second model built tick by tick by appending, which observes the
 generated measurements as they arrive. Each retirement removes a pose and some landmarks, with the
-terms joined to them, from that model, and adds the replacement the linearization computes; the
+measurements taken from the pose, given to it at their observed values row by row, and the terms
+joined to them, from that model, and adds the replacement the linearization computes; the
 query of the next tick reads the replacement as it reads any term, through its bound residual. The
 batch on the same path, used for the gap at the last tick, is a query of the generating model
 itself.
 
 **Precision and the host.** The passes run on the query's target in double precision; every
 elimination runs on the host, as the linearization entry has it. The method's state, the point,
-$\lambda$ and $\nu$ of each row, is on the host between iterations, and only the point goes back to
+$\lambda$ and $\beta$ of each row, is on the host between iterations, and only the point goes back to
 the target.
 
 ## Open questions
