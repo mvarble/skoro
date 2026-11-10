@@ -67,4 +67,16 @@ impl Matrix {
     pub(crate) fn set(&mut self, row: usize, column: usize, value: f64) {
         self.data[row * self.columns + column] = value;
     }
+
+    pub(crate) fn from_faer(m: faer::MatRef<'_, f64>) -> Matrix {
+        let (rows, columns) = (m.nrows(), m.ncols());
+        let data = (0..rows)
+            .flat_map(|i| (0..columns).map(move |j| m[(i, j)]))
+            .collect();
+        Matrix {
+            rows,
+            columns,
+            data,
+        }
+    }
 }

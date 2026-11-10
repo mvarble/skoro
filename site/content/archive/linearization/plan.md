@@ -27,7 +27,7 @@ depends_on: [archive/linearization/implementation]
 - [x] The schedule: COLAMD on the block pattern, `Schedule::{all, keeping, eliminating,
       in_order}`, the elimination tree and the junction tree of its cliques. Tests:
       `the_star_eliminates_its_leaves_first`, `the_map_has_three_cliques`.
-- [ ] The numeric elimination, `Problem::eliminate`, with the pushes of the linear terms, the
+- [x] The numeric elimination, `Problem::eliminate`, with the pushes of the linear terms, the
       positive diagonal and the constants, and `Elimination::{minimizer, minimum}`. Tests:
       `triangular_root_of_the_example`, `the_ill_conditioned_example_keeps_its_digits`,
       `eliminating_one_block_is_the_lemma`, `two_scalars`,
