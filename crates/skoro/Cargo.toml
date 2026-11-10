@@ -17,6 +17,18 @@ skoro-core.workspace = true
 
 [dev-dependencies]
 skoro-normal.workspace = true
+skoro-spatial.workspace = true
+skoro-linearize.workspace = true
+skoro-elimination.workspace = true
+faer.workspace = true
+
+[[example]]
+name = "pose_graph"
+test = true
+
+[[example]]
+name = "sliding_window"
+test = true
 
 [lints]
 workspace = true
