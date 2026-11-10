@@ -49,18 +49,26 @@
             <a href={poseGraph.href}>Read the example →</a>
         </p>
         <div class="showcase-pair">
-            <a href={poseGraph.href}>
+            <div>
                 <ExampleFigure
                     name="calibration"
                     alt="Histograms of the normalized errors of 7,300 poses and 2,400 landmarks lying on the chi-squared densities they follow when the marginals are calibrated."
                 />
-            </a>
-            <a href={slidingWindow.href}>
+                <p class="showcase-link">
+                    <a href="{poseGraph.href}#are-the-uncertainties-honest"
+                        >Are the uncertainties honest? →</a
+                    >
+                </p>
+            </div>
+            <div>
                 <ExampleFigure
                     name="sliding-window"
                     alt="A sliding window over an open path of 80 poses: dead reckoning drifts by 3 m, while the window's filtered estimates and the batch stay within about a metre of the truth."
                 />
-            </a>
+                <p class="showcase-link">
+                    <a href={slidingWindow.href}>A sliding window, retiring as it goes →</a>
+                </p>
+            </div>
         </div>
     </section>
 {/if}
