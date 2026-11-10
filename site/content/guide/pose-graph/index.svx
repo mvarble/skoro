@@ -93,9 +93,67 @@ stationary point of its density:
 {../../../../crates/skoro/examples/pose_graph.rs:60..74}
 ```
 
-Every row converges, in eight or nine iterations. A row's last step often promises less than the
-rounding of its density, a few thousand nats here, and the method stops on that promise rather than
-waiting for a gain it cannot measure.
+Every row converges, in eight or nine iterations. The two checks the code makes, `converged` and
+`stationary`, test different things, and the rest of this section says what.
+
+### What a step promises
+
+Write $f$ for the negative log-density of a row's query, and $\hat \point$ for the row's current
+point. Linearized there, in the chart at $\hat \point$, it is a least-squares problem in the
+tangent step $\tangent$:
+
+$$
+	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + \tfrac12 \lVert J \tangent + r \rVert^2 - \tfrac12 \lVert r \rVert^2 ,
+$$
+
+with $r$ the stacked whitened residuals of every term and $J$ their Jacobian, the matrix drawn
+above; the log-volumes of the terms on $SE(3)$ are folded into $r$, so that $m$ agrees with $f$ to
+first order. Its gradient at $\tangent = 0$ is the gradient of $f$ in the chart,
+$g = J\transpose r$. A Levenberg–Marquardt step minimizes $m$ with a penalty on its length,
+$\tfrac12 \lambda\, \tangent\transpose D \tangent$, with $D$ Marquardt's diagonal
+[](eq:archive/examples/math/marquardt), so that
+$(J\transpose J + \lambda D)\, \tangent = -g$, and the decrease of $m$ it promises is
+
+$$
+	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent ,
+$$
+
+which is `Problem::promised`. It is measured in nats, like $f$, and it does not depend on how the
+chart's coordinates are scaled, where the norm of $g$ or of $\tangent$ would.
+
+### When a row stops
+
+The step is taken if $f$ actually decreased, if the gain
+[](eq:archive/examples/math/gain), the decrease obtained over $\Delta(\tangent)$, is positive, and
+$\lambda$ is updated from the gain by Nielsen's schedule [](eq:archive/examples/math/schedule). The
+row stops, `Status::Converged`, at the first step that promises $\Delta(\tangent) \le \epsilon$,
+with $\epsilon = 10^{-9}$ nats, whether that step was taken or not. Near the mode a step promises
+little more than the rounding of $f$, $u \lvert f \rvert \approx 4 \times 10^{-13}$ nats with
+$\lvert f \rvert \approx 3700$ here and $u$ the unit roundoff of double precision, and the gain of
+such a step is rounding of either sign: the last step of the first row promises
+$1.7 \times 10^{-12}$ nats, and its gain is $-0.27$. Waiting for an acceptance would raise
+$\lambda$ until the row was reported as failing when it had converged. A row whose $\lambda$
+passes $10^{10}$, or whose iterations pass a hundred, ends with another status, and `converged`
+fails the example on it.
+
+### Why the point is stationary
+
+A small promise bounds the distance to the mode only while $\lambda$ is small: with
+$\lambda$ large, $\Delta$ is small because the damping shortened the step, not because there is
+nowhere to go. So stationarity is checked apart from the stop, at the final point and with no
+damping. With $\lambda = 0$ the step is Gauss–Newton's, $\tangent_0 = -(J\transpose J)^{-1} g$,
+and its promise, the **decrement**, is
+
+$$
+	\delta = \tfrac12 \lVert J \tangent_0 \rVert^2 = \tfrac12\, g\transpose (J\transpose J)^{-1} g \ \ge\ \frac{\lVert g \rVert^2}{2\, h_{\max}} ,
+$$
+
+with $h_{\max}$ the largest eigenvalue of $J\transpose J$. Every pose has a prior or a motion term
+and every landmark a prior, so $J$ has full rank, $J\transpose J$ is invertible, and $\delta$ is
+zero exactly where $g$ is: where the point is stationary for $f$, log-volumes included. `decrement`
+computes it for every row, and `stationary` fails the example unless every row's is at most
+$10\, \epsilon$. It is the decrease of $f$ a full Gauss–Newton step would still give, in nats, so
+the check says that no step left could gain more than $10^{-8}$ nats.
 
 ## Are the uncertainties honest?
 

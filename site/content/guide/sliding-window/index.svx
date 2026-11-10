@@ -46,7 +46,8 @@ come back.
 
 ## What is reported
 
-Every tick of every row is checked to have stopped at a stationary point. Two figures are reported
+Every tick of every row is checked to have stopped at a stationary point, by its
+[decrement](../pose-graph/#why-the-point-is-stationary), as the batch is. Two figures are reported
 and not checked: how often the truth falls in the window's 90% ellipsoid, beside the batch's
 tolerance, and how far the window's last pose is from the batch's, in the batch's standard
 deviations. Each replacement is linearized at points the window later moves away from, and the
