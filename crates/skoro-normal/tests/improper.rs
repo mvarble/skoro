@@ -572,3 +572,56 @@ fn no_blocks_is_refused() {
     assert_eq!(failure.location.line(), line);
     let _ = Target::host(); // shared with the tests at both precisions
 }
+
+skoro_core::precision_tests! {
+    fn block_in_is_block(target) {
+        // The same factor over blocks stacked by marker and by space, shared and per-row anchors.
+        let (a, b, eta, c): (&[&[f64]], [f64; 2], [f64; 3], f64) =
+            (&[&[1.0, 0.5, -0.3], &[0.0, 2.0, 0.7]], [0.2, -0.4], [0.3, 0.0, -0.6], 0.25);
+        let (p, q) = ([0.4, -0.1], 1.3);
+        let build = |stacked: Stacked| {
+            stacked
+                .improper(2, by_columns(a).as_slice(), b.as_slice(), c)
+                .linear(eta.as_slice())
+        };
+        let typed = over_vector_and_positive(build, p, q, &XS, &YS, &target);
+        let shared = |data: &[f64]| HostValue::new(None, data.len(), HostData::Continuous(data.to_vec())).unwrap();
+        let per_row = |data: &[f64], storage: usize| {
+            let rows = data.len() / storage;
+            HostValue::new(Some(rows), storage, HostData::Continuous(data.to_vec())).unwrap()
+        };
+        for anchors in [
+            (shared(&p), shared(&[q])),
+            (per_row(&[p, p, p].concat(), 2), per_row(&[q, q, q], 1)),
+        ] {
+            let mut writer = Writer::new();
+            let (x, y, log_density) = writer
+                .build(|| {
+                    let x = quantity("x", Vector::<2>);
+                    let y = quantity("y", Positive::<1>);
+                    let stacked = Stacked::new()
+                        .block_in(x.untyped(), &skoro_core::Space::Vector(2), anchors.0.clone())
+                        .block_in(y.untyped(), &skoro_core::Space::Positive(1), anchors.1.clone());
+                    (x, y, build(stacked).log_density())
+                })
+                .unwrap();
+            let given = Observations::new()
+                .observe(x, Rows(XS.to_vec()))
+                .observe(y, Rows(YS.to_vec()));
+            let dynamic =
+                evaluate(&writer.snapshot(), &[log_density.untyped()], given, &target).remove(0);
+            close(&dynamic, &typed, tolerance(&target));
+        }
+        // An anchor that does not fit its space.
+        let mut writer = Writer::new();
+        let failure = writer
+            .build(|| {
+                let x = quantity("x", Vector::<2>);
+                Stacked::new()
+                    .block_in(x.untyped(), &skoro_core::Space::Vector(2), shared(&[1.0, 2.0, 3.0]))
+                    .tangent()
+            })
+            .unwrap_err();
+        assert!(matches!(failure.error, Error::ValueShape { .. }));
+    }
+}
