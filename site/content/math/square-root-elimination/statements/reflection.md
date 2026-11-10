@@ -4,7 +4,7 @@ kind: lemma
 title: Householder reflections
 ---
 
-For a nonzero $w \in \R^p$, the *Householder reflection*
+For a nonzero $w \in \R^p$, the _Householder reflection_
 
 $$
 	H_w = I - \frac{2\, w w\transpose}{\lVert w \rVert^2}
