@@ -9,7 +9,7 @@ depends_on: [archive/linearization/implementation]
 - [x] Add `Observations::union`, keeping this set's value where both observe a quantity. Tests:
       none named for it; the replacement's tasks below exercise it.
 - [x] Make `roots` public as `Snapshot::reached_from`. Tests: `reached_from_is_what_a_term_involves`.
-- [ ] Add `Composite::reads` and `Space::volume_reads_point`. Tests: `composites_read_their_inputs`,
+- [x] Add `Composite::reads` and `Space::volume_reads_point`. Tests: `composites_read_their_inputs`,
       `volume_reads_point_by_space`.
 - [ ] Add `scope::constant_in`. Tests: `constant_in_is_constant`.
 

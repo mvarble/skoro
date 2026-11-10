@@ -76,6 +76,32 @@ impl Space {
         }
     }
 
+    /// Whether `λ_x(t)` depends on the point `x`: false on the Euclidean spaces, whose log-volume
+    /// is zero, true on `Positive`, the factors' on a product (true if any factor's is), and on
+    /// an embedded type whether its declared `Λ` reads its first input (`NotContinuous` for a
+    /// discrete space, `NoVolume` for one without a measure).
+    pub fn volume_reads_point(&self) -> Result<bool, Error> {
+        self.measured()?;
+        Ok(match self {
+            Space::Real | Space::Vector(_) | Space::Matrix(..) => false,
+            Space::Positive(_) => true,
+            Space::Product(factors) => {
+                let mut reads = false;
+                for factor in factors.iter() {
+                    reads |= factor.volume_reads_point()?;
+                }
+                reads
+            }
+            Space::Embedded(declaration) => match declaration.volume() {
+                Some(volume) => volume.log_volume().reads(0),
+                None => unreachable!("measured() refuses a type without a volume"),
+            },
+            Space::Categorical(_) | Space::Integer => {
+                unreachable!("measured() refuses a discrete space")
+            }
+        })
+    }
+
     /// Whether the space has a reference measure: false only for an embedded type that declares
     /// no volume, and for a product with such a factor. A discrete space has counting measure.
     pub fn has_measure(&self) -> bool {
