@@ -195,3 +195,74 @@ fn an_undetermined_quantity_is_refused() {
         .unwrap_err();
     assert_eq!(error, Error::Undetermined { quantity: second });
 }
+
+/// A flat type of storage and dimension 2 declared without a volume: `x ⊕ t = x + t`.
+fn unmeasured() -> std::sync::Arc<skoro_core::Embedded> {
+    use skoro_core::{Composite, Embedded, Space};
+    let v = Space::Vector(2);
+    let r = Composite::define(
+        "test.unmeasured.retract",
+        Vec::new(),
+        &[v.clone(), v.clone()],
+        |q| q[0] + q[1],
+    )
+    .unwrap();
+    let q = Composite::define("test.unmeasured.local", Vec::new(), &[v.clone(), v], |q| {
+        q[1] - q[0]
+    })
+    .unwrap();
+    Embedded::declare("test.unmeasured", Vec::new(), 2, 2, r, q, None).unwrap()
+}
+
+#[test]
+fn an_integral_without_a_volume_is_refused() {
+    use skoro_core::{
+        Space, Values,
+        scope::{constant_in, quantity_in},
+    };
+    let target = Target::host();
+    let space = Space::Embedded(unmeasured());
+    let mut writer = Writer::new();
+    let x = writer
+        .build(|| {
+            let x = quantity_in("x", space.clone());
+            let z = constant_in(
+                space.clone(),
+                skoro_tensor::HostValue::new(
+                    None,
+                    2,
+                    skoro_tensor::HostData::Continuous(vec![0.3, 0.1]),
+                )
+                .unwrap(),
+            );
+            Normal::in_space(space.clone(), x, Scale::sd(1.0)).factor_at(z);
+            x
+        })
+        .unwrap();
+    let linearizer = Linearizer::new(
+        &writer.snapshot(),
+        &Query::log_density(),
+        &target,
+        Assembly::Residual,
+    )
+    .unwrap();
+    let point = Values::new().with(
+        x,
+        skoro_tensor::Value::Continuous(skoro_tensor::Points::from_host(
+            &[0.0, 0.0],
+            1,
+            2,
+            &target,
+        )),
+    );
+    // A step is fine; an integral over x is not.
+    assert!(linearizer.at(&point).is_ok());
+    let error = linearizer.at_in_chart(&point, &[x.id()]).unwrap_err();
+    assert_eq!(
+        error,
+        Error::Core(CoreError::NoVolume {
+            space,
+            quantity: Some(x.id())
+        })
+    );
+}

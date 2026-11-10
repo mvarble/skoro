@@ -254,6 +254,109 @@ impl Linearizer {
         Ok(folds)
     }
 
+    /// The chart linearization at `point` over `quantities`, each of whose spaces must have a
+    /// volume (`NoVolume`): the linear term less `∇λ_p̂(0)` and the constant less `λ_p̂(0)`
+    /// (`NotAnIntegral` of the Fisher assembly, `NotFree` for a quantity that is not free).
+    /// Whether the linear term is then present is decided by the types: it is, if it was, or if a
+    /// quantity's chart volume reads its point, or has a gradient at zero, a constant of its type
+    /// when it does not read the point, that is not zero.
+    pub fn at_in_chart(&self, point: &Values, quantities: &[NodeId]) -> Result<Linearized, Error> {
+        if self.assembly == Assembly::Fisher {
+            return Err(Error::NotAnIntegral);
+        }
+        let layout = self.layout();
+        let mut blocks = Vec::with_capacity(quantities.len());
+        for &q in quantities {
+            let k = layout
+                .quantities()
+                .iter()
+                .position(|&p| p == q)
+                .ok_or(Error::NotFree { quantity: q })?;
+            let space = self
+                .snapshot
+                .space(q)
+                .cloned()
+                .ok_or(Error::NotFree { quantity: q })?;
+            if !space.has_measure() {
+                return Err(Error::Core(skoro_core::Error::NoVolume {
+                    space,
+                    quantity: Some(q),
+                }));
+            }
+            blocks.push((q, k, space));
+        }
+        let mut linearized = self.at(point)?;
+        let rows = linearized.problems.len();
+        let host_target = Target::host();
+        // Each quantity's `λ_p̂(0)` and `∇λ_p̂(0)`, row by row.
+        let mut charts = Vec::with_capacity(blocks.len());
+        let mut present = linearized
+            .problems
+            .first()
+            .is_some_and(|p| p.linear().is_some());
+        for (q, k, space) in &blocks {
+            let program = space.log_volume()?.compile(&host_target)?;
+            let free = program.free();
+            let (Some(at), Some(tangent)) = (free.first(), free.get(1)) else {
+                continue;
+            };
+            let d = self.structure.blocks()[*k];
+            let values = host(point, *q)?;
+            let inputs = Values::new()
+                .with(
+                    at.node,
+                    Value::Continuous(Points::from_host(
+                        &values,
+                        rows,
+                        space.storage(),
+                        &host_target,
+                    )),
+                )
+                .with(
+                    tangent.node,
+                    Value::Continuous(Points::from_host(
+                        &vec![0.0; rows * d],
+                        rows,
+                        d,
+                        &host_target,
+                    )),
+                );
+            let (out, gradients) = program.gradient(&inputs)?;
+            let value = host(&out, program.targets()[0])?;
+            let gradient = frame(&gradients, tangent.node)?;
+            // A volume that does not read its point has the same gradient at zero everywhere: a
+            // constant of the type, read off the first row.
+            let constant_zero = gradient.iter().take(d).all(|&g| g == 0.0);
+            present |= space.volume_reads_point()? || !constant_zero;
+            charts.push((*k, value, gradient));
+        }
+        for (row, problem) in linearized.problems.iter_mut().enumerate() {
+            let mut linear = problem.linear().map(<[f64]>::to_vec);
+            if present && linear.is_none() {
+                linear = Some(vec![0.0; self.structure.dimension()]);
+            }
+            let mut constant = problem.constant();
+            for (k, value, gradient) in &charts {
+                constant -= value[row];
+                if let Some(eta) = &mut linear {
+                    let range = self.structure.range(*k);
+                    let d = range.len();
+                    for (e, g) in eta[range].iter_mut().zip(&gradient[row * d..(row + 1) * d]) {
+                        *e -= g;
+                    }
+                }
+            }
+            *problem = Problem::new(
+                problem.structure().clone(),
+                problem.factors().to_vec(),
+                linear,
+                constant,
+                problem.roundoff(),
+            )?;
+        }
+        Ok(linearized)
+    }
+
     /// The quantities of a curved type among the free ones.
     pub(crate) fn curved_quantities(&self) -> Vec<NodeId> {
         self.layout()

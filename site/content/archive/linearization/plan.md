@@ -61,7 +61,7 @@ depends_on: [archive/linearization/implementation]
       `INFORMATION_ROOT`, and `ĉ_t` from the space's log-volume on the host. Tests:
       `the_linearization_agrees_with_the_query`, `folded_log_volumes_are_in_the_right_hand_sides`,
       `steps_converge_on_rotations`.
-- [ ] `Linearizer::{at_in_chart, schedule_keeping}`, `Solved::{marginal, log_integral, draw}` and
+- [x] `Linearizer::{at_in_chart, schedule_keeping}`, `Solved::{marginal, log_integral, draw}` and
       `QuantityMarginal`. Tests: `the_laplace_approximation_is_centred_in_the_chart`,
       `draws_have_the_marginal_covariance`, `marginals_name_their_curved_quantities`,
       `an_integral_without_a_volume_is_refused`.

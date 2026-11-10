@@ -9,7 +9,7 @@ use common::{
     tolerance,
 };
 use skoro_core::scope::{constant, quantity};
-use skoro_core::{Matrix, Observations, Positive, Query, Real, Values, Vector, Writer};
+use skoro_core::{Key, Matrix, Observations, Positive, Query, Real, Values, Vector, Writer};
 use skoro_elimination::{Damping, Problem, Schedule};
 use skoro_linearize::{Assembly, Linearizer};
 use skoro_normal::{Normal, Scale, roles};
@@ -559,4 +559,211 @@ fn steps_converge_on_rotations() {
         let norm = g.iter().map(|g| g * g).sum::<f64>().sqrt();
         assert!(norm < 1e-9, "|g| = {norm}");
     }
+}
+
+/// `log 𝒩(x; m, s²)`.
+fn log_normal(x: f64, m: f64, s: f64) -> f64 {
+    -0.5 * ((x - m) / s).powi(2) - s.ln() - 0.5 * (2.0 * std::f64::consts::PI).ln()
+}
+
+#[test]
+fn the_laplace_approximation_is_centred_in_the_chart() {
+    let target = Target::host();
+    // A quantity scored by a log-normal of median μ: the chart linearization at μ has a zero
+    // minimizer and the variance of the logarithm.
+    let (mu, sigma) = (1.7, 0.35);
+    let mut writer = Writer::new();
+    let p = writer
+        .build(|| {
+            let p = quantity("p", Positive::<1>);
+            Normal::on(
+                Positive::<1>,
+                constant(Positive::<1>, [mu]),
+                Scale::sd(sigma),
+            )
+            .score(p);
+            p
+        })
+        .unwrap();
+    let query = Query::log_density();
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let point = Values::new().with(p, points(&[mu], 1, 1, &target));
+    let chart = linearizer.at_in_chart(&point, &[p.id()]).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let solved = chart.eliminate(&schedule, None).unwrap();
+    close(
+        &solved.eliminations()[0].minimizer().unwrap(),
+        &[0.0],
+        1e-14,
+        "centred at the median",
+    );
+    let keeping = linearizer.schedule_keeping(&[p.id()]).unwrap();
+    let marginal = &chart.eliminate(&keeping, None).unwrap().marginal().unwrap()[0];
+    close(
+        marginal.marginal.covariance().data(),
+        &[sigma * sigma],
+        1e-12,
+        "the variance of log p",
+    );
+    // The evidence of a linear-Gaussian model of positives: p ~ LN(μ₀, s²), w ~ LN(p, r²) with w
+    // observed, is log 𝒩(log w; log μ₀, s² + r²) - log w, at any point.
+    let (mu0, s, r, w_hat) = (1.3, 0.4, 0.25, 2.1);
+    let mut writer = Writer::new();
+    let (p, w) = writer
+        .build(|| {
+            let p = quantity("p", Positive::<1>);
+            Normal::on(Positive::<1>, constant(Positive::<1>, [mu0]), Scale::sd(s)).score(p);
+            let w = quantity("w", Positive::<1>);
+            Normal::on(Positive::<1>, p, Scale::sd(r)).score(w);
+            (p, w)
+        })
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let query = Query::log_density().given(Observations::new().observe(w, [w_hat]));
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let closed = log_normal(w_hat.ln(), mu0.ln(), (s * s + r * r).sqrt()) - w_hat.ln();
+    for at in [0.6, 1.5, 2.8] {
+        let point = Values::new().with(p, points(&[at], 1, 1, &target));
+        let chart = linearizer.at_in_chart(&point, &[p.id()]).unwrap();
+        let evidence = chart
+            .eliminate(&schedule, None)
+            .unwrap()
+            .log_integral()
+            .unwrap();
+        close(&evidence, &[closed], 1e-12, "the evidence");
+    }
+    // And the closed form against quadrature of the model's own density over u = log p.
+    let n = 4000;
+    let (low, high) = (-6.0, 6.0);
+    let du = (high - low) / n as f64;
+    let us: Vec<f64> = (0..n).map(|i| low + (i as f64 + 0.5) * du).collect();
+    let ps: Vec<f64> = us.iter().map(|u: &f64| u.exp()).collect();
+    let program = snapshot.compile(&query, &target).unwrap();
+    let at = Values::new().with(p, points(&ps, n, 1, &target));
+    let logs = host(&program.forward(&at).unwrap(), skoro_core::NodeId::DENSITY);
+    let integral: f64 = logs.iter().zip(&ps).map(|(l, p)| l.exp() * p * du).sum();
+    close(&[integral.ln()], &[closed], 1e-8, "quadrature");
+}
+
+#[test]
+fn draws_have_the_marginal_covariance() {
+    let target = Target::host();
+    let n = 6000;
+    let (writer, query, _) = squares(1, &target);
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let x = linearizer.layout().quantities()[0];
+    let data: Vec<f64> = (0..n).flat_map(|_| [0.4, -0.7]).collect();
+    let point = Values::new().with(x, points(&data, n, 2, &target));
+    let schedule = linearizer.schedule().unwrap();
+    let solved = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap();
+    let draws = solved.draw(&point, &Key::from_seed(7), &target).unwrap();
+    let again = solved.draw(&point, &Key::from_seed(7), &target).unwrap();
+    assert_eq!(
+        host(&draws, x),
+        host(&again, x),
+        "a draw is a function of its key"
+    );
+    // On a vector the chart is a translation: the draws less the point and the step are the
+    // Gaussian's, of the marginal covariance.
+    let step = solved.eliminations()[0].minimizer().unwrap();
+    let samples = host(&draws, x);
+    let centred: Vec<[f64; 2]> = (0..n)
+        .map(|r| {
+            [
+                samples[2 * r] - 0.4 - step[0],
+                samples[2 * r + 1] + 0.7 - step[1],
+            ]
+        })
+        .collect();
+    let covariance: Vec<f64> = (0..2)
+        .flat_map(|i| (0..2).map(move |j| (i, j)))
+        .map(|(i, j)| centred.iter().map(|c| c[i] * c[j]).sum::<f64>() / n as f64)
+        .collect();
+    let keeping = linearizer.schedule_keeping(&[x]).unwrap();
+    let alone = Values::new().with(x, points(&[0.4, -0.7], 1, 2, &target));
+    let marginal = &linearizer
+        .at(&alone)
+        .unwrap()
+        .eliminate(&keeping, None)
+        .unwrap()
+        .marginal()
+        .unwrap()[0];
+    let expected = marginal.marginal.covariance();
+    for (c, e) in covariance.iter().zip(expected.data()) {
+        // Five standard errors of a sample covariance, about √(2/n) of the variances.
+        let scale = expected.get(0, 0).max(expected.get(1, 1));
+        assert!(
+            (c - e).abs() < 5.0 * (2.0 / n as f64).sqrt() * scale,
+            "{covariance:?} against {expected:?}"
+        );
+    }
+}
+
+#[test]
+fn marginals_name_their_curved_quantities() {
+    let target = Target::host();
+    let mut writer = Writer::new();
+    let (v, p, r) = writer
+        .build(|| {
+            let v = quantity("v", Vector::<2>);
+            Normal::on(
+                Vector::<2>,
+                constant(Vector::<2>, [0.0, 0.0]),
+                Scale::sd(1.0),
+            )
+            .score(v);
+            let p = quantity("p", Positive::<1>);
+            Normal::on(
+                Positive::<1>,
+                constant(Positive::<1>, [1.0]),
+                Scale::sd(0.5),
+            )
+            .score(p);
+            let r = quantity("r", Rotation);
+            Normal::on(
+                Rotation,
+                constant(Rotation, [1.0, 0.0, 0.0, 0.0]),
+                Scale::sd(0.3),
+            )
+            .score(r);
+            (v, p, r)
+        })
+        .unwrap();
+    let linearizer = Linearizer::new(
+        &writer.snapshot(),
+        &Query::log_density(),
+        &target,
+        Assembly::Residual,
+    )
+    .unwrap();
+    let point = Values::new()
+        .with(v, points(&[0.1, 0.2], 1, 2, &target))
+        .with(p, points(&[1.2], 1, 1, &target))
+        .with(
+            r,
+            points(
+                &[0.9, 0.1, 0.2, 0.3].map(|x: f64| x / 0.9539392014169456_f64.sqrt() / 1.0),
+                1,
+                4,
+                &target,
+            ),
+        );
+    let keep = [v.id(), p.id(), r.id()];
+    let schedule = linearizer.schedule_keeping(&keep).unwrap();
+    let marginals = linearizer
+        .at(&point)
+        .unwrap()
+        .eliminate(&schedule, None)
+        .unwrap()
+        .marginal()
+        .unwrap();
+    assert_eq!(marginals[0].quantities, keep);
+    assert_eq!(marginals[0].curved, [r.id()]);
 }

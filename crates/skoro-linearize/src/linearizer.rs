@@ -261,6 +261,29 @@ impl Linearizer {
     pub fn schedule(&self) -> Result<Schedule, Error> {
         Ok(Schedule::all(&self.structure)?)
     }
+
+    /// The block of each of `quantities` (`NotFree` for one that is not a free continuous
+    /// quantity of the linearizer).
+    pub(crate) fn blocks_of(&self, quantities: &[NodeId]) -> Result<Vec<usize>, Error> {
+        quantities
+            .iter()
+            .map(|&q| {
+                self.layout()
+                    .quantities()
+                    .iter()
+                    .position(|&p| p == q)
+                    .ok_or(Error::NotFree { quantity: q })
+            })
+            .collect()
+    }
+
+    /// `Schedule::keeping` the blocks of `quantities`: the schedule of their marginal.
+    pub fn schedule_keeping(&self, quantities: &[NodeId]) -> Result<Schedule, Error> {
+        Ok(Schedule::keeping(
+            &self.structure,
+            &self.blocks_of(quantities)?,
+        )?)
+    }
 }
 
 /// The fold of a term's log-volume, when it binds the tangent, the log-volume and the information

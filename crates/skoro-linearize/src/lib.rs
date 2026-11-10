@@ -19,4 +19,4 @@ mod solved;
 pub use assemble::Linearized;
 pub use error::Error;
 pub use linearizer::{Assembly, Linearizer};
-pub use solved::Solved;
+pub use solved::{QuantityMarginal, Solved};
