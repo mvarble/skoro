@@ -7,6 +7,7 @@ depends_on: [guide/least-squares]
 
 <script>
 	import ExampleFigure from '$lib/components/ExampleFigure.svelte';
+	import Matrices from '$lib/components/PoseGraphMatrices.svelte';
 </script>
 
 A robot drives a closed circuit. It measures its own motion between ticks by odometry, and the
@@ -57,6 +58,30 @@ dead reckoning on its own odometry puts it:
 
 Since the truth is drawn from the model, the model is right by construction: what the example tests
 is the estimation, not the modelling.
+
+## Rows, and what each solves
+
+A **row**, in skoro, is one independent copy of the whole computation, as a batch of tensors has
+rows: here, one dataset. It is not a coordinate of the state, nor a row of a Jacobian. Every value
+the model holds, generated, observed or estimated, has one entry per row, and the rows never meet:
+
+<Matrices kind="rows" />
+
+So the hundred datasets are estimated _together_ only in that they share the compiled programs, the
+schedule and every pass. Each row is its own estimation problem, and each is a **batch** estimate
+in the sense of state estimation: one least-squares problem over every pose and every landmark of
+its trajectory at once, a smoother rather than a filter. Its Jacobian has a row for each component
+of each term's residual and a column for each tangent coordinate, 1,776 rows and 510 columns here,
+6 for each of the 73 poses and 3 for each of the 24 landmarks. Its sparsity is the graph's, drawn
+here for a graph of eight poses and four landmarks:
+
+<Matrices kind="jacobians" />
+
+The last sighting, of $m_0$ from $x_7$, reaches back to the start: it closes the loop, and it is
+why the batch recovers what dead reckoning lost. [The sliding window](../sliding-window/) solves a
+problem of the same kind over its last five poses alone, with everything before them folded into
+one dense replacement over what they still share with the past. It never makes that closing
+sighting, since $m_0$ has already been retired.
 
 ## The mode of every row
 
