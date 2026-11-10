@@ -11,18 +11,20 @@ mod common;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use skoro::tensor::{Points, Value};
-use skoro::{Key, NodeId, Observations, Q, QDyn, Query, Target, Values, Vector, Writer};
+use skoro::{Q, Query, Target, Vector};
 use skoro_linearize::{Assembly, LevenbergMarquardt, Linearizer, decrement};
-use skoro_spatial::{Pose, host};
+use skoro_spatial::Pose;
 
+use common::batch::{Dataset, dataset};
 use common::laplace::{CHI2_3_90, CHI2_6_90, SLOPE_3, SLOPE_6, calibration, normalized_errors};
-use common::model::{Tick, tick};
 use common::report::{self, Result, calibrated, check, converged, mean, stationary};
 use common::scenario::Scenario;
 
 /// The number of datasets, each a row of the batch.
 const N: usize = 100;
+
+/// The seed of the datasets, so that every run of the example is the same run.
+const SEED: u64 = 20_261_109;
 
 /// The largest rotational standard deviation the check's tolerance was designed for.
 const SIGMA_PHI: f64 = 0.05;
@@ -34,41 +36,20 @@ fn main() -> Result {
 
     // 1. The model, every tick in one build; a hundred datasets drawn from it; the query that
     // observes their measurements; and the start of each.
-    let mut writer = Writer::new();
-    let ticks: Vec<Tick> = writer.build(|| {
-        let mut landmarks = BTreeMap::new();
-        let mut previous = None;
-        (0..=scenario.last())
-            .map(|k| {
-                let t = tick(&scenario, k, previous, &mut landmarks);
-                previous = Some(t.pose);
-                t
-            })
-            .collect()
-    })?;
-    let snapshot = writer.snapshot();
-    let truth = snapshot
-        .generate(
-            &Observations::new(),
-            &Key::from_seed(20_261_109),
-            N,
-            &target,
-        )?
-        .values;
+    let Dataset {
+        snapshot,
+        ticks,
+        truth,
+        given,
+        start,
+        ..
+    } = dataset(&scenario, N, SEED, &target)?;
     let poses: Vec<Q<Pose>> = ticks.iter().map(|t| t.pose).collect();
     let landmarks: BTreeMap<usize, Q<Vector<3>>> = ticks
         .iter()
         .flat_map(|t| t.new_landmarks.iter().copied())
         .collect();
-    let mut given = Observations::new();
-    for t in &ticks {
-        let measured = t.odometry.map(QDyn::from).into_iter();
-        for q in measured.chain(t.sightings.iter().map(|&(_, z)| QDyn::from(z))) {
-            given = given.observe_value(q, value(&truth, q)?);
-        }
-    }
     let query = Query::log_density().given(given);
-    let start = start(&scenario, &ticks, &truth, &target)?;
 
     // 2. The mode of every row.
     let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual)?;
@@ -169,68 +150,4 @@ fn main() -> Result {
     )?;
     println!("every check passed");
     Ok(())
-}
-
-/// The value of `q` in `values`.
-fn value(values: &Values, q: impl Into<NodeId>) -> Result<&Value> {
-    let id = q.into();
-    values
-        .get(id)
-        .ok_or_else(|| format!("no value for {id:?}").into())
-}
-
-/// The rows of a continuous value, on the host.
-fn rows(values: &Values, q: impl Into<NodeId>) -> Result<Vec<f64>> {
-    match value(values, q)? {
-        Value::Continuous(points) => Ok(points.to_host()),
-        Value::Discrete(_) => Err("a continuous value".into()),
-    }
-}
-
-/// The start of every row: the poses at dead reckoning on the odometry, the landmarks at their
-/// first sighting.
-fn start(scenario: &Scenario, ticks: &[Tick], truth: &Values, target: &Target) -> Result<Values> {
-    let mut poses: Vec<Vec<[f64; 7]>> = vec![vec![scenario.nominal[0]; N]];
-    let mut landmarks: BTreeMap<usize, Vec<[f64; 3]>> = BTreeMap::new();
-    for (k, t) in ticks.iter().enumerate() {
-        if let Some(odometry) = t.odometry {
-            let y = rows(truth, odometry)?;
-            let next = (0..N)
-                .map(|r| {
-                    let y: [f64; 7] = y[7 * r..7 * r + 7].try_into()?;
-                    Ok(host::pose_compose(poses[k - 1][r], y))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            poses.push(next);
-        }
-        for &(j, z) in &t.sightings {
-            if landmarks.contains_key(&j) {
-                continue;
-            }
-            let z = rows(truth, z)?;
-            let first = (0..N)
-                .map(|r| {
-                    let z: [f64; 3] = z[3 * r..3 * r + 3].try_into()?;
-                    Ok(host::pose_transform(poses[k][r], z))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            landmarks.insert(j, first);
-        }
-    }
-    let load = |data: Vec<f64>, storage: usize| {
-        Value::Continuous(Points::from_host(&data, N, storage, target))
-    };
-    let mut start = Values::new();
-    for (t, rows) in ticks.iter().zip(poses) {
-        start.insert(t.pose, load(rows.concat(), 7));
-    }
-    for t in ticks {
-        for &(j, m) in &t.new_landmarks {
-            let rows = landmarks
-                .remove(&j)
-                .ok_or("a landmark with no first sighting")?;
-            start.insert(m, load(rows.concat(), 3));
-        }
-    }
-    Ok(start)
 }
