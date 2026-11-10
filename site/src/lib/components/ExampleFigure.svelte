@@ -24,7 +24,7 @@
         width: 100%;
         height: auto;
         border-radius: 18px;
-        box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
     }
 
     figcaption {

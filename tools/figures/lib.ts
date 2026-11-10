@@ -3,10 +3,12 @@
 // the sliding window's path and errors. `main.ts` is the command line over it; the README and the
 // site show what it writes to `site/static/figures/`.
 //
-// Each card carries its own dark surface, so that it reads the same on a light page and a dark
-// one. The series take the first three slots of a categorical palette validated on that surface
-// for every pair: blue for the estimate, orange for dead reckoning, aqua for the landmarks and the
-// batch. The truth is drawn in neutral ink, dashed, never in a series colour.
+// Each card carries its own light surface and a hairline border, so that it reads the same on a
+// light page and a dark one. The series take the first three slots of a categorical palette
+// validated on that surface for every pair: blue for the estimate, orange for dead reckoning, aqua
+// for the landmarks and the batch. Aqua is below 3:1 against the surface, so every aqua mark is
+// named by a legend or a direct label. The truth is drawn in neutral ink, dashed, never in a
+// series colour.
 
 // ---------------------------------------------------------------------------
 // The data the examples write
@@ -122,18 +124,19 @@ export function largestEigenvalue(m: number[]): number {
 // Drawing
 
 const INK = {
-    surface: '#1a1a19',
-    panel: '#232321',
-    primary: '#f0efec',
-    secondary: '#c3c2b7',
-    muted: '#8f8e86',
-    grid: '#383835',
+    surface: '#fcfcfb',
+    panel: '#f3f2ee',
+    border: '#e4e3de',
+    primary: '#0b0b0b',
+    secondary: '#52514e',
+    muted: '#7a7974',
+    grid: '#e1e0da',
 };
 
 export const SERIES = {
-    estimate: '#3987e5',
-    reckoning: '#d95926',
-    landmark: '#199e70',
+    estimate: '#2a78d6',
+    reckoning: '#eb6834',
+    landmark: '#1baf7a',
 };
 
 const FONT = `font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"`;
@@ -158,7 +161,7 @@ function card(width: number, height: number, title: string, subtitle: string, bo
     return [
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${escape(label)}" ${FONT}>`,
         `<title>${escape(label)}</title>`,
-        `<rect width="${width}" height="${height}" rx="18" fill="${INK.surface}"/>`,
+        `<rect x="0.5" y="0.5" width="${width - 1}" height="${height - 1}" rx="18" fill="${INK.surface}" stroke="${INK.border}"/>`,
         text(36, 52, title, { size: 26, fill: INK.primary, weight: 650 }),
         text(36, 80, subtitle, { size: 15, fill: INK.muted }),
         ...body,
