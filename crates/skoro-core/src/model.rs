@@ -256,6 +256,13 @@ impl Snapshot {
         self.node(id).is_some_and(Node::is_quantity) && !self.0.scoring.contains_key(&id)
     }
 
+    /// The quantities `id` is reached from in the compilation graph, walking back through mapped
+    /// nodes and stopping at nodes fixed in the model, sorted: what `Term::involves` holds for a
+    /// log-density.
+    pub fn reached_from(&self, id: impl Into<NodeId>) -> Vec<NodeId> {
+        crate::term::roots(&self.0, id.into())
+    }
+
     /// The proposal attached to the parameter `q`.
     pub fn proposal(&self, q: impl Into<NodeId>) -> Option<&Proposal> {
         self.0.proposals.get(&q.into()).map(Arc::as_ref)
