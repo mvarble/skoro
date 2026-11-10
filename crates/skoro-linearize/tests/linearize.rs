@@ -749,7 +749,7 @@ fn marginals_name_their_curved_quantities() {
         .with(
             r,
             points(
-                &[0.9, 0.1, 0.2, 0.3].map(|x: f64| x / 0.9539392014169456_f64.sqrt() / 1.0),
+                &[0.9, 0.1, 0.2, 0.3].map(|x: f64| x / 0.95_f64.sqrt()),
                 1,
                 4,
                 &target,
