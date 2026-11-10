@@ -22,22 +22,14 @@ archive is the branch `archive`, tagged `archive-2026-10-09`; read it with
 - **Pointwise operations the core does not have**: the absolute value, and the general division
   and reciprocal of Euclidean values, where the core offers division by a literal alone and
   `e^{-log b}` where `b` is positive: `crates/skoro-pointwise/`.
-- **Least squares**: the least-squares readers, the assembly of Jacobians, linearization, and the
-  coverage check, which names the terms an objective's readers skip for want of a role, so that an
-  objective is known to cover the whole log-density: `crates/skoro-model/src/least_squares.rs`,
-  `crates/skoro-model/src/information.rs`, `crates/skoro-model/src/coverage.rs` and
-  `crates/skoro-linearize/`.
-- **Elimination**, dense and block-sparse, with the marginalization a sliding window retires by:
-  `crates/skoro-dense/` (`elimination.rs`, `marginal.rs`, `ordering.rs`). The core retires a
-  namespace with a replacement the caller computes; computing one is this entry's.
 - **Literal operands as primitives**: the archive gave an operation with a literal operand a
   kernel of its own (`crates/skoro-model/src/ops/`); the core makes a literal a constant node.
 - **Compiling between cuts**: `Graph::compile_between` (`crates/skoro-graph/src/graph.rs`) stopped
   a program's backward walk at named interior nodes, each a differentiable leaf whose value the
   caller gave, so that a Jacobian could be taken at a mapped value. The core's programs have the
-  quantities and constants their targets reach for roots, so a cut changes that; it returns with
-  the first entry that needs one, likely linearization or Gauss–Newton, as a method on `Query` that
-  changes no existing query. Keep the archive's lesson: a cut is never folded through, since a
+  quantities and constants their targets reach for roots, so a cut changes that. Linearization did
+  without one, reading the tangent a normal binds as a node of its own; a cut returns with the first
+  entry that needs one, as a method on `Query` that changes no existing query. Keep the archive's lesson: a cut is never folded through, since a
   value below it that looks fixed moves with the cut, and folding it would give the right values
   with the derivatives silently missing.
 

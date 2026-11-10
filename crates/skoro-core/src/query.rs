@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use rpds::HashTrieMapSync;
 use skoro_tensor::HostValue;
 
-use crate::{IntoHostValue, NodeId, Q, QDyn, Typed};
+use crate::{IntoHostValue, NodeId, Q, QDyn, Snapshot, Typed};
 
 /// Values for some quantities, under an identity of their own: a set that is extended is a new
 /// set. Reference-counted, so a caller keeps one and passes it to every `compile`.
@@ -118,5 +118,86 @@ impl Query {
             observations,
             ..self
         }
+    }
+
+    /// The observations the query is given.
+    pub fn observations(&self) -> &Observations {
+        &self.observations
+    }
+
+    /// The terms whose log-densities a density query sums, in the order they were added: every
+    /// term of `snapshot` for `log_density()`, the named ones for `log_density_of`; `None` for a
+    /// query of nodes.
+    pub fn terms(&self, snapshot: &Snapshot) -> Option<Vec<NodeId>> {
+        match &self.targets {
+            Targets::Nodes(_) => None,
+            Targets::Density => Some(snapshot.0.terms.keys().copied().collect()),
+            Targets::DensityOf(terms) => Some(terms.iter().copied().collect()),
+        }
+    }
+}
+
+impl Observations {
+    /// This set with the values of `other` for the quantities this set does not observe: a new
+    /// set. Where both observe a quantity, this set's value is kept. When `other` adds nothing,
+    /// the set is this one, of the same identity.
+    pub fn union(self, other: &Observations) -> Observations {
+        let mut values = (*self.values).clone();
+        let mut added = false;
+        for (id, value) in other.values.iter() {
+            if !values.contains_key(id) {
+                values.insert_mut(*id, value.clone());
+                added = true;
+            }
+        }
+        if !added {
+            return self;
+        }
+        Observations {
+            identity: fresh(),
+            values: Arc::new(values),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn value(x: f64) -> HostValue {
+        HostValue::new(None, 1, skoro_tensor::HostData::Continuous(vec![x])).unwrap()
+    }
+
+    #[test]
+    fn union_keeps_this_sets_values() {
+        let (a, b, c) = (
+            QDyn::from_id(NodeId::fresh()),
+            QDyn::from_id(NodeId::fresh()),
+            QDyn::from_id(NodeId::fresh()),
+        );
+        let this = Observations::new()
+            .observe_dyn(a, value(1.0))
+            .observe_dyn(b, value(2.0));
+        let other = Observations::new()
+            .observe_dyn(b, value(20.0))
+            .observe_dyn(c, value(30.0));
+        let identity = this.identity();
+        let joined = this.union(&other);
+        assert_ne!(joined.identity(), identity);
+        assert_eq!(joined.get(a.id()), Some(Some(&value(1.0))));
+        assert_eq!(
+            joined.get(b.id()),
+            Some(Some(&value(2.0))),
+            "this set's value is kept"
+        );
+        assert_eq!(joined.get(c.id()), Some(Some(&value(30.0))));
+        let same = joined
+            .clone()
+            .union(&Observations::new().observe_dyn(a, value(5.0)));
+        assert_eq!(
+            same.identity(),
+            joined.identity(),
+            "nothing added, the same set"
+        );
     }
 }

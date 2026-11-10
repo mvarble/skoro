@@ -1,0 +1,655 @@
+---
+title: Elimination in square-root form
+summary: A sum of squared linear residuals and linear terms is minimized, integrated or marginalized one block of variables at a time by orthogonal factorizations of its rows, without ever forming its normal equations; each elimination leaves a conditional and a smaller problem of the same form.
+depends_on: []
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import * as reflection from './statements/reflection.md';
+	import * as reflectionBlock from './statements/reflection-block.md';
+	import * as triangularRoot from './statements/triangular-root.md';
+	import * as eliminateOne from './statements/eliminate-one.md';
+	import * as marginal from './statements/marginal.md';
+	import { starFactors, starTree } from './star.graph';
+	import { mapFactors, mapTree, mapJunction } from './junction.graph';
+</script>
+
+Gauss–Newton and Levenberg–Marquardt steps, Laplace approximations and Kalman filters all end in
+the same piece of linear algebra: a function of a vector $\tangent \in \R^\dimension$ that is half
+a sum of squared affine residuals, plus a linear term,
+
+$$
+	\phi(\tangent) = \tfrac12 \lVert A \tangent - b \rVert^2 + \eta\transpose \tangent , @tag(problem)
+$$
+
+which is to be minimized, integrated as $e^{-\phi}$, or reduced to a function of some of its
+variables. This note shows how to do each without forming the matrix $A\transpose A$, and how to
+do it one block of variables at a time when $A$ is sparse. It is a note about numbers and matrices
+alone, and nothing in it depends on where the rows came from.
+
+## Linear least squares
+
+With $\eta = 0$, minimizing [](eq:problem) is the *linear least-squares problem*. Its gradient
+$A\transpose (A \tangent - b)$ vanishes at the minimizer, which therefore solves the *normal
+equations*
+
+$$
+	A\transpose A\, \tangent = A\transpose b . @tag(normal-equations)
+$$
+
+They are the obvious way to compute it, and the wrong one. Floating-point arithmetic rounds each
+operation with a relative error of at most the *unit roundoff* $u$, about $1.1 \times 10^{-16}$ in
+double precision, and a linear system amplifies such errors by its *condition number*
+$\kappa(M) = \sigma_{\max}(M) / \sigma_{\min}(M)$, the ratio of its extreme singular values: a
+solution computed stably is accurate to about $u\, \kappa$, so that a solve loses about
+$\log_{10} \kappa$ of its sixteen digits. The singular values of $A\transpose A$ are the squares of
+those of $A$, so $\kappa(A\transpose A) = \kappa(A)^2$, and forming the normal equations doubles
+the digits lost. A Jacobian with $\kappa(A) = 10^6$, common when variables have different scales,
+leaves ten digits to a method that works with $A$ and four to one that works with $A\transpose A$.
+
+The loss can be total. With $\varepsilon = 10^{-8}$, take
+
+$$
+	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} ,
+	\qquad
+	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
+$$
+
+The least-squares solution is $(1, 1)$, with zero residual, and $\kappa(A) \approx 1.4 \times 10^8$,
+well within double precision. But
+$A\transpose A = \left[\begin{smallmatrix} 1 + \varepsilon^2 & 1 \\ 1 & 1 + \varepsilon^2 \end{smallmatrix}\right]$,
+and $1 + 10^{-16}$ rounds to $1$, so the matrix of the normal equations, as computed, is singular.
+The information was lost when the matrix was formed, and no solver of [](eq:normal-equations) can
+recover it. The factorization below returns $(1, 1)$ to full precision.
+
+## Householder reflections
+
+A square matrix $Q$ is orthogonal if $Q\transpose Q = I$. It preserves lengths, so it can be applied
+to the residual without changing the problem, $\lVert A \tangent - b \rVert = \lVert Q\transpose(A
+\tangent - b) \rVert$, and its condition number is one, so applying it amplifies no error. The
+orthogonal matrices used here are reflections: $H_w$ below fixes every vector orthogonal to $w$ and
+sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$. A tuple of vectors,
+such as $(v, u)$, stands for the column vector that stacks them, $v$ above $u$.
+
+<Statement {...reflection} />
+
+<Proof>
+
+$H_w$ is symmetric because $w w\transpose$ is, and
+
+$$
+	\begin{aligned}
+		H_w\transpose H_w &= H_w^2 \\
+		&= I - 4 \frac{w w\transpose}{\lVert w \rVert^2} + 4 \frac{w\, (w\transpose w)\, w\transpose}{\lVert w \rVert^4} \\
+		&= I .
+	\end{aligned}
+$$
+
+For the second part, $w$ differs from $x$ only in its first entry, by $-\alpha$, and
+$\alpha^2 = \lVert x \rVert^2$, so $w\transpose x = \lVert x \rVert^2 - \alpha x_1$ and
+
+$$
+	\begin{aligned}
+		\lVert w \rVert^2
+		&= \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 \\
+		&= 2 \bigl( \lVert x \rVert^2 - \alpha x_1 \bigr) \\
+		&= 2\, w\transpose x .
+	\end{aligned}
+$$
+
+The product $-\alpha x_1$ is $\lvert x_1 \rvert \lVert x \rVert$, which is not negative, so
+$\lVert w \rVert^2 \ge 2 \lVert x \rVert^2$, which is positive. Then
+
+$$
+	\begin{aligned}
+		H_w x &= x - 2 \frac{w\transpose x}{\lVert w \rVert^2}\, w \\
+		&= x - w \\
+		&= \begin{bmatrix} \alpha \\ 0 \end{bmatrix} .
+	\end{aligned}
+$$
+
+</Proof>
+
+Either sign of $\alpha$ would do, as long as $w \neq 0$; the one chosen makes
+$w_1 = x_1 + \operatorname{sgn}(x_1) \lVert x \rVert$ a sum of two numbers of the same sign. The
+other sign subtracts them, and when $x$ is already close to a multiple of the first coordinate
+vector they nearly cancel, and $w$ is computed with a large relative error.
+
+A reflection built from a vector whose leading entries are zero touches only the trailing entries
+of what it is applied to.
+
+<Statement {...reflectionBlock} />
+
+<Proof>
+
+The norms agree, $\lVert w \rVert = \lVert w' \rVert$, and the leading zeros of $w$ meet $v$, so
+
+$$
+	w\transpose \begin{bmatrix} v \\ u \end{bmatrix} = w'^\top u .
+$$
+
+Therefore
+
+$$
+	\begin{aligned}
+		H_w \begin{bmatrix} v \\ u \end{bmatrix}
+		&= \begin{bmatrix} v \\ u \end{bmatrix} - 2 \frac{w'^\top u}{\lVert w' \rVert^2} \begin{bmatrix} 0 \\ w' \end{bmatrix} \\
+		&= \begin{bmatrix} v \\ H_{w'} u \end{bmatrix} .
+	\end{aligned}
+$$
+
+Read column by column, with $(v, u)$ each coordinate vector in turn, this is the block form.
+
+</Proof>
+
+## The triangular root
+
+<Statement {...triangularRoot} />
+
+<Proof>
+
+The matrix $Q$ is built from $n$ reflections, one for each column of $A$, each of them made by
+[%full](statement:reflection) to reduce one column, and each leaving the columns already reduced
+alone by [%full](statement:reflection-block). Let $M_0 = [A \;\, b]$ and $M_j = H_j M_{j-1}$ for
+$j = 1, \dots, n$, with $H_j$ chosen as follows. Suppose that each of the first $j - 1$ columns of
+$M_{j-1}$ is zero below its diagonal entry, which holds for $j = 1$ since there are none. Let $x$
+be the entries of column $j$ of $M_{j-1}$ in rows $j$ to $m$. Then $x \neq 0$: otherwise the first
+$j$ columns of $M_{j-1}$ would all lie in the span of the first $j - 1$ coordinate vectors, and so
+be linearly dependent, but they are the first $j$ columns of $H_{j-1} \cdots H_1 A$, which has rank
+$n$ since each $H_i$ is invertible. Take $\alpha_j$ and $w'$ for $x$ from
+[%full](statement:reflection), and let $H_j = H_w$ with $w = (0, w')$, its first $j - 1$ entries
+zero. By [%full](statement:reflection-block), $H_j$ leaves rows $1$ to $j - 1$ of $M_{j-1}$
+unchanged, and its first $j - 1$ columns too, since each is zero below row $j - 1$; and it maps
+column $j$'s entries in rows $j$ to $m$ to $\alpha_j$ followed by zeros. So the first $j$ columns
+of $M_j$ are zero below their diagonal entries.
+
+After $n$ steps, $M_n = H_n \cdots H_1 [A \;\, b]$ has the form of the theorem, with $R$ upper
+triangular with diagonal entries $\alpha_1, \dots, \alpha_n$, each nonzero. Each $H_j$ is
+symmetric and orthogonal, so $Q = H_1 \cdots H_n$ is orthogonal and
+$Q\transpose = H_n \cdots H_1$. Then
+
+$$
+	\begin{aligned}
+		\lVert A \tangent - b \rVert^2
+		&= \bigl\lVert Q\transpose (A \tangent - b) \bigr\rVert^2 \\
+		&= \left\lVert \begin{bmatrix} R \tangent - d \\ -e \end{bmatrix} \right\rVert^2 \\
+		&= \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2 ,
+	\end{aligned}
+$$
+
+and
+
+$$
+	\begin{aligned}
+		A\transpose A &= A\transpose Q Q\transpose A \\
+		&= \begin{bmatrix} R \\ 0 \end{bmatrix}\transpose \begin{bmatrix} R \\ 0 \end{bmatrix} \\
+		&= R\transpose R .
+	\end{aligned}
+$$
+
+</Proof>
+
+The minimizer of $\lVert A \tangent - b \rVert^2$ therefore solves the triangular system
+$R \tangent = d$, and the minimum is $\lVert e \rVert^2$. $R$ is a square root of the normal
+equations' matrix, $R\transpose R = A\transpose A$, computed without forming that matrix, and
+$\kappa(R) = \kappa(A)$. A triangular system is solved by *back substitution*, from the last
+unknown up: for $i = n, n - 1, \dots, 1$,
+
+$$
+	\tangent_i = \frac{1}{R_{ii}} \Bigl( d_i - \sum_{j > i} R_{ij}\, \tangent_j \Bigr) , @tag(back-substitution)
+$$
+
+the sum being empty for $i = n$, in about $n^2$ operations, and backward stably; a lower-triangular one, such as
+$R\transpose y = c$, by *forward substitution*, from the first unknown down. A zero diagonal entry
+means $A$ does not have rank $n$: some direction is not determined by the rows, and a diagonal
+entry small against the others means a direction determined poorly. Either is reported, not
+divided by.
+
+For example, take
+
+$$
+	A = \begin{bmatrix} -2 & 0 \\ 1 & 5 \\ 2 & 5 \end{bmatrix} ,
+	\qquad
+	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
+$$
+
+The first column is $x = (-2, 1, 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
+and $w = (-5, 1, 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
+$y - (w\transpose y / 15)\, w$, so the first column goes to $(3, 0, 0)$, as
+[%full](statement:reflection) says, and the others follow with $w\transpose y = 15$ and
+$w\transpose b = 45$:
+
+$$
+	\begin{gathered}
+		H_1 \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} -2 \\ 1 \\ 2 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 3 \\ 0 \\ 0 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} = \begin{bmatrix} 0 \\ 5 \\ 5 \end{bmatrix} - \frac{15}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 5 \\ 4 \\ 3 \end{bmatrix} , \\
+		H_1 \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} - \frac{45}{15} \begin{bmatrix} -5 \\ 1 \\ 2 \end{bmatrix} = \begin{bmatrix} 8 \\ 13 \\ -9 \end{bmatrix} .
+	\end{gathered}
+$$
+
+Together,
+
+$$
+	H_1 \begin{bmatrix} A & b \end{bmatrix}
+	= \begin{bmatrix} 3 & 5 & 8 \\ 0 & 4 & 13 \\ 0 & 3 & -9 \end{bmatrix} .
+$$
+
+The first row and the first column are now final. The second step works on what is left, rows 2
+and 3 of the last two columns. There $x = (4, 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
+$\alpha_2 = -5$ and $w' = (9, 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
+$w = (0, 9, 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $[3 \;\, 5 \;\, 8]$,
+alone, and the first column, $(3, 0, 0)$, which is of the form $(v, 0)$. On the rest it acts as
+$H_{w'}$, which maps $y$ to $y - (w'^\top y / 45)\, w'$:
+
+$$
+	\begin{gathered}
+		H_{w'} \begin{bmatrix} 4 \\ 3 \end{bmatrix} = \begin{bmatrix} 4 \\ 3 \end{bmatrix} - \frac{45}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} = \begin{bmatrix} -5 \\ 0 \end{bmatrix} , \\
+		H_{w'} \begin{bmatrix} 13 \\ -9 \end{bmatrix} = \begin{bmatrix} 13 \\ -9 \end{bmatrix} - \frac{90}{45} \begin{bmatrix} 9 \\ 3 \end{bmatrix} = \begin{bmatrix} -5 \\ -15 \end{bmatrix} .
+	\end{gathered}
+$$
+
+Together,
+
+$$
+	H_2 H_1 \begin{bmatrix} A & b \end{bmatrix}
+	= \begin{bmatrix} 3 & 5 & 8 \\ 0 & -5 & -5 \\ 0 & 0 & -15 \end{bmatrix} .
+$$
+
+So $R = \left[\begin{smallmatrix} 3 & 5 \\ 0 & -5 \end{smallmatrix}\right]$, $d = (8, -5)$ and
+$e = -15$. Back substitution gives the minimizer,
+
+$$
+	\begin{gathered}
+		\tangent_2 = \frac{-5}{-5} = 1 , \\
+		\tangent_1 = \frac{8 - 5 \tangent_2}{3} = 1 ,
+	\end{gathered}
+$$
+
+and the minimum of $\lVert A \tangent - b \rVert^2$ is $e^2 = 225$. Indeed, and with the root as
+the theorem says,
+
+$$
+	\begin{gathered}
+		b - A \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} -5 \\ 10 \\ -10 \end{bmatrix} , \\
+		R\transpose R = \begin{bmatrix} 9 & 15 \\ 15 & 50 \end{bmatrix} = A\transpose A .
+	\end{gathered}
+$$
+
+The second diagonal entry of $R$ is negative, which the sign rule of [%full](statement:reflection)
+allows and the theorem does not mind. Changing the sign of a row of $[R \;\, d]$, which is
+multiplying $Q$ by a diagonal matrix of signs, changes nothing in the theorem, so a positive
+diagonal can be had when it is wanted.
+
+Neither $Q$ nor any $H_j$ is formed. A reflection is applied to a vector $y$ of $p$ entries as
+$y - \beta\, (w\transpose y)\, w$, with $\beta = 2 / \lVert w \rVert^2$, in about $4p$ operations,
+and only the vectors $w$ are kept, if $Q$ is needed again at all. Step $j$ applies one to the last
+$n - j$ columns of $A$, in rows $j$ to $m$, so the reduction takes about
+$\sum_j 4 (m - j)(n - j) \approx 2 m n^2 - \tfrac23 n^3$ operations. Forming $A\transpose A$ and
+factoring it takes about $m n^2 + \tfrac13 n^3$, so when $m$ is much larger than $n$ the
+reflections cost twice as much, which is the price of the digits kept. Applying them to $b$
+alongside $A$ gives $d$ and $e$ in the same pass.
+
+## Linear terms
+
+A linear term $\eta\transpose \tangent$ in [](eq:problem) is not a squared residual, but it can be
+carried along. With $R$ and $d$ from [%full](statement:triangular-root) and $y = R^{-\top} \eta$,
+the solution of the forward substitution $R\transpose y = \eta$, so that
+$\eta\transpose \tangent = y\transpose R \tangent$, completing the square gives
+
+$$
+	\phi(\tangent) = \tfrac12 \bigl\lVert R \tangent - (d - y) \bigr\rVert^2
+	+ \tfrac12 \lVert e \rVert^2 + y\transpose d - \tfrac12 \lVert y \rVert^2 . @tag(complete-square)
+$$
+
+So $\phi$ is minimized at $\tangent^* = R^{-1}(d - y)$, which solves
+$A\transpose A\, \tangent^* = A\transpose b - \eta$, and the decrease from $\tangent = 0$ is
+
+$$
+	\phi(0) - \phi(\tangent^*) = \tfrac12 \lVert d - y \rVert^2 = \tfrac12 \lVert R \tangent^* \rVert^2 , @tag(decrease)
+$$
+
+since $\phi(0) = \tfrac12 \lVert d \rVert^2 + \tfrac12 \lVert e \rVert^2$. Two things change with
+the linear term.
+
+- **It needs every direction determined.** When $A$ has rank $n$, $\phi$ is bounded below whatever
+  $\eta$ is. When it does not, $\phi$ is bounded below only if $\eta$ lies in the row space of $A$,
+  and the minimizer is then not unique. The rank condition is checked on the diagonal of $R$, as
+  before.
+- **It is solved at $\kappa(A)^2$.** The part of $\tangent^*$ that comes from $b$ is $R^{-1} d$, one
+  triangular solve at $\kappa(A)$. The part that comes from $\eta$ is $R^{-1} R^{-\top} \eta$, two,
+  and is as sensitive as a solve of the normal equations: only the factor was computed at
+  $\kappa(A)$. A linear term known to be $A\transpose c$ for some vector $c$ is better folded into
+  $b$, as $b - c$, before factoring.
+
+With $A$ empty, $\phi$ is linear and the problem is unbounded unless $\eta = 0$; with $b = 0$ and
+$\eta$ a gradient, the minimizer is the solution of the normal equations with that gradient on the
+right, which is the form of every method whose rows come without a residual.
+
+## Eliminating one block
+
+The variables of a large problem usually fall into *blocks*, one for each unknown, holding that
+unknown's coordinates: in a map built along a robot's path, a block for each pose and one for each
+landmark. Write $\tangent = (\tangent_1, \dots, \tangent_n)$, with block $k$ the vector
+$\tangent_k \in \R^{d_k}$.
+
+The rows fall into *factors* in the same way, one for each measurement. A measurement concerns
+only a few of the unknowns, so the rows it gives are zero in the columns of every other block. A
+factor $f$ is therefore described by three things:
+
+- the set $K_f$ of the blocks it *involves*, those whose columns are not all zero in its rows;
+- its rows $A_f$, keeping only the columns of the blocks it involves;
+- its right-hand side $b_f$.
+
+Its residual is $A_f \tangent_{K_f} - b_f$, where $\tangent_{K_f}$ stacks the blocks of $K_f$.
+Stacking the rows of every factor, with zeros put back in the columns of the blocks it does not
+involve, gives back $A$ and $b$. The odometry in the example at the end of this section,
+$\tangent_2 - \tangent_1 = 1$, is a factor with $K_f = \{1, 2\}$, $A_f = [\,{-1} \;\, 1\,]$ and
+$b_f = 1$.
+
+The linear term needs no factors. It splits into one piece for each block,
+$\eta\transpose \tangent = \sum_k \eta_k\transpose \tangent_k$, and each piece involves a single
+block, so it never ties two blocks together. It is kept as a vector $\eta_k$ for each block, and
+the problem [](eq:problem) is
+
+$$
+	\phi(\tangent) = \sum_f \tfrac12 \bigl\lVert A_f\, \tangent_{K_f} - b_f \bigr\rVert^2 + \sum_k \eta_k\transpose \tangent_k . @tag(factored)
+$$
+
+The factors say where the matrix $A\transpose A$ is zero. Its block $(j, k)$ is the sum, over the
+factors that involve both $j$ and $k$, of the product of their columns for $j$, transposed, with
+their columns for $k$. It is zero when no factor involves both blocks.
+
+*Eliminating* a block $k$ removes it from the problem. Apart from the linear term $\eta_k$, only
+the factors that involve $k$ depend on $\tangent_k$. The other blocks that those factors involve
+form the *separator* $S$ of $k$. Stack the rows of those factors into one matrix
+$[A_k \;\, A_S \;\, b]$, where $A_k$ holds their columns for $k$, $A_S$ their columns for the
+blocks of $S$ (zero where a factor does not involve one of them), and $b$ their right-hand sides.
+The lemma concerns these factors together with the linear terms of $k$ and of $S$, where $\eta_S$
+stacks the vectors $\eta_j$ of the blocks $j$ of $S$.
+
+<Statement {...eliminateOne} />
+
+<Proof>
+
+Since $Q$ preserves lengths, the squares are
+
+$$
+	\begin{aligned}
+		\tfrac12 \lVert A_k \tangent_k + A_S \tangent_S - b \rVert^2
+		&= \tfrac12 \left\lVert \begin{bmatrix} R \tangent_k + T \tangent_S - d \\ A' \tangent_S - b' \end{bmatrix} \right\rVert^2 \\
+		&= \tfrac12 \lVert R \tangent_k + T \tangent_S - d \rVert^2 + \tfrac12 \lVert A' \tangent_S - b' \rVert^2 .
+	\end{aligned}
+$$
+
+Write $w = R \tangent_k + T \tangent_S - d$. Since $R\transpose y = \eta_k$,
+
+$$
+	\eta_k\transpose \tangent_k = y\transpose R \tangent_k = y\transpose w - y\transpose T \tangent_S + y\transpose d ,
+$$
+
+and completing the square in $w$,
+
+$$
+	\tfrac12 \lVert w \rVert^2 + y\transpose w = \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y \rVert^2 ,
+$$
+
+which together give the decomposition. Only its first term depends on $\tangent_k$; it is zero
+exactly at the point of part 1, since $R$ is nonsingular, which proves part 1, and the substitution
+$s = R \tangent_k$ turns its integral into that of a standard normal density's kernel, of volume
+$(2\pi)^{d_k/2}$, times $\lvert \det R \rvert^{-1}$, which proves part 2. For part 3, $Q$ is
+orthogonal, so $\Lambda$ is also the product of the reduced columns with themselves:
+$\Lambda_{kk} = R\transpose R$, $\Lambda_{kS} = R\transpose T$ and
+$\Lambda_{SS} = T\transpose T + A'^\top A'$, whence
+
+$$
+	\begin{aligned}
+		\Lambda_{SS} - \Lambda_{Sk} \Lambda_{kk}^{-1} \Lambda_{kS}
+		&= T\transpose T + A'^\top A' - T\transpose R\, (R\transpose R)^{-1} R\transpose T \\
+		&= A'^\top A' .
+	\end{aligned}
+$$
+
+In the same way $g_k = \eta_k - R\transpose d$ and $g_S = \eta_S - T\transpose d - A'^\top b'$, so
+
+$$
+	\begin{aligned}
+		g_S - \Lambda_{Sk} \Lambda_{kk}^{-1} g_k
+		&= \eta_S - T\transpose d - A'^\top b' - T\transpose R^{-\top} (\eta_k - R\transpose d) \\
+		&= \eta_S - A'^\top b' - T\transpose R^{-\top} \eta_k ,
+	\end{aligned}
+$$
+
+which is the gradient of $\phi'$ at zero, since $R^{-\top} \eta_k = y$.
+
+</Proof>
+
+The first term of the decomposition is a *conditional*: it says what $\tangent_k$ is once
+$\tangent_S$ is known. The second, $\phi'$, is a *new factor* on the separator, with the linear
+term $-T\transpose y$ pushed onto the separator's blocks, and it replaces every factor that
+involved $k$. The constant $\gamma$, and $\tfrac12 \lVert e \rVert^2$ when $A'$ is reduced
+further, depend on nothing. The problem now has one block fewer and the same form. Minimizing over
+$\tangent_k$ and integrating over it leave the same new factor, and differ only in a constant,
+$\tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert$. Part 3 says that the new factor is what
+Gaussian elimination of block $k$ from the normal equations would have produced, reached through
+square roots instead: the matrix $\Lambda$ is never formed, and nothing is inverted but triangular
+blocks.
+
+The new factor has $m - d_k$ rows, which may be more than the separator's dimension $d_S$. A
+further QR of $[A' \;\, b']$ leaves at most $d_S$ rows and a scalar residual, a constant, and is
+worth doing when the factor is to be stored or eliminated again.
+
+**A linear term in the row space stays there.** Suppose the linear term of the eliminated factors
+is of the form $(\eta_k, \eta_S) = [A_k \;\, A_S]\transpose u$ for some vector $u$. Write
+$Q\transpose u = (u_1, u_2)$, split as the rows of the reduced matrix are. Then
+
+$$
+	\begin{bmatrix} \eta_k \\ \eta_S \end{bmatrix}
+	= \begin{bmatrix} R & T \\ 0 & A' \end{bmatrix}\transpose \begin{bmatrix} u_1 \\ u_2 \end{bmatrix}
+	= \begin{bmatrix} R\transpose u_1 \\ T\transpose u_1 + A'^\top u_2 \end{bmatrix} ,
+$$
+
+so $y = R^{-\top} \eta_k = u_1$, and the new factor's linear term is
+$\eta_S - T\transpose y = A'^\top u_2$. It is again in the row space of the factor's rows, and it
+can be folded into the right-hand side, as [Linear terms](#linear-terms) says. Elimination never
+creates a linear term that cannot be folded. One that cannot be folded was there from the start.
+
+For example, take two scalars with a prior $\tangent_1 = 1$ and an odometry
+$\tangent_2 - \tangent_1 = 1$, both of unit variance: the factors $[\,1 \;\, 0 \mid 1\,]$ and
+$[\,{-1} \;\, 1 \mid 1\,]$, with no linear term. Eliminating $\tangent_1$ reduces their rows to
+
+$$
+	\begin{bmatrix} \sqrt2 & -1/\sqrt2 & 0 \\ 0 & 1/\sqrt2 & \sqrt2 \end{bmatrix} .
+$$
+
+The first row is the conditional $\tangent_1 = \tangent_2 / 2$, the second the new factor
+$\tfrac12 (\tangent_2 / \sqrt2 - \sqrt2)^2$ on $\tangent_2$, minimized at $\tangent_2 = 2$, which
+gives $\tangent_1 = 1$. Its matrix, $\tfrac12$, is the Schur complement $1 - 1 \cdot \tfrac12 \cdot
+1$ of $\Lambda = \left[\begin{smallmatrix} 2 & -1 \\ -1 & 1 \end{smallmatrix}\right]$, so the
+marginal variance of $\tangent_2$ is $2$: one unit from the prior, one from the odometry.
+
+## Order, fill and the elimination tree
+
+Which factors involve which blocks is recorded by the *factor structure*, a bipartite graph with a
+node for each block of variables and each factor, and an edge between a factor and every block it
+involves. Eliminating $k$ removes $k$ and the factors joined to
+it, and adds one factor joined to the whole separator. Blocks that shared no factor may now share
+one, and the new nonzero blocks of the matrix this creates are its *fill*. The answer does not
+depend on the order of elimination; the cost does, entirely.
+
+<ModelGraph spec={starFactors} />
+
+In the star, eliminating the hub $h$ first creates a factor over all the leaves at once, and with
+$n$ leaves everything after it is dense work, of order $n^3$. Eliminating the leaves first creates,
+for each, a new factor on $h$ alone, and the hub is eliminated last in a problem of one block: order
+$n$. Finding the order with the least fill is NP-hard, but cheap heuristics do well. *Minimum
+degree* eliminates, at each step, a block whose separator is then smallest, and its approximate
+variants work on the factor structure without forming the matrix. An order may also be
+*constrained* to eliminate chosen blocks last, which the reductions below need.
+
+The separators depend on the factor structure and the order alone, not on any number, so the
+elimination can be planned before it is performed. Give each block $k$ a *parent*: the block of its
+separator that is eliminated first after $k$, which is the block its new factor will be collected
+with next. The *elimination tree* has a node for each block and an edge from each block's parent to
+the block. Its roots, which have no parent, are the blocks eliminated last, one in each connected
+part of the factor structure; its leaves, which are no block's parent, are eliminated before
+anything joined to them. The elimination of a block waits only on the blocks below it in the
+elimination tree, so disjoint subtrees can be eliminated independently.
+
+<ModelGraph spec={starTree} />
+
+The order, the elimination tree and the separators together are the *symbolic factorization*:
+everything about the elimination that does not depend on the numbers in the rows. It is computed
+once and reused for as long as the factor structure stays the same. An optimizer that relinearizes
+at every iteration changes the numbers in every factor but not which factors involve which blocks,
+so it plans the elimination once; so does a program that solves many problems of the same shape.
+
+### Cliques and the junction tree
+
+Eliminating one small block at a time does the arithmetic in many small pieces. Some blocks can be
+eliminated together, as one larger block, with no more fill and the same result.
+
+Call two blocks *joined* when some factor involves both, counting the new factors that elimination
+creates as well as the original ones. When a block $k$ is eliminated, its factors are joined to all
+of $S_k$, its separator, and they leave a new factor on the whole of $S_k$. So every two blocks of
+$\{k\} \cup S_k$ are joined: it is a *clique*, in the sense of graph theory, and it is the set of
+blocks that the rows of $k$'s conditional involve.
+
+Now let $c$ be a child of $k$ in the elimination tree. The new factor of $c$ involves all of $S_c$,
+which contains $k$, and is collected when $k$ is eliminated, so $S_c \setminus \{k\} \subseteq S_k$.
+When the two are equal,
+
+$$
+	S_k = S_c \setminus \{k\} , @tag(clique-chain)
+$$
+
+the clique of $k$, $\{k\} \cup S_k$, is the clique of $c$, $\{c\} \cup S_c$, without $c$. It adds
+no block to it. Eliminating $c$ and $k$ together, as one block $(c, k)$ by
+[%full](statement:eliminate-one), then has the separator $S_k$ and leaves the same new factor and
+the same conditionals as eliminating them in turn. In fact it performs the same reflections: those
+that triangularize $c$'s columns leave unchanged the rows that are zero there, and what remains in
+$k$'s columns afterwards is exactly the rows that $k$'s own elimination would have stacked. A chain
+of blocks, each related to the next by [](eq:clique-chain), is eliminated as one block in the same
+way. If two children of $k$ both satisfy [](eq:clique-chain), $k$ joins either one.
+
+Grouping the blocks along such chains gives the maximal cliques: each group, together with its
+separator, is a clique that no other contains. The *junction tree* has a node for each group and an
+edge from the group that contains the parent of its last block to the group. Each node eliminates
+its *frontal* blocks, the group, and shares its separator with its parent: a block that two cliques
+contain is contained in every clique on the path between them, so what a clique shares with any
+clique outside its own subtree lies in its separator. The groups must be eliminated in an order that keeps each
+one's blocks consecutive, children before parents, which a postorder of the junction tree does.
+
+For example, take a small map of three poses $x_1, x_2, x_3$ and two landmarks $l_1, l_2$. A prior
+fixes $x_1$, odometry joins consecutive poses, a loop closure joins $x_1$ to $x_3$, and each
+landmark is seen from two poses.
+
+<ModelGraph spec={mapFactors} />
+
+Eliminating in the order $l_1, l_2, x_1, x_2, x_3$ gives the separators and the elimination tree
+below. Eliminating $l_1$ joins $x_1$ and $x_2$, which already were, and $l_2$ joins $x_2$ and
+$x_3$, so the order creates no fill.
+
+<ModelGraph spec={mapTree} />
+
+Both $x_1$ and $l_2$ have the separator $\{x_2, x_3\}$, which is $\{x_2\} \cup S_{x_2}$, and
+$S_{x_2} = \{x_3\}$ is $\{x_3\} \cup S_{x_3}$ with $x_3$ removed, so [](eq:clique-chain) holds for
+$x_2$ with either child, and for $x_3$ with $x_2$. Taking the child $x_1$ makes the chain
+$x_1, x_2, x_3$ one group. The landmarks stay groups of one block. The junction tree has three
+cliques.
+
+<ModelGraph spec={mapJunction} />
+
+Eliminating it takes three factorizations instead of five. Each landmark's is unchanged: the rows
+of its two sightings, reduced to a conditional and a new factor on its separator. The
+root's stacks the prior, the odometry, the loop closure and the two new factors into rows over
+$(x_1, x_2, x_3)$, and triangularizes them in one dense factorization, where eliminating the poses
+one at a time would have taken three smaller ones. The arithmetic is the same; done in fewer,
+larger dense operations, it runs faster.
+
+## What the eliminated problem answers
+
+Eliminating every block in turn, by part 1 of [%full](statement:eliminate-one), leaves only
+conditionals and a constant. Stacked in the order of elimination, the conditionals' rows form one
+block upper-triangular matrix $R$ with $R\transpose R = A\transpose A$ in that order, and right-hand
+sides $d - y$; every computation with $R$ becomes a traversal of the elimination tree.
+
+| computes | traversal | what it is for |
+| --- | --- | --- |
+| the minimizer $\tangent^*$ | from the roots to the leaves: each block solves its conditional given its separator's values | the minimum of [](eq:factored) |
+| $R^{-\top} c$ | from the leaves to the roots | a linear term's pushes $y$, and the first half of a normal-equations solve |
+| $R^{-1} z$ | from the roots to the leaves | a draw from $\mathcal N(0, (A\transpose A)^{-1})$ when $z$ is standard normal |
+| $\sum_i \log \lvert R_{ii} \rvert$ | none | $\tfrac12 \log \det A\transpose A$ |
+
+The minimum is the sum of the constants, and the decrease from $\tangent = 0$ is
+$\tfrac12 \lVert R \tangent^* \rVert^2$ by [](eq:decrease). Eliminating by integration instead, by
+part 2, gives
+
+$$
+	\int_{\R^\dimension} e^{-\phi(\tangent)} \, \dd \tangent
+	= (2\pi)^{\dimension / 2}\, e^{-\phi(\tangent^*)} \prod_i \lvert R_{ii} \rvert^{-1} . @tag(integral)
+$$
+
+**Partial elimination.** Eliminating only some blocks $E$ and keeping the rest, $K$, leaves the
+conditionals of $E$ and the factors on $K$, old and new. The order is then constrained to put $K$
+last, and only the factors joined to a block of $E$, directly or through new factors, are ever read.
+
+<Statement {...marginal} />
+
+<Proof>
+
+By part 2 of [%full](statement:eliminate-one), applied once for each block of $E$, the integral of
+$e^{-\phi}$ over $\tangent_E$ is a constant times $e^{-\phi_K}$, and the marginal density is that
+integral normalized. $\phi_K$ is quadratic with the matrix of part 3, applied repeatedly, which is
+the Schur complement of $\Lambda_{EE}$ in $\Lambda$, positive definite since $\Lambda$ is; a normal
+density's kernel with precision $P$ and minimizer $\mu$ is $e^{-\frac12 (\tangent - \mu)\transpose
+P (\tangent - \mu)}$ up to a constant.
+
+</Proof>
+
+The marginal's precision, covariance and mean follow from one more factorization of the factors on
+$K$, which brings them to a single triangular root $W$ with a right-hand side: the precision is
+$W\transpose W$, the covariance $W^{-1} W^{-\top}$, and $\sum_i \log \lvert W_{ii} \rvert$ is half
+the log-determinant of the precision. A root that is to be read as a whitening must often be lower
+triangular, with a positive diagonal, which QR does not give directly: factor the rows with the
+order of $K$'s coordinates reversed, reverse both the rows and the columns of the upper-triangular
+result, and change the sign of every row whose diagonal entry is negative. Reversal is a
+permutation $P$, with $P\transpose P = I$, and a change of sign is a diagonal orthogonal matrix, so
+the result $W$ has $W\transpose W$ equal to the original matrix.
+
+**Eliminating from some factors only.** The reductions above eliminate from the whole of
+[](eq:factored). A different question keeps the factors not joined to $E$ out of it: which single
+factor on $K$ can replace those joined to $E$, without changing the minimum, or the integral, over
+$E$? Split $\phi = \phi_{\ni E} + \phi_{\not\ni E}$ into the factors joined to $E$ and the rest.
+Since the rest does not involve $\tangent_E$,
+
+$$
+	\begin{gathered}
+		\min_{\tangent_E} \phi = \Bigl(\min_{\tangent_E} \phi_{\ni E}\Bigr) + \phi_{\not\ni E} , \\
+		\int e^{-\phi} \, \dd \tangent_E = e^{-\phi_{\not\ni E}} \int e^{-\phi_{\ni E}} \, \dd \tangent_E ,
+	\end{gathered} @tag(replace)
+$$
+
+so the replacement is the elimination of $E$ from $\phi_{\ni E}$ alone, with the linear terms of
+$E$'s blocks and the separator's linear terms that came from those factors. Eliminating $E$ from
+the whole of $\phi$ would instead fold $\phi_{\not\ni E}$ into the new factors, and a problem that
+kept those factors as well would count them twice.
+
+## Damping
+
+A step computed from [](eq:problem) is the minimizer of a model, and a model is often trusted only
+near $\tangent = 0$. *Damping* penalizes the step's length, adding
+$\tfrac12 \lambda\, \tangent\transpose D \tangent$ for a $\lambda \ge 0$ and a positive diagonal
+$D$, so that the minimizer solves $(A\transpose A + \lambda D)\, \tangent = A\transpose b - \eta$.
+The penalty is a sum of squares of its own,
+
+$$
+	\tfrac12 \lambda\, \tangent\transpose D \tangent = \sum_k \tfrac12 \bigl\lVert \sqrt\lambda\, D_k^{1/2} \tangent_k - 0 \bigr\rVert^2 , @tag(damping)
+$$
+
+one factor on each block $k$ with $D_k$ its part of $D$, so damping appends rows and nothing else:
+each new factor is joined to one block, creates no fill, and leaves the factor structure, and so
+the symbolic factorization, unchanged. It also makes every block's rows of full rank when
+$\lambda > 0$.

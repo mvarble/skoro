@@ -117,3 +117,17 @@ fn with_roles<B: Binds>(target: B, residual: QDyn, mean: QDyn, scale: Scale) -> 
         .bind_role(&roles::MEAN, mean)
         .bind_role(roles::scale(scale.form()), scale.value())
 }
+
+impl Stacked {
+    /// `x ⊖ p` for a quantity of `space`, known at run time, with the constant anchor `anchor`,
+    /// shared or per row: `block` without a marker. A value that does not fit `space` is refused
+    /// (`ValueShape`), and so is a discrete space (`NotContinuous`, by the core's inverse
+    /// retraction).
+    #[track_caller]
+    pub fn block_in(mut self, x: QDyn, space: &Space, anchor: skoro_tensor::HostValue) -> Stacked {
+        let anchor = skoro_core::scope::constant_in(space.clone(), anchor);
+        self.blocks.push(x.local(anchor));
+        self.dimension += space.dimension().unwrap_or(0);
+        self
+    }
+}

@@ -433,3 +433,13 @@ pub(crate) fn literal(draft: &mut Draft, space: Space, c: f64) -> Result<NodeId,
         .flatten();
     draft.constant(space, value)
 }
+
+/// A constant of `space` (`ValueShape` when the value does not fit it), for a space known only at
+/// run time.
+#[track_caller]
+pub fn constant_in(space: Space, value: HostValue) -> QDyn {
+    let location = Location::caller();
+    QDyn::from_id(build(location, |draft, _| {
+        draft.constant(space, Some(value))
+    }))
+}

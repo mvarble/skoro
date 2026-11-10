@@ -34,6 +34,17 @@ needs no observations at all.
 its own. A caller keeps one set and passes it to every compile, and the identity is what the
 compiled program is cached under.
 
+A query gives back what it was made with, so that an algorithm handed one can compile programs of
+its own under the same observations, as [the linearizer](../linearization/#linearizing-a-query)
+does with the nodes the terms bind:
+
+```rust
+{../../../../crates/skoro-core/src/query.rs:123..137}
+```
+
+Two sets of observations join by `Observations::union`, which keeps the first set's value of a
+quantity both observe, and is the first set itself when the second adds nothing.
+
 ## A target
 
 A target is where a program computes and at what precision, checked once, when it is made:

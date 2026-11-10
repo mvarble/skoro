@@ -711,3 +711,18 @@ mod layouts {
         assert_eq!((gradient.dimension(), gradient.columns()), (5, 1));
     }
 }
+
+#[test]
+fn query_gives_its_terms_and_observations() {
+    let e = example();
+    let snapshot = e.writer.snapshot();
+    let ids = |terms: &[TermHandle]| terms.iter().map(TermHandle::id).collect::<Vec<_>>();
+    assert_eq!(Query::log_density().terms(&snapshot), Some(ids(&e.t)));
+    let named = Query::log_density_of([e.t[5], e.t[0], e.t[2]]);
+    assert_eq!(named.terms(&snapshot), Some(ids(&[e.t[0], e.t[2], e.t[5]])));
+    assert_eq!(Query::of([e.x0.untyped()]).terms(&snapshot), None);
+    let observations = Observations::new().observe(e.z0, [0.1, 0.2]);
+    let query = Query::log_density().given(observations.clone());
+    assert_eq!(query.observations().identity(), observations.identity());
+    assert_eq!(Query::log_density().observations().identity(), 0);
+}

@@ -137,3 +137,87 @@ fn discrete_spaces_have_no_retraction() {
     let b = Space::Positive(2).retraction().unwrap();
     assert!(std::sync::Arc::ptr_eq(&a, &b));
 }
+
+/// A circle declared by stand-in composites of the right signatures, with the log-volume
+/// `log_volume` of the point's storage and the tangent.
+fn circle_with(
+    name: &'static str,
+    log_volume: fn(&[QDyn]) -> QDyn,
+) -> std::sync::Arc<skoro_core::Embedded> {
+    use skoro_core::{Composite, Embedded, Volume};
+    let (n, d) = (Space::Vector(2), Space::Vector(1));
+    let r = Composite::define(
+        "test.volume.retract",
+        Vec::new(),
+        &[n.clone(), d.clone()],
+        |q| q[0],
+    )
+    .unwrap();
+    let q = Composite::define(
+        "test.volume.local",
+        Vec::new(),
+        &[n.clone(), n.clone()],
+        |q| q[1].slice(0..1) - q[0].slice(0..1),
+    )
+    .unwrap();
+    let lambda = Composite::define(name, Vec::new(), &[n, d], log_volume).unwrap();
+    Embedded::declare(
+        "test.volume.circle",
+        vec![skoro_core::Param::Text(name.into())],
+        2,
+        1,
+        r,
+        q,
+        None,
+    )
+    .and_then(|circle| circle.with_volume(Volume::global(lambda)))
+    .unwrap()
+}
+
+#[test]
+fn volume_reads_point_by_space() {
+    for space in [Space::Real, Space::Vector(3), Space::Matrix(2, 2)] {
+        assert_eq!(space.volume_reads_point(), Ok(false), "{space:?}");
+    }
+    assert_eq!(Space::Positive(2).volume_reads_point(), Ok(true));
+    let mixed = Space::product([Space::Vector(2), Space::Positive(1)]).unwrap();
+    assert_eq!(mixed.volume_reads_point(), Ok(true));
+    let flat = Space::product([Space::Vector(2), Space::Matrix(1, 2)]).unwrap();
+    assert_eq!(flat.volume_reads_point(), Ok(false));
+    // The sphere's and the rotations' log-volumes read the tangent alone.
+    let invariant = Space::Embedded(circle_with("test.volume.tangent", |q| {
+        ((q[1] * q[1]).sum() * 0.25 + 1.0).log() * -2.0
+    }));
+    assert_eq!(invariant.volume_reads_point(), Ok(false));
+    let product = Space::product([invariant, Space::Vector(1)]).unwrap();
+    assert_eq!(product.volume_reads_point(), Ok(false));
+    let moving = Space::Embedded(circle_with("test.volume.point", |q| {
+        q[0].sum() * 0.0 + q[1].sum()
+    }));
+    assert_eq!(
+        moving.volume_reads_point(),
+        Ok(true),
+        "read, even if multiplied by zero"
+    );
+    assert!(matches!(
+        Space::Integer.volume_reads_point(),
+        Err(Error::NotContinuous { .. })
+    ));
+    let unmeasured = circle_with("test.volume.unmeasured", |q| q[1].sum());
+    let unmeasured = skoro_core::Embedded::declare(
+        "test.volume.none",
+        Vec::new(),
+        2,
+        1,
+        unmeasured.retraction().clone(),
+        unmeasured.inverse().clone(),
+        None,
+    )
+    .unwrap();
+    assert!(matches!(
+        Space::Embedded(unmeasured).volume_reads_point(),
+        Err(Error::NoVolume { .. })
+    ));
+    let bare = skoro_core::Embedded::declare_flat("test.volume.flat", Vec::new(), 2).unwrap();
+    assert_eq!(Space::Embedded(bare).volume_reads_point(), Ok(false));
+}

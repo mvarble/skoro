@@ -26,6 +26,8 @@ export function documentData(key: string) {
     const doc = cms.get(key);
     if (!doc) error(404, `No document ${key}.`);
     const links = (records: SkoroDocument[]) => records.map(linkOf);
+    const qualified = (records: SkoroDocument[]) =>
+        records.map((record) => ({ ...linkOf(record), title: qualifiedTitle(record) }));
     const keys = (list: string[]) =>
         list.flatMap((k) => {
             const record = cms.get(k);
@@ -70,12 +72,10 @@ export function documentData(key: string) {
         prev,
         next,
         references,
-        prerequisites: links(cms.prerequisites(key)),
-        // Named as the map names them, since an archive document's own title ("Mathematics") says
-        // nothing of the entry it belongs to.
-        dependents: cms
-            .dependents(key)
-            .map((record) => ({ ...linkOf(record), title: qualifiedTitle(record) })),
+        // Both named as the map names them, since an archive document's own title ("Mathematics")
+        // says nothing of the entry it belongs to.
+        prerequisites: qualified(cms.prerequisites(key)),
+        dependents: qualified(cms.dependents(key)),
         // A page: the development behind it. An entry: what it changed (its pages and its
         // crates), and what it revises or is revised by. An entry's document: its siblings.
         entries: doc.kind == 'page' ? keys(doc.entries) : [],

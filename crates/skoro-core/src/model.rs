@@ -298,6 +298,13 @@ impl Snapshot {
     pub fn is_empty(&self) -> bool {
         self.0.nodes.is_empty()
     }
+
+    /// The quantities `id` is reached from in the compilation graph, walking back through mapped
+    /// nodes and stopping at nodes fixed in the model, sorted: what `Term::involves` holds for a
+    /// log-density.
+    pub fn reached_from(&self, id: impl Into<NodeId>) -> Vec<NodeId> {
+        crate::term::roots(&self.0, id.into())
+    }
 }
 
 /// Two snapshots are equal when they hold the same nodes: the same identifiers, each the same

@@ -39,3 +39,8 @@ pub fn scale(form: Form) -> &'static Role<AtMostOne> {
         Form::Whitening => &WHITENING,
     }
 }
+
+/// The tangent `s = x ⊖ μ` of a normal's term, which scores a quantity: its residual is `W s`,
+/// with `W` the whitening of the bound scale, and its log-volume, where it binds one, is
+/// `λ_μ(s)`, the chart's log-volume of the scored quantity's space at `μ`.
+pub const TANGENT: Role<AtMostOne> = Role::new("skoro.normal.tangent");

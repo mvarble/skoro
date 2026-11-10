@@ -107,6 +107,7 @@ impl Normal {
             })
             .bind(&roles::RESIDUAL, parts.residual)
             .bind(&roles::MEAN, self.mean)
+            .bind(&roles::TANGENT, parts.tangent)
             .bind(roles::scale(form), scale)
             .bind(&roles::INFORMATION_ROOT, root.call(&[scale]));
         if let Some(log_volume) = parts.log_volume {

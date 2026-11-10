@@ -53,19 +53,20 @@ fn roles_are_bound() {
             .map(|form| at_most(roles::scale(form))),
             at_most(&roles::LOG_VOLUME),
             at_most(&roles::INFORMATION_ROOT),
+            at_most(&roles::TANGENT),
         )
     };
     assert_eq!(
         bound(vector),
-        (true, true, [false, true, false, false], false, true)
+        (true, true, [false, true, false, false], false, true, true)
     );
     assert_eq!(
         bound(positive),
-        (true, true, [true, false, false, false], true, true)
+        (true, true, [true, false, false, false], true, true, true)
     );
     assert_eq!(
         bound(factor),
-        (true, true, [false, false, true, false], false, false)
+        (true, true, [false, false, true, false], false, false, false)
     );
 }
 
@@ -311,5 +312,52 @@ fn four_forms_agree() {
                 common::close(b, a, 1e-12);
             }
         }
+    }
+}
+
+skoro_core::precision_tests! {
+    fn score_binds_the_tangent(target) {
+        // `TANGENT` is `x ⊖ μ`, and the residual is `W` times it: `diag(σ)⁻¹` here.
+        let sigma = [0.5, 2.0];
+        let cases: [(Space, [f64; 2], [f64; 2]); 2] = [
+            (Space::Vector(2), [0.3, -0.7], [1.1, 0.4]),
+            (Space::Positive(2), [1.5, 0.4], [2.0, 0.1]),
+        ];
+        for (space, mean, at) in cases {
+            let mut writer = Writer::new();
+            let (x, term) = writer
+                .build(|| {
+                    let x = quantity_in("x", space.clone());
+                    let mu = skoro_core::scope::constant_in(
+                        space.clone(),
+                        HostValue::new(None, 2, HostData::Continuous(mean.to_vec())).unwrap(),
+                    );
+                    let term = Normal::in_space(space.clone(), mu, Scale::sds(&sigma)).score(x);
+                    (x, term)
+                })
+                .unwrap();
+            let snapshot = writer.snapshot();
+            let tangent = snapshot.bound(term, &roles::TANGENT).unwrap().unwrap();
+            let residual = snapshot.bound(term, &roles::RESIDUAL).unwrap();
+            let given = Observations::new()
+                .observe_dyn(x, HostValue::new(None, 2, HostData::Continuous(at.to_vec())).unwrap());
+            let out = evaluate(&snapshot, &[tangent, residual], given, &target);
+            let expected: Vec<f64> = match space {
+                Space::Positive(_) => (0..2).map(|i| (at[i] / mean[i]).ln()).collect(),
+                _ => (0..2).map(|i| at[i] - mean[i]).collect(),
+            };
+            common::close(&out[0], &expected, common::tolerance(&target));
+            let whitened: Vec<f64> = out[0].iter().zip(sigma).map(|(t, s)| t / s).collect();
+            common::close(&out[1], &whitened, common::tolerance(&target));
+        }
+        // A likelihood factor binds none.
+        let mut writer = Writer::new();
+        let factor = writer
+            .build(|| {
+                let x = quantity("x", Vector::<2>);
+                Normal::on(Vector::<2>, x, Scale::sd(1.0)).factor_at(constant(Vector::<2>, [0.0, 0.0]))
+            })
+            .unwrap();
+        assert_eq!(writer.snapshot().bound(factor, &roles::TANGENT).unwrap(), None);
     }
 }

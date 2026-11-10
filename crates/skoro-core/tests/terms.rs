@@ -516,3 +516,28 @@ fn sample_records_a_refusal_at_its_line() {
     );
     assert_eq!(failure.location.line(), line);
 }
+
+#[test]
+fn reached_from_is_what_a_term_involves() {
+    let mut e = example();
+    let snapshot = e.writer.snapshot();
+    for term in snapshot.terms() {
+        let reached = snapshot.reached_from(term.log_density);
+        let mut expected: Vec<NodeId> = term.involves.to_vec();
+        if term.scores.is_some_and(|q| !reached.contains(&q)) {
+            expected.retain(|&q| Some(q) != term.scores);
+        }
+        assert_eq!(reached, expected, "{:?}", term.log_density);
+    }
+    // A mapped node is reached from the quantities it reads, a quantity from itself, and a
+    // constant, fixed in the model, from none.
+    let (m, x0) = (e.m, e.x0);
+    let (between, half) = e
+        .writer
+        .build(|| ((m - x0).untyped(), constant(Real, 0.5).untyped()))
+        .unwrap();
+    let snapshot = e.writer.snapshot();
+    assert_eq!(snapshot.reached_from(between), ids(&[m.id(), x0.id()]));
+    assert_eq!(snapshot.reached_from(e.zeta), [e.zeta.id()]);
+    assert!(snapshot.reached_from(half).is_empty());
+}

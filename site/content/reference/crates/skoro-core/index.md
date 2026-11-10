@@ -21,6 +21,12 @@ the namespaces they lie under, and keeps what they said about the rest as a like
 their Markov blanket, which the caller builds with the roles it binds, and whose handle the
 retirement gives back.
 
+An algorithm in another crate reads what it needs through the same interface: a query's terms and
+observations, and the union of two sets of observations; the quantities any node is reached from;
+whether a composite reads an input, and so whether a space's chart volume depends on its point; and
+a constant of a space known only at run time. [The linearization](../../../concepts/linearization/)
+is built on these alone.
+
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the
 `precision_tests!` macro, and a declared chart volume against the area formula. Its wgpu target

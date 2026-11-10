@@ -69,6 +69,14 @@ before the one it scores, so the order in which quantities were made is an ances
 which each comes after everything its distribution depends on. A quantity no term scores is a
 **parameter**, such as a sensor reading the model is driven by.
 
+The same reading is open for any node: `Snapshot::reached_from` gives the quantities a node is
+reached from, which for a term's log-density is what it involves, and for a node it binds, such as
+a normal's scale, says whether the node moves with the free quantities of a query.
+
+```rust
+{../../../../crates/skoro-core/src/model.rs:302..307}
+```
+
 ## An example
 
 A vehicle at $x_0$ and then $x_1$ measures a landmark $m$ once from each position, as $z_0$ and

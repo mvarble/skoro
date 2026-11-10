@@ -644,3 +644,34 @@ mod fused {
         check_agreement(fused, |q| composite.call(q), &inputs(), &single).unwrap();
     }
 }
+
+#[test]
+fn composites_read_their_inputs() {
+    let v = Space::Vector(2);
+    let both = Composite::define(
+        "test.reads.both",
+        Vec::new(),
+        &[v.clone(), v.clone()],
+        |q| q[0] + q[1],
+    )
+    .unwrap();
+    assert!(both.reads(0) && both.reads(1));
+    let second = Composite::define(
+        "test.reads.second",
+        Vec::new(),
+        &[v.clone(), v.clone()],
+        |q| q[1] * 2.0,
+    )
+    .unwrap();
+    assert!(!second.reads(0) && second.reads(1));
+    assert!(
+        !second.reads(2),
+        "an index past the inputs is read by nothing"
+    );
+    // A composite that ignores its first input, called on both: the call is taken to read both.
+    let outer = Composite::define("test.reads.outer", Vec::new(), &[v.clone(), v], |q| {
+        second.call(&[q[0], q[1]])
+    })
+    .unwrap();
+    assert!(outer.reads(0) && outer.reads(1));
+}

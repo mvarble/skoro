@@ -101,6 +101,31 @@ impl Composite {
         &self.output
     }
 
+    /// Whether the output is reached from the input at `index` through the body. An operation is
+    /// taken to read every input it is given, a composite call among them, so the answer errs
+    /// towards `true`; an index past the inputs is read by nothing.
+    pub fn reads(&self, index: usize) -> bool {
+        let Some(&input) = self.body.inputs.get(index) else {
+            return false;
+        };
+        let mut seen = std::collections::HashSet::new();
+        let mut stack = vec![self.body.output];
+        while let Some(id) = stack.pop() {
+            if id == input {
+                return true;
+            }
+            if !seen.insert(id) {
+                continue;
+            }
+            if let Some(node) = self.body.model.nodes.get(&id)
+                && !node.is_fixed()
+            {
+                stack.extend(node.inputs().iter().copied());
+            }
+        }
+        false
+    }
+
     pub(crate) fn body(&self) -> &Body {
         &self.body
     }
