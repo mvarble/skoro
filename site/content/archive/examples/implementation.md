@@ -360,9 +360,9 @@ A few choices in that body:
   linearized again at the same point on the next iteration, which repeats work the row has
   already done; caching it would split a batch's problems between two points, for no change in
   any result.
-- **A rejected step's $\Delta$** is still compared with the tolerance only on acceptance, as the
-  stopping rule says. A row whose $\Delta$ fell to the order of rounding while it was rejected
-  would be at a point where an accepted step had already stopped it.
+- **A rejected step's $\Delta$** is compared with the tolerance only on acceptance, as the
+  stopping rule of the mathematics says. That rule fails rows that have converged; see
+  [Open questions](#open-questions), which proposes to amend it.
 - **A step is refused, not skipped,** when the elimination refuses a block. Damping makes every
   block determined for $\lambda > 0$, so a refusal is a malformed problem, and the error names its
   quantity.
@@ -440,7 +440,7 @@ apply it either, and a test pins the two to each other).
 ```
 crates/skoro/
     Cargo.toml                 dev-dependencies: skoro-normal, skoro-spatial, skoro-linearize,
-                               skoro-elimination; an [[example]] for each, test = true
+                               skoro-elimination, faer; an [[example]] for each, test = true
     examples/
         common/mod.rs          pub mod scenario; pub mod model; pub mod laplace; pub mod report;
         common/scenario.rs     the two scenarios and their sightings
@@ -452,7 +452,10 @@ crates/skoro/
 ```
 
 Each example starts with `mod common;`. Cargo does not take `common/mod.rs` for an example, since
-it is not a `main.rs`.
+it is not a `main.rs`. `common/mod.rs` opens with `#![allow(dead_code)]`, as every `tests/common`
+of the workspace does: each example uses part of it, and clippy with `-D warnings` refuses an item
+that one of them leaves unused, as a throwaway crate confirmed for an example built normally and
+as a test.
 
 **The scenarios.** A scenario is the constants of [the setting](math.svx#setting):
 
@@ -496,10 +499,11 @@ The sightings are the pairs with $\lVert \bar p_k - \bar m_j \rVert \le h$, the 
 under the pose's rotation, so no map of the motions is needed to choose them. The scales are the
 same for both scenarios: $\Sigma_0$ of $0.01$ rad and $0.01$ m, $\Sigma_u$ of $0.02$ rad and
 $0.05$ m, $\Sigma_y$ of $0.005$ rad and $0.02$ m, $\Sigma_m$ of $2$ m and $\Sigma_z$ of $0.05$ m.
-The odometry's rotational error accumulates to $0.005 \sqrt{72} \approx 0.04$ rad over the circuit
-before any sighting closes it, within the $\sigma_\phi \le 0.05$ rad that
-[the check](math.svx#calibration) assumes; the example checks the assumption rather than trusting
-this figure.
+Dead reckoning on the odometry drifts in rotation by about $0.005 \sqrt{72} \approx 0.04$ rad per
+axis over the circuit. That is the start's error, not the posterior's: the motion terms and the
+sightings that close the loop make every marginal tighter, so the posterior's $\sigma_\phi$ is
+expected well within the $0.05$ rad that [the check](math.svx#calibration) assumes. The example
+checks the assumption rather than trusting this figure.
 
 **The model, tick by tick.** One builder serves the batch, which calls it for every tick in one
 `build`, and the window, which calls it once per tick in a `build` of its own, so that the model is
@@ -547,12 +551,14 @@ generated rows. The start [](eq:archive/examples/math/start) is computed on the 
 **The Laplace marginals and the check** (`common/laplace.rs`):
 
 ```rust
-/// Each row's normalized error of `quantity`, [](eq:archive/examples/math/nees): the chart
-/// linearization at `mode`, the schedule keeping `quantity`, its marginal's whitening `W` and mean
-/// `μ` per row, and `|W (q* ⊖ q̂ - μ)|²` with `q* ⊖ q̂` from `Layout::local`; and the trace of the
-/// marginal's rotation block, for a pose.
+/// Each row's normalized error of `quantity`, [](eq:archive/examples/math/nees): `chart`, the
+/// chart linearization at `mode` computed once for every quantity, eliminated along the schedule
+/// keeping `quantity`; its marginal's whitening `W` and mean `μ` per row; and `|W (q* ⊖ q̂ - μ)|²`
+/// with `q* ⊖ q̂` from `Layout::local`. For a pose, also the largest eigenvalue of the marginal
+/// covariance's rotation block, per row.
 pub fn normalized_errors(
     linearizer: &Linearizer,
+    chart: &Linearized,
     mode: &Values,
     truth: &Values,
     quantity: NodeId,
@@ -574,16 +580,18 @@ pub const SLOPE_6: f64 = 0.367_975;
 pub const SLOPE_3: f64 = 0.273_781;
 ```
 
-The marginal of each quantity is its own elimination, `schedule_keeping(&[q])`, once per quantity
-at the mode, which for 73 poses and 24 landmarks over 100 rows is 9 700 small eliminations: seconds
-in release. The alternative, the joint marginal and its covariance, inverts one dense matrix of the
+The chart linearization is computed once at the mode, and the marginal of each quantity is its
+own elimination of it, `schedule_keeping(&[q])`, which for 73 poses and 24 landmarks over 100 rows
+is 9 700 eliminations of the whole problem, of dimension $6 \cdot 73 + 3 \cdot 24 = 510$: tens of
+seconds in release by an estimate the build measures and reports. The alternative, the joint marginal and its covariance, inverts one dense matrix of the
 whole problem's dimension per row and is slower at these sizes. The truth's tangent is taken at
 the mode, and the marginal's mean, zero to the tolerance at a converged mode, is subtracted rather
 than assumed.
 
-`σ_φ²` is bounded by the largest trace of a pose's rotation block over every pose and row, an upper
-bound of its largest eigenvalue: the band $\delta_6 = 0.37\, \bar\kappa$ of the check is then
-conservative. If the bound exceeds $0.05^2$, the example fails, saying that the scales left the
+$\sigma_\phi^2$ is the largest eigenvalue of a pose's rotation block of its marginal covariance,
+the largest over every pose and row, as the mathematics defines it. The eigenvalues are faer's
+self-adjoint eigensolver's, `faer` being a dev-dependency of the umbrella crate for the purpose;
+the trace, an upper bound, would be up to three times too strict. If the bound exceeds $0.05^2$, the example fails, saying that the scales left the
 regime the check was designed for, rather than check at a tolerance whose premise does not hold.
 
 **The batch example**, `pose_graph.rs`, in order:
@@ -698,6 +706,13 @@ crate's own models in `tests/common`.
   is $\beta$ times larger. Shows rejection leaves the point and grows the damping.
 - `non_convergence_is_an_outcome`: `max_iterations: 1` gives `Status::IterationsExceeded` and no
   error; `max_damping` below $\lambda_0$ gives `Status::DampingExceeded`.
+- `rows_at_rounding_converge`: a model with many terms, so that $\lvert f \rvert$ is in the
+  thousands, and nearly linear, $x \sim \mathcal N(0, 1)$ on $\R^3$ with 2 000 observed
+  $z_i \sim \mathcal N(x + 0.01\, x \odot x, I)$, minimized from 1 000 rows of starts near the
+  mode: every row ends `Converged`. Under the rule of the mathematics as written, rows whose last
+  accepted step promised just over $\epsilon$ take a next step whose gain is rounding, and some
+  reach `max_damping`; this test is what shows the amended rule of
+  [Open questions](#open-questions) right.
 - `the_fisher_assembly_is_refused`: `minimize` with a Fisher linearizer is `NotAnIntegral`.
 - `the_objective_is_the_negative_log_density`: `Linearizer::objective` against the negated
   `DENSITY` of the query's own compiled program, per row, and against `value(0)` of the
@@ -741,7 +756,28 @@ crate's own models in `tests/common`.
 
 ## Open questions
 
-None remains. The method is the library's, in `skoro-linearize`, with per-row damping by row-wise
-elimination; the examples are the umbrella crate's, sharing one model builder; the inverse
+> [!TODO] The stopping rule of the mathematics fails rows that have converged
+> [The stopping rule](math.svx#a-levenberg-marquardt-method) stops a row only on an *accepted* step
+> that promised $\Delta \le \epsilon$. In these models $\lvert f \rvert$ is in the thousands, so each
+> of the two values of $f$ in the gain [](eq:archive/examples/math/gain) carries rounding of about
+> $10^{-12}$. Gauss–Newton contracts fast here: an accepted step promising, say, $5 \times 10^{-9}$,
+> just over $\epsilon$, is followed by one promising $10^{-12}$ or less, whose gain is rounding of
+> either sign, and a step promising exactly zero has the gain $0/0$, not a number, which is never
+> positive. Each rejection multiplies $\lambda$ by $\beta$ and doubles $\beta$, so some ten
+> rejections in a row, a chance of about one in a thousand, carry $\lambda$ past $\lambda_{\max}$ and
+> end a converged row as `DampingExceeded`. The window runs some 8 000 row-solves and fails unless
+> every one converges, so it would fail. The mathematics's own paragraph on precision argues that
+> $\Delta$ must stay above $u \lvert f \rvert$ for the gain to mean anything, which is the case for
+> stopping as soon as it does not, accepted or not.
+>
+> The amendment proposed is: *a row stops when a step promises $\Delta \le \epsilon$, whether or not
+> it is accepted, the step being taken if it is*; stationarity is still checked apart from it by
+> the undamped decrement at most $10\, \epsilon$, which is what bounds the point. This changes the
+> approved mathematics, so it is the user's to reopen (`/wf-reopen math`); the design above then
+> moves the comparison with the tolerance before the acceptance, and the test
+> `rows_at_rounding_converge` pins it.
+
+The rest is decided. The method is the library's, in `skoro-linearize`, with per-row damping by
+row-wise elimination; the examples are the umbrella crate's, sharing one model builder; the inverse
 retraction, the observation of generated values and the host maps of the motions are added where a
 user would look for them.
