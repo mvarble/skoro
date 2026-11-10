@@ -484,11 +484,11 @@ pub struct Scales {
 
 impl Scenario {
     /// The closed circuit: 73 poses on a circle of radius 10 m traversed 1.2 times, heading along
-    /// the path, the height and the pitch following `0.5 sin 2θ`; 24 landmarks on rings of radii 7
-    /// and 13 m at alternating heights ±1 m; sighted within `h = 6` m.
+    /// the path: the height `0.5 sin 2θ` and the pitch the path's climb, `atan(0.1 cos 2θ)`; 24
+    /// landmarks on rings of radii 7 and 13 m at alternating heights ±1 m; sighted within `h = 6` m.
     pub fn circuit() -> Scenario;
     /// The open path: 80 poses 1 m apart along `(k, 3 sin(k/10), 0.3 sin(k/7))`, heading along it;
-    /// 40 landmarks at `(2j, ±5, 0)`, alternating sides; sighted within `h = 7` m. Refuses itself
+    /// 40 landmarks at `(2j, ±5, 0)`, alternating sides; sighted within `h = 8.5` m. Refuses itself
     /// (`Err`) unless every landmark's sightings are an interval of ticks, as
     /// [the window](math.svx#a-sliding-window) requires.
     pub fn open_path() -> Result<Scenario, Box<dyn std::error::Error>>;
@@ -767,6 +767,11 @@ crate's own models in `tests/common`.
 
 **The examples**, run by CI in release. Their checks are the tests of the whole:
 
+- `the_scenarios_are_sighted`: in both scenarios every landmark is sighted, `first_sightings`
+  being `Ok`, and `open_path` does not refuse itself, so every landmark's sightings on the open
+  path are an interval of ticks. Shows the constants give the structure the window needs before
+  anything is drawn. (A unit test in the examples' `common`, beside `the_chi_squared_constants`.)
+
 - `the_chi_squared_constants`: the distribution function at `CHI2_6_90` by its closed form
   $1 - e^{-x/2}(1 + x/2 + x^2/8)$, and at `CHI2_3_90` by Simpson's rule on the density
   $\sqrt{x}\, e^{-x/2} / \sqrt{2\pi}$ (the standard library has no $\operatorname{erf}$), each
@@ -824,4 +829,11 @@ $(2j, \pm 5, 0)$ and a range of $h = 7$ m, sights ten of its forty landmarks nev
 $3$ m to either side, and a landmark on the side it has swung away from stays $7.5$ to $8$ m from
 every pose. [The window](math.svx#a-sliding-window) needs every landmark sighted, its sightings an
 interval of ticks, and `Scenario::open_path` refuses itself otherwise, as designed. The scenario's
-constants are revised so that every landmark is sighted over one interval.
+constants are revised so that every landmark is sighted over one interval: the landmarks stay at
+$(2j, \pm 5, 0)$, and the range becomes $h = 8.5$ m. Every landmark is then sighted, over one
+interval of $5$ to $16$ ticks. The alternatives were landmarks at $\pm 4$ m with $h = 7.5$ m, or
+at $\pm 3.5$ m with $h = 7$ m, which sight every landmark too; the range was changed rather than
+the layout. A test, `the_scenarios_are_sighted`, now checks the scenarios' structure before any
+example runs. And the circuit's pitch, which this document said followed $0.5 \sin 2\theta$ with
+its height, is said as the build has it: the pitch is the path's climb, so that each pose heads
+along the path.
