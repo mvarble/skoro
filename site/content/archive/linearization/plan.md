@@ -72,7 +72,7 @@ depends_on: [archive/linearization/implementation]
       `fisher_scoring_converges_to_the_estimate`, `fisher_marginals_are_the_inverse_information`,
       `fisher_shares_the_schedule`, `fisher_gives_no_integral`,
       `a_free_scale_without_a_root_is_refused_by_fisher`.
-- [ ] `Replacing::new`, with its checks of the blanket and the union of the retirement's values
+- [x] `Replacing::new`, with its checks of the blanket and the union of the retirement's values
       with the caller's. Tests: `a_mismatched_blanket_is_refused`.
 - [ ] `Replacing::at`, `LinearizedReplacement` and `build`, on the linear-Gaussian chains. Tests:
       `retiring_the_scalar_chain_is_the_kalman_filter`,

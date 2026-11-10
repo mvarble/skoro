@@ -14,9 +14,11 @@
 mod assemble;
 mod error;
 mod linearizer;
+mod replacing;
 mod solved;
 
 pub use assemble::Linearized;
 pub use error::Error;
 pub use linearizer::{Assembly, Linearizer};
+pub use replacing::Replacing;
 pub use solved::{QuantityMarginal, Solved};
