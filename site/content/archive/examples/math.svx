@@ -396,25 +396,36 @@ the window overconfident. First-estimate linearization of every term joined to a
 usual remedy and costs accuracy elsewhere; this entry linearizes at the window's mode and measures
 what that gives.
 
-**What is measured.** The calibration of the filtering marginals, the $\bar c$ of [](eq:check) over
-the ticks of each row, and the gap between the window and the batch at the last tick, where both
-estimate the last pose from every measurement: the batch's mode $\hat \point_K$ on the same path and
-data, and the window's $\tilde \point_K$, compared in the batch marginal's whitening,
-$\lVert W_K (\tilde \point_K \ominus \hat \point_K) \rVert$, which is zero for linear-Gaussian terms
-and otherwise says how far, in standard deviations, the window's approximations moved the estimate.
+**What is reported, and what is checked.** Two figures are reported. The first is the calibration
+of the filtering marginals: in row $r$, $c_r$ is the fraction of the ticks whose newest pose lies in
+its Laplace ellipsoid of level $\alpha$, and the report gives $\bar c$ beside $\alpha$ with the
+sampling part $4 s_* / \sqrt N$ of [](eq:check) and the Laplace part $\delta_6$, so that a reader
+sees how far outside the batch's tolerance the window falls, if it does. The second is the gap
+between the window and the batch at the last tick, where both estimate the last pose from every
+measurement: the batch's mode $\hat \point_K$ on the same path and data, and the window's
+$\tilde \point_K$, compared in the batch marginal's whitening,
 
-> [!TODO] Checked or reported
-> Is the window's calibration *checked*, failing the example as the batch's does, or *reported*
-> beside the gap to the batch? The batch's tolerance [](eq:check) has two parts, sampling and the
-> Laplace approximation's expected error $\delta$, and the second is known to its order. The window
-> adds a third error, from replacements linearized at anchors the blanket later leaves, whose size
-> nothing above predicts: it depends on how far the blanket moves, and on the information the
-> replacements claim in the directions only $\Sigma_0$ holds. Checking the window with the batch's
-> tolerance asserts that this error is below it, which is the stronger claim; if it fails, the
-> finding is the linearization point of the replacements, which a later entry on first-estimate
-> linearization would take up. Reporting it keeps the example from asserting what the mathematics
-> does not guarantee. This draft proposes reporting the window's calibration and its gap to the
-> batch, and checking only that each tick's solve is stationary.
+$$
+	\gamma = \bigl\lVert W_K (\tilde \point_K \ominus \hat \point_K) \bigr\rVert , @tag(gap)
+$$
+
+reported row by row and as its mean over the rows. It is zero for linear-Gaussian terms, and
+otherwise says how far, in the batch's standard deviations, the window's approximations moved the
+estimate. What is checked is only what the mathematics guarantees of every tick: that its solve
+stopped at a stationary point of the window's query, by the undamped decrement of
+[A Levenberg–Marquardt method](#a-levenberg-marquardt-method).
+
+> [!DECISION] The window's calibration is reported, not checked
+> The batch's tolerance [](eq:check) has two parts, sampling and the Laplace approximation's
+> expected error $\delta$, and the second is known to its order. The window adds a third error,
+> from replacements linearized at anchors the blanket later leaves, whose size nothing above
+> predicts: it depends on how far the blanket moves, and on the information the replacements claim
+> in the directions only $\Sigma_0$ holds. Checking the window with the batch's tolerance would
+> assert that this error is below it, which the mathematics does not guarantee, and a tolerance
+> widened until the example passes would be tuned to its result. So the example reports the
+> window's calibration and its gap to the batch, and leaves a claim about them to a later entry on
+> the replacements' linearization point, such as first-estimate linearization, which would have
+> these figures to improve on.
 
 ## In skoro's terms
 
@@ -450,8 +461,9 @@ the target.
 
 ## Open questions
 
-The question of the window's calibration is open above. The rest is decided: one model and two
-scenarios, the closed circuit for the batch and the open path for the window; Marquardt's damping
-with Nielsen's schedule; a stopping rule on the promised decrease in nats, with stationarity checked
-apart from it; calibration checked by [](eq:check), at a tolerance fixed by the statistics; and each
-replacement linearized at the window's mode.
+None remains. One model and two scenarios, the closed circuit for the batch and the open path for
+the window; Marquardt's damping with Nielsen's schedule; a stopping rule on the promised decrease in
+nats, with stationarity checked apart from it; the batch's calibration checked by [](eq:check), at a
+tolerance fixed by the statistics and the approximation's expected error; each replacement
+linearized at the window's mode; and the window's calibration and its gap [](eq:gap) reported, with
+only its stationarity checked.
