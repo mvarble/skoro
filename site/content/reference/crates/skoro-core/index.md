@@ -23,8 +23,9 @@ retirement gives back.
 
 An algorithm in another crate reads what it needs through the same interface: a query's terms and
 observations, and the union of two sets of observations; the quantities any node is reached from;
-whether a composite reads an input, and so whether a space's chart volume depends on its point; and
-a constant of a space known only at run time. [The linearization](../../../concepts/linearization/)
+whether a composite reads an input, and so whether a space's chart volume depends on its point; a
+constant of a space known only at run time; observations of a value that differs from row to row,
+as generation draws it; and a layout's inverse step, the tangent at one point that reaches another. [The linearization](../../../concepts/linearization/)
 is built on these alone.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types

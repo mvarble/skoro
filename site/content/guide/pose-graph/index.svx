@@ -1,0 +1,105 @@
+---
+title: A pose graph
+summary: "The example pose_graph, read top-down: a robot's poses and landmarks on SE(3) built tick by tick, a hundred datasets drawn from the model, estimated together by Levenberg–Marquardt, and the Laplace marginals checked for calibration against the truth."
+order: 4
+depends_on: [guide/least-squares]
+---
+
+<script>
+	import ExampleFigure from '$lib/components/ExampleFigure.svelte';
+</script>
+
+A robot drives a closed circuit. It measures its own motion between ticks by odometry, and the
+landmarks it passes by a range sensor that returns their positions in its frame. The example
+`pose_graph`, in the umbrella crate's `examples/`, builds that model once, draws a hundred datasets
+from it, each with its own truth, and estimates all of them together: the mode of every dataset,
+and a Laplace marginal for every pose and landmark. Then it asks whether those marginals are
+honest, by counting how often the truth falls inside them. It runs in CI, and fails when a check
+fails:
+
+```sh
+cargo run --release -p skoro --example pose_graph
+```
+
+<ExampleFigure
+	name="pose-graph"
+	alt="A closed circuit of 73 poses and 24 landmarks. Dead reckoning on the odometry drifts by up to 1.49 m; the estimate follows the dashed truth to within 34 cm, and a zoom at true scale shows each estimated pose with its 90% ellipse around the truth."
+	caption="One of the hundred datasets: the truth, the start dead reckoning gives, and the estimate with its 90% ellipses."
+/>
+
+## The model, tick by tick
+
+Each tick adds a pose, scored by a prior at the first tick and by the commanded motion from the
+previous pose after it; the odometry, the relative motion between the two poses with an error; each
+landmark seen for the first time, with a broad prior about its nominal position; and each
+sighting, the landmark's position in the pose's frame with an error. Every term is a
+[normal](../../concepts/the-normal/), on $SE(3)$ for the poses and the odometry and on $\R^3$ for the
+rest:
+
+```rust
+{../../../../crates/skoro/examples/common/model.rs:24..78}
+```
+
+The same function serves [the sliding window](../sliding-window/), which calls it once per tick
+in a build of its own. Which landmark each pose sights is fixed from the nominal trajectory, before
+anything is drawn: the structure of a model is not random.
+
+## A hundred datasets
+
+The whole circuit is built in one build. Generating from it with nothing observed draws the truth
+and its measurements together, a hundred rows of them, each its own dataset with the one structure.
+The query observes the measurements, row by row, with `observe_value`, and each row starts where
+dead reckoning on its own odometry puts it:
+
+```rust
+{../../../../crates/skoro/examples/common/batch.rs:27..61}
+```
+
+Since the truth is drawn from the model, the model is right by construction: what the example tests
+is the estimation, not the modelling.
+
+## The mode of every row
+
+One linearizer and one schedule serve all hundred rows. `LevenbergMarquardt` finds each row's mode,
+damping and stopping each row on its own, and `decrement` checks that every row stopped at a
+stationary point of its density:
+
+```rust
+{../../../../crates/skoro/examples/pose_graph.rs:60..74}
+```
+
+Every row converges, in eight or nine iterations. A row's last step often promises less than the
+rounding of its density, a few thousand nats here, and the method stops on that promise rather than
+waiting for a gain it cannot measure.
+
+## Are the uncertainties honest?
+
+At the mode, the [Laplace approximation](../../concepts/linearization/#steps-marginals-and-the-laplace-approximation)
+gives every pose and landmark a normal marginal in its own chart. The truth's tangent at the
+estimate, from `Layout::local`, whitened by the marginal, is the normalized error; if the marginals
+are calibrated it follows the chi-squared law with as many degrees of freedom as the quantity has
+dimensions, and the 90% ellipsoid holds the truth nine times in ten, over datasets drawn from the
+model. [The mathematics](../../archive/examples/math.svx#calibration) says why, and how large a
+difference the approximation itself should make.
+
+<ExampleFigure
+	name="calibration"
+	alt="Two histograms, of 7,300 pose errors and 2,400 landmark errors, lying on the chi-squared densities with 6 and 3 degrees of freedom; 92.0% of poses and 92.3% of landmarks fall inside their 90% ellipsoids, within the tolerances of 5.0 and 5.4 points."
+	caption="The normalized errors of every pose and landmark of every dataset, against the chi-squared density each follows when its marginal is calibrated."
+/>
+
+The example checks it, with a tolerance fixed before it runs, not tuned to its result:
+
+```rust
+{../../../../crates/skoro/examples/pose_graph.rs:215..226}
+```
+
+## Drawing it
+
+With `SKORO_FIGURES` naming a directory, the example also writes the data of these figures, and
+`bin/figures` draws them:
+
+```sh
+SKORO_FIGURES=/tmp/figures cargo run --release -p skoro --example pose_graph
+bin/figures /tmp/figures
+```

@@ -1,6 +1,6 @@
 ---
 title: Steps and replacements
-summary: Linearize a model's density at a point and iterate Gauss–Newton steps to its mode, and retire part of a model with a linearized replacement that keeps what it said, with the crate skoro-linearize, from its own tests.
+summary: Linearize a model's density at a point and iterate damped Gauss–Newton steps to its mode, and retire part of a model with a linearized replacement that keeps what it said, with the crate skoro-linearize, from its own tests.
 order: 3
 ---
 
@@ -17,7 +17,7 @@ rotations is measured once, through the normal on the rotations, and a batch of 
 is given for the free rotations:
 
 ```rust
-{../../../../crates/skoro-linearize/tests/linearize.rs:306..344}
+{../../../../crates/skoro-linearize/tests/common/mod.rs:249..286}
 ```
 
 A `Linearizer` is built once for the snapshot, the query, the target and the assembly, here the
@@ -26,14 +26,24 @@ elimination, is computed once too. Each iteration linearizes at the current batc
 row along the schedule, and retracts the step onto the quantities:
 
 ```rust
-{../../../../crates/skoro-linearize/tests/linearize.rs:538..562}
+{../../../../crates/skoro-linearize/tests/linearize.rs:499..523}
 ```
 
 The loop stops where the query's own gradient vanishes, log-volumes included: the mode of the
-density, not of the residuals alone. A `Damping` given to `eliminate` makes the step a
-Levenberg–Marquardt step, and `Problem::promised` gives the decrease it promises. A schedule kept
-on some quantities, `schedule_keeping`, gives their marginal covariance, and `at_in_chart` the
-linearization a Laplace approximation reads its evidence and draws from.
+density, not of the residuals alone. Undamped, a step far from the mode can overshoot. The crate's
+`LevenbergMarquardt` is the loop to use: it damps each row of the batch on its own, takes a row's
+step only where it decreased the density's negative logarithm, and stops each row when a step
+promises less than a tolerance in nats. Every row ends with a status, and `decrement` checks that
+where it stopped is stationary:
+
+```rust
+{../../../../crates/skoro-linearize/tests/minimize.rs:82..99}
+```
+
+[The concepts page](../../concepts/linearization/#minimizing-the-levenberg-marquardt-method) says
+how the damping and the stop are chosen. A schedule kept on some quantities, `schedule_keeping`,
+gives their marginal covariance, and `at_in_chart` the linearization a Laplace approximation reads
+its evidence and draws from.
 
 ## A replacement for what is retired
 

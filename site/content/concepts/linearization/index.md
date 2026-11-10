@@ -1,6 +1,6 @@
 ---
 title: Linearization and elimination
-summary: A density query is linearized at a batch of points into factored least-squares problems over its free quantities, by its residuals or by its information roots, and each problem is eliminated in square-root form on the host into a step, marginals, an evidence, draws, or a retirement's replacement.
+summary: A density query is linearized at a batch of points into factored least-squares problems over its free quantities, by its residuals or by its information roots, and each problem is eliminated in square-root form on the host into a step, marginals, an evidence, draws, or a retirement's replacement; the Levenberg–Marquardt method iterates the steps to the mode.
 order: 8
 depends_on: [concepts/queries, concepts/the-normal, square-root-elimination]
 ---
@@ -147,7 +147,7 @@ computed on the host, from the space's own log-volume and the whitening read off
 root:
 
 ```rust
-{../../../../crates/skoro-linearize/src/assemble.rs:223..290}
+{../../../../crates/skoro-linearize/src/assemble.rs:229..296}
 ```
 
 ### The Fisher rows of a free scale
@@ -158,7 +158,7 @@ gives $J^\mu = W\, \D s$ above the root's scale rows composed with the scale's J
 scale residual $u$ on the right, so that the scale's score is carried by the rows too:
 
 ```rust
-{../../../../crates/skoro-linearize/src/assemble.rs:395..444}
+{../../../../crates/skoro-linearize/src/assemble.rs:401..450}
 ```
 
 With every scale fixed the two assemblies are the same, row for row, and one schedule serves both.
@@ -199,6 +199,53 @@ A draw takes one key per row, standard normals by the normal's quantile, and $R^
 The Fisher linearization gives steps and covariances, and refuses an evidence, a draw and a chart
 linearization: those approximate an integral of the density, whose curvature in a free scale is not
 the expected information.
+
+## Minimizing: the Levenberg–Marquardt method
+
+A step from one linearization is Gauss–Newton's, and far from the mode it can overshoot. A
+`LevenbergMarquardt` runs the damped method on every row of a batch at once, each row with its own
+damping, its own point and its own stop, sharing with the others only the passes that linearize
+them all:
+
+```rust
+{../../../../crates/skoro-linearize/src/minimize.rs:11..37}
+```
+
+Each iteration damps each row by Marquardt's diagonal
+[](eq:archive/examples/math/marquardt), the squared norm of each coordinate's column of its rows, so
+that the damping is invariant to the units of the coordinates. It eliminates the row with its own
+`Damping`, retracts every row's step in one pass, and reads $f$ at the trial points by
+`Linearizer::objective`, one forward pass of the query's density program. The gain
+[](eq:archive/examples/math/gain), the decrease obtained over the decrease promised, decides each
+row alone: a step that decreased $f$ is taken, and the damping follows Nielsen's schedule
+[](eq:archive/examples/math/schedule):
+
+```rust
+{../../../../crates/skoro-linearize/src/minimize.rs:167..185}
+```
+
+A row that does not converge is not an error. Every row ends with a `Status` and the history of its
+iterations, and the caller decides what a row that ran out of damping or iterations means:
+
+```rust
+{../../../../crates/skoro-linearize/src/minimize.rs:39..48}
+```
+
+> [!DECISION] A row stops on what a step promises
+> The method stops a row when a step promises at most the tolerance $\epsilon$, in nats like $f$,
+> whether the step is accepted or not. Once the promise is of the order of the rounding of $f$, the
+> gain has a random sign; a rule that waited for an acceptance would reject steps of a converged
+> row until its damping passed its limit, and report it as failed. A step's promise is invariant to
+> the chart's coordinates, where a gradient's norm is not.
+> [Examples that run](../../archive/examples/math.svx#a-levenberg-marquardt-method) decided it.
+
+The damped promise bounds the distance to the mode only while the damping is small, so stationarity
+is checked apart from the stop, by `decrement`: the undamped promise
+$\tfrac12 \lVert J \tangent_0 \rVert^2$, which is zero exactly where the query's gradient is.
+
+```rust
+{../../../../crates/skoro-linearize/src/minimize.rs:195..219}
+```
 
 ## A retirement's replacement
 
