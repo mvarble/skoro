@@ -11,8 +11,10 @@
 //! step, the marginals, the evidence and draws. A [`Replacing`] computes the replacement of a
 //! retirement the same way and builds it as the normal's `Improper` factor.
 
+mod assemble;
 mod error;
 mod linearizer;
 
+pub use assemble::Linearized;
 pub use error::Error;
 pub use linearizer::{Assembly, Linearizer};

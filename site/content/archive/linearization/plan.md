@@ -48,7 +48,7 @@ depends_on: [archive/linearization/implementation]
       reached from free quantities, the structure. Tests: `a_free_discrete_quantity_is_refused`,
       `a_factor_without_a_residual_is_refused`,
       `a_free_scale_is_refused_by_the_residual_linearization`.
-- [ ] The rows program, its seeds from `rows.free()` by colouring the factor structure, and the
+- [x] The rows program, its seeds from `rows.free()` by colouring the factor structure, and the
       residual assembly at a point, `Linearizer::at`, without folding: rows, right-hand sides,
       the linear term from the log-volumes that are not folded, and `c_0`. Tests:
       `linear_gaussian_terms_are_exact`, `the_linear_term_is_zero_without_log_volumes`,

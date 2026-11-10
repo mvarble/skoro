@@ -1,0 +1,199 @@
+//! The passes at a point, and each row's problem.
+
+use skoro_core::{Frames, Layout, NodeId, QDyn, Space, Values};
+use skoro_elimination::{Matrix, Problem, Rows};
+use skoro_tensor::Value;
+
+use crate::{Assembly, Error, Linearizer};
+
+/// A batch's linearization: one problem per row, over the linearizer's structure.
+#[derive(Clone, Debug)]
+pub struct Linearized {
+    pub(crate) problems: Vec<Problem>,
+    pub(crate) assembly: Assembly,
+    pub(crate) layout: Layout,
+    /// The quantities of a curved type, whose covariances carry an error of order `σ²`.
+    pub(crate) curved: Vec<NodeId>,
+}
+
+impl Linearized {
+    /// One problem per row of the batch.
+    pub fn problems(&self) -> &[Problem] {
+        &self.problems
+    }
+
+    pub fn assembly(&self) -> Assembly {
+        self.assembly
+    }
+
+    /// The free continuous quantities, in the order of the blocks.
+    pub fn layout(&self) -> &Layout {
+        &self.layout
+    }
+
+    /// The quantities of a curved type among them.
+    pub fn curved(&self) -> &[NodeId] {
+        &self.curved
+    }
+}
+
+/// A node's value, row by row, on the host.
+pub(crate) fn host(values: &Values, id: impl Into<NodeId>) -> Result<Vec<f64>, Error> {
+    let id = id.into();
+    match values.get(id) {
+        Some(Value::Continuous(points)) => Ok(points.to_host()),
+        _ => Err(Error::Core(skoro_core::Error::MissingValue { id })),
+    }
+}
+
+/// A node's tangent frame on the host, `[rows, dimension, columns]` row-major.
+pub(crate) fn frame(frames: &Frames, id: impl Into<NodeId>) -> Result<Vec<f64>, Error> {
+    let id = id.into();
+    frames
+        .get(id)
+        .map(|frame| frame.to_host())
+        .ok_or(Error::Core(skoro_core::Error::MissingValue { id }))
+}
+
+/// Whether a space is curved: an embedded type, or a product with one among its factors.
+pub(crate) fn curved(space: &Space) -> bool {
+    match space {
+        Space::Embedded(_) => true,
+        Space::Product(factors) => factors.iter().any(curved),
+        _ => false,
+    }
+}
+
+/// What a row's assembly reads of a pass: values and tangent frames, row-major, by node.
+pub(crate) struct Pass {
+    pub(crate) values: Values,
+    pub(crate) frames: Frames,
+    /// The query's log-density, row by row.
+    pub(crate) density: Vec<f64>,
+    pub(crate) rows: usize,
+}
+
+impl Linearizer {
+    /// The rows program's tangent pass at `point`, with the compressed seeds.
+    pub(crate) fn pass(&self, point: &Values) -> Result<Pass, Error> {
+        let (values, frames) = self.rows.tangent(point, &self.seeds)?;
+        let density = host(&self.density.forward(point)?, NodeId::DENSITY)?;
+        let rows = density.len();
+        Ok(Pass {
+            values,
+            frames,
+            density,
+            rows,
+        })
+    }
+
+    /// The columns of a factor's blocks in a frame of `dimension` rows at batch row `row`: the
+    /// matrix `dimension × width` of its Jacobian, its blocks in the structure's order.
+    pub(crate) fn cut(
+        &self,
+        frame: &[f64],
+        row: usize,
+        dimension: usize,
+        blocks: &[usize],
+    ) -> Matrix {
+        let dimensions = self.structure.blocks();
+        let width: usize = blocks.iter().map(|&k| dimensions[k]).sum();
+        let mut matrix = Matrix::zeros(dimension, width);
+        let mut data = Vec::with_capacity(dimension * width);
+        for i in 0..dimension {
+            let base = (row * dimension + i) * self.width;
+            for &k in blocks {
+                let start = base + self.columns[k];
+                data.extend_from_slice(&frame[start..start + dimensions[k]]);
+            }
+        }
+        if let Some(full) = Matrix::new(dimension, width, data) {
+            matrix = full;
+        }
+        matrix
+    }
+
+    /// The linearization at `point`, one problem per row: each factor's Jacobian and right-hand
+    /// side, the linear term from the bound log-volumes that are not folded, and the constant
+    /// that makes `m(0) = f(p̂)`.
+    pub fn at(&self, point: &Values) -> Result<Linearized, Error> {
+        let pass = self.pass(point)?;
+        let dimension = self.structure.dimension();
+        let has_linear = self.factors.iter().any(|f| f.log_volume.is_some());
+        // Each factor's values and frames, on the host once.
+        let residuals: Vec<(Vec<f64>, Vec<f64>)> = self
+            .factors
+            .iter()
+            .map(|f| {
+                Ok((
+                    host(&pass.values, f.residual)?,
+                    frame(&pass.frames, f.residual)?,
+                ))
+            })
+            .collect::<Result<_, Error>>()?;
+        let log_volumes: Vec<Option<Vec<f64>>> = self
+            .factors
+            .iter()
+            .map(|f| f.log_volume.map(|v| frame(&pass.frames, v)).transpose())
+            .collect::<Result<_, Error>>()?;
+        let mut problems = Vec::with_capacity(pass.rows);
+        for row in 0..pass.rows {
+            let mut factors = Vec::with_capacity(self.factors.len());
+            let mut squares = 0.0;
+            let mut linear = has_linear.then(|| vec![0.0; dimension]);
+            for (f, factor) in self.factors.iter().enumerate() {
+                let d = factor.components;
+                let (values, jacobian) = &residuals[f];
+                let r = &values[row * d..(row + 1) * d];
+                squares += r.iter().map(|r| r * r).sum::<f64>();
+                let a = self.cut(jacobian, row, d, &factor.blocks);
+                factors.push(Rows {
+                    a,
+                    b: r.iter().map(|r| -r).collect(),
+                });
+                if let (Some(eta), Some(gradient)) = (&mut linear, &log_volumes[f]) {
+                    let g = self.cut(gradient, row, 1, &factor.blocks);
+                    let mut at = 0;
+                    for &k in &factor.blocks {
+                        for c in self.structure.range(k) {
+                            eta[c] += g.get(0, at);
+                            at += 1;
+                        }
+                    }
+                }
+            }
+            let constant = -pass.density[row] - 0.5 * squares;
+            problems.push(Problem::new(
+                self.structure.clone(),
+                factors,
+                linear,
+                constant,
+                self.roundoff(),
+            )?);
+        }
+        Ok(Linearized {
+            problems,
+            assembly: self.assembly,
+            layout: self.layout().clone(),
+            curved: self.curved_quantities(),
+        })
+    }
+
+    /// The quantities of a curved type among the free ones.
+    pub(crate) fn curved_quantities(&self) -> Vec<NodeId> {
+        self.layout()
+            .quantities()
+            .iter()
+            .copied()
+            .filter(|&q| self.snapshot.space(q).is_some_and(curved))
+            .collect()
+    }
+}
+
+/// The node handles a linearizer reads, for the targets of its rows program.
+pub(crate) fn targets(nodes: impl IntoIterator<Item = QDyn>) -> Vec<QDyn> {
+    let mut targets: Vec<QDyn> = nodes.into_iter().collect();
+    targets.sort_unstable_by_key(|q| q.id());
+    targets.dedup();
+    targets
+}
