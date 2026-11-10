@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "build",
+    "stage": "implementation",
     "started": "2026-11-10",
     "events": [
         {
@@ -38,6 +38,13 @@
             "action": "approve",
             "stage": "plan",
             "commit": "86cdd52"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The method's tests ask for a gradient below 1e-6 and for modes to 1e-10 and 1e-8, which the stopping rule's tolerance of 1e-9 nats does not bound.",
+            "commit": "c82510a"
         }
     ],
     "approvals": {
@@ -49,12 +56,14 @@
         "implementation": {
             "date": "2026-11-10",
             "commit": "b874d83",
-            "hash": "00632902167a509dd9181a00a199fa50af3f742a59d44b627e3f1db4d91524ac"
+            "hash": "00632902167a509dd9181a00a199fa50af3f742a59d44b627e3f1db4d91524ac",
+            "stale": true
         },
         "plan": {
             "date": "2026-11-10",
             "commit": "86cdd52",
-            "hash": "d04278dcbe424899b29837ee697acc2904033338ce60c0f34bd3eb4a711f21ec"
+            "hash": "d04278dcbe424899b29837ee697acc2904033338ce60c0f34bd3eb4a711f21ec",
+            "stale": true
         }
     }
 }

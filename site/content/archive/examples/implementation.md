@@ -772,3 +772,14 @@ question, and the mathematics now states it. What changed here: `Status::Converg
 promise, accepted or not; `minimize` compares $\Delta$ with the tolerance before the acceptance,
 takes the step if its gain is positive, and does not update $\lambda$ for a row that stops; the
 test `rows_at_rounding_converge` pins it; and the open question is closed.
+
+**2026-11-10: the method's tests and its tolerance.** The build showed that two tests of the
+method asked more than its stopping rule bounds. `levenberg_marquardt_finds_the_mode_on_rotations`
+asked for the query's gradient below $10^{-6}$ and for the Gauss–Newton loop's mode to $10^{-8}$,
+and `levenberg_marquardt_finds_the_linear_gaussian_mean` for the posterior mean to $10^{-10}$. The
+rule stops on a promise of at most $\epsilon = 10^{-9}$ nats. A decrement $\delta$ allows a gradient
+up to about $\sqrt{2 \delta h}$ for a curvature $h$, which in these models is of the order of
+$10^2$, and the last step, damped by $\lambda \approx 10^{-4}$, leaves the point some $10^{-10}$
+from the mode. Run, every row converged without a rejection, with a final decrement near
+$10^{-13}$, a gradient of $4 \times 10^{-6}$ to $8 \times 10^{-6}$ and the linear mean within
+$5 \times 10^{-10}$. The checks are restated in terms the rule bounds.
