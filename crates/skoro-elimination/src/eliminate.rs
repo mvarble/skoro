@@ -331,9 +331,12 @@ impl Problem {
     }
 
     /// A frontal diagonal entry at most this, relative to its column's norm before the reduction,
-    /// is a direction the rows do not determine.
+    /// is a direction the rows do not determine: `u^{3/4}` of the precision the rows were
+    /// computed at, between an exact dependence, which leaves a diagonal entry of the order of
+    /// the rows' rounding `u`, and a determined direction, of order `1 / κ`. About `1.1e-12` for
+    /// rows computed in double precision and `3.8e-6` for rows computed in single.
     fn threshold(&self) -> f64 {
-        0.0 * self.roundoff()
+        self.roundoff().powf(0.75)
     }
 }
 

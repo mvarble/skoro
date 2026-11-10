@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use skoro_elimination::{Matrix, Problem, Rows, Schedule, Structure};
+use skoro_elimination::{Error, Matrix, Problem, Rows, Schedule, Structure};
 
 const DOUBLE: f64 = f64::EPSILON / 2.0;
 
@@ -524,5 +524,74 @@ fn a_linear_term_in_the_row_space_stays_there() {
         &dense_minimizer(&with),
         1e-10,
         "dense",
+    );
+}
+
+#[test]
+fn an_undetermined_block_is_refused() {
+    // A gauge freedom: an odometry between two blocks and nothing else.
+    let structure = Arc::new(Structure::new(vec![1, 1], vec![vec![0, 1]]).unwrap());
+    let problem = Problem::new(
+        structure.clone(),
+        vec![rows(&[&[-1.0, 1.0]], &[1.0])],
+        None,
+        0.0,
+        DOUBLE,
+    )
+    .unwrap();
+    let schedule = Schedule::all(&structure).unwrap();
+    let second = schedule.order()[1];
+    assert_eq!(
+        problem.eliminate(&schedule, None).unwrap_err(),
+        Error::Undetermined { block: second }
+    );
+    // A block no row reaches.
+    let structure = Arc::new(Structure::new(vec![2, 1], vec![vec![0]]).unwrap());
+    let problem = Problem::new(
+        structure.clone(),
+        vec![rows(&[&[1.0, 0.0], &[0.0, 1.0]], &[1.0, 2.0])],
+        None,
+        0.0,
+        DOUBLE,
+    )
+    .unwrap();
+    let schedule = Schedule::all(&structure).unwrap();
+    assert_eq!(
+        problem.eliminate(&schedule, None).unwrap_err(),
+        Error::Undetermined { block: 1 }
+    );
+    // An exact dependence, the second column a third of the first, in rows rounded to single
+    // precision: the rounding leaves it at about 1e-8 relative, which passes for determined at the
+    // double-precision roundoff and is refused at the single-precision one.
+    let structure = Arc::new(Structure::new(vec![2], vec![vec![0]]).unwrap());
+    let column = [0.7f64, -1.3, 0.45, 2.1];
+    let single = |x: f64| x as f32 as f64;
+    let a: Vec<f64> = column
+        .iter()
+        .flat_map(|&x| [single(x), single(x / 3.0)])
+        .collect();
+    let rounded = Rows {
+        a: Matrix::new(4, 2, a).unwrap(),
+        b: vec![1.0, 0.0, -1.0, 0.5],
+    };
+    let schedule = Schedule::all(&structure).unwrap();
+    let at = |roundoff: f64| {
+        Problem::new(
+            structure.clone(),
+            vec![rounded.clone()],
+            None,
+            0.0,
+            roundoff,
+        )
+        .unwrap()
+        .eliminate(&schedule, None)
+    };
+    assert!(
+        at(DOUBLE).is_ok(),
+        "at double precision's roundoff, a direction of 1e-8"
+    );
+    assert_eq!(
+        at(f32::EPSILON as f64 / 2.0).unwrap_err(),
+        Error::Undetermined { block: 0 }
     );
 }
