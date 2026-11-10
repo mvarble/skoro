@@ -25,7 +25,7 @@ depends_on: [archive/examples/implementation]
 - [x] Write `common/scenario.rs`: `Scenario`, `Scales`, `circuit`, `open_path` with the range of 8.5 m (refusing a landmark whose sightings are not an interval) and `first_sightings`. Tests: `the_scenarios_are_sighted`.
 - [x] Write `common/model.rs`: `Tick` and `tick`, every term of the model as one `Normal::on(...).score(...)`, the odometry addressed under the tick it retires with.
 - [x] Write `common/laplace.rs`: `normalized_errors`, `Calibration`, `calibration`, and the constants `CHI2_6_90`, `CHI2_3_90`, `SLOPE_6` and `SLOPE_3`. Tests: `the_chi_squared_constants`.
-- [ ] Write `common/report.rs`: the printing, and the checks as errors that name the figures.
+- [x] Write `common/report.rs`: the printing, and the checks as errors that name the figures.
 - [ ] Write `pose_graph.rs`: the circuit generated for $N = 100$ rows, the start on the host, `minimize`, the decrements, the bound on $\sigma_\phi^2$, the calibrations of the poses and the landmarks, and the report. Tests: `pose_graph`. Measure its run time in release and report it in the commit.
 - [ ] Write `common/live.rs` (`Live`, the window's handles, observed rows and landmark sightings) and `sliding_window.rs`: the window over the open path with $W = 5$, retirement and replacement at the window's mode, the batch on the same path, and the filtering calibration and the gap reported and not checked. Tests: `sliding_window`.
 
