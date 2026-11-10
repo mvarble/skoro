@@ -191,10 +191,11 @@ that a rule with thresholds shows. With $D$ of [](eq:marquardt), $\lambda$ is di
 $\lambda_0$ is a small multiple of the curvature along each coordinate, so that a start near the
 mode takes nearly a Gauss–Newton step.
 
-**The stopping rule.** The method stops on a row when an accepted step promised less than a
-tolerance, $\Delta(\tangent) \le \epsilon$, measured in nats like $f$ itself, and refuses to call
-it converged when $\lambda$ has grown past $\lambda_{\max}$ or the iterations past a bound. The
-promise is the right measure: it is invariant to the coordinates of the chart, and near the mode,
+**The stopping rule.** The method stops on a row when a step promises less than a tolerance,
+$\Delta(\tangent) \le \epsilon$, measured in nats like $f$ itself, whether or not the step is
+accepted: the step is taken if its gain is positive, and the row stops either way. It refuses to
+call a row converged when $\lambda$ has grown past $\lambda_{\max}$ or the iterations past a bound.
+The promise is the right measure: it is invariant to the coordinates of the chart, and near the mode,
 where $\lambda$ is small, it approaches the Gauss–Newton decrement $\tfrac12 g\transpose (J\transpose
 J)^{-1} g$, the decrease of $f$ that a full Gauss–Newton step would still give. A gradient's norm
 would depend on the units of the coordinates, and a step's on the chart.
@@ -207,8 +208,19 @@ the order of the number of residual components, a few thousand here, double prec
 $\epsilon = 10^{-9}$, and single precision nothing below about $10^{-3}$. The examples run in double
 precision.
 
-**What is checked at the end.** The stopping rule bounds the damped step, so convergence is checked
-apart from it: at the final point, with $\lambda = 0$, one elimination gives the Gauss–Newton step
+This is why the rule does not wait for an acceptance. Once $\Delta$ is of the order of
+$u \lvert f \rvert$, the obtained decrease is rounding and the gain has a random sign; a step that
+promises nothing has the gain $0/0$. A rule that stopped only on an accepted step would meet such
+steps just after convergence, since Gauss–Newton contracts fast on this model and the step after
+one promising slightly more than $\epsilon$ promises far less. Each rejection multiplies $\lambda$
+by $\beta$ and doubles $\beta$, so a run of some ten of them, about one chance in a thousand, would
+carry $\lambda$ past $\lambda_{\max}$ and report a converged row as one that failed. Stopping on the
+promise alone forms no gain from rounding, and a row is never failed for having converged.
+
+**What is checked at the end.** The stopping rule bounds the damped step, not the undamped one.
+The damped promise is at least $\tfrac12 g\transpose (J\transpose J + \lambda D)^{-1} g$, which bounds
+the Gauss–Newton decrement when $\lambda$ is small and not when it is large, as it may be at a stop
+that followed rejections. So convergence is checked apart from the rule: at the final point, with $\lambda = 0$, one elimination gives the Gauss–Newton step
 $\tangent_0$ and its decrement $\tfrac12 \lVert J \tangent_0 \rVert^2$, which must be at most a
 small multiple of $\epsilon$. That is the statement that the point is stationary for $f$, since the
 rows have full rank and $\tangent_0 = 0$ exactly where $g = 0$
@@ -477,4 +489,6 @@ little more than the rounding of $f$, its gain [](eq:gain) has a random sign (or
 step promising nothing), and a run of rejections carries $\lambda$ past $\lambda_{\max}$. The rule
 becomes: a row stops when a step promises $\Delta \le \epsilon$, whether or not it is accepted,
 the step being taken if it is, with stationarity still checked apart from it by the undamped
-decrement.
+decrement. [A Levenberg–Marquardt method](#a-levenberg-marquardt-method) now states the rule,
+says why it does not wait for an acceptance, and says why the check of stationarity at the end
+remains: the damped promise bounds the Gauss–Newton decrement only when $\lambda$ is small.
