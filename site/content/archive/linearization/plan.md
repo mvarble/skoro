@@ -21,7 +21,7 @@ depends_on: [archive/linearization/implementation]
 
 ## `skoro-elimination`
 
-- [ ] Add the crate to the workspace, with `faer` 0.24.4 among the workspace's dependencies:
+- [x] Add the crate to the workspace, with `faer` 0.24.4 among the workspace's dependencies:
       `Matrix`, `Structure`, `Rows`, `Problem` with `value`, `Damping` and `Problem::promised`,
       and `Error`. Tests: none of its own; the crate compiles and passes clippy.
 - [ ] The schedule: COLAMD on the block pattern, `Schedule::{all, keeping, eliminating,

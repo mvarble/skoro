@@ -1,0 +1,15 @@
+[package]
+name = "skoro-elimination"
+description = "Elimination in square-root form: factored least-squares problems minimized, integrated and marginalized one block at a time, on the host, in double precision."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+faer.workspace = true
+
+[lints]
+workspace = true
