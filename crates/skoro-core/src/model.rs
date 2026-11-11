@@ -24,6 +24,15 @@ pub(crate) struct Model {
     pub(crate) scoring: HashTrieMapSync<NodeId, NodeId>,
     pub(crate) joined: HashTrieMapSync<NodeId, HashTrieSetSync<NodeId>>,
     pub(crate) proposals: HashTrieMapSync<NodeId, Arc<Proposal>>,
+    /// `H(M)` but the terms' log-densities: how many times each node is named by a binding, a
+    /// sampler's inputs or log-density, or a proposal's inputs or log-density. A node with no
+    /// entry is named by none.
+    pub(crate) held: HashTrieMapSync<NodeId, u32>,
+    /// `P(M)`: the pinned nodes.
+    pub(crate) pinned: HashTrieSetSync<NodeId>,
+    /// Pinned nodes a retirement would have freed: when one is unpinned it is among the next
+    /// retirement's candidates.
+    pub(crate) spared: HashTrieSetSync<NodeId>,
     /// The programs compiled from this model, most recently used last.
     pub(crate) programs: Mutex<Vec<(ProgramKey, Arc<Program>)>>,
 }
@@ -40,6 +49,9 @@ impl Clone for Model {
             scoring: self.scoring.clone(),
             joined: self.joined.clone(),
             proposals: self.proposals.clone(),
+            held: self.held.clone(),
+            pinned: self.pinned.clone(),
+            spared: self.spared.clone(),
             programs: Mutex::new(Vec::new()),
         }
     }
@@ -136,6 +148,9 @@ impl Model {
             scoring: HashTrieMapSync::new_sync(),
             joined: HashTrieMapSync::new_sync(),
             proposals: HashTrieMapSync::new_sync(),
+            held: HashTrieMapSync::new_sync(),
+            pinned: HashTrieSetSync::new_sync(),
+            spared: HashTrieSetSync::new_sync(),
             programs: Mutex::new(Vec::new()),
         }
     }
@@ -155,6 +170,24 @@ impl Model {
             self.joined.insert_mut(*q, terms);
         }
         self.terms.insert_mut(id, Arc::new(term));
+    }
+
+    /// Counts one more naming of `id` outside the compilation graph's edges.
+    pub(crate) fn hold(&mut self, id: NodeId) {
+        let count = self.held.get(&id).copied().unwrap_or(0);
+        self.held.insert_mut(id, count + 1);
+    }
+
+    /// Counts one naming of `id` fewer, removing its entry at zero.
+    pub(crate) fn release(&mut self, id: NodeId) {
+        match self.held.get(&id).copied() {
+            Some(count) if count > 1 => {
+                self.held.insert_mut(id, count - 1);
+            }
+            _ => {
+                self.held.remove_mut(&id);
+            }
+        }
     }
 
     pub(crate) fn insert(&mut self, node: Node) {

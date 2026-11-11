@@ -5,7 +5,7 @@ depends_on: [archive/retired-constants/implementation]
 
 ## The held index (`skoro-core`)
 
-- [ ] Add `held`, `pinned` and `spared` to `Model`, with `hold`, `release` and `keeps`, and clone
+- [x] Add `held`, `pinned` and `spared` to `Model`, with `hold`, `release` and `keeps`, and clone
       them in `Clone for Model`. Add the helpers `named(term)` and `named_by(proposal)`, and hold
       and release through them in `TermHandle::bind`, `TermHandle::sampler` (releasing a replaced
       sampler), `Draft::add_proposal` (releasing a replaced proposal), the bindings of

@@ -26,6 +26,32 @@ pub struct Term {
     pub(crate) bindings: Vec<(&'static str, NodeId)>,
 }
 
+/// The nodes `term` names outside the compilation graph's edges, other than its log-density: its
+/// bindings, and its sampler's inputs and log-density.
+pub(crate) fn named(term: &Term) -> impl Iterator<Item = NodeId> + '_ {
+    term.bindings
+        .iter()
+        .map(|&(_, node)| node)
+        .chain(term.sampler.iter().flat_map(named_by_sampler))
+}
+
+fn named_by_sampler(sampler: &Sampler) -> impl Iterator<Item = NodeId> + '_ {
+    sampler
+        .inputs
+        .iter()
+        .map(QDyn::id)
+        .chain(sampler.log_density.map(|q| q.id()))
+}
+
+/// The nodes `proposal` names: its inputs and its log-density.
+pub(crate) fn named_by(proposal: &Proposal) -> impl Iterator<Item = NodeId> + '_ {
+    proposal
+        .inputs
+        .iter()
+        .map(QDyn::id)
+        .chain([proposal.log_density.id()])
+}
+
 impl Term {
     /// The quantities the term is conditioned on: those it involves, but the one it scores.
     pub fn conditioned_on(&self) -> impl Iterator<Item = NodeId> + '_ {
@@ -126,6 +152,14 @@ impl TermHandle {
                 if let Some(quantity) = reads {
                     return Err(Error::SamplerOutsideTerm { term: id, quantity });
                 }
+                if let Some(old) = &term.sampler {
+                    for node in named_by_sampler(old) {
+                        draft.model.release(node);
+                    }
+                }
+                for node in named_by_sampler(&sampler) {
+                    draft.model.hold(node);
+                }
                 term.sampler = Some(sampler);
                 draft.model.terms.insert_mut(id, Arc::new(term));
                 Ok(id)
@@ -154,6 +188,7 @@ impl TermHandle {
                     });
                 }
                 term.bindings.push((name, node.id()));
+                draft.model.hold(node.id());
                 draft.model.terms.insert_mut(id, Arc::new(term));
                 Ok(id)
             }),
@@ -436,6 +471,14 @@ impl scope::Draft {
                 quantity: id,
                 later,
             });
+        }
+        if let Some(old) = self.model.proposals.get(&id).cloned() {
+            for node in named_by(&old) {
+                self.model.release(node);
+            }
+        }
+        for node in named_by(&proposal) {
+            self.model.hold(node);
         }
         self.model.proposals.insert_mut(id, Arc::new(proposal));
         Ok(id)
