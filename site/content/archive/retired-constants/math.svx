@@ -247,3 +247,11 @@ nodes that need keeping; pinning puts the cost on those nodes alone.
 ## Open questions
 
 None remain.
+
+## Revisions
+
+**2026-11-10.** Reopened because the nodes a model holds outside the compilation graph's edges,
+$H(M)$, omitted each term's sampler. A sampler's inputs and its log-density are nodes the term
+reads by name and need not consume, so a node read by a surviving term's sampler alone could be
+freed, and generation would then fail. $H(M)$ now includes them, and a retirement drops the
+samplers of the terms it removes along with their bindings.
