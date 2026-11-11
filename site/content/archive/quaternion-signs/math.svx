@@ -1,20 +1,21 @@
 ---
-summary: A unit quaternion names a rotation twice, and its sign carries no information; the normal on the rotations, the rigid motions and the extended poses becomes the sign-free normal, the equal mixture of the normal and its mirror, which is the exact law of the rotation, is computed by the residual of the sign on the side of the mean and a correction negligible near it, and makes aligning a measurement on the host unnecessary.
-depends_on: [chart-volume, archive/core/math, archive/normal/math, archive/rotations/math]
+summary: A unit quaternion names a rotation twice, and the stereographic chart of the unit quaternions tells the two names apart, so that a measurement given with the wrong sign is misread; the rotations, the rigid motions and the extended poses become the groups themselves, stored as quaternions up to sign under the Cayley chart, which cannot tell the signs apart, and the core learns to declare a type stored up to a finite group.
+depends_on: [chart-volume, retraction, archive/core/math, archive/measures/math, archive/normal/math, archive/rotations/math]
 ---
 
 <script>
 	import Statement from '$lib/components/Statement.svelte';
 	import Proof from '$lib/components/Proof.svelte';
 	import * as antipode from './statements/antipode.md';
-	import * as signFree from './statements/sign-free.md';
-	import * as nearSide from './statements/near-side.md';
+	import * as cayley from './statements/cayley.md';
+	import * as quotient from './statements/quotient.md';
 </script>
 
 ## The problem
 
 skoro holds a rotation as a unit quaternion, and the unit quaternions cover the rotations twice:
-$q$ and $-q$ are one rotation and two points of $S^3$. A normal on $S^3$ tells them apart, so
+$q$ and $-q$ are one rotation and two points of $S^3$. The type skoro declares is $S^3$ itself, with
+the stereographic chart, and that chart tells the two apart, so
 [the rotations' mathematics](../rotations/math.svx#the-double-cover) asks the caller to give an
 observed quaternion the sign of its prediction before it is observed, by aligning it on the host.
 One given with the other sign is not refused. Its residual is the coordinate of a point beside the
@@ -31,50 +32,56 @@ program, given the choice, writes with $w > 0$. At states composed from the odom
 closure is on the far side of its prediction. At states read from a file, whose signs are as
 arbitrary as the measurements', the far side falls on whichever edges the signs put it; but, as
 [In a cycle](#what-a-misaligned-measurement-does) shows, the cycle as a whole cannot be satisfied
-with every measurement as given, wherever the states start. Both of skoro's
-examples draw their measurements from the model, so their signs are right by construction, and this
-path has not met outside data.
+with every measurement as given, wherever the states start. Both of skoro's examples draw their
+measurements from the model, so their signs are right by construction, and this path has not met
+outside data.
 
-This entry works out what an observed quaternion of arbitrary sign is as a random variable, which
-law scores it without reference to its sign, what a misaligned one does to an estimate, and how a
-measurement given in the format of g2o, the usual source of pose-graph datasets, becomes one of
-skoro's. Its answer changes the normal rather than adding a law beside it: on a type whose points
-$q$ and $-q$ are one element, the normal is the sign-free law, so that a model writes the one
-normal it writes today and the sign of a quaternion stops mattering to it.
+The sign carries no information about the world: a sensor or a file measured a rotation, and the
+quaternion is one of its two names. The trouble is that skoro's type is the cover rather than the
+group. This entry works out what a misaligned quaternion does under the present chart, and then
+makes the types the groups themselves: $SO(3)$, $SE(3)$ and $SE_2(3)$, still stored as quaternions,
+with the Cayley chart, whose coordinates are the same for $q$ and $-q$. A stored quaternion is then
+a representative of its rotation, either sign as good as the other, and nothing in a model needs to
+align one. The core's embedded types are submanifolds of their storage, which the rotations stored
+as quaternions cannot be, so the core learns to declare a type stored up to a finite group. Last,
+it works out how a measurement given in the format of g2o, the usual source of pose-graph datasets,
+becomes one of skoro's.
 
 ## Setting
 
-The unit quaternions $S^3$, their product $\otimes$, the covering map $\pi : S^3 \to SO(3)$, the
-stereographic chart [](eq:archive/rotations/math/quaternion-chart) with its inverse $\ominus$, and
-the Haar measure $\nu$ normalized so that the chart has volume $1$ at its centre, are those of
-[the rotations' mathematics](../rotations/math.svx#the-unit-quaternions). The chart at $\mu$ is
-$\tangent \mapsto \mu \otimes \delta(\tangent)$, a diffeomorphism of $\R^3$ onto $S^3 \setminus
-\{-\mu\}$, and its log-volume is $\lambda(\tangent) = -3 \log(1 + \lVert \tangent \rVert^2 / 16)$.
-The rigid motions $S^3 \ltimes \R^3$ and the extended poses $S^3 \ltimes (\R^3 \times \R^3)$ have the
-charts of [%full](statement:archive/rotations/math/motions), whose inverse at $(q, p)$ is
+The unit quaternions $S^3$, their product $\otimes$, the covering map $\pi : S^3 \to SO(3)$ with
+$\pi(q) = \pi(-q)$, the stereographic chart [](eq:archive/rotations/math/quaternion-chart) with its
+inverse, and its volume are those of
+[the rotations' mathematics](../rotations/math.svx#the-unit-quaternions). Writing $\bar \mu \otimes q
+= (w, u)$, the stereographic coordinate of $q$ at $\mu$ is $4u / (1 + w)$, of length $4 \tan(\theta /
+4)$ for $\theta \in [0, 2\pi)$ the angle of $\bar \mu \otimes q$ on $S^3$'s scale, and its chart at
+$\mu$ is a diffeomorphism of $\R^3$ onto $S^3 \setminus \{-\mu\}$. The rigid motions and the extended
+poses are stored as $(q, p)$ and $(q, v, p)$, with the charts of
+[%full](statement:archive/rotations/math/motions), whose inverse at $(q, p)$ is
 
 $$
 	(q', p') \ominus (q, p) = \bigl(q' \ominus q,\ \pi(q)\transpose (p' - p)\bigr) ,
 $$
 
-the rotation's coordinate first, and whose log-volume is that of the rotation alone. A tuple of
-vectors, such as $(\tangent_R, \tangent_T)$, is the column vector with its entries stacked. For a point of
-any of the three, $-q$ is the point whose quaternion is negated and whose other coordinates are
-kept; it is the same rotation, motion or extended pose.
+the rotation's coordinate first, then the rest, each in the frame of the point. A tuple of vectors,
+such as $(\tangent_R, \tangent_T)$, is the column vector with its entries stacked. For a point of any
+of the three, $-q$ is the point whose quaternion is negated and whose other coordinates are kept;
+it is the same rotation, motion or extended pose.
 
-The normal $\mathcal N(\mu, \Sigma)$ is that of [its mathematics](../normal/math.svx#the-definition):
-the law of $\mu \oplus \varepsilon$ with $\varepsilon$ normal in $\R^\dimension$, with the precision
-$\Lambda = \Sigma^{-1} = W\transpose W$, the whitening $W$, and the density with respect to $\nu$
+The normal $\mathcal N(\mu, \Sigma)$ is that of [its mathematics](../normal/math.svx#the-definition),
+with the precision $\Lambda = \Sigma^{-1} = W\transpose W$, its residual $\point \ominus \mu$, and
+the density with respect to the measure $\nu$ the chart normalizes,
 
 $$
-	\density_\mu(q) = \frac{\det W}{(2\pi)^{\dimension / 2}} \exp\Bigl(-\tfrac12 \bigl\lVert W (q \ominus \mu) \bigr\rVert^2\Bigr) \Bigl(1 + \tfrac1{16} \bigl\lVert (q \ominus \mu)_R \bigr\rVert^2\Bigr)^3 , @tag(density)
+	\density_\mu(\point) = \frac{\det W}{(2\pi)^{\dimension / 2}} \exp\Bigl(-\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2\Bigr) e^{-\lambda(\point \ominus \mu)} , @tag(density)
 $$
 
-where $(\cdot)_R$ is the rotation's coordinate. A measurement $z$ of a state $\point$ is predicted
-by a map $h(\point)$, such as the relative motion $h(\point) = X_i^{-1} X_j$ of a pose graph, whose
-quaternion is $\bar q_i \otimes q_j$.
+with $\lambda$ the chart's log-volume, $-3 \log(1 + \lVert \tangent_R \rVert^2 / 16)$ for the
+stereographic chart. A measurement $z$ of a state $\point$ is predicted by a map $h(\point)$, such
+as the relative motion $h(\point) = X_i^{-1} X_j$ of a pose graph, whose quaternion is $\bar q_i
+\otimes q_j$.
 
-## The antipode in the chart
+## The antipode in the stereographic chart
 
 Everything about the sign follows from where the chart at $\mu$ puts the two points over one
 rotation.
@@ -160,239 +167,198 @@ So a measured rotation's sign is a choice, for each cycle it closes, of whether 
 once more around it. Choosing the sign on the near side of a prediction chooses the winding of the
 estimate the prediction was computed at, which unwinds the drift the shorter way.
 
-## The observed value is a rotation
+## A chart that cannot tell the signs apart
 
-The sign of a measured quaternion carries no information about the world: the sensor or the file
-measured a rotation, and the quaternion is one of its two names. Its law is the law of a rotation,
-and by [%full](statement:archive/rotations/math/cover) the law on the rotations of a normal draw
-$\pi(\mu \oplus \varepsilon)$ has the density $\density_\mu(q) + \density_\mu(-q)$ with respect to
-$\nu_{SO(3)}$. Pulled back to $S^3$, where skoro's quantities live, that is the following law.
+The stereographic chart is a chart of $S^3$, and every chart of $S^3$ must tell $q$ from $-q$, since
+they are different points of it. A chart of $SO(3)$ must not, and the Cayley chart, already in
+[the note's table](../../math/chart-volume/#the-usual-charts) as a global and full chart of the
+rotations, is written on quaternions as the familiar first-order update, normalized.
 
-<Statement {...signFree} />
-
-<Proof>
-
-For a measurable $A$, $\Pr(b\zeta \in A) = \tfrac12 \Pr(\zeta \in A) + \tfrac12 \Pr(-\zeta \in
-A)$. The map $q \mapsto -q$ is the left translation by $-1$, or by $(-1, 0)$ and $(-1, 0, 0)$ on the
-motions, which preserves $\nu$, so $-\zeta$ has the density $q \mapsto \density_\mu(-q)$.
-
-</Proof>
-
-Its density is invariant under $q \mapsto -q$, so the sign in which a measurement is given changes
-nothing. It is invariant under $\mu \mapsto -\mu$ too, since $(-\mu) \oplus \tangent = -(\mu \oplus
-\tangent)$ on all three types, so that $\density_{-\mu}(q) = \density_\mu(-q)$; the sign of the
-prediction changes nothing either. Its image under $\pi$ is the image of the normal, so as a law on
-the rotations it is exactly the normal's, and a draw from it is a draw from the normal with a sign
-that a fair coin chooses. It is normalized on $S^3$, as a term's density must be.
-
-It is computed by its near side.
-
-<Statement {...nearSide} />
+<Statement {...cayley} />
 
 <Proof>
 
-The identity is [%full](statement:sign-free) with $\density_\mu(s q)$ factored out, using
-$\density_\mu(q) + \density_\mu(-q) = \density_\mu(sq) + \density_\mu(-sq)$. By
-[%full](statement:antipode), $(-sq) \ominus \mu = \tilde\tangent$: the rotation's coordinate is
-inverted, and the translation's, $\pi(\mu_R)\transpose (p - p_\mu)$, does not depend on the sign.
-The ratio of [](eq:density) at the two coordinates is then the ratio of the Gaussian factors times
-$\bigl((1 + c^2 \lVert \tangent_R \rVert^2 / 16) / (1 + \lVert \tangent_R \rVert^2 / 16)\bigr)^3 =
-c^3$, since $c^2 \lVert \tangent_R \rVert^2 / 16 = c$.
-
-The density $\density_\mu$ is smooth on $S^3 \setminus \{-\mu\}$, and as $q \to -\mu$ its coordinate
-grows like the inverse of the distance from $-\mu$ while the density falls like the exponential of
-minus its square, so that $\density_\mu$, extended by $0$ at $-\mu$, is smooth on $S^3$ with every
-derivative vanishing there. The sum of two such densities is smooth and positive, so its logarithm
-is smooth.
-
-Without a coupling block, and with $\lVert \tangent_R \rVert^2 = 16 / c$,
-
-$$
-	\begin{aligned}
-		\lVert W \tilde\tangent \rVert^2 - \lVert W \tangent \rVert^2 &= (c^2 - 1) \lVert W_R \tangent_R \rVert^2 \\
-		&\ge (c^2 - 1) \tfrac3{16} \lVert \tangent_R \rVert^2 \\
-		&= 3 (c - 1/c) ,
-	\end{aligned}
-$$
-
-so that
-
-$$
-	\log \rho \le g(c) = 3 \log c - \tfrac32 (c - 1/c) . @tag(rho-bound)
-$$
-
-Since $g(1) = 0$ and
-$g'(c) = -\tfrac32 (1 - 1/c)^2 \le 0$, $\rho \le 1$ for $c \ge 1$, and the bounds follow. As $\tangent_R \to 0$, $c$ grows
-like $\lVert \tangent_R \rVert^{-2}$ and $\log \rho \le g(c)$ falls like $-\tfrac32 c$, faster than
-any multiple of $\log c$.
+The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lVert \tangent \rVert^2 / 4}$, so $\gamma(\tangent)
+\in S^3$, with $w(\gamma) > 0$ and $\lVert \operatorname{vec}(\gamma) \rVert / w(\gamma) =
+\lVert \tangent \rVert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
+\lVert \tangent \rVert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
+negates $q \otimes \gamma$. Negating $p$ or $q$ negates $\bar q \otimes p$, whose $\operatorname{vec}$
+and $w$ change sign together, so their ratio does not. For $p = q \otimes \gamma(\tangent)$, $\bar q
+\otimes p = \gamma(\tangent)$ and $2 \operatorname{vec}(\gamma) / w(\gamma) = \tangent$; and every
+rotation by less than $\pi$ from $\pi(q)$ is $\pi(q \otimes \delta)$ for a $\delta$ with
+$w(\delta) > 0$, which is $\gamma$ of $2 \operatorname{vec}(\delta) / w(\delta)$. The first-order form and the
+last identity follow as for the stereographic chart
+([%full](statement:archive/rotations/math/chart) and
+[](eq:archive/rotations/math/conjugation)): $\gamma(\tangent) = (1, \tangent / 2) + O(\lVert \tangent
+\rVert^2)$, and $\gamma$ depends on $\tangent$ only through its direction and its length.
 
 </Proof>
 
-So the sign-free normal is the normal of the measurement's near side, plus a correction
-$\log(1 + \rho)$, less a constant. Near a good estimate the correction vanishes to every order: for an
-isotropic $\Sigma = \sigma^2 I$ on a rotation, $\rho = c^3 e^{-8 (c - 1/c) / \sigma^2}$ with $c =
-\cot^2(\theta / 4)$ for the near side at the angle $\theta$, which at $\sigma = 0.5$ rad is below
-$10^{-70}$ at $\theta = 90°$. It matters only where the
-measured rotation is near a half-turn from its prediction, where it rises to $\log 2$, and it is
-what keeps the term smooth across the half-turn, where the near side changes sign.
-
-**The near side alone.** Without the correction, the term is the normal of $sq$, with $s$ a selection
-on the sign of $\langle q_R, \mu_R \rangle$. On a rotation its value is continuous across the
-half-turn, where the two candidates are $\tangent$ and $-\tangent$ of length $4$ and the Gaussian
-factor and the volume agree; its derivative jumps there. On a motion the candidates are
-$(\tangent_R, \tangent_T)$ and $(-\tangent_R, \tangent_T)$, and the Gaussian factors differ by
-$2\, \tangent_R\transpose \Lambda_{RT}\, \tangent_T$: the value itself jumps, unless $\Sigma$ has no
-coupling block. The correction removes both, since the sum it completes is smooth. Both are at the
-half-turn, where a concentrated normal has no mass to speak of, so either form estimates the same
-mode; the correction is the difference between a term that is exactly the law of the measured
-rotation and one that is within $\log 2$ of it.
-
-**Computing the correction.** Neither of the two direct forms is finite everywhere. The far side's
-density $\density_\mu(-sq)$ needs the coordinate of $-sq$ at $\mu$, which does not exist at $q =
-\pm\mu$, where the residual is zero; and the closed form of $\rho$ multiplies $c^3$, infinite there,
-by an exponential that is zero there. Its logarithm, $3 \log c - \tfrac12 (\lVert W \tilde\tangent
-\rVert^2 - \lVert W \tangent \rVert^2)$, is finite wherever $\tangent_R \ne 0$, but its terms grow
-like $c$ as $\tangent_R \to 0$, and overflow, with their derivatives, at residuals an estimate reaches
-near convergence: in single precision once $\lVert \tangent_R \rVert$ is below about $10^{-9}$, where
-$c^2$ passes the largest float. A guard at $\tangent_R = 0$ alone does not hold, and a formula that is
-not selected must not see such an argument, as in the rotations'
-[Removable singularities](../rotations/math.svx#removable-singularities).
-
-Where $\Sigma$ has no coupling block and $\Lambda_{RR} \ge \tfrac3{16} I$, [](eq:rho-bound) gives a
-cutoff that does not depend on the scale: at $c \ge 100$, which is $\lVert \tangent_R \rVert^2 \le
-0.16$, a turn of about $23°$, it bounds $\rho$ by $e^{g(100)} \approx e^{-136}$, and its derivative by
-the same factor times a power of $c$, both far below the rounding of either precision. So the
-correction is a discretization of $\lVert \tangent_R \rVert^2$ at $0.16$: below it, $\rho$ is taken
-as $0$, a jump far below rounding, and the closed form is given a harmless argument, $\tangent_R$ of
-length $1$, on those rows; above it, the closed form is computed, its argument bounded away from
-zero. A broader rotation, with a standard deviation above $4 / \sqrt 3 \approx 2.3$ rad on some axis,
-or a coupling block, under which $\rho$ is not bounded by [](eq:rho-bound) and need not be small
-at a small rotation residual if the translation's is large, does not allow the correction to be
-dropped at a fixed cutoff; its cutoff is then set from the scale, or the correction is kept on
-every row with the argument guarded only where $c$ would overflow.
-
-## Four ways to choose the sign
-
-A model can avoid the far side in four ways, which differ in where the sign is chosen and in what
-they do to the probabilistic graph ([the core's mathematics](../core/math.svx#the-probabilistic-graph):
-quantities and terms as nodes, an edge from each quantity a term is conditioned on to the term, and
-an edge from the term to the quantity it scores).
-
-**On the host, against a fixed estimate.** The caller aligns $z$ against the prediction $\hat h =
-h(\hat\point)$ at an estimate, usually the initial one, and observes the normal of $\operatorname{sign}
-\langle z, \hat h \rangle\, z$. This is skoro's practice today. The probabilistic graph is unchanged,
-and the term is the near side of the sign-free normal at every estimate whose prediction is on the
-same side of $z$ as $\hat h$. That holds until the predicted rotation passes a half-turn from the
-measured one: if $\hat h$ is at the angle $\alpha$ from it, the estimate must move the prediction by
-at least $\pi - \alpha$ first. Past that the measurement is misaligned, with everything
-[What a misaligned measurement does](#what-a-misaligned-measurement-does) says. In practice an
-optimizer moving toward a solution moves predictions toward their measurements, and the failure
-needs a prediction that starts near a half-turn from its measurement and is carried across it by
-the other terms. It also needs a prediction on the host, and so the states' initial values and the
-map $h$ evaluated outside the model, which a pose graph has and a model whose prediction runs
-through a long composite may not.
-
-**In the model, against the value itself.** The model could align its prediction with the
-measurement, $\mu = \operatorname{sign} \langle h(\point), z \rangle\, h(\point)$, and score $z$ by
-the normal at $\mu$. This term scores $z$ and is conditioned on $\point$, since a term is
-conditioned on the quantities its log-density is reached from other than the one it scores; the
-probabilistic graph has no cycle. But its log-density, $q \mapsto \log \density_{h}(s q)$, is not
-the log of a density of $z$: it gives both $q$ and $-q$ the near side's value and integrates to
-$2(1 - m)$, with $m$ the normal's far-side mass. And the normal's sampler cannot run, since its
-mean needs the value it is to draw. The term claims to be a normal and is, up to $\log 2$ and the
-correction, the sign-free normal. Aligning $z$ against $h(\point)$ instead is worse: the normal
-would score a mapped value rather than the quantity $z$, so $z$ would be scored by no term and
-become a parameter of the model, free in every query that does not observe it.
-
-**In the model, against a constant.** The mean could be aligned against a constant $c$ holding the
-measured value, $\mu = \operatorname{sign} \langle h(\point), c \rangle\, h(\point)$. That law is
-honest, with a sampler, and at $c = z$ its term is the near side. But the model then holds its data
-twice, as the observed value and as a constant, and a query that frees the measurement or observes
-another value keeps the old sign.
-
-**In the law.** The fourth way chooses no sign at all: the measurement is scored by the sign-free
-normal, whose density is the same at $z$ and $-z$, computed by its near side as
-[%full](statement:near-side) says. The term scores $z$, is conditioned on $\point$, is a density of
-$z$, and has a sampler. Nothing is computed on the host, and the selection the near side makes is
-inside the law, where it changes the value by no more than the correction.
-
-> [!DECISION] The normal on a double cover is the sign-free normal
-> The normal on the rotations, the rigid motions and the extended poses, and on any product with
-> one of them among its factors, is the sign-free normal of
-> [The normal on a double cover](#the-normal-on-a-double-cover), not the normal of $S^3$ alone.
-> It is the exact law of the rotation, so the sign in which a value, a mean or a prediction is given
-> changes nothing; it needs no estimate on the host and no alignment by the caller; its sampler is
-> the normal's with a fair sign; and it is computed by the near side's residual and a correction
-> that vanishes near the mean. A model writes one normal, as it does today, and its type decides
-> which law that is. The one-sheet normal survives inside it, as the component the mixture is made
-> of, and not as a law a model can choose on these types: what it adds is a preference for one
-> sign, which means nothing for a rotation. A model that wants the law of $S^3$ as a sphere wants a
-> different type.
-
-## The normal on a double cover
-
-Each of the three types is a double cover of its group, and the cover has one nontrivial deck
-transformation, $\iota(q) = -q$: the left translation by the central element $-1$, or $(-1, 0)$
-and $(-1, 0, 0)$ on the motions, which preserves $\nu$, commutes with every left translation, and
-satisfies $\iota(\mu \oplus \tangent) = \iota(\mu) \oplus \tangent$. The type declares it, and the
-normal on such a type is the average of the normal over it,
+The chart's coordinate of a rotation by $\theta$ has the length $2 \tan(\theta / 2) = \theta +
+\theta^3 / 12 + O(\theta^5)$. Its volume against the Haar measure of $SO(3)$ normalized at the
+chart's centre is
 
 $$
-	\density^{\pm}_\mu(q) = \tfrac12 \bigl( \density_\mu(q) + \density_\mu(\iota(q)) \bigr) , @tag(average)
+	\lambda(\tangent) = -2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr) , @tag(cayley-volume)
 $$
 
-which is [%full](statement:sign-free). Its term is [](eq:archive/normal/math/term) at the near side,
-plus $\log(1 + \rho)$ and $-\log 2$, by [%full](statement:near-side). Every property of the normal
-that holds near its mean holds unchanged, since there the two laws differ by $\rho$, which vanishes
-to every order: its mean is a mode under the same condition, and a measurement weighs on the state
-with the same precision. What changes is far from the mean, where the mixture puts back near $\mu$
-the mass the normal put on the far side, and where the near side's sign changes at the half-turn.
+by [the note](../../math/chart-volume/#the-usual-charts), whose derivation in the exponential chart
+is the same for a quaternion as for a matrix. Every coordinate the chart computes at $\mu$ is that of
+the rotation, whichever sign either quaternion is given in.
 
-**Products.** A product of spaces is a double cover in each factor that is one, and the deck
-transformations of a product with $k$ such factors are the $2^k$ sign patterns $\epsilon \in
-\{\pm 1\}^k$, applied factor by factor. The normal on it is the average over them,
+**What it does to a measurement.** Read under the Cayley chart, a measured rotation has one
+residual, of length $2 \tan(\varphi / 2)$ for $\varphi \in [0, \pi)$ the angle between the measured
+and the predicted rotations, and none of [What a misaligned measurement does](#what-a-misaligned-measurement-does)
+can happen. The residual is unbounded as the prediction nears a half-turn from the measurement, a
+real error of a half-turn rather than a mistaken sign, and there it attracts rather than repels: a
+Gauss–Newton step on $r(\varphi) = 2 \tan(\varphi / 2)$ alone changes $\varphi$ by
+$-r / r' = -\sin \varphi$, toward $0$, if slowly near $\pi$. In the cycle of the one-turn loop, the
+residual angles are rotation angles, in $(-\pi, \pi)$, and add modulo $2\pi$,
 
 $$
-	\density^{\pm}_\mu(q) = 2^{-k} \sum_{\epsilon} \density_\mu(\epsilon q) , @tag(product-average)
+	\sum_e \theta_e \equiv \sum_k \alpha_k + \beta = 2\pi \equiv 0 \pmod{2\pi} ,
 $$
 
-and its near side takes each factor's sign separately, $s_i = \operatorname{sign} \langle q_i,
-\mu_i \rangle$. Its correction is $\log \sum_\epsilon \rho_\epsilon$, with $\rho_\epsilon$ the
-ratio of the density at the pattern $\epsilon$ applied to $sq$ to the density at $sq$, so that the
-pattern of no flips contributes $1$. Where $\Sigma$ couples no two factors, the density is a product
-of the factors' densities and so is the average, and the correction is $\sum_i \log(1 + \rho_i)$, one
-term per factor as [%full](statement:near-side) gives it: $k$ terms, not $2^k$. Where $\Sigma$
-couples them, each $\rho_\epsilon$ involves the whole residual, and the $2^k$ terms do not separate.
-The usual product, $S^3 \times \R^3$ for a pose whose position's noise is in a fixed frame, has
-$k = 1$.
+so every residual can vanish: the winding that the stereographic chart forced on the estimate is
+no longer a property of any point of the type.
 
-The likelihood factors of the normal's mathematics are untouched: the replacement
-[](eq:archive/normal/math/joint) that a retirement adds is a Gaussian of the stacked tangent
-coordinates $\point_i \ominus p_i$ at fixed anchors, a function on $\R^D$ rather than the normal of a
-type, and it reads each state on the sheet of its anchor.
+## A type stored up to a group
 
-**The broad normal.** The correction's fixed cutoff holds for a rotation's standard deviation below
-$4 / \sqrt 3 \approx 2.3$ rad, as [Computing the correction](#the-observed-value-is-a-rotation) says.
-A prior on an attitude about which little is known is broader than that, and meets the correction on
-every row; for it, the correction is the law. It is the regime in which the rotations' mathematics
-found the normal's mean no longer a mode, and in which a uniform law, not a broad normal, is the way
-to say that an attitude is unknown.
+The Cayley chart is not a chart of $S^3$, and the core cannot declare it as one. Its retraction and
+inverse meet every condition of [%full](statement:archive/core/math/embedded) on $\manifold = S^3$:
+$R(q, 0) = q$, $R$ stays on $S^3$, its derivative $B(q) = q \otimes (0, \tfrac12 I)$ has rank $3$,
+and $Q(q, R(q, \tangent)) = \tangent$. The derivative maps that statement gives are therefore right
+as they stand. What fails is what [the core's measures](../measures/math.svx#what-an-embedded-type-declares)
+ask of a type with a volume. On $S^3$, the chart at $\mu$ reaches only the open hemisphere $\langle
+q, \mu \rangle > 0$, so it is not full, and $Q(\mu, \cdot)$, finite on the other hemisphere, is not
+the inverse of the chart there; it is exactly the chart that measures' decision
+[Only full charts declare a volume](../measures/math.svx#what-an-embedded-type-declares) refuses,
+because a density read at a point it does not reach would be silently wrong. Read on the rotations
+instead, the chart is full and $Q$ is right everywhere, since the point $Q$ reads on the far
+hemisphere is the same rotation as its antipode on the near one. The type is $SO(3)$, and $S^3$ is
+how it is stored.
 
-## Estimates and their mirrors
+$SO(3)$ is not a submanifold of $\R^4$, or of any coordinate space in which the quaternions store
+it: the quotient of $S^3$ by $\pm 1$ is the real projective space $\mathbb{RP}^3$, which does not
+embed in $\R^4$. So the core's definition of an embedded type, a submanifold of its storage, has to
+admit a type whose storage covers it.
 
-When every term that reads a state's quaternion is invariant under its sign, because it reads it
-through $\pi$ or through the normal of a prediction the sign flips, which is now sign-free, the joint
-density is invariant under negating that state. That is now the rule rather than the exception,
-since the normal of every quantity of these types, a state's prior among them, is sign-free. A model with $n$ such states has $2^n$ copies of each mode, one
-for each choice of signs, all the same rotations. An optimizer converges to the copy on the side it
-starts from, and a Laplace approximation, which is local, is the same at each. A sampler moving
-continuously passes from one copy to another only by carrying a state's rotation at least a
-half-turn from where it was, since a path from $q$ to $-q$ on $S^3$ passes a point orthogonal to
-$q$, so for a concentrated posterior it stays in one; that is no loss, since every copy is the same law
-on the rotations. What still breaks the symmetry is a term that reads a quaternion's coordinates
-other than through $\pi$, such as a model that computes with $w(q)$ directly, and a retirement's
-replacement, which reads its states at their anchors; each keeps its states on one sheet, which is
-harmless for the same reason.
+<Statement {...quotient} />
+
+<Proof>
+
+A finite group acting freely by diffeomorphisms acts properly discontinuously, so $N$ is a manifold
+and $\varpi$ a covering, a local diffeomorphism. The retraction on $N$ is well defined, since
+$\varpi(R(g \point, \tangent)) = \varpi(g\, R(\point, \tangent)) = \varpi(R(\point, \tangent))$; it is
+smooth, the identity at $\tangent = 0$, and of full rank there, since $\varpi$ is a local
+diffeomorphism and $R$ meets the same conditions on $\manifold$. The inverse is well defined by the
+two invariances of $Q$, and inverts the retraction near $0$ as $Q$ inverts $R$. For the derivatives,
+$f(R(g \point, \tangent)) = f(g\, R(\point, \tangent)) = f(R(\point, \tangent))$ as functions of
+$\tangent$, and $f \circ R(\point, \cdot) = \bar f \circ \varpi \circ R(\point, \cdot)$, which is
+$\bar f$ in the chart of $N$ at $[\point]$.
+
+</Proof>
+
+A chart volume is declared for such a type as [%full](statement:archive/measures/math/declaration)
+declares one, with $\manifold$ read as $N$: the measure is the one the retraction normalizes on
+$N$; the domain, the image, globality and fullness are those of $\tangent \mapsto [\mu] \oplus
+\tangent$ in $N$; and the log-volume $\Lambda$ is asked to be invariant, $\Lambda(g \mu, \tangent) =
+\Lambda(\mu, \tangent)$. Since $\varpi$ is a local diffeomorphism and the chart volume is local, the
+volume on $N$ is that of the chart on $\manifold$ wherever the chart is injective there, and a
+density on $N$ read at a stored point is the same at every representative, since it reads the point
+only through $Q$ and $\Lambda$.
+
+**What a model may read.** Everything the core computes from a quantity of such a type goes through
+$R$, $Q$, $P$ and $\Lambda$, and is the same at every representative. Two things a model writes need
+not be. The inclusion $\iota$ reads a stored point as its storage, which is a representative and
+not a function of the point of $N$: on the rotations, the quaternion itself. A map out of the type
+written on the inclusion is a map of $N$ only if it is invariant under $G$, as $\pi(q)$, a rotated
+vector and the Cayley coordinate are, and the rotation vector of [](eq:archive/rotations/math/log),
+of length up to $2\pi$, is not. A map into the type, written on the inclusions and projected as
+[](eq:archive/core/math/map-into) does, is a map of $N$ when it is equivariant, $F_{\mathrm s}(g_1
+\point_1, \dots, g_m \point_m) \in G\, F_{\mathrm s}(\point_1, \dots, \point_m)$; the composition
+$P(q_1 \otimes q_2)$ is, since $(\pm q_1) \otimes (\pm q_2) = \pm (q_1 \otimes q_2)$. The core cannot
+check invariance, which is a property of a composite on all its inputs, any more than it checks that
+a type's $R$ stays on $\manifold$; a type's entry says which of its maps are maps of $N$, and its
+tests check them at both representatives.
+
+**Which representative a value carries** is decided by how it was made, and matters to nothing that
+reads it as a point of $N$. A retraction $\mu \oplus \tangent$ is on the side of the stored $\mu$,
+$\langle \mu \oplus \tangent, \mu \rangle > 0$; a draw of the normal therefore carries its mean's
+sign; a composition carries the product's sign; and an observed or given value carries the sign it
+was given in.
+
+**Products.** A product of types stored up to groups $G_1, \dots, G_m$ is stored up to their
+product, acting factor by factor, and meets the conditions of [%full](statement:quotient) when each
+factor does. Its chart, its volume and its normal are the product's, with nothing to sum over: the
+charts are invariant already.
+
+## The rotations, the rigid motions and the extended poses
+
+The three types become the groups.
+
+- **The rotations**, $SO(3)$, stored as $S^3 \subset \R^4$ up to $G = \{\pm 1\}$, with the Cayley
+  retraction and inverse of [%full](statement:cayley), the normalizing projection $P(x) = x / \lVert
+  x \rVert$, and the log-volume [](eq:cayley-volume). The retraction is equivariant and the inverse
+  invariant by [%full](statement:cayley), $P(-x) = -P(x)$, and the log-volume reads $\tangent$
+  alone.
+- **The rigid motions**, $SE(3)$, stored as $S^3 \times \R^3$ up to $(q, p) \mapsto (-q, p)$, with
+  $(q, p) \oplus (\phi, \rho) = (q \oplus \phi,\ p + \pi(q)\, \rho)$ and its inverse $(q' \ominus q,\
+  \pi(q)\transpose (p' - p))$, both meeting the conditions because $\pi(-q) = \pi(q)$, and the
+  log-volume of the rotation alone, against $\nu_{SO(3)} \times$ Lebesgue, a Haar measure by the
+  argument of [%full](statement:archive/rotations/math/motions).
+- **The extended poses**, $SE_2(3)$, stored as $S^3 \times \R^3 \times \R^3$ up to the same sign,
+  likewise.
+
+Each chart is global and full on its group: the rotation's reaches every rotation by less than $\pi$
+from the point's, which is all of $SO(3)$ but the half-turns, a set of measure zero, and the
+translations' are affine bijections. So the normal applies to them as
+[its mathematics](../normal/math.svx#setting) defines it, its density and its sampler exact, and its
+law is the law of the rotation. A normal's term is the same whichever sign the value and the mean are
+given in, so an observed quaternion needs no alignment, and the sign of a state's quaternion is a
+choice of representative that no term reads.
+
+**What the change of chart costs.** The figures of the rotations'
+[normal on these types](../rotations/math.svx#the-normal-on-these-types) follow from the log-volume,
+whose negative is now $2 \log(1 + \lVert \tangent \rVert^2 / 4) = \tfrac12 \lVert \tangent \rVert^2 +
+O(\lVert \tangent \rVert^4)$, with the Hessian $I$ in place of $\tfrac38 I$:
+
+- a measurement of a rotation weighs on the state as a Gaussian of its residual would with the
+  precision $\Lambda - I$ on the rotation's block, a change of $1\,\%$ for a noise of $0.1$ rad;
+- the mean is a mode of the density when $\sigma^2 < 1$, a standard deviation under $1$ rad, where
+  it was $1.6$ rad;
+- Gauss–Newton with the log-volume's gradient converges at a rate within $\kappa = \sigma^2$ of the
+  residuals' own.
+
+A broad normal is no better than before. Its draws go to the half-turns as its scale grows, since
+$\theta = 2 \arctan(\lVert \varepsilon \rVert / 2) \to \pi$, where the stereographic chart's went to the
+far side of $S^3$, which as a rotation is the mean again; neither is a way to say that an attitude
+is unknown, which a uniform law will be. The coordinate is farther from the angle at third order,
+$\theta^3 / 12$ against $\theta^3 / 48$, which a model meets only through the log-volume's
+curvature above. The [double cover](../rotations/math.svx#the-double-cover)'s law on the rotations,
+$\density(q) + \density(-q)$, and its mirrored modes, are gone: a normal on $SO(3)$ is a law on
+$SO(3)$ already.
+
+**The maps of the rotations.** Every map of [the rotations' mathematics](../rotations/math.svx#maps-of-the-rotations)
+that reads the rotation through $\pi$ or through a composition stays as it is: the group operations
+and the actions, the matrices and the adjoints, the exponential into the type, the Jacobians, the
+rotation vector of the shorter turn, the angle between two rotations, the shorter interpolation,
+the Euler angles where their formulas are even in $q$, and the constructions into the type, whose
+sign was a choice anyway. Those that read the representative are maps of $S^3$ and not of $SO(3)$:
+the logarithm with its length in $[0, 2\pi)$ and the axis and angle read off it, the interpolation by
+the arc that avoids $-q$, and alignment, which chooses a representative. Each has a counterpart on
+$SO(3)$ among the first: the rotation vector of the shorter turn, its axis and an angle in $[0, \pi]$,
+and the shorter interpolation.
+
+> [!DECISION] The rotations are the group, stored as quaternions up to sign
+> The rotations, the rigid motions and the extended poses are $SO(3)$, $SE(3)$ and $SE_2(3)$, stored
+> as unit quaternions with their translations, up to the sign of the quaternion, under the Cayley
+> chart. Their charts are global and full on the groups, their normal is the law of the rotation, and
+> no observed quaternion is aligned. What the stereographic chart bought, a slightly closer
+> coordinate and a slightly flatter volume, is less than what it cost: a type that was the cover,
+> every observed quaternion aligned by its caller, and a model that could wind a turn into an
+> estimate without notice. The core gains the declaration of a type stored up to a finite group,
+> which changes none of its derivatives and only reads its measures' conditions on the quotient.
 
 ## Measurements as g2o gives them
 
@@ -407,8 +373,8 @@ EDGE_SE3:QUAT   i j  x y z  qx qy qz qw  Ω₁₁ Ω₁₂ … Ω₁₆ Ω₂₂
 a vertex's initial pose and an edge's measurement $Z$ of $X_i^{-1} X_j$, each a translation and a
 quaternion with $w$ last, followed by the upper triangle of the edge's $6 \times 6$ information
 matrix $\Omega$, row by row. As g2o's source reads and scores these lines (`EdgeSE3::read` and
-`EdgeSE3::computeError`, read on its `master` branch on 2026-11-11), the quaternion is normalized on reading and
-its sign kept, and the error is
+`EdgeSE3::computeError`, read on its `master` branch on 2026-11-11), the quaternion is normalized on
+reading and its sign kept, and the error is
 
 $$
 	e = \bigl(\, t(\Delta),\ \operatorname{vec}\bigl(s_\Delta\, q(\Delta)\bigr) \bigr),
@@ -420,31 +386,30 @@ matrix and given the sign $s_\Delta$ that makes $w \ge 0$. The information matri
 this order. The vertex's increment is applied on the right, in the frame of the pose, as skoro's
 chart applies it.
 
-**The error is free of the sign.** It reads the measurement through the matrix of $\Delta$, so the
-sign in which $Z$ is written never reaches it: g2o scores the measured rotation, as the sign-free
-normal does, but by choosing the shorter turn, as `log_shorter` does on skoro's rotations. Its law is
-not a normal, though. It is the likelihood factor
-$\exp(-\tfrac12 e\transpose \Omega e)$ of
-[the normal's mathematics](../normal/math.svx#without-a-volume-or-a-global-chart), with no volume
-and the rotation coordinate $\sin(\theta/2)\, a$ of length at most $1$, so it has no sampler of the
-normal's form and its normalization depends on $\Omega$.
-
-**Its information in skoro's coordinates.** skoro observes $Z$ with the mean $h = X_i^{-1} X_j$ and
-reads the residual $\tangent = Z \ominus h$, rotation first. To first order the two residuals are
-the same vector up to order, sign and scale. For the rotation, $\bar h \otimes Z$ is the conjugate of
-$\bar Z \otimes h$, so that $\operatorname{vec}(\bar Z \otimes h) = -\operatorname{vec}(\bar h
-\otimes Z)$, with $w = w(\bar h \otimes Z)$ near $1$ at a small residual; for the translation, $p_h - p_Z =
--\pi(q_h)\, \tangent_T$. So
+**The same cut, the same blindness to sign.** g2o's error reads the measurement through the matrix
+of $\Delta$, so the sign in which $Z$ is written never reaches it, and its rotation coordinate is a
+function of the Cayley coordinate. skoro observes $Z$ with the mean $h = X_i^{-1} X_j$ and reads the
+residual $\tangent = Z \ominus h$, rotation first. Since $\bar h \otimes Z$ is the conjugate of $\bar Z
+\otimes h$, the two have the same $w$ and opposite vector parts, and with $|w| = (1 - \lVert e_R
+\rVert^2)^{1/2}$ the sign $s_\Delta$ makes positive, the rotation coordinates are related exactly,
+and the translations to first order, $p_h - p_Z$ being $-\pi(q_h)\, \tangent_T$:
 
 $$
 	\begin{gathered}
-		\tangent_R = \frac{4 \operatorname{vec}(\bar h \otimes Z)}{1 + w} = -2\, e_R + O(\lVert e \rVert^2) , \\
+		\tangent_R = \frac{2 \operatorname{vec}(\bar h \otimes Z)}{w(\bar h \otimes Z)} = -\frac{2\, e_R}{\sqrt{1 - \lVert e_R \rVert^2}} , \\
 		e_T = \pi(q_Z)\transpose (p_h - p_Z) = -\pi(q_Z)\transpose \pi(q_h)\, \tangent_T = -\tangent_T + O(\lVert \tangent \rVert^2) .
-	\end{gathered}
+	\end{gathered} @tag(g2o-coordinates)
 $$
 
- So $e = -A \tangent + O(\lVert \tangent \rVert^2)$ with $A(\tangent_R, \tangent_T) = (\tangent_T, \tfrac12 \tangent_R)$, and
-the precision of $\tangent$ that gives the same quadratic form to second order is
+Both coordinates are cut at the half-turns, where $w = 0$, $\lVert e_R \rVert = 1$ and $\tangent_R$
+is unbounded. g2o's law is not a normal: it is the likelihood factor $\exp(-\tfrac12 e\transpose
+\Omega e)$ of [the normal's mathematics](../normal/math.svx#without-a-volume-or-a-global-chart),
+with no volume, so it has no sampler of the normal's form and its normalization depends on
+$\Omega$.
+
+**Its information in skoro's coordinates.** By [](eq:g2o-coordinates), $e = -A \tangent +
+O(\lVert \tangent \rVert^2)$ with $A(\tangent_R, \tangent_T) = (\tangent_T, \tfrac12 \tangent_R)$,
+and the precision of $\tangent$ that gives the same quadratic form to second order is
 
 $$
 	\Lambda = A\transpose \Omega A =
@@ -459,58 +424,46 @@ $\Omega_{TR} = \Omega_{RT}\transpose$ the block between them. The rotation's pre
 of g2o's, because g2o's coordinate is half an angle.
 
 **What the conversion costs.** The two costs agree at a zero residual to second order and differ in
-the third, where the coordinates differ: g2o's rotation coordinate has the length $\sin(\theta / 2)
-= \theta/2 - \theta^3/48 + \cdots$, and half of skoro's the length $2 \tan(\theta/4) = \theta/2 +
-\theta^3 / 96 + \cdots$. The normal adds its log-volume, which changes the rotation's precision by $\tfrac38 I$ (the
-rotations' [normal on these types](../rotations/math.svx#the-normal-on-these-types)), negligible
-when $\Lambda_{RR}$ is large against it. So an estimate under [](eq:g2o-precision) agrees with g2o's
-to the order of the residuals at the solution, not exactly, and a comparison with g2o's solution
-on a dataset is a comparison to that tolerance. The half-turn is a cut of g2o's error as well,
-where $s_\Delta$ changes, with the same jump of the value under a coupling block as the near side
-alone.
+the third: by [](eq:g2o-coordinates), g2o's rotation coordinate has the length $\sin(\theta / 2) =
+\theta/2 - \theta^3/48 + \cdots$, and half of skoro's the length $\tan(\theta / 2) = \theta/2 +
+\theta^3/24 + \cdots$. The normal adds its log-volume, which changes the rotation's precision by
+$I$, negligible when $\Lambda_{RR}$ is large against it. So an estimate under
+[](eq:g2o-precision) agrees with g2o's to the order of the residuals at the solution, not exactly,
+and a comparison with g2o's solution on a dataset is a comparison to that tolerance.
 
 ## In skoro's terms
 
-- **A quantity of the rotations, the rigid motions or the extended poses**, or of a product with one
-  of them among its factors, when scored by the normal, is scored by the sign-free law
-  [](eq:average) or [](eq:product-average). A measured rotation, motion or extended pose is such a
-  quantity, observed, with the prediction $h(\point)$, a mapped value of the states, as its mean and
-  the scale a constant or a quantity; a state's prior is another. The probabilistic graph is the one
-  the normal gives: the term scores the quantity and is conditioned on the quantities its mean and
-  its scale are reached from.
-- **Each type declares its deck transformation**, $q \mapsto -q$, as it declares its chart and its
-  volume; on a type that declares none, the normal is unchanged.
-- **The term** is the normal's term [](eq:archive/normal/math/term) at the near side $s z$, with $s$
-  a selection on the sign of $\langle z_R, \mu_R \rangle$ for each factor that is a double cover,
-  plus the correction and the constant $-k \log 2$. Its whitened residual is $W ((s z) \ominus \mu)$,
-  the residual a linearization reads, and the correction joins the log-volume as the varying part of
-  the remainder. Its derivatives with respect to the mean, the scale and the value are the passes'
-  over the selected branch, and the term as a whole is smooth.
-- **Its expected information** is the normal's to within the far-side mass. The near-side residual of
-  a draw $b(\mu \oplus \varepsilon)$ is $\varepsilon$ when $\lVert \varepsilon_R \rVert < 4$ and its
-  inversion otherwise, so the normal's scale block, exact because the residual of a draw is its
-  noise, is exact here up to terms of the order of $\Pr(\lVert \varepsilon_R \rVert > 4)$, and the
-  blocks of the state and the mean are the normal's, the correction adding terms of the order of
-  $\rho$.
-- **Its sampler** is the normal's at $\mu$, followed by a fair sign for each factor that is a double
-  cover, which takes a random key of its own; the sampler is exact. A draw's sign is therefore
-  arbitrary, which nothing reads but a computation with a quaternion's coordinates.
+- **A type stored up to a group** is declared by its storage, its dimension, $R$, $Q$, optionally
+  $P$, and the finite group $G$ of linear maps of the storage it is stored up to, meeting
+  [%full](statement:quotient); a type that declares no group is stored up to the trivial one, as
+  every type is today. Its quantities are points of $N$; their stored values are representatives.
+- **Its derivatives** are those [%full](statement:archive/core/math/embedded) gives, unchanged,
+  computed at the stored representative; by [%full](statement:quotient) they are the same at every
+  representative for every function the core computes.
+- **Its volume** is declared as for any embedded type, with the domain, globality and fullness read
+  on $N$ and the log-volume invariant under $G$; its normal is the normal of
+  [its mathematics](../normal/math.svx#the-definition), with no change.
+- **The rotations, the rigid motions and the extended poses** are the groups, stored up to the sign
+  of their quaternion, with the Cayley charts, the normalizing projection, and the log-volume
+  [](eq:cayley-volume), all composites of the core's primitives. A quantity of these types is a
+  rotation, motion or extended pose; a measured one is observed in whatever sign it was given, and
+  scored by the normal of its prediction; a state's prior is a normal like any other.
+- **Maps out of these types** are maps of the groups when they are invariant under the sign, and
+  maps into them when they are equivariant; the rotations' maps are sorted as
+  [The maps of the rotations](#the-rotations-the-rigid-motions-and-the-extended-poses) says.
 - **A measurement read from g2o** is a quaternion and a translation in g2o's order, normalized, in
   whatever sign the file gives, observed under the normal with the precision [](eq:g2o-precision);
   a vertex's pose is a state's initial value, in whatever sign the file gives.
-- **Aligning on the host** is no longer needed by a model: a measurement aligned by its caller is
-  scored as it would be unaligned. It remains for reporting a quaternion with $w \ge 0$.
-- **The normal's own mathematics** is revised on these types: its definition gains the average over
-  the deck transformation, its sampler the sign, its term the correction, and the scale block of
-  its expected information is exact to within the far-side mass rather than exactly.
+- **Alignment on the host** is no longer needed by a model; a quaternion is given $w \ge 0$, when a
+  user wants one to report, by choosing the representative.
 
 ## Open questions
 
-> [!TODO] A normal coupling several double covers
-> On a product with $k$ factors that are double covers and a scale that couples them, the exact
-> correction is a sum of $2^k$ terms, [](eq:product-average). A pose, or a pose with a fixed-frame
-> position, has $k = 1$, and a product of uncoupled factors separates into $k$ terms; a normal over
-> several coupled rotations, such as a prior taken from a joint marginal, does not. Either it is
-> computed exactly, at a cost exponential in $k$ that is fixed when the model is built; or only the
-> patterns that flip one factor are kept, an approximation whose error is of the order of the
-> products $\rho_i \rho_j$ of two flips; or such a normal is refused above some $k$.
+> [!TODO] The maps of the representative
+> The logarithm with its length in $[0, 2\pi)$, the axis and angle read off it, the interpolation
+> along the arc that avoids $-q$, alignment, and the inclusion itself read the stored quaternion
+> rather than the rotation. Either the rotations keep them, documented as maps of the
+> representative, whose value depends on the sign a point happens to carry; or they are removed,
+> their $SO(3)$ counterparts taking their names, and the inclusion of these types is read only
+> through invariant maps such as $\pi$. Removing them is the safer rule, since a term built on one
+> would make a density depend on the sign again.

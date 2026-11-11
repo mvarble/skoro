@@ -2,7 +2,7 @@
 title: "Observed quaternions of arbitrary sign on outside data"
 pages: []
 crates: []
-revises: [rotations, normal]
+revises: [rotations, core, measures]
 ---
 
 The type `Rotation` is the unit quaternions, a double cover of the rotations, and the normal on it
@@ -13,5 +13,6 @@ refuses it, and no optimizer step can cross to the other sign. Both examples dra
 measurements from the model, so their signs are right by construction, and the path has never been
 run on outside data. This entry observes quaternions of arbitrary sign, among them a loop closure
 given with the opposite sign to its prediction, on a standard g2o dataset if loading one is cheap
-enough, and works out whether alignment stays the caller's or becomes a helper that aligns each
-row against a prediction.
+enough. It makes the types the groups themselves, $SO(3)$ and its motions stored as quaternions up
+to sign under the Cayley chart, which cannot tell $q$ from $-q$, so that no observed quaternion is
+aligned; and it teaches the core to declare a type stored up to a finite group.
