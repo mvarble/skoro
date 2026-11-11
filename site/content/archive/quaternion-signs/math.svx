@@ -194,8 +194,13 @@ last identity follow as for the stereographic chart
 
 </Proof>
 
-The chart's coordinate of a rotation by $\theta$ has the length $2 \tan(\theta / 2) = \theta +
-\theta^3 / 12 + O(\theta^5)$. Its volume against the Haar measure of $SO(3)$ normalized at the
+The chart's coordinate of a rotation by $\theta$ has the length
+
+$$
+	2 \tan(\theta / 2) = \theta + \theta^3 / 12 + O(\theta^5) .
+$$
+
+Its volume against the Haar measure of $SO(3)$ normalized at the
 chart's centre is
 
 $$
@@ -206,13 +211,47 @@ by [the note](../../math/chart-volume/#the-usual-charts), whose derivation in th
 is the same for a quaternion as for a matrix. Every coordinate the chart computes at $\mu$ is that of
 the rotation, whichever sign either quaternion is given in.
 
+**Built from the primitives.** The core's primitives take reciprocals only of positive numbers, as
+$e^{-\log a}$, and $w(\bar q \otimes p)$ is negative on the far hemisphere, which is now a value a
+model may be given. The inverse is therefore computed as
+
+$$
+	p \ominus q = \frac{2\, w\, \operatorname{vec}(\bar q \otimes p)}{w^2}, \qquad w = w(\bar q \otimes p),
+	\qquad \frac{1}{w^2} = e^{-\log w^2} , @tag(cayley-composite)
+$$
+
+whose numerator and denominator are each even in the sign of $p$ and of $q$, and whose reciprocal
+is of a positive number wherever the inverse is defined. The retraction's normalization is the
+reciprocal of $\sqrt{1 + \lVert \tangent \rVert^2 / 4} \ge 1$, and the log-volume is a logarithm of
+a number at least $1$; both are composites as written.
+
+**The half-turns.** The chart misses, at each $\mu$, the rotations a half-turn from it: not one
+point, as the stereographic chart missed $-\mu$, but a surface, the rotations by $\pi$ about every
+axis, composed with $\mu$. It has measure zero and no draw reaches it, which is all
+[fullness](../measures/math.svx#what-an-embedded-type-declares) asks. A given value can: a
+measurement exactly a half-turn from its prediction, a state initialized at the identity against a
+prior whose mean is a half-turn, a sensor's mounting given exactly upside down as a measurement of
+it. There $w = 0$, [](eq:cayley-composite) is non-finite, and the term is too; near it the residual
+is large, its Gauss–Newton weight grows like $\sec^4(\varphi / 2)$, and the step below crawls. The
+stereographic chart was finite at every half-turn, its coordinate of length $4$ there, and missed
+only the antipode $-\mu$, the point a sign error lands on. So the change trades a cut that a common
+mistake reaches, invisibly, for a cut that only a value a half-turn from its mean reaches, where a
+non-finite term says so. A half-turn between a value and its mean is itself an error of the largest
+size a rotation can have, so the cut costs a model nothing at an estimate that fits its data; it is
+a fact about the start, and an estimate is started away from it.
+
 **What it does to a measurement.** Read under the Cayley chart, a measured rotation has one
 residual, of length $2 \tan(\varphi / 2)$ for $\varphi \in [0, \pi)$ the angle between the measured
 and the predicted rotations, and none of [What a misaligned measurement does](#what-a-misaligned-measurement-does)
 can happen. The residual is unbounded as the prediction nears a half-turn from the measurement, a
 real error of a half-turn rather than a mistaken sign, and there it attracts rather than repels: a
 Gauss–Newton step on $r(\varphi) = 2 \tan(\varphi / 2)$ alone changes $\varphi$ by
-$-r / r' = -\sin \varphi$, toward $0$, if slowly near $\pi$. In the cycle of the one-turn loop, the
+
+$$
+	-\frac{r(\varphi)}{r'(\varphi)} = -2 \tan\frac\varphi2 \cos^2 \frac\varphi2 = -\sin \varphi ,
+$$
+
+toward $0$, if slowly near $\pi$. In the cycle of the one-turn loop, the
 residual angles are rotation angles, in $(-\pi, \pi)$, and add modulo $2\pi$,
 
 $$
@@ -238,10 +277,10 @@ instead, the chart is full and $Q$ is right everywhere, since the point $Q$ read
 hemisphere is the same rotation as its antipode on the near one. The type is $SO(3)$, and $S^3$ is
 how it is stored.
 
-$SO(3)$ is not a submanifold of $\R^4$, or of any coordinate space in which the quaternions store
-it: the quotient of $S^3$ by $\pm 1$ is the real projective space $\mathbb{RP}^3$, which does not
-embed in $\R^4$. So the core's definition of an embedded type, a submanifold of its storage, has to
-admit a type whose storage covers it.
+Stored as quaternions, $SO(3)$ is not a submanifold of its storage: each rotation is stored at two
+points of $\R^4$, $q$ and $-q$, so the storage is not the inclusion of the type but a two-to-one
+cover of it. The core's definition of an embedded type, a submanifold of its storage, has to admit
+a type whose storage covers it.
 
 <Statement {...quotient} />
 
@@ -249,13 +288,22 @@ admit a type whose storage covers it.
 
 A finite group acting freely by diffeomorphisms acts properly discontinuously, so $N$ is a manifold
 and $\varpi$ a covering, a local diffeomorphism. The retraction on $N$ is well defined, since
-$\varpi(R(g \point, \tangent)) = \varpi(g\, R(\point, \tangent)) = \varpi(R(\point, \tangent))$; it is
+
+$$
+	\varpi\bigl(R(g \point, \tangent)\bigr) = \varpi\bigl(g\, R(\point, \tangent)\bigr) = \varpi\bigl(R(\point, \tangent)\bigr) ;
+$$
+
+it is
 smooth, the identity at $\tangent = 0$, and of full rank there, since $\varpi$ is a local
 diffeomorphism and $R$ meets the same conditions on $\manifold$. The inverse is well defined by the
-two invariances of $Q$, and inverts the retraction near $0$ as $Q$ inverts $R$. For the derivatives,
-$f(R(g \point, \tangent)) = f(g\, R(\point, \tangent)) = f(R(\point, \tangent))$ as functions of
-$\tangent$, and $f \circ R(\point, \cdot) = \bar f \circ \varpi \circ R(\point, \cdot)$, which is
-$\bar f$ in the chart of $N$ at $[\point]$.
+two invariances of $Q$, and inverts the retraction near $0$ as $Q$ inverts $R$. For the derivatives, as functions of $\tangent$,
+
+$$
+	f\bigl(R(g \point, \tangent)\bigr) = f\bigl(g\, R(\point, \tangent)\bigr) = f\bigl(R(\point, \tangent)\bigr) ,
+$$
+
+and $f \circ R(\point, \cdot) = \bar f \circ \varpi \circ R(\point, \cdot)$ is $\bar f$ in the chart of
+$N$ at $[\point]$.
 
 </Proof>
 
@@ -343,21 +391,26 @@ $SO(3)$ already.
 that reads the rotation through $\pi$ or through a composition stays as it is: the group operations
 and the actions, the matrices and the adjoints, the exponential into the type, the Jacobians, the
 rotation vector of the shorter turn, the angle between two rotations, the shorter interpolation,
-the Euler angles where their formulas are even in $q$, and the constructions into the type, whose
-sign was a choice anyway. Those that read the representative are maps of $S^3$ and not of $SO(3)$:
-the logarithm with its length in $[0, 2\pi)$ and the axis and angle read off it, the interpolation by
-the arc that avoids $-q$, and alignment, which chooses a representative. Each has a counterpart on
-$SO(3)$ among the first: the rotation vector of the shorter turn, its axis and an angle in $[0, \pi]$,
-and the shorter interpolation.
+and the constructions into the type, whose sign was a choice anyway. The Euler angles are among
+them: their half-angles, each an $\operatorname{atan2}$ of a coordinate and $w$, change by $\pi$ when
+$q$ is negated, and the angles, their sums and differences returned to $(-\pi, \pi]$, do not.
+Alignment is too: it returns the same rotation, on the side of its reference, so as a map of
+$SO(3)$ it is the identity, choosing a representative and nothing else. Those that read the
+representative are maps of $S^3$ and not of $SO(3)$: the logarithm with its length in $[0, 2\pi)$,
+the axis and the angle in $[0, 2\pi)$ read off it, and the interpolation by the arc that avoids
+$-q$. Each has a counterpart on $SO(3)$: the rotation vector of the shorter turn, its axis and an
+angle in $[0, \pi]$, and the shorter interpolation.
 
 > [!DECISION] The rotations are the group, stored as quaternions up to sign
 > The rotations, the rigid motions and the extended poses are $SO(3)$, $SE(3)$ and $SE_2(3)$, stored
 > as unit quaternions with their translations, up to the sign of the quaternion, under the Cayley
 > chart. Their charts are global and full on the groups, their normal is the law of the rotation, and
 > no observed quaternion is aligned. What the stereographic chart bought, a slightly closer
-> coordinate and a slightly flatter volume, is less than what it cost: a type that was the cover,
-> every observed quaternion aligned by its caller, and a model that could wind a turn into an
-> estimate without notice. The core gains the declaration of a type stored up to a finite group,
+> coordinate, a slightly flatter volume, and a finite residual at the half-turns, is less than what
+> it cost: a type that was the cover, every observed quaternion aligned by its caller, and a model
+> that could wind a turn into an estimate without notice. The Cayley chart's cut is the half-turns,
+> which a given value reaches only by being a half-turn from its mean, and there its term is
+> non-finite rather than silently wrong. The core gains the declaration of a type stored up to a finite group,
 > which changes none of its derivatives and only reads its measures' conditions on the quotient.
 
 ## Measurements as g2o gives them
@@ -424,9 +477,17 @@ $\Omega_{TR} = \Omega_{RT}\transpose$ the block between them. The rotation's pre
 of g2o's, because g2o's coordinate is half an angle.
 
 **What the conversion costs.** The two costs agree at a zero residual to second order and differ in
-the third: by [](eq:g2o-coordinates), g2o's rotation coordinate has the length $\sin(\theta / 2) =
-\theta/2 - \theta^3/48 + \cdots$, and half of skoro's the length $\tan(\theta / 2) = \theta/2 +
-\theta^3/24 + \cdots$. The normal adds its log-volume, which changes the rotation's precision by
+the third: by [](eq:g2o-coordinates), g2o's rotation coordinate and half of skoro's have the
+lengths
+
+$$
+	\begin{gathered}
+		\sin(\theta / 2) = \theta/2 - \theta^3/48 + \cdots , \\
+		\tan(\theta / 2) = \theta/2 + \theta^3/24 + \cdots .
+	\end{gathered}
+$$
+
+ The normal adds its log-volume, which changes the rotation's precision by
 $I$, negligible when $\Lambda_{RR}$ is large against it. So an estimate under
 [](eq:g2o-precision) agrees with g2o's to the order of the residuals at the solution, not exactly,
 and a comparison with g2o's solution on a dataset is a comparison to that tolerance.
@@ -437,6 +498,10 @@ and a comparison with g2o's solution on a dataset is a comparison to that tolera
   $P$, and the finite group $G$ of linear maps of the storage it is stored up to, meeting
   [%full](statement:quotient); a type that declares no group is stored up to the trivial one, as
   every type is today. Its quantities are points of $N$; their stored values are representatives.
+- **Its points are compared up to the group.** $\mu \oplus (\otherPoint \ominus \mu)$ is
+  $\otherPoint$ only up to $G$, on the side of $\mu$; every check the core makes of a type, and every
+  test that compares stored values, compares them as points of $N$, by their distance in a chart or
+  by the closest representative.
 - **Its derivatives** are those [%full](statement:archive/core/math/embedded) gives, unchanged,
   computed at the stored representative; by [%full](statement:quotient) they are the same at every
   representative for every function the core computes.
@@ -445,7 +510,8 @@ and a comparison with g2o's solution on a dataset is a comparison to that tolera
   [its mathematics](../normal/math.svx#the-definition), with no change.
 - **The rotations, the rigid motions and the extended poses** are the groups, stored up to the sign
   of their quaternion, with the Cayley charts, the normalizing projection, and the log-volume
-  [](eq:cayley-volume), all composites of the core's primitives. A quantity of these types is a
+  [](eq:cayley-volume), all composites of the core's primitives, the inverse as
+  [](eq:cayley-composite). A quantity of these types is a
   rotation, motion or extended pose; a measured one is observed in whatever sign it was given, and
   scored by the normal of its prediction; a state's prior is a normal like any other.
 - **Maps out of these types** are maps of the groups when they are invariant under the sign, and
@@ -459,10 +525,19 @@ and a comparison with g2o's solution on a dataset is a comparison to that tolera
 
 ## Open questions
 
+> [!TODO] A given value a half-turn from its mean
+> At a half-turn the term is non-finite, which a model reports as a failed evaluation. Either that is
+> the behaviour, documented, with estimates started away from it; or the term selects a finite
+> value there, such as the residual of length $2 \tan(\varphi_0 / 2)$ at a fixed angle $\varphi_0$
+> just short of $\pi$, so that an evaluation at a bad start succeeds and the optimizer moves away;
+> or a model is refused at evaluation when any value is within some angle of a half-turn from its
+> mean. Leaving it non-finite is the honest default, and the second is a discretization that hides a
+> real error of a half-turn.
+
 > [!TODO] The maps of the representative
 > The logarithm with its length in $[0, 2\pi)$, the axis and angle read off it, the interpolation
-> along the arc that avoids $-q$, alignment, and the inclusion itself read the stored quaternion
-> rather than the rotation. Either the rotations keep them, documented as maps of the
+> along the arc that avoids $-q$, and the inclusion itself read the stored quaternion rather than the
+> rotation. Either the rotations keep them, documented as maps of the
 > representative, whose value depends on the sign a point happens to carry; or they are removed,
 > their $SO(3)$ counterparts taking their names, and the inclusion of these types is read only
 > through invariant maps such as $\pi$. Removing them is the safer rule, since a term built on one
