@@ -9,16 +9,20 @@
 //! points it gives a [`Linearized`], one [`skoro_elimination::Problem`] per row over one
 //! structure, which a [`skoro_elimination::Schedule`] eliminates row by row into a [`Solved`]: the
 //! step, the marginals, the evidence and draws. A [`Replacing`] computes the replacement of a
-//! retirement the same way and builds it as the normal's `Improper` factor.
+//! retirement the same way and builds it as the normal's `Improper` factor. A
+//! [`LevenbergMarquardt`] minimizes the query's negative log-density, row by row, with the
+//! linearizer's problems.
 
 mod assemble;
 mod error;
 mod linearizer;
+mod minimize;
 mod replacing;
 mod solved;
 
 pub use assemble::Linearized;
 pub use error::Error;
 pub use linearizer::{Assembly, Linearizer};
+pub use minimize::{Iterate, LevenbergMarquardt, Minimized, RowOutcome, Status, decrement};
 pub use replacing::{LinearizedReplacement, Replacing};
 pub use solved::{QuantityMarginal, Solved};

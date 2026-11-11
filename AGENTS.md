@@ -47,6 +47,7 @@ Rules that hold whether or not a command was invoked:
 | `site/content/reference/crates/<crate>/`    | each crate's description, which its page shows above its reading order       |
 | `bin/wf`, `tools/wf/`                       | the workflow's command line and its tests                                    |
 | `bin/reading-order`, `tools/reading-order/` | the order in which to read a crate's modules, and its tests                  |
+| `bin/figures`, `tools/figures/`             | the examples' figures, drawn from the data they write with `SKORO_FIGURES` |
 | `.workflow/active`                          | the entry this branch works on, written by `bin/wf` alone                    |
 | `.agents/skills/`                           | the skills (linked into `.claude/skills/` for Claude Code)                   |
 | `.agents/reference/`                        | `workflow.md` (the procedure) and `authoring.md` (how documents are written) |
@@ -77,6 +78,8 @@ Before pushing, run what applies:
 bin/wf check
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run --release -p skoro --example pose_graph
+cargo run --release -p skoro --example sliding_window
 node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind

@@ -100,6 +100,10 @@ jobs:
               run: cargo clippy --workspace --all-targets -- -D warnings
             - if: steps.workspace.outputs.exists == 'true'
               run: cargo test --workspace
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo run --release -p skoro --example pose_graph
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo run --release -p skoro --example sliding_window
 
     pages:
         name: Publish the site

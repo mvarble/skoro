@@ -1,0 +1,3 @@
+#!/bin/sh
+# The examples' figures, from the data they write with SKORO_FIGURES set; see tools/figures/lib.ts.
+exec node "$(dirname "$0")/../tools/figures/main.ts" "$@"

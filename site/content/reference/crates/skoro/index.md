@@ -14,3 +14,12 @@ landmark, binding its roles on a retirement's factor, needing a proposal for the
 undetermined, and read on the sphere; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
 with `sample` and without it, generated, and queried with its range observed. One of its tests
 checks that none of the others names `skoro-core` or `skoro-tensor` directly.
+
+Its two examples run in CI and fail when a check of their mathematics fails.
+[`pose_graph`](../../../guide/pose-graph/) estimates a hundred datasets of a pose graph on
+$SE(3)$ together, by Levenberg–Marquardt, and checks that the Laplace marginals at the mode are
+calibrated against the truth; [`sliding_window`](../../../guide/sliding-window/) filters an open path
+with a window of five poses, retiring the oldest at every tick into a linearized factor, and reports
+its calibration and its gap to the batch. They share a module of scenarios, the model tick by tick,
+the marginals' statistics and the report, and with `SKORO_FIGURES` set they write the data that
+`bin/figures` draws.

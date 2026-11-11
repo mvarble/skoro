@@ -1,7 +1,7 @@
 ---
 title: Crates
 summary: The workspace's crates, what each holds, and what each depends on.
-order: 1
+order: 2
 ---
 
 <script>
@@ -23,12 +23,12 @@ the site is built: an order that uses as little as possible before it is read.
 | `skoro-normal` | The [normal distribution](../../concepts/the-normal/), on every space whose chart is global and whose volume is known: its term, its exact sampler, its scale in four forms, its roles, and the stacked tangent of a retirement's replacement, Gaussian or improper. |
 | `skoro-spatial` | The [rotations and rigid motions](../../concepts/rotations-and-motions/): the unit quaternions, the rigid motions and the extended poses as embedded types with global charts and declared volumes, and their maps, from compositions and actions to exponentials, Jacobians, interpolations and Euler angles, as composites of the core's operations. |
 | `skoro-elimination` | [Elimination in square-root form](../../math/square-root-elimination/): factored least-squares problems over blocks, their schedules of elimination, and their numeric elimination by unpivoted QR on the host, in double precision, through faer, with what it answers. It depends on no other crate of skoro. |
-| `skoro-linearize` | The [linearization](../../concepts/linearization/) of a density query at a batch of points, by its residuals or by its information roots, into the problems `skoro-elimination` eliminates, with steps, marginals, evidence and draws, and a retirement's linearized replacement as the normal's improper factor. |
-| `skoro`        | The crate a user depends on: it re-exports `skoro-core`, and `skoro-tensor` as `skoro::tensor`, with `Device`, `Precision` and `Target` at its root.     |
+| `skoro-linearize` | The [linearization](../../concepts/linearization/) of a density query at a batch of points, by its residuals or by its information roots, into the problems `skoro-elimination` eliminates, with steps, marginals, evidence and draws, the Levenberg–Marquardt method to a mode, and a retirement's linearized replacement as the normal's improper factor. |
+| `skoro`        | The crate a user depends on: it re-exports `skoro-core`, and `skoro-tensor` as `skoro::tensor`, with `Device`, `Precision` and `Target` at its root, and the [examples](../../guide/pose-graph/) that run in CI. |
 
 The normal is the first distribution, the rotations and rigid motions the first curved types, and
 linearization and elimination the first pieces of the estimators built on them. What is left for
-later entries (other distributions, spheres, linear algebra, the estimators' own loops,
+later entries (other distributions, spheres, linear algebra, estimators beyond Levenberg–Marquardt,
 serialization and bindings among them)
 is listed in the repository's
 [`PLAN.md`](https://github.com/mvarble/skoro/blob/main/PLAN.md).

@@ -1,7 +1,8 @@
 ---
 title: How skoro is developed
 summary: Every change is an entry that moves through fixed stages, mathematics first and the pages last, each approved by a person before the next begins.
-order: 91
+order: 1
+formerly: [start/how-skoro-is-developed]
 ---
 
 <script>

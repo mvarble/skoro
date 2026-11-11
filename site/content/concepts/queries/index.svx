@@ -19,7 +19,7 @@ the three in turn.
 ## A query
 
 ```rust
-{../../../../crates/skoro-core/src/query.rs:90..121}
+{../../../../crates/skoro-core/src/query.rs:105..136}
 ```
 
 A query's targets are some nodes of the model, or the log-density: the sum of every
@@ -34,12 +34,20 @@ needs no observations at all.
 its own. A caller keeps one set and passes it to every compile, and the identity is what the
 compiled program is cached under.
 
+A value that differs from row to row of a batch, such as one that generation drew, is observed
+whole, one value per row, by `observe_value`; a value that does not fit the quantity is refused when
+the set is used, as `observe` refuses one:
+
+```rust
+{../../../../crates/skoro-core/src/query.rs:45..58}
+```
+
 A query gives back what it was made with, so that an algorithm handed one can compile programs of
 its own under the same observations, as [the linearizer](../linearization/#linearizing-a-query)
 does with the nodes the terms bind:
 
 ```rust
-{../../../../crates/skoro-core/src/query.rs:123..137}
+{../../../../crates/skoro-core/src/query.rs:138..152}
 ```
 
 Two sets of observations join by `Observations::union`, which keeps the first set's value of a
@@ -151,6 +159,14 @@ and the layout moves the quantities along it by the retraction of the product of
 ```
 
 </Walkthrough>
+
+`Layout::local` inverts the step: the tangent coordinates at one point that reach another, by the
+product's inverse retraction. It measures how far an estimate is from a value, such as the truth,
+in the estimate's own chart, where its covariance is:
+
+```rust
+{../../../../crates/skoro-core/src/layout.rs:112..133}
+```
 
 ## What a pass may refuse
 

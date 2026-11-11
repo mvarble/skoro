@@ -108,6 +108,16 @@ product instead.
 No frame is assumed: an earth frame, a gravity or a sensor's mounting is a rotation or a motion
 the model composes, or a constant it holds.
 
+Some of these maps are needed before a model runs, on values that are not yet in it: a start for an
+estimator computed from the measurements, or a quaternion aligned before it is observed. `host`
+holds them, in double precision on arrays: the alignment, the composition of quaternions, the
+matrix, the exponential and logarithm, the Euler angles, and a motion's composition and action,
+each computing what the graph's map computes:
+
+```rust
+{../../../../crates/skoro-spatial/src/host.rs:26..38}
+```
+
 ## Derivatives
 
 No map writes a derivative. Each is a composite of the core's primitives, so its derivatives of

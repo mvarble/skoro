@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
     import CrateMap from '$lib/components/CrateMap.svelte';
+    import ExampleFigure from '$lib/components/ExampleFigure.svelte';
     import Logo from '$lib/components/Logo.svelte';
     import TrackCard from '$lib/components/TrackCard.svelte';
     import { ARCHIVE, MATH, SITE, TRACKS } from '$lib/site';
@@ -8,6 +9,12 @@
     let { data } = $props();
 
     const blurb = (id: string) => TRACKS.find((t) => t.id == id)!.blurb;
+
+    // The examples' guide pages, which the showcase links to; it is shown only where they exist.
+    const guidePage = (key: string) =>
+        data.nav.find((section) => section.id == 'guide')?.items.find((item) => item.key == key);
+    const poseGraph = $derived(guidePage('guide/pose-graph'));
+    const slidingWindow = $derived(guidePage('guide/sliding-window'));
 </script>
 
 <svelte:head>
@@ -28,6 +35,43 @@
         <a class="button" href={SITE.repo} rel="external">View source</a>
     </div>
 </section>
+
+{#if poseGraph && slidingWindow}
+    <section class="landing-showcase">
+        <ExampleFigure
+            name="pose-graph"
+            alt="A pose graph on SE(3): 73 poses around a closed circuit and 24 landmarks; dead reckoning drifts by 1.49 m, and the estimate stays within 34 cm of the truth, each pose inside its 90% ellipse."
+        />
+        <p class="showcase-lede">
+            A robot's poses and the landmarks it sights, written once as a model, drawn a hundred
+            times and estimated together, with uncertainties that hold the truth as often as they
+            claim to.
+            <a href={poseGraph.href}>Read the example →</a>
+        </p>
+        <div class="showcase-pair">
+            <div>
+                <ExampleFigure
+                    name="calibration"
+                    alt="Histograms of the normalized errors of 7,300 poses and 2,400 landmarks lying on the chi-squared densities they follow when the marginals are calibrated."
+                />
+                <p class="showcase-link">
+                    <a href="{poseGraph.href}#are-the-uncertainties-honest"
+                        >Are the uncertainties honest? →</a
+                    >
+                </p>
+            </div>
+            <div>
+                <ExampleFigure
+                    name="sliding-window"
+                    alt="A sliding window over an open path of 80 poses, from above and from the side: dead reckoning drifts by 3 m, almost all of it in height, while the window's filtered estimates and the batch stay within about a metre of the truth."
+                />
+                <p class="showcase-link">
+                    <a href={slidingWindow.href}>A sliding window, retiring as it goes →</a>
+                </p>
+            </div>
+        </div>
+    </section>
+{/if}
 
 {#if data.component}
     <section class="landing-body prose">

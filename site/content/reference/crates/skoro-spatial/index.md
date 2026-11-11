@@ -15,4 +15,5 @@ directions, Euler angles and matrices, with the Jacobians of the exponentials an
 The removable singularities at the identity are computed by series below a cutoff, one for every
 precision and device, high enough for a GPU's sine. Euler angles, in all twelve conventions, are
 compared on the circle by `angle_residual`. `host` does the same conversions in double precision
-for the values a model is given, and aligns an observed quaternion with its prediction.
+for the values a model is given, aligns an observed quaternion with its prediction, and composes
+and applies rigid motions as the graph does, for a start computed from the measurements.

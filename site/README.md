@@ -18,23 +18,23 @@ taken to be the parent of the working directory.
 
 ## Layout
 
-| Path                                     | What it is                                                                                                                            |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `content/landing.md`                     | The prose on the home page.                                                                                                           |
-| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. |
-| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note.                                                                                            |
-| `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                 |
-| `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                            |
-| `content/archive/<slug>/workflow.json`   | Its stage record, written by `bin/wf` alone and shown as the entry's history.                                                         |
-| `content/**/*.bib`                       | Bibliography entries, for `[](cite:key)`.                                                                                             |
-| `src/lib/site.ts`                        | Site name, repo URL, the tracks, and the names of an entry's documents. The navigation comes from here.                               |
-| `src/lib/crates.ts`                      | The crate map's data. Keep it in step with `cargo metadata`.                                                                          |
-| `src/styles/`                            | CSS, split as `tokens/{colors,dimensions,typography}.css` + element and utility sheets. Colors exist only as tokens.                  |
-| `plugins/`                               | skoro's own Markdown plugins: callouts, quoted source, heading anchors.                                                               |
-| `katex.config.ts`                        | Site-wide KaTeX macros.                                                                                                               |
-| `test/content/`                          | A fixture with a document of every kind. `SITE_CONTENT=test/content pnpm build` builds it instead of `content/`.                      |
-| `src/lib/cms/`                           | The content layout: what each file under `content/` is, how its links resolve, and the queries the routes call.                       |
-| `test/cms/`                              | The fixture `src/lib/cms/preset.test.ts` reads, with a few documents that are wrong on purpose.                                       |
+| Path                                     | What it is                                                                                                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content/landing.md`                     | The prose on the home page.                                                                                                                                                                                                              |
+| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. A page that moves lists the keys it had under `formerly`, so that entries naming it still resolve. |
+| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note.                                                                                                                                                                                               |
+| `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                                                                                                                    |
+| `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                                                                                                                               |
+| `content/archive/<slug>/workflow.json`   | Its stage record, written by `bin/wf` alone and shown as the entry's history.                                                                                                                                                            |
+| `content/**/*.bib`                       | Bibliography entries, for `[](cite:key)`.                                                                                                                                                                                                |
+| `src/lib/site.ts`                        | Site name, repo URL, the tracks, and the names of an entry's documents. The navigation comes from here.                                                                                                                                  |
+| `src/lib/crates.ts`                      | The crate map's data. Keep it in step with `cargo metadata`.                                                                                                                                                                             |
+| `src/styles/`                            | CSS, split as `tokens/{colors,dimensions,typography}.css` + element and utility sheets. Colors exist only as tokens.                                                                                                                     |
+| `plugins/`                               | skoro's own Markdown plugins: callouts, quoted source, heading anchors.                                                                                                                                                                  |
+| `katex.config.ts`                        | Site-wide KaTeX macros.                                                                                                                                                                                                                  |
+| `test/content/`                          | A fixture with a document of every kind. `SITE_CONTENT=test/content pnpm build` builds it instead of `content/`.                                                                                                                         |
+| `src/lib/cms/`                           | The content layout: what each file under `content/` is, how its links resolve, and the queries the routes call.                                                                                                                          |
+| `test/cms/`                              | The fixture `src/lib/cms/preset.test.ts` reads, with a few documents that are wrong on purpose.                                                                                                                                          |
 
 The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms)
 with the preset in `src/lib/cms/`: it reads every document, resolves links, numbers equations and statements,
@@ -317,6 +317,17 @@ publish stage. The content database does not read it as a document of its own, s
 not rewritten; its folder lies as deep as the page's URL, so a link written the way the files sit
 on disk works as it is. The crate map links each crate to its page, so a crate it lists must be one
 under `crates/`.
+
+## The examples' figures
+
+`<ExampleFigure name="…" alt="…" caption="…" />` shows one of the examples' figures from
+`static/figures/`, inlined so that the page's stylesheet reaches it, and opens it in a dialog when
+it is clicked. `bin/figures` draws the figures from the data the examples write with
+`SKORO_FIGURES` set, each example's from its own data, skipping an example that was not run, and colours every mark through a `--fig-*` variable. Each figure carries its
+own light and dark values for use on its own (the README shows them as images), and
+`styles/utils/figures.css`, which `bin/figures` writes from the same palette, sets them from the
+site's theme instead. Do not edit that file: change the palette in `tools/figures/lib.ts` and draw
+the figures again.
 
 ## For language models
 

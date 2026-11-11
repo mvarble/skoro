@@ -1,0 +1,119 @@
+{
+    "kind": "feature",
+    "stage": "done",
+    "started": "2026-11-10",
+    "events": [
+        {
+            "date": "2026-11-10",
+            "action": "start",
+            "stage": "math"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "math",
+            "commit": "17d6a14"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "math",
+            "reason": "The stopping rule stopped a row only on an accepted step, so a converged row whose next gain is rounding can be rejected until its damping passes the limit.",
+            "commit": "3aad1cf"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "math",
+            "commit": "df80282"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "b874d83"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "86cdd52"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The method's tests ask for a gradient below 1e-6 and for modes to 1e-10 and 1e-8, which the stopping rule's tolerance of 1e-9 nats does not bound.",
+            "commit": "c82510a"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "225c466"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "fa9b277"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "reopen",
+            "stage": "implementation",
+            "reason": "The open path's landmarks at ±5 m with a range of 7 m leave ten landmarks never sighted, which the window requires of every one.",
+            "commit": "20b26dc"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "f6f7c9d"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "ccf85b3"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "build",
+            "commit": "b438c8e"
+        },
+        {
+            "date": "2026-11-10",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "9a7ba48"
+        }
+    ],
+    "approvals": {
+        "math": {
+            "date": "2026-11-10",
+            "commit": "df80282",
+            "hash": "66a181737c5b5b08c1e83226088ca0b8759a926ab1c8213d4b687d114af4cb29"
+        },
+        "implementation": {
+            "date": "2026-11-10",
+            "commit": "f6f7c9d",
+            "hash": "7a88cb3cbad257af2638e316782477c40cf7f0f34572149c8bab4c296dbbeffd"
+        },
+        "plan": {
+            "date": "2026-11-10",
+            "commit": "ccf85b3",
+            "hash": "b9dfeaca872cb677a9e77466435143f97b703f3ec8542c31312b61deddd5f406"
+        },
+        "build": {
+            "date": "2026-11-10",
+            "commit": "b438c8e"
+        },
+        "publish": {
+            "date": "2026-11-10",
+            "commit": "9a7ba48"
+        }
+    },
+    "finished": "2026-11-10"
+}

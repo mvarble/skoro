@@ -5,8 +5,8 @@
 mod common;
 
 use common::{
-    close, f_at, factor_rows, gradient, gram, host, node_gradient, nodes_at, points, row, solve,
-    tolerance,
+    close, f_at, factor_rows, gradient, gram, host, node_gradient, nodes_at, points, rotations,
+    row, solve, tolerance,
 };
 use skoro_core::scope::{constant, quantity};
 use skoro_core::{Key, Matrix, Observations, Positive, Query, Real, Values, Vector, Writer};
@@ -302,45 +302,6 @@ fn damping_promises_the_decrease() {
         1e-10,
         "the promised decrease",
     );
-}
-
-/// A chain of rotations: `r₀ ~ N(μ₀, 0.3²)`, `r₁ ~ N(r₀, diag(0.2, 0.25, 0.15)²)`, and an observed
-/// measurement `z ~ N(r₁, 0.1²)`, each a normal on the rotations, whose log-volume is folded; with
-/// a batch of two points.
-fn rotations(target: &Target) -> (Writer, Query, Values) {
-    let unit = |q: [f64; 4]| {
-        let n = q.iter().map(|x| x * x).sum::<f64>().sqrt();
-        q.map(|x| x / n)
-    };
-    let mut writer = Writer::new();
-    let (r0, r1, z) = writer
-        .build(|| {
-            let r0 = quantity("r0", Rotation);
-            Normal::on(
-                Rotation,
-                constant(Rotation, unit([0.9, 0.1, -0.3, 0.2])),
-                Scale::sd(0.3),
-            )
-            .score(r0);
-            let r1 = quantity("r1", Rotation);
-            Normal::on(Rotation, r0, Scale::sds(&[0.2, 0.25, 0.15])).score(r1);
-            let z = quantity("z", Rotation);
-            Normal::on(Rotation, r1, Scale::sd(0.1)).score(z);
-            (r0, r1, z)
-        })
-        .unwrap();
-    let query =
-        Query::log_density().given(Observations::new().observe(z, unit([0.7, 0.3, -0.4, 0.5])));
-    let a = [unit([0.8, 0.2, -0.3, 0.1]), unit([0.95, 0.0, -0.2, 0.25])].concat();
-    let b = [
-        unit([0.75, 0.25, -0.35, 0.45]),
-        unit([0.6, 0.35, -0.3, 0.6]),
-    ]
-    .concat();
-    let point = Values::new()
-        .with(r0, points(&a, 2, 4, target))
-        .with(r1, points(&b, 2, 4, target));
-    (writer, query, point)
 }
 
 type Model = fn(&Target) -> (Writer, Query, Values);

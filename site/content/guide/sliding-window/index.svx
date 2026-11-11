@@ -1,0 +1,65 @@
+---
+title: A sliding window
+summary: "The example sliding_window, read top-down: a model kept to its last few poses as a robot drives an open path, each tick appended, solved and the oldest retired with a linearized replacement, and its estimates set beside the truth and the batch."
+order: 5
+depends_on: [guide/pose-graph]
+---
+
+<script>
+	import ExampleFigure from '$lib/components/ExampleFigure.svelte';
+	import Walkthrough from '$lib/components/Walkthrough.svelte';
+	import { window } from './window.walk';
+</script>
+
+A robot that drives on cannot keep every pose it has had. The example `sliding_window` keeps a
+window: the last five poses, the landmarks they see, and one factor standing in for everything
+before. At every tick it appends the new pose and its measurements, finds the window's mode, and
+retires the oldest pose with the landmarks only it still sees, replacing their terms by their
+linearization. It is the model of [the pose graph](../pose-graph/), on an open path, built one tick
+at a time:
+
+```sh
+cargo run --release -p skoro --example sliding_window
+```
+
+<ExampleFigure
+	name="sliding-window"
+	alt="An open path of 80 poses, from above and from the side. Dead reckoning drifts by about 3 m, almost all of it in height; the window's filtered estimates and the batch's both stay within about a metre of the truth, the window's error mostly under its 90% radius."
+	caption="One of the hundred datasets: the path from above and from the side, and each tick's position error in all three dimensions, for dead reckoning, the window as each pose arrives, and the batch with every measurement. Dead reckoning drifts mostly in height, which only the side view shows."
+/>
+
+## A tick
+
+The truth and the measurements come from the whole path's model, drawn as the batch draws them. The
+window is a second model, written by its own `Writer`, which observes the measurements as they
+arrive:
+
+<Walkthrough spec={window}>
+
+```rust
+{../../../../crates/skoro/examples/sliding_window.rs:55..114}
+```
+
+</Walkthrough>
+
+Each tick builds itself with the same `tick` as the batch, and starts from the window's previous
+mode, so a solve takes six or seven iterations. The newest pose's marginal is the window's estimate
+of where the robot is now, given everything measured so far. A [retirement](../least-squares/#a-replacement-for-what-is-retired)
+names the oldest pose, the odometry and sightings taken from it, and every landmark no other pose
+of the window sees; their terms are replaced by one factor over what is left, linearized at the
+window's mode. A landmark leaves the window with the last pose that sees it, since the path does not
+come back.
+
+## What is reported
+
+Every tick of every row is checked to have stopped at a stationary point, by its
+[decrement](../pose-graph/#why-the-point-is-stationary), as the batch is. Two figures are reported
+and not checked: how often the truth falls in the window's 90% ellipsoid, beside the batch's
+tolerance, and how far the window's last pose is from the batch's, in the batch's standard
+deviations. Each replacement is linearized at points the window later moves away from, and the
+error that makes is not one the mathematics bounds; checking it against the batch's tolerance would
+claim more than is known.
+
+> [!DECISION] The window's calibration is reported, not checked
+> [Examples that run](../../archive/examples/math.svx#a-sliding-window) decided it, and leaves a
+> claim about it to a later entry on where replacements are linearized.

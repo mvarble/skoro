@@ -4,6 +4,10 @@ summary: Two tracks that say what skoro is, notes of the mathematics, and an arc
 order: 90
 ---
 
+<script>
+	import TrackCard from '$lib/components/TrackCard.svelte';
+</script>
+
 These docs are kept in four parts, and each answers a different question.
 
 ## What skoro is
@@ -42,3 +46,21 @@ changed.
 > [!NOTE]
 > Every document is also served as Markdown (follow "View as Markdown" at its foot), and
 > [llms.txt](../../llms.txt) indexes all of them for language models.
+
+## Where to go next
+
+Pick the track that matches what you came for. Each card opens the track's first page, and every
+page ends by pointing to the next.
+
+<div class="card-grid">
+	<TrackCard
+		id="guide"
+		eyebrow="To use skoro"
+		blurb="Write a model, generate from it, estimate it: start from the code a user writes, and reach into the machinery only when an example needs it."
+	/>
+	<TrackCard
+		id="concepts"
+		eyebrow="To understand skoro"
+		blurb="Build the library from its spaces and operations upward, one idea at a time, each resting only on the ones before it."
+	/>
+</div>

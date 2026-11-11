@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use rpds::HashTrieMapSync;
-use skoro_tensor::HostValue;
+use skoro_tensor::{HostData, HostValue, Value};
 
 use crate::{IntoHostValue, NodeId, Q, QDyn, Snapshot, Typed};
 
@@ -40,6 +40,21 @@ impl Observations {
     /// This set with `quantity` observed at `value`: a new set.
     pub fn observe_dyn(self, quantity: QDyn, value: HostValue) -> Observations {
         self.insert(quantity.id(), Some(value))
+    }
+
+    /// This set with `quantity` observed at `value`, one value per row of a `Points` as `generate`
+    /// gives it: a new set. A discrete value, or one of another storage than the quantity's
+    /// space, is read when the set is used, as `observe` defers a bad value (`ValueShape`).
+    pub fn observe_value(self, quantity: impl Into<QDyn>, value: &Value) -> Observations {
+        let host = match value {
+            Value::Continuous(points) => HostValue::new(
+                Some(points.rows()),
+                points.storage(),
+                HostData::Continuous(points.to_host()),
+            ),
+            Value::Discrete(_) => None,
+        };
+        self.insert(quantity.into().id(), host)
     }
 
     fn insert(self, id: NodeId, value: Option<HostValue>) -> Observations {

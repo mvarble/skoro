@@ -437,6 +437,7 @@ main {
 
 /* ---- landing ---------------------------------------------------------- */
 .hero,
+.landing-showcase,
 .landing-body,
 .landing-tracks,
 .landing-crates {
@@ -471,6 +472,29 @@ main {
         justify-content: center;
         gap: var(--space-3);
         margin-top: var(--space-8);
+    }
+}
+
+/* The examples' figures, under the hero: one wide, and a pair beneath it. */
+.landing-showcase {
+    padding-bottom: var(--space-8);
+
+    .showcase-lede {
+        max-width: 42rem;
+        margin: 0 auto;
+        text-align: center;
+        color: var(--fg-3);
+    }
+
+    .showcase-link {
+        margin-top: calc(-1 * var(--space-3));
+        text-align: center;
+    }
+
+    .showcase-pair {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+        gap: var(--space-4);
     }
 }
 

@@ -14,6 +14,8 @@ pub struct Layout {
     target: Target,
     /// The product's retraction, compiled once per target.
     retractions: Mutex<Vec<(Target, Arc<Program>)>>,
+    /// The product's inverse retraction, compiled once per target.
+    locals: Mutex<Vec<(Target, Arc<Program>)>>,
 }
 
 impl Clone for Layout {
@@ -47,6 +49,7 @@ impl Layout {
             product,
             target,
             retractions: Mutex::new(Vec::new()),
+            locals: Mutex::new(Vec::new()),
         }
     }
 
@@ -76,23 +79,12 @@ impl Layout {
     /// moved by the product's retraction along `tangent`, `[rows, dimension]`, on `target`, and
     /// sliced back.
     pub fn retract(&self, at: &Values, tangent: &Points, target: &Target) -> Result<Values, Error> {
-        let parts = self
-            .quantities
-            .iter()
-            .map(|&id| match at.get(id) {
-                Some(Value::Continuous(points)) => Ok(points.clone().into_burn()),
-                Some(Value::Discrete(_)) => Err(Error::NotContinuous {
-                    space: self.product.clone(),
-                }),
-                None => Err(Error::MissingValue { id }),
-            })
-            .collect::<Result<Vec<Tensor<2>>, Error>>()?;
+        let point = self.stack(at, target)?;
         if tangent.storage() != self.dimension() {
             return Err(Error::ValueShape {
                 space: Space::Vector(self.dimension()),
             });
         }
-        let point = Points::from_burn(Tensor::cat(parts, 1), target)?;
         let program = self.retraction(target)?;
         let inputs = program.free();
         let (Some(x), Some(t)) = (inputs.first(), inputs.get(1)) else {
@@ -115,6 +107,55 @@ impl Layout {
             out.insert(id, Value::Continuous(Points::from_burn(part, target)?));
         }
         Ok(out)
+    }
+
+    /// `of ⊖ at`: the tangent coordinates at `at` that reach `of`, `[rows, dimension]` on `target`,
+    /// by the product's inverse retraction, compiled once per target. It inverts `retract` on the
+    /// chart's image: `local(retract(at, τ), at) = τ`. It refuses as `retract` does
+    /// (`MissingValue`, `NotContinuous`).
+    pub fn local(&self, of: &Values, at: &Values, target: &Target) -> Result<Points, Error> {
+        let (y, x) = (self.stack(of, target)?, self.stack(at, target)?);
+        let program = self.inverse(target)?;
+        let inputs = program.free();
+        let (Some(first), Some(second)) = (inputs.first(), inputs.get(1)) else {
+            unreachable!("an inverse retraction takes two points")
+        };
+        let values = Values::new()
+            .with(first.node, Value::Continuous(y))
+            .with(second.node, Value::Continuous(x));
+        let out = program.forward(&values)?;
+        let Some(Value::Continuous(tangent)) =
+            program.targets().first().and_then(|&id| out.get(id))
+        else {
+            unreachable!("an inverse retraction gives a tangent")
+        };
+        Ok(tangent.clone())
+    }
+
+    /// The quantities' values stacked into one point of the product on `target`.
+    fn stack(&self, at: &Values, target: &Target) -> Result<Points, Error> {
+        let parts = self
+            .quantities
+            .iter()
+            .map(|&id| match at.get(id) {
+                Some(Value::Continuous(points)) => Ok(points.clone().into_burn()),
+                Some(Value::Discrete(_)) => Err(Error::NotContinuous {
+                    space: self.product.clone(),
+                }),
+                None => Err(Error::MissingValue { id }),
+            })
+            .collect::<Result<Vec<Tensor<2>>, Error>>()?;
+        Ok(Points::from_burn(Tensor::cat(parts, 1), target)?)
+    }
+
+    fn inverse(&self, target: &Target) -> Result<Arc<Program>, Error> {
+        let mut cache = self.locals.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, program)) = cache.iter().find(|(t, _)| t == target) {
+            return Ok(program.clone());
+        }
+        let program = Arc::new(self.product.inverse_retraction()?.compile(target)?);
+        cache.push((target.clone(), program.clone()));
+        Ok(program)
     }
 
     fn retraction(&self, target: &Target) -> Result<Arc<Program>, Error> {

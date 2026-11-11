@@ -95,6 +95,12 @@ impl Linearizer {
         })
     }
 
+    /// `f = -log p` of the query at `point`, per row: one forward pass of its density program.
+    pub fn objective(&self, point: &Values) -> Result<Vec<f64>, Error> {
+        let density = host(&self.density.forward(point)?, NodeId::DENSITY)?;
+        Ok(density.into_iter().map(|l| -l).collect())
+    }
+
     /// The columns of a factor's blocks in a frame of `dimension` rows at batch row `row`: the
     /// matrix `dimension × width` of its Jacobian, its blocks in the structure's order.
     pub(crate) fn cut(

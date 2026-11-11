@@ -6,7 +6,7 @@ mod common;
 
 use common::normal::{Normal, exact, inexact, log_density, log_normal, proposal};
 use skoro::scope::{constant, factor, propose, quantity, score};
-use skoro::tensor::Value;
+use skoro::tensor::{HostData, HostValue, Value};
 use skoro::testing::flex;
 use skoro::{
     Address, Addresses, Error, Generated, Key, NodeId, Observations, Precision, Q, Query, Real,
@@ -400,4 +400,66 @@ fn draws_agree_across_precisions() {
         single_weight, double_weight,
         "both weights are zero: every sampler is exact"
     );
+}
+
+#[test]
+fn generated_values_are_observed_row_by_row() {
+    let chain = chain();
+    let (key, rows, target) = (Key::from_seed(11), 4, Target::host());
+    let generated = chain
+        .snapshot
+        .generate(
+            &Observations::new().observe(chain.z, 0.7),
+            &key,
+            rows,
+            &target,
+        )
+        .unwrap();
+    let given = Observations::new()
+        .observe_value(chain.x0, generated.values.get(chain.x0).unwrap())
+        .observe_value(chain.x1, generated.values.get(chain.x1).unwrap())
+        .observe(chain.z, 0.7);
+    let program = chain
+        .snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap();
+    let density = host(&program.forward(&Values::new()).unwrap(), NodeId::DENSITY);
+    let (x0, x1) = (
+        host(&generated.values, chain.x0),
+        host(&generated.values, chain.x1),
+    );
+    assert_eq!(density.len(), rows);
+    assert!(x0.windows(2).any(|w| w[0] != w[1]), "the rows differ");
+    for r in 0..rows {
+        let want = log_normal(x0[r], 0.0, 1.0)
+            + log_normal(x1[r], x0[r], 0.5)
+            + log_normal(0.7, x1[r], 0.3)
+            + log_normal(x1[r], x0[r], 2.0);
+        assert!((density[r] - want).abs() < 1e-10, "row {r}: {density:?}");
+    }
+}
+
+#[test]
+fn a_discrete_generated_value_is_refused() {
+    let chain = chain();
+    let target = Target::host();
+    let discrete = HostValue::new(Some(2), 1, HostData::Discrete(vec![0, 1]))
+        .unwrap()
+        .load(2, &target)
+        .unwrap()
+        .unwrap();
+    let given = Observations::new().observe_value(chain.x0, &discrete);
+    let refused = chain
+        .snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap_err();
+    assert!(matches!(refused, Error::ValueShape { .. }), "{refused:?}");
+    // The same value of another storage than the quantity's.
+    let wide = Value::Continuous(skoro::tensor::Points::from_host(&[0.0; 4], 2, 2, &target));
+    let given = Observations::new().observe_value(chain.x0, &wide);
+    let refused = chain
+        .snapshot
+        .compile(&Query::log_density().given(given), &target)
+        .unwrap_err();
+    assert!(matches!(refused, Error::ValueShape { .. }), "{refused:?}");
 }
