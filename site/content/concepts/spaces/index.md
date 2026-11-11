@@ -72,7 +72,7 @@ fixed by the value instead. A marker that fixes its space (every one but `Produc
 nodes for whatever quantities it is given, `constant_in` makes a constant of the space itself:
 
 ```rust
-{../../../../crates/skoro-core/src/scope.rs:437..445}
+{../../../../crates/skoro-core/src/scope.rs:445..453}
 ```
 
 `QDyn` is the handle with no static type. A handle moves between the two: `untyped` forgets the

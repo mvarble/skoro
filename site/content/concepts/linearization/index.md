@@ -249,7 +249,7 @@ $\tfrac12 \lVert J \tangent_0 \rVert^2$, which is zero exactly where the query's
 
 ## A retirement's replacement
 
-A [retirement](../terms/) removes some quantities and needs a replacement for the terms joined to
+A [retirement](../terms/#retirement) removes some quantities and needs a replacement for the terms joined to
 them, the integral of those terms over the quantities it integrates. A `Replacing` linearizes the
 query of those terms alone, free in the quantities to integrate and in the blanket quantities to
 keep, with the retirement's own observed values:

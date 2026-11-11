@@ -19,7 +19,9 @@ generation, which draws a model's free quantities from explicit random keys and 
 retirement, which removes the quantities at a collection of addresses, named one by one or as
 the namespaces they lie under, and keeps what they said about the rest as a likelihood factor over
 their Markov blanket, which the caller builds with the roles it binds, and whose handle the
-retirement gives back.
+retirement gives back. A retirement also frees every node it leaves needed by nothing, so that a
+model that retires as it grows stays bounded, and `pin` and `unpin` keep a node the user still
+needs, such as a constant made once for a whole run.
 
 An algorithm in another crate reads what it needs through the same interface: a query's terms and
 observations, and the union of two sets of observations; the quantities any node is reached from;

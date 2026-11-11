@@ -181,7 +181,7 @@ A retirement adds its replacement as a likelihood factor itself, and the replace
 roles that factor binds, as a term in a scope does:
 
 ```rust
-{../../../../crates/skoro-core/src/retire.rs:85..102}
+{../../../../crates/skoro-core/src/retire.rs:86..103}
 ```
 
 `Stacked::replacement` gives a retirement that replacement whole, its residual, mean and scale
