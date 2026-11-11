@@ -1,6 +1,9 @@
 ---
 summary: A unit quaternion names a rotation twice, and the stereographic chart of the unit quaternions tells the two names apart, so that a measurement given with the wrong sign is misread; the rotations, the rigid motions and the extended poses become the groups themselves, stored as quaternions up to sign under the Cayley chart, which cannot tell the signs apart, and the core learns to declare a type stored up to a finite group.
 depends_on: [chart-volume, retraction, archive/core/math, archive/measures/math, archive/normal/math, archive/rotations/math]
+katex_macros:
+    '\Exp': '\operatorname{Exp}'
+    '\rv': '\operatorname{rv}'
 ---
 
 <script>
@@ -238,7 +241,10 @@ only the antipode $-\mu$, the point a sign error lands on. So the change trades 
 mistake reaches, invisibly, for a cut that only a value a half-turn from its mean reaches, where a
 non-finite term says so. A half-turn between a value and its mean is itself an error of the largest
 size a rotation can have, so the cut costs a model nothing at an estimate that fits its data; it is
-a fact about the start, and an estimate is started away from it.
+a fact about the start, and an estimate is started away from it. The term is left non-finite there:
+a finite residual selected at the cut would let an evaluation at a bad start succeed only by hiding
+an error of a half-turn, and refusing a model within some angle of the cut would need an angle that
+no model's noise sets.
 
 **What it does to a measurement.** Read under the Cayley chart, a measured rotation has one
 residual, of length $2 \tan(\varphi / 2)$ for $\varphi \in [0, \pi)$ the angle between the measured
@@ -395,11 +401,29 @@ and the constructions into the type, whose sign was a choice anyway. The Euler a
 them: their half-angles, each an $\operatorname{atan2}$ of a coordinate and $w$, change by $\pi$ when
 $q$ is negated, and the angles, their sums and differences returned to $(-\pi, \pi]$, do not.
 Alignment is too: it returns the same rotation, on the side of its reference, so as a map of
-$SO(3)$ it is the identity, choosing a representative and nothing else. Those that read the
-representative are maps of $S^3$ and not of $SO(3)$: the logarithm with its length in $[0, 2\pi)$,
-the axis and the angle in $[0, 2\pi)$ read off it, and the interpolation by the arc that avoids
-$-q$. Each has a counterpart on $SO(3)$: the rotation vector of the shorter turn, its axis and an
-angle in $[0, \pi]$, and the shorter interpolation.
+$SO(3)$ it is the identity, choosing a representative and nothing else.
+
+Three read the representative, and are maps of $S^3$ rather than of $SO(3)$: the logarithm with its
+length in $[0, 2\pi)$, the axis and angle with the angle in $[0, 2\pi)$, and the interpolation by the
+arc that avoids $-q$. For a rotation by $\theta$ about $a$, the first two give $\theta a$ at $q$ and
+$(2\pi - \theta)(-a)$ at $-q$, two names of one rotation, and the third takes one of the two arcs
+between two rotations according to their signs. It is their conventions that read the sign, not
+what they compute. The rotations remove them, and their counterparts on $SO(3)$ take their names:
+
+- **the logarithm** is the rotation vector of the shorter turn, of length in $[0, \pi]$,
+  [](eq:archive/rotations/math/rotation-vector), a discretization at the half-turns, where the two
+  turns are equally short;
+- **the axis and angle** are that vector's direction and length, the angle in $[0, \pi]$; the axis is
+  a convention at the identity, as it was, and at a half-turn, where $a$ and $-a$ name one rotation, a
+  discretization of the vector's;
+- **the interpolation** is the shorter one, $q_1 \otimes \Exp(t\, \rv(\bar q_1 \otimes q_2))$, a
+  discretization where the two rotations are a half-turn apart.
+
+The inclusion, which reads the stored quaternion itself, is the core's boundary and stays: every
+map above is a composite written on it. The rotations offer no map that returns it. A quaternion
+read out of a model, to report or to hand to another program, is the representative with $w \ge 0$,
+the alignment with the identity, which is a map of $SO(3)$ with a discretization at the half-turns
+from the identity, where $w = 0$.
 
 > [!DECISION] The rotations are the group, stored as quaternions up to sign
 > The rotations, the rigid motions and the extended poses are $SO(3)$, $SE(3)$ and $SE_2(3)$, stored
@@ -515,30 +539,21 @@ and a comparison with g2o's solution on a dataset is a comparison to that tolera
   rotation, motion or extended pose; a measured one is observed in whatever sign it was given, and
   scored by the normal of its prediction; a state's prior is a normal like any other.
 - **Maps out of these types** are maps of the groups when they are invariant under the sign, and
-  maps into them when they are equivariant; the rotations' maps are sorted as
-  [The maps of the rotations](#the-rotations-the-rigid-motions-and-the-extended-poses) says.
+  maps into them when they are equivariant. The rotations offer only such maps: the logarithm, the
+  axis and angle and the interpolation are those of the shorter turn, and the quaternion a model
+  reports is the representative with $w \ge 0$, as
+  [The maps of the rotations](#the-rotations-the-rigid-motions-and-the-extended-poses) says. The
+  core's inclusion stays, the boundary those maps are written on; a model that reads it directly
+  reads a representative, outside what the types promise.
+- **At a half-turn** between a value and its mean, the inverse [](eq:cayley-composite), and so the
+  residual and the term, are non-finite, and are left so: a model evaluated there fails, saying
+  where, and an estimate is started away from it.
 - **A measurement read from g2o** is a quaternion and a translation in g2o's order, normalized, in
   whatever sign the file gives, observed under the normal with the precision [](eq:g2o-precision);
   a vertex's pose is a state's initial value, in whatever sign the file gives.
-- **Alignment on the host** is no longer needed by a model; a quaternion is given $w \ge 0$, when a
-  user wants one to report, by choosing the representative.
+- **Alignment on the host** is no longer needed by a model; a measured quaternion is observed in
+  whichever sign it comes in.
 
 ## Open questions
 
-> [!TODO] A given value a half-turn from its mean
-> At a half-turn the term is non-finite, which a model reports as a failed evaluation. Either that is
-> the behaviour, documented, with estimates started away from it; or the term selects a finite
-> value there, such as the residual of length $2 \tan(\varphi_0 / 2)$ at a fixed angle $\varphi_0$
-> just short of $\pi$, so that an evaluation at a bad start succeeds and the optimizer moves away;
-> or a model is refused at evaluation when any value is within some angle of a half-turn from its
-> mean. Leaving it non-finite is the honest default, and the second is a discretization that hides a
-> real error of a half-turn.
-
-> [!TODO] The maps of the representative
-> The logarithm with its length in $[0, 2\pi)$, the axis and angle read off it, the interpolation
-> along the arc that avoids $-q$, and the inclusion itself read the stored quaternion rather than the
-> rotation. Either the rotations keep them, documented as maps of the
-> representative, whose value depends on the sign a point happens to carry; or they are removed,
-> their $SO(3)$ counterparts taking their names, and the inclusion of these types is read only
-> through invariant maps such as $\pi$. Removing them is the safer rule, since a term built on one
-> would make a density depend on the sign again.
+None remain.
