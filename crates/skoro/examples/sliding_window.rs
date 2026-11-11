@@ -20,7 +20,7 @@ use common::figures::{self, Json};
 use common::laplace::{CHI2_6_90, SLOPE_6, calibration, normalized_errors};
 use common::live::Live;
 use common::model::tick;
-use common::report::{Result, converged, mean, print_calibration, stationary};
+use common::report::{Result, check, converged, mean, print_calibration, stationary};
 use common::scenario::Scenario;
 
 /// The number of datasets, each a row of the batch and of the window.
@@ -52,6 +52,8 @@ fn main() -> Result {
     let mut variance: f64 = 0.0;
     let mut iterations: Vec<f64> = Vec::new();
     let mut filtered: Vec<Json> = Vec::new();
+    // The window's number of nodes after each tick.
+    let mut nodes: Vec<usize> = Vec::new();
     for k in 0..=scenario.last() {
         // 1. Append, and start what was appended.
         let previous = live.newest();
@@ -111,7 +113,16 @@ fn main() -> Result {
             retirement.replace(|_| replacement.build())?;
             live.retire(a);
         }
+        nodes.push(window.snapshot().len());
     }
+    // A retirement frees what it leaves needed by nothing, so the window stops growing once it is
+    // full: its count after tick 2w stays within 1.5 times its largest over the first full
+    // windows, the spread of the landmarks in view.
+    let largest = |ticks: &[usize]| ticks.iter().copied().max().unwrap_or(0);
+    let (first, later) = (largest(&nodes[W + 1..=2 * W]), largest(&nodes[2 * W + 1..]));
+    check(2 * later <= 3 * first, || {
+        format!("the window grew from {first} nodes to {later}")
+    })?;
     let windowed = started.elapsed();
 
     // The batch on the same path and data, for the gap at the last tick.
@@ -177,6 +188,11 @@ fn main() -> Result {
         scenario.nominal.len(),
         scenario.landmarks.len(),
         scenario.sightings.len()
+    );
+    println!(
+        "the window held at most {} nodes, {} at the last tick",
+        nodes.iter().copied().max().unwrap_or(0),
+        nodes.last().copied().unwrap_or(0)
     );
     println!(
         "every tick of every row converged, in {:.2} iterations on average",

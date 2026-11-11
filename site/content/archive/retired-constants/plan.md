@@ -42,7 +42,7 @@ depends_on: [archive/retired-constants/implementation]
 
 ## The example (`skoro`)
 
-- [ ] Report the window's node count in `sliding_window`, and check that the largest count after
+- [x] Report the window's node count in `sliding_window`, and check that the largest count after
       tick $2W$ is at most 1.5 times the largest from tick $W + 1$ to $2W$.
 
 ## Done when
