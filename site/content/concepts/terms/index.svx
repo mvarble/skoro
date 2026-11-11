@@ -1,6 +1,6 @@
 ---
 title: Terms and the probabilistic graph
-summary: A model's density is a sum of terms, each a log-density that scores one quantity or none, and the terms and quantities together make the probabilistic graph inference reads.
+summary: A model's density is a sum of terms, each a log-density that scores one quantity or none; the terms and quantities together make the probabilistic graph inference reads, and a retirement removes some quantities, replaces their terms, and frees what it leaves needed by nothing.
 order: 4
 depends_on: [concepts/building, generative-models]
 ---
@@ -149,7 +149,7 @@ retirement opens, from the plan, by the same functions as any term, and the reti
 whole change in one snapshot:
 
 ```rust
-{../../../../crates/skoro-core/src/retire.rs:223..243}
+{../../../../crates/skoro-core/src/retire.rs:223..242}
 ```
 
 The [normal](../the-normal/#as-a-likelihood-factor) builds a replacement in the
@@ -176,7 +176,8 @@ mathematics, and the proof of both, are in
 [the entry that added it](../../archive/retired-constants/math.svx#freeing).
 
 Freeing is what keeps a model that retires as it grows to a bounded size: its nodes are those its
-current quantities, terms, samplers, proposals and pins need, and no more. A window that keeps its
+current quantities, terms, samplers, proposals and pins need, with at most the values that no
+retirement has touched since they were built. A window that keeps its
 last few ticks holds a number of nodes that stops growing once it is full, as
 [the sliding window](../../guide/sliding-window/#what-is-reported) checks. `Snapshot::nodes` lists
 a snapshot's nodes, and `Snapshot::len` counts them.
@@ -199,7 +200,7 @@ A pin keeps a node from being freed, not from being retired: a pinned value comp
 quantity is removed with it. A released pin returns its node to the rule, and the next retirement
 frees it if nothing else needs it, even a retirement that touches nothing near it. Pins are part
 of the model, so a snapshot carries them, `Snapshot::is_pinned` reads them, and a branch forked
-from a snapshot changes its own. In the core's tests, a first tick whose measurement alone reads a
+from a snapshot changes its own. In the retirement tests, a first tick whose measurement alone reads a
 noise constant:
 
 ```rust

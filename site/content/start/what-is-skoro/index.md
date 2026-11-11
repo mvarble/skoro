@@ -50,7 +50,7 @@ Skoro is built for sequential estimation, where a model is never finished:
   different.
 - **It forgets.** States that stop mattering are marginalized onto what remains and retired, and
   what they leave needed by nothing is freed, so a model that keeps a window of its last few ticks
-  stays the same size however long it runs.
+  stops growing however long it runs.
 - **It branches.** When it is uncertain which target a measurement came from, the model is held
   under several hypotheses at once, as cheap branches of one another, and an algorithm weighs them.
 - **It is shared.** One writer builds while estimators run on immutable snapshots of the model,

@@ -8,8 +8,7 @@ pages:
         concepts/terms,
         concepts/the-normal,
         guide/sliding-window,
-        reference/crates/skoro,
-        reference/crates/skoro-core,
+        reference/crates,
         start/what-is-skoro,
     ]
 crates: [skoro, skoro-core]
