@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "publish",
+    "stage": "done",
     "started": "2026-11-11",
     "events": [
         {
@@ -44,6 +44,12 @@
             "action": "approve",
             "stage": "build",
             "commit": "efea3b2"
+        },
+        {
+            "date": "2026-11-11",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "91c9b94"
         }
     ],
     "approvals": {
@@ -65,6 +71,11 @@
         "build": {
             "date": "2026-11-11",
             "commit": "efea3b2"
+        },
+        "publish": {
+            "date": "2026-11-11",
+            "commit": "91c9b94"
         }
-    }
+    },
+    "finished": "2026-11-11"
 }
