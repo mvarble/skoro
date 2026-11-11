@@ -1,0 +1,383 @@
+---
+summary: An observed quaternion is a measured rotation, whose sign carries no information; the sign-free normal is its exact law, computed by the residual of the sign on the side of the prediction and a correction that is negligible near it, and it replaces aligning on the host, which is right only while the estimate stays within a half-turn of where it was aligned.
+depends_on: [chart-volume, archive/core/math, archive/normal/math, archive/rotations/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as antipode from './statements/antipode.md';
+	import * as signFree from './statements/sign-free.md';
+	import * as nearSide from './statements/near-side.md';
+</script>
+
+## The problem
+
+skoro holds a rotation as a unit quaternion, and the unit quaternions cover the rotations twice:
+$q$ and $-q$ are one rotation and two points of $S^3$. A normal on $S^3$ tells them apart, so
+[the rotations' mathematics](../rotations/math.svx#the-double-cover) asks the caller to give an
+observed quaternion the sign of its prediction before it is observed, by aligning it on the host.
+One given with the other sign is not refused. Its residual is the coordinate of a point beside the
+one point the chart at the prediction cannot reach, of length at least $4$, and growing without
+bound as the estimate improves.
+
+Nothing in a model's data can give the right sign, because the right sign is not a property of the
+measurement. It is set by the prediction, and the prediction's sign by the signs of the estimated
+states it is computed from, which are themselves whatever the estimate's history made them. A robot
+that drives one loop and closes it shows the difficulty at its plainest: its odometry, composed from
+the start, turns its heading through $2\pi$, and the composed quaternion at the end is near $-1$,
+while the loop closure measures a relative rotation near the identity, whose quaternion a file or a
+program, given the choice, writes with $w > 0$. Every such loop closure is on the far side of its prediction. Both of skoro's
+examples draw their measurements from the model, so their signs are right by construction, and this
+path has not met outside data.
+
+This entry works out what an observed quaternion of arbitrary sign is as a random variable, which
+law scores it without reference to its sign, what a misaligned one does to an estimate, and how a
+measurement given in the format of g2o, the usual source of pose-graph datasets, becomes one of
+skoro's.
+
+## Setting
+
+The unit quaternions $S^3$, their product $\otimes$, the covering map $\pi : S^3 \to SO(3)$, the
+stereographic chart [](eq:archive/rotations/math/quaternion-chart) with its inverse $\ominus$, and
+the Haar measure $\nu$ normalized so that the chart has volume $1$ at its centre, are those of
+[the rotations' mathematics](../rotations/math.svx#the-unit-quaternions). The chart at $\mu$ is
+$\tangent \mapsto \mu \otimes \delta(\tangent)$, a diffeomorphism of $\R^3$ onto $S^3 \setminus
+\{-\mu\}$, and its log-volume is $\lambda(\tangent) = -3 \log(1 + \lVert \tangent \rVert^2 / 16)$.
+The rigid motions $S^3 \ltimes \R^3$ and the extended poses $S^3 \ltimes (\R^3 \times \R^3)$ have the
+charts of [%full](statement:archive/rotations/math/motions), whose inverse at $(q, p)$ is
+
+$$
+	(q', p') \ominus (q, p) = \bigl(q' \ominus q,\ \pi(q)\transpose (p' - p)\bigr) ,
+$$
+
+the rotation's coordinate first, and whose log-volume is that of the rotation alone. For a point of
+any of the three, $-q$ is the point whose quaternion is negated and whose other coordinates are
+kept; it is the same rotation, motion or extended pose.
+
+The normal $\mathcal N(\mu, \Sigma)$ is that of [its mathematics](../normal/math.svx#the-definition):
+the law of $\mu \oplus \varepsilon$ with $\varepsilon$ normal in $\R^\dimension$, with the precision
+$\Lambda = \Sigma^{-1} = W\transpose W$, the whitening $W$, and the density with respect to $\nu$
+
+$$
+	\density_\mu(q) = \frac{\det W}{(2\pi)^{\dimension / 2}} \exp\Bigl(-\tfrac12 \bigl\lVert W (q \ominus \mu) \bigr\rVert^2\Bigr) \Bigl(1 + \tfrac1{16} \bigl\lVert (q \ominus \mu)_R \bigr\rVert^2\Bigr)^3 , @tag(density)
+$$
+
+where $(\cdot)_R$ is the rotation's coordinate. A measurement $z$ of a state $\point$ is predicted
+by a map $h(\point)$, such as the relative motion $h(\point) = X_i^{-1} X_j$ of a pose graph, whose
+quaternion is $\bar q_i \otimes q_j$.
+
+## The antipode in the chart
+
+Everything about the sign follows from where the chart at $\mu$ puts the two points over one
+rotation.
+
+<Statement {...antipode} />
+
+<Proof>
+
+Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and $\lVert \tangent \rVert^2 =
+16 \lVert u \rVert^2 / (1 + w)^2 = 16 (1 - w) / (1 + w)$, which is below $16$ exactly when $w =
+\langle q, \mu \rangle > 0$. Both $\bar\mu \otimes (-q)$ and $\overline{(-\mu)} \otimes q$ are $(-w,
+-u)$, whose coordinate is $-4u / (1 - w)$, and
+
+$$
+	-\frac{16}{\lVert \tangent \rVert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
+$$
+
+The lengths follow from [%full](statement:archive/rotations/math/chart): the point on the side of
+$\mu$ is at the angle $\theta \in [0, \pi]$ from $\mu$ on $S^3$'s scale of angles, which is the
+angle between the rotations, and the other at $2\pi - \theta$, whose coordinate has the length
+$4 \tan(\pi/2 - \theta/4) = 4 \cot(\theta/4)$.
+
+</Proof>
+
+So the map from one sign to the other is the inversion in the sphere of radius $4$ followed by
+negation. The ball of radius $4$ is the chart of the near sides, one point for each rotation within
+less than a half-turn of $\pi(\mu)$, and its complement the far sides; the sphere of radius $4$
+itself holds the points orthogonal to $\mu$, the half-turns, where the two signs have coordinates
+$\tangent$ and $-\tangent$ of equal length. This sharpens the third claim of
+[%full](statement:archive/rotations/math/cover), that the two lengths multiply to $16$.
+
+## What a misaligned measurement does
+
+Let $z$ be a measured rotation given with the sign on the far side of its prediction, so that the
+point on the near side is $-z$, at the angle $\varphi \in [0, \pi]$ from $\pi(h(\point))$. Its
+residual has the length $4 \cot(\varphi/4)$, which grows without bound as $\varphi \to 0$: the term
+is least likely exactly where the estimate is right. For a concentrated normal, with $\sigma^2 <
+\tfrac83$, its density [](eq:density) increases with $\varphi$, and its maximum is at $h(\point) = z$, the measured rotation on the other
+sheet, which the estimate reaches from where it is only by turning through the remaining $2\pi -
+\varphi$.
+
+**Against Gauss–Newton.** Along the geodesic from $h(\point)$ to $z$, let $\theta = 2\pi - \varphi$ be
+the angle that remains, so that the residual is $r(\theta) = 4 \tan(\theta / 4)$. A Gauss–Newton
+step on this residual alone changes $\theta$ by
+
+$$
+	-\frac{r(\theta)}{r'(\theta)} = -4 \tan\frac\theta4 \cos^2 \frac\theta4 = -2 \sin\frac\theta2 = -2 \sin\frac\varphi2 ,
+$$
+
+so that $\varphi$ becomes $\varphi + 2 \sin(\varphi/2)$, about $2\varphi$: each step doubles the
+error. Its weight in the normal equations, $r'(\theta)^2 / \sigma^2 = \sigma^{-2} \sin^{-4}(\varphi
+/ 4)$, is about $256 / (\sigma^2 \varphi^4)$, which overwhelms the weight of every correctly given
+measurement once the estimate is close. A misaligned measurement is not an outlier that the others
+outvote; near the right answer it is the term that decides the step, and it steps away.
+
+**In a cycle.** In a pose graph the misalignment of one measurement is the misalignment of a cycle.
+Take the loop of [The problem](#the-problem) with every rotation about one axis, so that the
+quaternions of the states are $(\cos(\phi_k / 2), \sin(\phi_k / 2)\, e_3)$ and angles add on $S^3$
+as they do on the line, modulo $4\pi$. Let the $n$ odometry measurements turn by $\alpha_1, \dots,
+\alpha_n$, with $\sum_k \alpha_k = 2\pi$, and the loop closure by $\beta = 0$, each given with $w >
+0$. The residual angles $\theta_e$ of the $n + 1$ edges, each in $(-2\pi, 2\pi)$, telescope around
+the cycle:
+
+$$
+	\sum_e \theta_e \equiv \sum_k \alpha_k + \beta = 2\pi \pmod{4\pi} .
+$$
+
+No estimate makes every residual zero. With equal noise $\sigma$ on every edge, the cost of an edge
+is $8 \sigma^{-2} \tan^2(\theta / 4) + 6 \log \cos(\theta / 4)$, the negative logarithm of
+[](eq:density) up to a constant, whose second derivative is at least $\sigma^{-2} \sec^4(\theta/4) -
+\tfrac38 \sec^2(\theta/4)$, positive when $\sigma^2 < \tfrac83$. The cost is then strictly convex,
+and the least total cost under the constraint spreads the turn evenly: every edge is wrong by
+$2\pi / (n + 1)$. On a loop of a hundred edges that is $3.6°$ an edge, a trajectory that looks
+plausible and has an extra full turn of heading wound into it. Had the loop closure been given as
+$-z$, with $\beta = 2\pi$, the sum would be $0$ modulo $4\pi$ and every residual could vanish.
+
+So a measured rotation's sign is a choice, for each cycle it closes, of whether the estimate winds
+once more around it. Choosing the sign on the near side of a prediction chooses the winding of the
+estimate the prediction was computed at, which unwinds the drift the shorter way.
+
+## The observed value is a rotation
+
+The sign of a measured quaternion carries no information about the world: the sensor or the file
+measured a rotation, and the quaternion is one of its two names. Its law is the law of a rotation,
+and by [%full](statement:archive/rotations/math/cover) the law on the rotations of a normal draw
+$\pi(\mu \oplus \varepsilon)$ has the density $\density_\mu(q) + \density_\mu(-q)$ with respect to
+$\nu_{SO(3)}$. Pulled back to $S^3$, where skoro's quantities live, that is the following law.
+
+<Statement {...signFree} />
+
+<Proof>
+
+For a measurable $A$, $\Pr(\sigma\zeta \in A) = \tfrac12 \Pr(\zeta \in A) + \tfrac12 \Pr(-\zeta \in
+A)$. The map $q \mapsto -q$ is the left translation by $-1$, or by $(-1, 0)$ and $(-1, 0, 0)$ on the
+motions, which preserves $\nu$, so $-\zeta$ has the density $q \mapsto \density_\mu(-q)$.
+
+</Proof>
+
+Its density is invariant under $q \mapsto -q$, so the sign in which a measurement is given changes
+nothing. It is invariant under $\mu \mapsto -\mu$ too, since $(-\mu) \oplus \tangent = -(\mu \oplus
+\tangent)$ on all three types, so that $\density_{-\mu}(q) = \density_\mu(-q)$; the sign of the
+prediction changes nothing either. Its image under $\pi$ is the image of the normal, so as a law on
+the rotations it is exactly the normal's, and a draw from it is a draw from the normal with a sign
+that a fair coin chooses. It is normalized on $S^3$, as a term's density must be.
+
+It is computed by its near side.
+
+<Statement {...nearSide} />
+
+<Proof>
+
+The identity is [%full](statement:sign-free) with $\density_\mu(s q)$ factored out, using
+$\density_\mu(q) + \density_\mu(-q) = \density_\mu(sq) + \density_\mu(-sq)$. By
+[%full](statement:antipode), $(-sq) \ominus \mu = \tilde\tangent$: the rotation's coordinate is
+inverted, and the translation's, $\pi(\mu_R)\transpose (p - p_\mu)$, does not depend on the sign.
+The ratio of [](eq:density) at the two coordinates is then the ratio of the Gaussian factors times
+$\bigl((1 + c^2 \lVert \tangent_R \rVert^2 / 16) / (1 + \lVert \tangent_R \rVert^2 / 16)\bigr)^3 =
+c^3$, since $c^2 \lVert \tangent_R \rVert^2 / 16 = c$.
+
+The density $\density_\mu$ is smooth on $S^3 \setminus \{-\mu\}$, and as $q \to -\mu$ its coordinate
+grows like the inverse of the distance from $-\mu$ while the density falls like the exponential of
+minus its square, so that $\density_\mu$, extended by $0$ at $-\mu$, is smooth on $S^3$ with every
+derivative vanishing there. The sum of two such densities is smooth and positive, so its logarithm
+is smooth.
+
+Without a coupling block, $\lVert W \tilde\tangent \rVert^2 - \lVert W \tangent \rVert^2 = (c^2 - 1)
+\lVert W_R \tangent_R \rVert^2 \ge (c^2 - 1) \tfrac3{16} \lVert \tangent_R \rVert^2 = 3 (c - 1/c)$,
+so $\log \rho \le g(c) = 3 \log c - \tfrac32 (c - 1/c)$. Since $g(1) = 0$ and
+$g'(c) = -\tfrac32 (1 - 1/c)^2 \le 0$, $\rho \le 1$ for $c \ge 1$, and the bounds follow. As $\tangent_R \to 0$, $c$ grows
+like $\lVert \tangent_R \rVert^{-2}$ and $\log \rho \le g(c)$ falls like $-\tfrac32 c$, faster than
+any multiple of $\log c$.
+
+</Proof>
+
+So the sign-free normal is the normal of the measurement's near side, plus a correction
+$\log(1 + \rho)$, less a constant. Near a good estimate the correction vanishes to every order: for an
+isotropic $\Sigma = \sigma^2 I$ on a rotation, $\rho = c^3 e^{-8 (c - 1/c) / \sigma^2}$ with $c =
+\cot^2(\theta / 4)$ for the near side at the angle $\theta$, which at $\sigma = 0.5$ rad is below
+$10^{-70}$ at $\theta = 90°$. It matters only where the
+measured rotation is near a half-turn from its prediction, where it rises to $\log 2$, and it is
+what keeps the term smooth across the half-turn, where the near side changes sign.
+
+**The near side alone.** Without the correction, the term is the normal of $sq$, with $s$ a selection
+on the sign of $\langle q_R, \mu_R \rangle$. On a rotation its value is continuous across the
+half-turn, where the two candidates are $\tangent$ and $-\tangent$ of length $4$ and the Gaussian
+factor and the volume agree; its derivative jumps there. On a motion the candidates are
+$(\tangent_R, \tangent_T)$ and $(-\tangent_R, \tangent_T)$, and the Gaussian factors differ by
+$2\, \tangent_R\transpose \Lambda_{RT}\, \tangent_T$: the value itself jumps, unless $\Sigma$ has no
+coupling block. The correction removes both, since the sum it completes is smooth. Both are at the
+half-turn, where a concentrated normal has no mass to speak of, so either form estimates the same
+mode; the correction is the difference between a term that is exactly the law of the measured
+rotation and one that is within $\log 2$ of it.
+
+**Computing the correction.** Neither of the two direct forms is finite everywhere. The far side's
+density $\density_\mu(-sq)$ needs the coordinate of $-sq$ at $\mu$, which does not exist at $q =
+\pm\mu$, where the residual is zero; and the closed form of $\rho$ multiplies $c^3$, infinite there,
+by an exponential that is zero there. Its logarithm, $3 \log c - \tfrac12 (\lVert W \tilde\tangent
+\rVert^2 - \lVert W \tangent \rVert^2)$, is finite wherever $\tangent_R \ne 0$, and $\rho$ is taken
+as $0$ where $\tangent_R = 0$. That is a selection whose two sides agree in value and in every
+derivative, since $\rho$ is flat at $0$, so it is not a discretization in the sense of the
+rotations' maps but a guard at a removable singularity.
+
+## Three ways to choose the sign
+
+A model can avoid the far side in three ways, which differ in where the sign is chosen and in what
+they do to the probabilistic graph ([the core's mathematics](../core/math.svx#the-probabilistic-graph):
+quantities and terms as nodes, an edge from each quantity a term is conditioned on to the term, and
+an edge from the term to the quantity it scores).
+
+**On the host, against a fixed estimate.** The caller aligns $z$ against the prediction $\hat h =
+h(\hat\point)$ at an estimate, usually the initial one, and observes the normal of $\operatorname{sign}
+\langle z, \hat h \rangle\, z$. This is skoro's practice today. The probabilistic graph is unchanged,
+and the term is the near side of the sign-free normal at every estimate whose prediction is on the
+same side of $z$ as $\hat h$. That holds until the predicted rotation passes a half-turn from the
+measured one: if $\hat h$ is at the angle $\alpha$ from it, the estimate must move the prediction by
+at least $\pi - \alpha$ first. Past that the measurement is misaligned, with everything
+[What a misaligned measurement does](#what-a-misaligned-measurement-does) says. In practice an
+optimizer moving toward a solution moves predictions toward their measurements, and the failure
+needs a prediction that starts near a half-turn from its measurement and is carried across it by
+the other terms. It also needs a prediction on the host, and so the states' initial values and the
+map $h$ evaluated outside the model, which a pose graph has and a model whose prediction runs
+through a long composite may not.
+
+**In the model, against the value itself.** The model could align its prediction with the
+measurement, $\mu = \operatorname{sign} \langle h(\point), z \rangle\, h(\point)$, and score $z$ by
+the normal at $\mu$. This term scores $z$ and is conditioned on $\point$, since a term is
+conditioned on the quantities its log-density is reached from other than the one it scores; the
+probabilistic graph has no cycle. But its log-density, $q \mapsto \log \density_{h}(s q)$, is not
+the log of a density of $z$: it gives both $q$ and $-q$ the near side's value and integrates to
+$2(1 - m)$, with $m$ the normal's far-side mass. And the normal's sampler cannot run, since its
+mean needs the value it is to draw. The term claims to be a normal and is, up to $\log 2$ and the
+correction, the sign-free normal. Aligning $z$ against $h(\point)$ instead is worse: the normal
+would score a mapped value rather than the quantity $z$, so $z$ would be scored by no term and
+become a parameter of the model, free in every query that does not observe it.
+
+**In the model, against a constant.** The mean could be aligned against a constant $c$ holding the
+measured value, $\mu = \operatorname{sign} \langle h(\point), c \rangle\, h(\point)$. That law is
+honest, with a sampler, and at $c = z$ its term is the near side. But the model then holds its data
+twice, as the observed value and as a constant, and a query that frees the measurement or observes
+another value keeps the old sign.
+
+> [!DECISION] An observed rotation is scored by the sign-free normal
+> A measured rotation, motion or extended pose is a quantity scored by $\mathcal N^{\pm}(h(\point),
+> \Sigma)$ rather than by $\mathcal N(h(\point), \Sigma)$. It is the exact law of the measured
+> rotation, so the sign in which a measurement and a prediction are given changes nothing; it needs
+> no estimate on the host and no alignment by the caller; its sampler is the normal's with a fair
+> sign; and it is computed by the near side's residual and a correction that vanishes near the
+> prediction. Aligning on the host stays what it is, a way to give the plain normal a measurement
+> on the near side, right while the estimate stays within the half-turn this section bounds.
+
+## Estimates and their mirrors
+
+When every term that reads a state's quaternion is invariant under its sign, because it reads it
+through $\pi$ or through the sign-free normal of a prediction the sign flips, the joint density is
+invariant under negating that state. A model with $n$ such states has $2^n$ copies of each mode, one
+for each choice of signs, all the same rotations. An optimizer converges to the copy on the side it
+starts from, and a Laplace approximation, which is local, is the same at each. A sampler moving
+continuously cannot pass from one copy to another without turning a state through every rotation,
+so for a concentrated posterior it stays in one; that is no loss, since every copy is the same law
+on the rotations. A state scored by the plain normal, a prior with a fixed mean among them, keeps
+the symmetry broken as [the rotations' mathematics](../rotations/math.svx#the-double-cover) says.
+
+## Measurements as g2o gives them
+
+The pose-graph datasets of the literature are files in the format of the g2o library, whose 3D lines
+are
+
+```text
+VERTEX_SE3:QUAT i  x y z  qx qy qz qw
+EDGE_SE3:QUAT   i j  x y z  qx qy qz qw  Ω₁₁ Ω₁₂ … Ω₁₆ Ω₂₂ … Ω₆₆
+```
+
+a vertex's initial pose and an edge's measurement $Z$ of $X_i^{-1} X_j$, each a translation and a
+quaternion with $w$ last, followed by the upper triangle of the edge's $6 \times 6$ information
+matrix $\Omega$, row by row. As g2o's source reads and scores these lines (`EdgeSE3::read` and
+`EdgeSE3::computeError`, read at the current master), the quaternion is normalized on reading and
+its sign kept, and the error is
+
+$$
+	e = \bigl(\, t(\Delta),\ \operatorname{vec}\bigl(s_\Delta\, q(\Delta)\bigr) \bigr),
+	\qquad \Delta = Z^{-1} X_i^{-1} X_j , @tag(g2o-error)
+$$
+
+the translation of $\Delta$ followed by the vector part of its quaternion, read off its rotation
+matrix and given the sign $s_\Delta$ that makes $w \ge 0$. The information matrix is that of $e$, in
+this order. The vertex's increment is applied on the right, in the frame of the pose, as skoro's
+chart applies it.
+
+**The error is free of the sign.** It reads the measurement through the matrix of $\Delta$, so the
+sign in which $Z$ is written never reaches it: g2o scores the measured rotation, as the sign-free
+normal does, by choosing the shorter turn, as `log_shorter` does on skoro's rotations. Its law is
+not a normal, though. It is the likelihood factor
+$\exp(-\tfrac12 e\transpose \Omega e)$ of
+[the normal's mathematics](../normal/math.svx#without-a-volume-or-a-global-chart), with no volume
+and the rotation coordinate $\sin(\theta/2)\, a$ of length at most $1$, so it has no sampler of the
+normal's form and its normalization depends on $\Omega$.
+
+**Its information in skoro's coordinates.** skoro observes $Z$ with the mean $h = X_i^{-1} X_j$ and
+reads the residual $\tangent = Z \ominus h$, rotation first. To first order the two residuals are
+the same vector up to order, sign and scale. For the rotation, $\bar h \otimes Z$ is the conjugate of
+$\bar Z \otimes h$, so $\operatorname{vec}(\bar Z \otimes h) = -\operatorname{vec}(\bar h \otimes Z)$
+and $\tangent_R = 4 \operatorname{vec}(\bar h \otimes Z) / (1 + w) = -2\, e_R + O(\lVert e
+\rVert^2)$; for the translation, $e_T = \pi(q_Z)\transpose (p_h - p_Z) = -\pi(q_Z)\transpose
+\pi(q_h)\, \tangent_T = -\tangent_T + O(\lVert \tangent \rVert^2)$. So $e = -A \tangent +
+O(\lVert \tangent \rVert^2)$ with $A(\tangent_R, \tangent_T) = (\tangent_T, \tfrac12 \tangent_R)$, and
+the precision of $\tangent$ that gives the same quadratic form to second order is
+
+$$
+	\Lambda = A\transpose \Omega A =
+	\begin{bmatrix}
+		\tfrac14 \Omega_{RR} & \tfrac12 \Omega_{RT} \\
+		\tfrac12 \Omega_{TR} & \Omega_{TT}
+	\end{bmatrix} , @tag(g2o-precision)
+$$
+
+with $\Omega_{TT}$ the first three rows and columns of $\Omega$, $\Omega_{RR}$ the last three, and
+$\Omega_{TR} = \Omega_{RT}\transpose$ the block between them. The rotation's precision is a quarter
+of g2o's, because g2o's coordinate is half an angle.
+
+**What the conversion costs.** The two costs agree at a zero residual to second order and differ in
+the third, where the coordinates differ: g2o's rotation coordinate has the length $\sin(\theta / 2)
+= \theta/2 - \theta^3/48 + \cdots$, and half of skoro's the length $2 \tan(\theta/4) = \theta/2 +
+\theta^3 / 96 + \cdots$. The normal adds its log-volume, which changes the rotation's precision by $\tfrac38 I$ (the
+rotations' [normal on these types](../rotations/math.svx#the-normal-on-these-types)), negligible
+when $\Lambda_{RR}$ is large against it. So an estimate under [](eq:g2o-precision) agrees with g2o's
+to the order of the residuals at the solution, not exactly, and a comparison with g2o's solution
+on a dataset is a comparison to that tolerance. The half-turn is a cut of g2o's error as well,
+where $s_\Delta$ changes, with the same jump of the value under a coupling block as the near side
+alone.
+
+## In skoro's terms
+
+- **A measured rotation, motion or extended pose** is a quantity of its type, observed, and scored
+  by the sign-free normal with the prediction $h(\point)$ as its mean, a mapped value of the
+  states, and the scale as a constant or a quantity. Its term is conditioned on the states and the
+  scale, as the normal's would be; the probabilistic graph is the one the normal gives.
+- **The term** is the normal's term [](eq:archive/normal/math/term) at the near side $s z$, with $s$
+  a selection on the sign of $\langle z_R, h(\point)_R \rangle$, plus $\log(1 + \rho)$ and the
+  constant $-\log 2$. Its whitened residual is $W ((s z) \ominus h(\point))$, the residual a
+  linearization reads, and $\log(1 + \rho)$ joins the log-volume as the varying part of the
+  remainder. Its derivatives with respect to the states, the scale and the measurement are the
+  passes' over the selected branch, and the term as a whole is smooth.
+- **Its sampler** is the normal's at $h(\point)$, followed by a fair sign, which takes a random key
+  of its own; the sampler is exact.
+- **A measurement read from g2o** is a quaternion and a translation in g2o's order, normalized, in
+  whatever sign the file gives, observed under the sign-free normal with the precision
+  [](eq:g2o-precision); a vertex's pose is a state's initial value, in whatever sign the file gives.
+- **Aligning on the host** remains for the plain normal, and for reporting a quaternion with $w \ge
+  0$; nothing in a model needs it once its measurements are scored by the sign-free normal.
+
+## Open questions
+
+None remain.
