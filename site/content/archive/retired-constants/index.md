@@ -1,16 +1,14 @@
 ---
 title: "Free the constants a retirement leaves with no consumer"
 pages:
-    [
-        concepts/building,
-        concepts/linearization,
-        concepts/spaces,
-        concepts/terms,
-        concepts/the-normal,
-        guide/sliding-window,
-        reference/crates,
-        start/what-is-skoro,
-    ]
+    - concepts/building
+    - concepts/linearization
+    - concepts/spaces
+    - concepts/terms
+    - concepts/the-normal
+    - guide/sliding-window
+    - reference/crates
+    - start/what-is-skoro
 crates: [skoro, skoro-core]
 revises: [core]
 ---
