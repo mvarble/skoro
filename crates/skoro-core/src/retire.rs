@@ -323,6 +323,18 @@ impl Retirement<'_> {
 
         // 4. What the change left needed by nothing, against the model after it.
         candidates.extend(draft.created.iter().copied());
+        // Pins released since a retirement spared their nodes: `U`.
+        let released: Vec<NodeId> = draft
+            .model
+            .spared
+            .iter()
+            .filter(|id| !draft.model.pinned.contains(*id))
+            .copied()
+            .collect();
+        for id in &released {
+            draft.model.spared.remove_mut(id);
+        }
+        candidates.extend(released);
         free(&mut draft.model, candidates);
         writer.publish(draft.model);
         Ok(Some(TermHandle::from_id(factor)))
@@ -396,6 +408,8 @@ fn remove(
         if let Some(address) = node.address() {
             model.addresses.remove_mut(address);
         }
+        model.pinned.remove_mut(id);
+        model.spared.remove_mut(id);
         model.consumers.remove_mut(id);
         model.nodes.remove_mut(id);
     }
@@ -426,7 +440,11 @@ fn free(model: &mut Model, candidates: Vec<NodeId>) {
             continue;
         };
         let consumed = model.consumers.get(&id).is_some_and(|c| !c.is_empty());
-        if node.is_quantity() || consumed || model.keeps(id) {
+        if node.is_quantity() || consumed || model.holds(id) {
+            continue;
+        }
+        if model.pinned.contains(&id) {
+            model.spared.insert_mut(id);
             continue;
         }
         for input in node.inputs() {

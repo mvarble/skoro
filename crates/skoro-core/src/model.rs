@@ -190,10 +190,10 @@ impl Model {
         }
     }
 
-    /// Whether the model keeps `id` outside the compilation graph's edges, `K(M)`: as a term's
-    /// log-density, named by a binding, a sampler or a proposal, or pinned.
-    pub(crate) fn keeps(&self, id: NodeId) -> bool {
-        self.terms.contains_key(&id) || self.held.contains_key(&id) || self.pinned.contains(&id)
+    /// Whether the model holds `id` outside the compilation graph's edges, `H(M)`: as a term's
+    /// log-density, or named by a binding, a sampler or a proposal. With the pins, `K(M)`.
+    pub(crate) fn holds(&self, id: NodeId) -> bool {
+        self.terms.contains_key(&id) || self.held.contains_key(&id)
     }
 
     pub(crate) fn insert(&mut self, node: Node) {
@@ -327,6 +327,11 @@ impl Snapshot {
         self.term(term)
             .ok_or(Error::NotATerm { id: term })?
             .bound(role)
+    }
+
+    /// Whether `id` is pinned.
+    pub fn is_pinned(&self, id: impl Into<NodeId>) -> bool {
+        self.0.pinned.contains(&id.into())
     }
 
     /// Every node of the compilation graph, sorted: the order they were made in.

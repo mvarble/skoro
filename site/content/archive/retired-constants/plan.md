@@ -30,7 +30,7 @@ depends_on: [archive/retired-constants/implementation]
 
 ## Pins (`skoro-core`)
 
-- [ ] Add `scope::pin` and `scope::unpin`, re-exported from `skoro::scope`, and
+- [x] Add `scope::pin` and `scope::unpin`, re-exported from `skoro::scope`, and
       `Snapshot::is_pinned`. Have `free` spare pinned nodes into `spared`, `Retirement::replace`
       release the spared nodes no longer pinned into the candidates, and `remove` drop the pins
       and spared entries of removed nodes. Say in `UnknownNode`'s documentation and message that a

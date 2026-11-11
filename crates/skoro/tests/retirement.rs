@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common::normal::{exact, inexact, log_density, log_normal, proposal};
-use skoro::scope::{constant, propose, quantity, score};
+use skoro::scope::{constant, lookup, pin, propose, quantity, score, unpin};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
 use skoro::{
     Address, Addresses, Error, Frames, Key, NodeId, Observations, Plan, Q, QDyn, Query, Real,
@@ -1573,4 +1573,153 @@ fn steady_window_holds_a_constant_number_of_nodes() {
         (x, z) = (next, next_z);
     }
     assert!(lengths[2..].iter().all(|&n| n == lengths[2]), "{lengths:?}");
+}
+
+/// A first tick whose measurement reads `noise`, and a second tick's state: `noise` is read by
+/// the term of `z0` alone, so retiring the first tick leaves it needed by nothing.
+struct Noisy {
+    writer: Writer,
+    z0: Q<Real>,
+    x1: Q<Real>,
+    noise: Q<Real>,
+}
+
+fn noisy(pinned: bool) -> Noisy {
+    let mut writer = Writer::new();
+    let (z0, x1, noise) = writer
+        .build(|| {
+            let noise = constant(Real, 0.1);
+            if pinned {
+                pin(noise);
+            }
+            let x0 = quantity("tick/0/x", Real);
+            score(x0, log_density(x0, constant(Real, A), S));
+            let z0 = quantity("tick/0/z", Real);
+            score(z0, log_density(z0, x0 + noise, R));
+            let x1 = quantity("tick/1/x", Real);
+            score(x1, log_density(x1, x0, QN));
+            (z0, x1, noise)
+        })
+        .unwrap();
+    Noisy {
+        writer,
+        z0,
+        x1,
+        noise,
+    }
+}
+
+/// The second tick's measurement, reading `noise`.
+fn measure_second_tick(writer: &mut Writer, x1: Q<Real>, noise: Q<Real>) -> Result<(), Error> {
+    writer
+        .build(|| {
+            let z1 = quantity("tick/1/z", Real);
+            score(z1, log_density(z1, x1 + noise, R));
+        })
+        .map_err(|failure| failure.error)
+}
+
+#[test]
+fn pinned_constant_survives_a_retirement_that_leaves_it_unused() {
+    // Retiring before adding: the noise has no consumer once the first tick is gone.
+    let mut kept = noisy(true);
+    retire_first_tick(&mut kept.writer, kept.z0, kept.x1);
+    assert!(kept.writer.snapshot().node(kept.noise).is_some());
+    measure_second_tick(&mut kept.writer, kept.x1, kept.noise).unwrap();
+    assert_closed(&kept.writer.snapshot(), []);
+
+    let mut freed = noisy(false);
+    retire_first_tick(&mut freed.writer, freed.z0, freed.x1);
+    assert!(freed.writer.snapshot().node(freed.noise).is_none());
+    assert_eq!(
+        measure_second_tick(&mut freed.writer, freed.x1, freed.noise),
+        Err(Error::UnknownNode {
+            id: freed.noise.id()
+        })
+    );
+}
+
+/// A retirement that touches nothing near the ticks: an unrelated quantity, retired with an
+/// empty blanket.
+fn retire_elsewhere(writer: &mut Writer) {
+    writer
+        .build(|| {
+            let w = quantity("other/w", Real);
+            score(w, log_density(w, constant(Real, 0.0), 1.0));
+        })
+        .unwrap();
+    writer
+        .retire(Addresses::new().under("other"), Observations::new())
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),
+            proposals: Vec::new(),
+            bindings: Vec::new(),
+        })
+        .unwrap();
+}
+
+#[test]
+fn unpinned_node_is_freed_at_the_next_retirement() {
+    let mut noisy = noisy(true);
+    let noise = noisy.noise;
+    retire_first_tick(&mut noisy.writer, noisy.z0, noisy.x1);
+    noisy.writer.build(|| unpin(noise)).unwrap();
+    let unpinned = noisy.writer.snapshot();
+    assert!(!unpinned.is_pinned(noise));
+    assert!(
+        unpinned.node(noise).is_some(),
+        "unpinning frees nothing by itself"
+    );
+    retire_elsewhere(&mut noisy.writer);
+    assert!(noisy.writer.snapshot().node(noise).is_none());
+}
+
+#[test]
+fn pin_on_a_node_reached_from_a_retired_quantity_does_not_keep_it() {
+    let mut chain = chain();
+    let between = chain.between;
+    chain.writer.build(|| pin(between)).unwrap();
+    assert!(chain.writer.snapshot().is_pinned(between));
+    retire_exactly(&mut chain);
+    let new = chain.writer.snapshot();
+    assert!(new.node(between).is_none());
+    assert!(!new.is_pinned(between));
+}
+
+#[test]
+fn pins_belong_to_their_branch() {
+    let mut parent = noisy(true);
+    let mut fork = parent.writer.snapshot().fork();
+    let noise = parent.noise;
+    fork.build(|| unpin(noise)).unwrap();
+    assert!(parent.writer.snapshot().is_pinned(noise));
+    retire_first_tick(&mut parent.writer, parent.z0, parent.x1);
+    retire_first_tick(&mut fork, parent.z0, parent.x1);
+    assert!(parent.writer.snapshot().node(noise).is_some());
+    assert!(fork.snapshot().node(noise).is_none());
+}
+
+#[test]
+fn pin_refusals() {
+    let other = Writer::new().build(|| constant(Real, 1.0)).unwrap();
+    let mut writer = Writer::new();
+    let failure = writer.build(|| pin(other)).unwrap_err();
+    assert_eq!(failure.error, Error::UnknownNode { id: other.id() });
+
+    let mut failed = None;
+    let _ = writer.build(|| failed = Some(lookup::<Real>("nowhere")));
+    let failed = failed.unwrap();
+    let failure = writer.build(|| unpin(failed)).unwrap_err();
+    assert_eq!(failure.error, Error::FailedOperand);
+
+    let outside = pin(other);
+    assert!(outside.is_failed());
+    let failure = writer.build(|| outside * 2.0).unwrap_err();
+    assert_eq!(failure.error, Error::OutsideScope);
+
+    let defined = skoro::Composite::define("test.pinned", Vec::new(), &[skoro::Space::Real], |q| {
+        pin(q[0]) * 2.0
+    });
+    assert!(matches!(defined, Err(failure) if failure.error == Error::NotInAModel));
 }

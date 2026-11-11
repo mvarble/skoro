@@ -21,8 +21,8 @@ pub use crate::term::{factor, propose, score};
 
 use crate::model::{Model, Node, NodeKind};
 use crate::{
-    Address, Declares, Distribution, Error, Failure, IntoHostValue, Lowered, Lowering, NodeId,
-    Operation, Q, QDyn, Space, Typed, Values,
+    Address, Declares, Distribution, Error, Failure, Handle, IntoHostValue, Lowered, Lowering,
+    NodeId, Operation, Q, QDyn, Space, Typed, Values,
 };
 
 /// A frame of the thread's stack.
@@ -449,5 +449,39 @@ pub fn constant_in(space: Space, value: HostValue) -> QDyn {
     let location = Location::caller();
     QDyn::from_id(build(location, |draft, _| {
         draft.constant(space, Some(value))
+    }))
+}
+
+/// Keeps `node` through every retirement that does not remove what it is reached from, whether or
+/// not anything uses it (`UnknownNode`, `FailedOperand`, `OutsideScope`, `NotInAModel`). Pinning
+/// a pinned node changes nothing. Gives back the same handle, failed if the pin was refused.
+#[track_caller]
+pub fn pin<H: Handle>(node: H) -> H {
+    let location = Location::caller();
+    let q: QDyn = node.into();
+    node.with_id(build(location, |draft, _| {
+        draft.spaces(&[q])?;
+        if !draft.in_model {
+            return Err(Error::NotInAModel);
+        }
+        draft.model.pinned.insert_mut(q.id());
+        Ok(q.id())
+    }))
+}
+
+/// Releases a pin: the next retirement frees the node if nothing else needs it (`UnknownNode`,
+/// `FailedOperand`, `OutsideScope`, `NotInAModel`). Unpinning a node that is not pinned changes
+/// nothing. Gives back the same handle, failed if the release was refused.
+#[track_caller]
+pub fn unpin<H: Handle>(node: H) -> H {
+    let location = Location::caller();
+    let q: QDyn = node.into();
+    node.with_id(build(location, |draft, _| {
+        draft.spaces(&[q])?;
+        if !draft.in_model {
+            return Err(Error::NotInAModel);
+        }
+        draft.model.pinned.remove_mut(&q.id());
+        Ok(q.id())
     }))
 }
