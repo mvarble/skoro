@@ -32,11 +32,11 @@ The scope's own functions make the roots of a model, its quantities and constant
 quantities at addresses:
 
 ```rust
-{../../../../crates/skoro-core/src/scope.rs:321..339}
+{../../../../crates/skoro-core/src/scope.rs:329..347}
 ```
 
 ```rust
-{../../../../crates/skoro-core/src/scope.rs:367..378}
+{../../../../crates/skoro-core/src/scope.rs:375..386}
 ```
 
 A **quantity** is an uncertain value of the model, made at an **address**: a path of names and
@@ -51,8 +51,9 @@ and anything computed from constants alone is folded into a value as soon as it 
 What a scope builds is the model's **compilation graph**. Its nodes are the model's values: the
 quantities and constants, which are its roots, and the outputs of operations, among them the
 log-densities of [terms](../terms/). Its edges run from each input of an operation to its output.
-The graph only grows: each scope adds nodes on top of the previous snapshot's, and nothing already
-published changes.
+A scope only adds: it builds nodes on top of the previous snapshot's, and nothing already published
+changes. Nodes leave the graph only through a [retirement](../terms/#retirement), which removes the
+quantities it retires, what is computed from them, and the values it leaves needed by nothing.
 
 Here is a scope building the compilation graph of a model of a vehicle and a landmark, to which
 the page on [terms](../terms/#an-example) returns, one line at a time. Step through it, or play it:

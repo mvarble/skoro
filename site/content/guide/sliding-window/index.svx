@@ -37,7 +37,7 @@ arrive:
 <Walkthrough spec={window}>
 
 ```rust
-{../../../../crates/skoro/examples/sliding_window.rs:55..114}
+{../../../../crates/skoro/examples/sliding_window.rs:55..125}
 ```
 
 </Walkthrough>
@@ -53,7 +53,14 @@ come back.
 ## What is reported
 
 Every tick of every row is checked to have stopped at a stationary point, by its
-[decrement](../pose-graph/#why-the-point-is-stationary), as the batch is. Two figures are reported
+[decrement](../pose-graph/#why-the-point-is-stationary), as the batch is. The window's size is
+checked too: a retirement [frees](../../concepts/terms/#what-a-retirement-frees) the scales, anchors
+and replacements it leaves needed by nothing, so the number of nodes the window holds stops growing
+once it is full. Its largest count after tick $2w$ must be within 1.5 times its largest over the
+first full windows, ticks $w + 1$ to $2w$, which is how far the number of landmarks in view varies,
+and the example prints the largest count and the last. Each tick makes its own scales from numbers, so
+nothing the window keeps is shared with what it retires; a model that made a measurement noise once
+for the whole run, as a constant every tick reads, would [pin](../../concepts/terms/#pins) it. Two figures are reported
 and not checked: how often the truth falls in the window's 90% ellipsoid, beside the batch's
 tolerance, and how far the window's last pose is from the batch's, in the batch's standard
 deviations. Each replacement is linearized at points the window later moves away from, and the

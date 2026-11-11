@@ -28,7 +28,8 @@ pub enum Error {
     OutsideScope,
     /// A handle from a scope that failed was used in another.
     FailedOperand,
-    /// A handle the model does not hold: from another model, or a retired quantity.
+    /// A handle the model does not hold: from another model, retired, or freed by a retirement
+    /// that left it needed by nothing (`scope::pin` keeps such a node).
     UnknownNode { id: NodeId },
     /// A quantity already lives at this address.
     AddressTaken { address: Address },
@@ -112,7 +113,11 @@ impl fmt::Display for Error {
                 "an operation was attempted with no building scope open, and its handle used here",
             ),
             Error::FailedOperand => f.write_str("a handle from a scope that failed was used here"),
-            Error::UnknownNode { id } => write!(f, "the model does not hold node {id:?}"),
+            Error::UnknownNode { id } => write!(
+                f,
+                "the model does not hold node {id:?}: it is from another model, was retired, or \
+                 was freed by a retirement (pin a node to keep it)"
+            ),
             Error::AddressTaken { address } => write!(f, "a quantity already lives at {address}"),
             Error::UnknownAddress { address } => write!(f, "no quantity lives at {address}"),
             Error::ValueShape { space } => write!(f, "the value does not fit {space:?}"),

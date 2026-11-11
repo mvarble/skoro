@@ -103,6 +103,32 @@ impl<T: Typed> From<Q<T>> for QDyn {
     }
 }
 
+/// A handle of either kind, typed or not: what `scope::pin` and `scope::unpin` take and give back.
+/// Implemented by `Q<T>` and `QDyn` alone.
+pub trait Handle: Copy + Into<QDyn> + sealed::Sealed {
+    /// The same kind of handle on the node `id`.
+    #[doc(hidden)]
+    fn with_id(self, id: NodeId) -> Self;
+}
+
+mod sealed {
+    pub trait Sealed {}
+    impl<T: super::Typed> Sealed for super::Q<T> {}
+    impl Sealed for super::QDyn {}
+}
+
+impl<T: Typed> Handle for Q<T> {
+    fn with_id(self, id: NodeId) -> Q<T> {
+        Q::from_id(id)
+    }
+}
+
+impl Handle for QDyn {
+    fn with_id(self, id: NodeId) -> QDyn {
+        QDyn::from_id(id)
+    }
+}
+
 impl QDyn {
     pub(crate) fn from_id(id: NodeId) -> QDyn {
         QDyn { id }

@@ -1,6 +1,7 @@
 //! Retirement: the quantities at a collection of addresses removed, and what they said about the
 //! rest kept as a replacement the caller builds, in [the three steps](math.svx#retirement) of the mathematics,
-//! with the caller's step between two of the core's.
+//! with the caller's step between two of the core's; and the nodes the change leaves needed by
+//! nothing freed with it, as the archive's entry `retired-constants` works out.
 
 use std::collections::{BTreeSet, HashSet};
 use std::panic::Location;
@@ -10,7 +11,7 @@ use rpds::HashTrieSetSync;
 
 use crate::model::Model;
 use crate::scope::{self, Draft, Frame};
-use crate::term::{Proposal, Term, roots};
+use crate::term::{Proposal, Term, named, named_by, roots};
 use crate::{
     Address, Error, Failure, Multiplicity, NodeId, Observations, Q, QDyn, Real, Role, Snapshot,
     Space, TermHandle, Writer,
@@ -226,8 +227,12 @@ impl Retirement<'_> {
     /// and each binding be of a node reached from no quantity outside the replacement's
     /// (`BindingOutsideTerm`). Then `E`, the terms of `𝒯_E`, the proposals of `E` and of
     /// `unproposed`, and every mapped node reached from `E` are removed, the replacement is added
-    /// as a likelihood factor with its bindings and the proposals attached, and one snapshot is
-    /// published; the factor's handle is given back. A failure at any point leaves the model as
+    /// as a likelihood factor with its bindings and the proposals attached, every node the change
+    /// leaves needed by nothing is freed (one that is no quantity, has no consumer, and is no
+    /// term's log-density, named by no binding, sampler or proposal, and not pinned), and one
+    /// snapshot is published; the factor's handle is given back. Freeing visits only what the
+    /// change touched: the inputs of removed nodes, what the dropped terms and proposals named,
+    /// and the nodes `body` made, so a node the retirement never touched stays. A failure at any point leaves the model as
     /// it was. A retirement of nothing changes nothing, does not call `body`, and gives back no
     /// factor.
     #[track_caller]
@@ -295,7 +300,7 @@ impl Retirement<'_> {
         }
 
         // 2. The removal.
-        remove(&mut draft.model, &plan, &retired, &unproposed);
+        let mut candidates = remove(&mut draft.model, &plan, &retired, &unproposed);
 
         // 3. The replacement, its bindings, and its proposals.
         let factor = draft.add_term(None, log_density).map_err(fail)?;
@@ -307,19 +312,47 @@ impl Retirement<'_> {
                     .iter()
                     .map(|&(role, node)| (role, node.id())),
             );
+            for &(_, node) in &replacement.bindings {
+                draft.model.hold(node.id());
+            }
             draft.model.terms.insert_mut(factor, Arc::new(term));
         }
         for (q, proposal) in replacement.proposals {
             draft.add_proposal(q, proposal).map_err(fail)?;
         }
+
+        // 4. What the change left needed by nothing, against the model after it.
+        candidates.extend(draft.created.iter().copied());
+        // Pins released since a retirement spared their nodes: `U`.
+        let released: Vec<NodeId> = draft
+            .model
+            .spared
+            .iter()
+            .filter(|id| !draft.model.pinned.contains(*id))
+            .copied()
+            .collect();
+        for id in &released {
+            draft.model.spared.remove_mut(id);
+        }
+        candidates.extend(released);
+        free(&mut draft.model, candidates);
         writer.publish(draft.model);
         Ok(Some(TermHandle::from_id(factor)))
     }
 }
 
 /// Removes `E`, the terms of `𝒯_E`, the proposals of `E` and of `unproposed`, and every node
-/// reached from `E` through the consumers, with every edge that names one of them.
-fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed: &HashSet<NodeId>) {
+/// reached from `E` through the consumers, with every edge that names one of them, and releases
+/// the nodes those terms and proposals named. Returns the candidates it found for freeing: the
+/// inputs of the removed nodes, and the nodes the dropped terms and proposals named, some of
+/// which may be removed themselves.
+fn remove(
+    model: &mut Model,
+    plan: &Plan,
+    retired: &HashSet<NodeId>,
+    unproposed: &HashSet<NodeId>,
+) -> Vec<NodeId> {
+    let mut candidates: Vec<NodeId> = Vec::new();
     let mut removed: HashSet<NodeId> = retired.clone();
     let mut stack: Vec<NodeId> = retired.iter().copied().collect();
     while let Some(id) = stack.pop() {
@@ -331,6 +364,10 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
     }
 
     for term in &plan.terms {
+        for node in named(term) {
+            model.release(node);
+            candidates.push(node);
+        }
         model.terms.remove_mut(&term.log_density);
         if let Some(scored) = term.scores {
             model.scoring.remove_mut(&scored);
@@ -348,6 +385,12 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
         }
     }
     for q in retired.iter().chain(unproposed) {
+        if let Some(proposal) = model.proposals.get(q).cloned() {
+            for node in named_by(&proposal) {
+                model.release(node);
+                candidates.push(node);
+            }
+        }
         model.proposals.remove_mut(q);
     }
 
@@ -359,19 +402,182 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
             if removed.contains(input) {
                 continue;
             }
-            if let Some(consumers) = model.consumers.get(input) {
-                let consumers = consumers.remove(id);
-                if consumers.is_empty() {
-                    model.consumers.remove_mut(input);
-                } else {
-                    model.consumers.insert_mut(*input, consumers);
-                }
-            }
+            detach(model, *input, *id);
+            candidates.push(*input);
         }
         if let Some(address) = node.address() {
             model.addresses.remove_mut(address);
         }
+        model.pinned.remove_mut(id);
+        model.spared.remove_mut(id);
         model.consumers.remove_mut(id);
         model.nodes.remove_mut(id);
+    }
+    candidates
+}
+
+/// Drops `consumer` from the consumers of `input`, and the entry when it empties.
+fn detach(model: &mut Model, input: NodeId, consumer: NodeId) {
+    if let Some(consumers) = model.consumers.get(&input) {
+        let consumers = consumers.remove(&consumer);
+        if consumers.is_empty() {
+            model.consumers.remove_mut(&input);
+        } else {
+            model.consumers.insert_mut(input, consumers);
+        }
+    }
+}
+
+/// Frees the nodes the change left needed by nothing, by reference counting from `candidates`:
+/// a node that is no quantity, has no consumer, and is kept by nothing is removed, and its inputs
+/// are visited in turn. A node visited while it still has a consumer is visited again when its
+/// last consumer is freed; the compilation graph is acyclic, so nothing is left that only a cycle
+/// keeps.
+fn free(model: &mut Model, candidates: Vec<NodeId>) {
+    let mut stack = candidates;
+    while let Some(id) = stack.pop() {
+        let Some(node) = model.nodes.get(&id).cloned() else {
+            continue;
+        };
+        let consumed = model.consumers.get(&id).is_some_and(|c| !c.is_empty());
+        if node.is_quantity() || consumed || model.holds(id) {
+            continue;
+        }
+        if model.pinned.contains(&id) {
+            model.spared.insert_mut(id);
+            continue;
+        }
+        for input in node.inputs() {
+            detach(model, *input, id);
+            stack.push(*input);
+        }
+        model.consumers.remove_mut(&id);
+        model.nodes.remove_mut(&id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use skoro_tensor::{Target, Value};
+
+    use super::*;
+    use crate::scope::{constant, factor, propose, quantity, score};
+    use crate::term::{Sample, Sampler};
+    use crate::{AnyNumber, Key, Param, Real};
+
+    const SCALE: Role<AnyNumber> = Role::new("scale");
+
+    /// A sampler that never draws: the index reads its nodes, and nothing is generated.
+    #[derive(Debug)]
+    struct Never;
+
+    impl Sample for Never {
+        fn name(&self) -> &'static str {
+            "test.never"
+        }
+
+        fn params(&self) -> Vec<Param> {
+            Vec::new()
+        }
+
+        fn draw(&self, _: &[Value], _: &[Key], _: &Target) -> Value {
+            unreachable!("these tests draw nothing")
+        }
+    }
+
+    fn sampler(inputs: Vec<QDyn>, log_density: Option<Q<Real>>) -> Sampler {
+        Sampler {
+            sample: Arc::new(Never),
+            inputs,
+            log_density,
+        }
+    }
+
+    fn square(x: Q<Real>, m: Q<Real>) -> Q<Real> {
+        (x - m) * (x - m) * -0.5
+    }
+
+    /// `held`, recounted from every term's bindings and sampler and every proposal, and every
+    /// spared node a node of the model.
+    fn assert_index(writer: &Writer) {
+        let model = &writer.snapshot().0;
+        let mut counts: HashMap<NodeId, u32> = HashMap::new();
+        let terms = model.terms.values().flat_map(|term| named(term));
+        let proposals = model.proposals.values().flat_map(|p| named_by(p));
+        for node in terms.chain(proposals) {
+            *counts.entry(node).or_default() += 1;
+        }
+        let held: HashMap<NodeId, u32> = model.held.iter().map(|(&k, &v)| (k, v)).collect();
+        assert_eq!(held, counts);
+        for id in model.spared.iter() {
+            assert!(model.nodes.contains_key(id), "{id:?} is spared but gone");
+        }
+    }
+
+    #[test]
+    fn held_index_matches_the_terms() {
+        let mut writer = Writer::new();
+        let (x1, p, x2) = writer
+            .build(|| {
+                let m = constant(Real, 0.5);
+                let s = constant(Real, 2.0);
+                let c = constant(Real, 1.0);
+                let x0 = quantity("t/0/x", Real);
+                score(x0, square(x0, m))
+                    .bind(&SCALE, s)
+                    .bind(&SCALE, s)
+                    .sampler(sampler(vec![m.untyped()], None))
+                    .sampler(sampler(vec![c.untyped(), m.untyped()], Some(square(x0, c))));
+                let x1 = quantity("t/1/x", Real);
+                score(x1, square(x1, x0)).sampler(sampler(vec![x0.untyped()], None));
+                let p = quantity("t/1/p", Real);
+                let proposal = |mean: Q<Real>| Proposal {
+                    sample: Arc::new(Never),
+                    inputs: vec![mean.untyped()],
+                    log_density: square(p, mean),
+                };
+                propose(p, proposal(m));
+                propose(p, proposal(c));
+                let x2 = quantity("t/2/x", Real);
+                factor(square(x2, x1) + square(p, x1));
+                (x1, p, x2)
+            })
+            .unwrap();
+        assert_index(&writer);
+
+        writer
+            .retire(Addresses::new().under("t/0"), Observations::new())
+            .unwrap()
+            .replace(|_| {
+                let k = constant(Real, 3.0);
+                Replacement {
+                    log_density: square(x1, k),
+                    proposals: Vec::new(),
+                    bindings: Vec::new(),
+                }
+                .bind(&SCALE, k)
+            })
+            .unwrap();
+        assert_index(&writer);
+
+        writer
+            .retire(Addresses::new().under("t/1"), Observations::new())
+            .unwrap()
+            .replace(|_| Replacement {
+                log_density: square(x2, constant(Real, 0.0)),
+                proposals: Vec::new(),
+                bindings: Vec::new(),
+            })
+            .unwrap();
+        assert_index(&writer);
+        let model = &writer.snapshot().0;
+        assert!(model.proposals.get(&p.id()).is_none());
+        assert_eq!(
+            model.held.size(),
+            0,
+            "nothing left names a node outside the edges"
+        );
     }
 }

@@ -7,8 +7,8 @@ mod common;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common::normal::{exact, log_density, log_normal, proposal};
-use skoro::scope::{constant, propose, quantity, score};
+use common::normal::{exact, inexact, log_density, log_normal, proposal};
+use skoro::scope::{constant, lookup, pin, propose, quantity, score, unpin};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
 use skoro::{
     Address, Addresses, Error, Frames, Key, NodeId, Observations, Plan, Q, QDyn, Query, Real,
@@ -174,19 +174,15 @@ fn retirement_reads_the_blanket_and_removes_what_it_names() {
     retirement.replace(|_| replacement(chain.x1)).unwrap();
 
     let new = chain.writer.snapshot();
-    let removed = [x0.id(), z0.id(), chain.between.id()]
+    // `a` is read only by the term of x0 and its sampler, so nothing needs it once they are gone.
+    let removed = [x0.id(), z0.id(), chain.between.id(), chain.a.id()]
         .into_iter()
         .chain(chain.terms[..3].iter().copied());
     for id in removed {
         assert!(old.node(id).is_some() && new.node(id).is_none(), "{id:?}");
     }
-    for id in [
-        x1.id(),
-        chain.z1.id(),
-        chain.kept.id(),
-        chain.a.id(),
-        chain.terms[3],
-    ] {
+    // `kept` is read by nothing, but the retirement never touched it.
+    for id in [x1.id(), chain.z1.id(), chain.kept.id(), chain.terms[3]] {
         assert!(new.node(id).is_some(), "{id:?} stays");
     }
     assert!(new.term(chain.terms[3]).is_some());
@@ -1373,4 +1369,357 @@ fn undetermined_blanket_needs_a_proposal() {
     for weight in generated.log_weight.to_host() {
         assert!(weight.is_finite(), "{weight}");
     }
+}
+
+/// The nodes of `snapshot` that nothing consumes and nothing names, other than its quantities:
+/// none a term's log-density, a sampler's input or log-density, or a proposal's input or
+/// log-density. The models of these tests bind no roles.
+fn loose(snapshot: &Snapshot) -> HashSet<NodeId> {
+    let mut named: HashSet<NodeId> = snapshot.quantities().into_iter().collect();
+    for term in snapshot.terms() {
+        named.insert(term.log_density);
+        if let Some(sampler) = &term.sampler {
+            named.extend(sampler.inputs.iter().map(|q| q.id()));
+            named.extend(sampler.log_density.map(|q| q.id()));
+        }
+    }
+    for q in snapshot.quantities() {
+        if let Some(proposal) = snapshot.proposal(q) {
+            named.extend(proposal.inputs.iter().map(|q| q.id()));
+            named.insert(proposal.log_density.id());
+        }
+    }
+    let nodes = snapshot.nodes();
+    let consumed: HashSet<NodeId> = nodes
+        .iter()
+        .filter_map(|&id| snapshot.node(id))
+        .flat_map(|node| node.inputs().iter().copied())
+        .collect();
+    nodes
+        .into_iter()
+        .filter(|id| !consumed.contains(id) && !named.contains(id))
+        .collect()
+}
+
+#[test]
+fn freed_nodes_are_what_nothing_needs() {
+    let mut chain = chain();
+    let old = chain.writer.snapshot();
+    assert_eq!(
+        loose(&old),
+        HashSet::from([chain.between.id(), chain.kept.id()])
+    );
+    retire_exactly(&mut chain);
+    let new = chain.writer.snapshot();
+    // Part (2) of the proposition: a node nothing needs after the retirement was one before.
+    let left = loose(&new);
+    assert!(left.is_subset(&loose(&old)), "{left:?}");
+    assert_eq!(left, HashSet::from([chain.kept.id()]));
+}
+
+/// The retirement of the first tick, `z0` observed, replaced by a density of `x1` about zero.
+fn retire_first_tick(writer: &mut Writer, z0: Q<Real>, x1: Q<Real>) {
+    writer
+        .retire(
+            Addresses::new().under("tick/0"),
+            Observations::new().observe(z0, Z0),
+        )
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: log_density(x1, constant(Real, 0.0), 1.0),
+            proposals: Vec::new(),
+            bindings: Vec::new(),
+        })
+        .unwrap();
+}
+
+#[test]
+fn shared_constant_stays_while_a_term_reads_it() {
+    let mut writer = Writer::new();
+    let (z0, x1, shared, own) = writer
+        .build(|| {
+            let (shared, own) = (constant(Real, 0.1), constant(Real, 0.2));
+            let x0 = quantity("tick/0/x", Real);
+            score(x0, log_density(x0, constant(Real, A), S));
+            let z0 = quantity("tick/0/z", Real);
+            score(z0, log_density(z0, x0 + shared + own, R));
+            let x1 = quantity("tick/1/x", Real);
+            score(x1, log_density(x1, x0, QN));
+            let z1 = quantity("tick/1/z", Real);
+            score(z1, log_density(z1, x1 + shared, R));
+            (z0, x1, shared, own)
+        })
+        .unwrap();
+    retire_first_tick(&mut writer, z0, x1);
+    let new = writer.snapshot();
+    assert!(new.node(shared).is_some(), "the term of z1 still reads it");
+    assert!(new.node(own).is_none(), "only the term of z0 read it");
+    assert_closed(&new, []);
+}
+
+#[test]
+fn sampler_inputs_are_held() {
+    let mut writer = Writer::new();
+    let (z0, x1, c) = writer
+        .build(|| {
+            let c = constant(Real, 0.4);
+            let x0 = quantity("tick/0/x", Real);
+            score(x0, log_density(x0, c, S)).sampler(exact(c, S));
+            let z0 = quantity("tick/0/z", Real);
+            score(z0, log_density(z0, x0, R)).sampler(exact(x0, R));
+            let x1 = quantity("tick/1/x", Real);
+            score(x1, log_density(x1, x0, QN)).sampler(exact(x0, QN));
+            let z1 = quantity("tick/1/z", Real);
+            // Drawn about `c`, a constant its density does not read.
+            score(z1, log_density(z1, x1, R)).sampler(inexact(z1, c, R));
+            (z0, x1, c)
+        })
+        .unwrap();
+    writer
+        .retire(
+            Addresses::new().under("tick/0"),
+            Observations::new().observe(z0, Z0),
+        )
+        .unwrap()
+        .replace(|_| {
+            let proposed = proposal(x1, constant(Real, 0.0), 1.0);
+            Replacement {
+                log_density: log_density(x1, constant(Real, 0.0), 1.0),
+                proposals: vec![(x1.untyped(), proposed)],
+                bindings: Vec::new(),
+            }
+        })
+        .unwrap();
+    let new = writer.snapshot();
+    assert!(new.node(c).is_some(), "the sampler of z1 reads it");
+    let (key, target) = (Key::from_seed(5), Target::host());
+    new.generate(&Observations::new(), &key, 4, &target)
+        .unwrap();
+}
+
+#[test]
+fn replacement_reusing_a_retired_constant_keeps_it() {
+    let mut chain = chain();
+    let (x1, a) = (chain.x1, chain.a);
+    chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed_z0(&chain))
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: log_density(x1, a, 1.0),
+            proposals: Vec::new(),
+            bindings: Vec::new(),
+        })
+        .unwrap();
+    assert!(chain.writer.snapshot().node(a).is_some());
+}
+
+#[test]
+fn unused_values_of_the_replacement_scope_are_freed() {
+    let mut chain = chain();
+    let x1 = chain.x1;
+    let mut made: Vec<NodeId> = Vec::new();
+    chain
+        .writer
+        .retire(Addresses::new().under("tick/0"), observed_z0(&chain))
+        .unwrap()
+        .replace(|_| {
+            made.push(constant(Real, 5.0).id());
+            made.push((x1 * 3.0).id());
+            replacement(x1)
+        })
+        .unwrap();
+    let new = chain.writer.snapshot();
+    for id in made {
+        assert!(
+            new.node(id).is_none(),
+            "{id:?} is reached by nothing the change kept"
+        );
+    }
+    assert_closed(&new, []);
+}
+
+#[test]
+fn steady_window_holds_a_constant_number_of_nodes() {
+    let mut writer = Writer::new();
+    let tick = |k: usize, previous: Option<Q<Real>>| {
+        let x = quantity(format!("tick/{k}/x"), Real);
+        let mean = match previous {
+            Some(previous) => previous + constant(Real, 0.1),
+            None => constant(Real, A),
+        };
+        score(x, log_density(x, mean, QN));
+        let z = quantity(format!("tick/{k}/z"), Real);
+        score(z, log_density(z, x, R));
+        (x, z)
+    };
+    let (mut x, mut z) = writer.build(|| tick(0, None)).unwrap();
+    let mut lengths = Vec::new();
+    for k in 1..=100 {
+        let (next, next_z) = writer.build(|| tick(k, Some(x))).unwrap();
+        writer
+            .retire(
+                Addresses::new().under(format!("tick/{}", k - 1)),
+                Observations::new().observe(z, Z0),
+            )
+            .unwrap()
+            .replace(|_| Replacement {
+                log_density: log_density(next, constant(Real, k as f64), 1.0),
+                proposals: Vec::new(),
+                bindings: Vec::new(),
+            })
+            .unwrap();
+        lengths.push(writer.snapshot().len());
+        (x, z) = (next, next_z);
+    }
+    assert!(lengths[2..].iter().all(|&n| n == lengths[2]), "{lengths:?}");
+}
+
+/// A first tick whose measurement reads `noise`, and a second tick's state: `noise` is read by
+/// the term of `z0` alone, so retiring the first tick leaves it needed by nothing.
+struct Noisy {
+    writer: Writer,
+    z0: Q<Real>,
+    x1: Q<Real>,
+    noise: Q<Real>,
+}
+
+fn noisy(pinned: bool) -> Noisy {
+    let mut writer = Writer::new();
+    let (z0, x1, noise) = writer
+        .build(|| {
+            let noise = constant(Real, 0.1);
+            if pinned {
+                pin(noise);
+            }
+            let x0 = quantity("tick/0/x", Real);
+            score(x0, log_density(x0, constant(Real, A), S));
+            let z0 = quantity("tick/0/z", Real);
+            score(z0, log_density(z0, x0 + noise, R));
+            let x1 = quantity("tick/1/x", Real);
+            score(x1, log_density(x1, x0, QN));
+            (z0, x1, noise)
+        })
+        .unwrap();
+    Noisy {
+        writer,
+        z0,
+        x1,
+        noise,
+    }
+}
+
+/// The second tick's measurement, reading `noise`.
+fn measure_second_tick(writer: &mut Writer, x1: Q<Real>, noise: Q<Real>) -> Result<(), Error> {
+    writer
+        .build(|| {
+            let z1 = quantity("tick/1/z", Real);
+            score(z1, log_density(z1, x1 + noise, R));
+        })
+        .map_err(|failure| failure.error)
+}
+
+#[test]
+fn pinned_constant_survives_a_retirement_that_leaves_it_unused() {
+    // Retiring before adding: the noise has no consumer once the first tick is gone.
+    let mut kept = noisy(true);
+    retire_first_tick(&mut kept.writer, kept.z0, kept.x1);
+    assert!(kept.writer.snapshot().node(kept.noise).is_some());
+    measure_second_tick(&mut kept.writer, kept.x1, kept.noise).unwrap();
+    assert_closed(&kept.writer.snapshot(), []);
+
+    let mut freed = noisy(false);
+    retire_first_tick(&mut freed.writer, freed.z0, freed.x1);
+    assert!(freed.writer.snapshot().node(freed.noise).is_none());
+    assert_eq!(
+        measure_second_tick(&mut freed.writer, freed.x1, freed.noise),
+        Err(Error::UnknownNode {
+            id: freed.noise.id()
+        })
+    );
+}
+
+/// A retirement that touches nothing near the ticks: an unrelated quantity, retired with an
+/// empty blanket.
+fn retire_elsewhere(writer: &mut Writer) {
+    writer
+        .build(|| {
+            let w = quantity("other/w", Real);
+            score(w, log_density(w, constant(Real, 0.0), 1.0));
+        })
+        .unwrap();
+    writer
+        .retire(Addresses::new().under("other"), Observations::new())
+        .unwrap()
+        .replace(|_| Replacement {
+            log_density: log_density(constant(Real, 0.0), constant(Real, 0.0), 1.0),
+            proposals: Vec::new(),
+            bindings: Vec::new(),
+        })
+        .unwrap();
+}
+
+#[test]
+fn unpinned_node_is_freed_at_the_next_retirement() {
+    let mut noisy = noisy(true);
+    let noise = noisy.noise;
+    retire_first_tick(&mut noisy.writer, noisy.z0, noisy.x1);
+    noisy.writer.build(|| unpin(noise)).unwrap();
+    let unpinned = noisy.writer.snapshot();
+    assert!(!unpinned.is_pinned(noise));
+    assert!(
+        unpinned.node(noise).is_some(),
+        "unpinning frees nothing by itself"
+    );
+    retire_elsewhere(&mut noisy.writer);
+    assert!(noisy.writer.snapshot().node(noise).is_none());
+}
+
+#[test]
+fn pin_on_a_node_reached_from_a_retired_quantity_does_not_keep_it() {
+    let mut chain = chain();
+    let between = chain.between;
+    chain.writer.build(|| pin(between)).unwrap();
+    assert!(chain.writer.snapshot().is_pinned(between));
+    retire_exactly(&mut chain);
+    let new = chain.writer.snapshot();
+    assert!(new.node(between).is_none());
+    assert!(!new.is_pinned(between));
+}
+
+#[test]
+fn pins_belong_to_their_branch() {
+    let mut parent = noisy(true);
+    let mut fork = parent.writer.snapshot().fork();
+    let noise = parent.noise;
+    fork.build(|| unpin(noise)).unwrap();
+    assert!(parent.writer.snapshot().is_pinned(noise));
+    retire_first_tick(&mut parent.writer, parent.z0, parent.x1);
+    retire_first_tick(&mut fork, parent.z0, parent.x1);
+    assert!(parent.writer.snapshot().node(noise).is_some());
+    assert!(fork.snapshot().node(noise).is_none());
+}
+
+#[test]
+fn pin_refusals() {
+    let other = Writer::new().build(|| constant(Real, 1.0)).unwrap();
+    let mut writer = Writer::new();
+    let failure = writer.build(|| pin(other)).unwrap_err();
+    assert_eq!(failure.error, Error::UnknownNode { id: other.id() });
+
+    let mut failed = None;
+    let _ = writer.build(|| failed = Some(lookup::<Real>("nowhere")));
+    let failed = failed.unwrap();
+    let failure = writer.build(|| unpin(failed)).unwrap_err();
+    assert_eq!(failure.error, Error::FailedOperand);
+
+    let outside = pin(other);
+    assert!(outside.is_failed());
+    let failure = writer.build(|| outside * 2.0).unwrap_err();
+    assert_eq!(failure.error, Error::OutsideScope);
+
+    let defined = skoro::Composite::define("test.pinned", Vec::new(), &[skoro::Space::Real], |q| {
+        pin(q[0]) * 2.0
+    });
+    assert!(matches!(defined, Err(failure) if failure.error == Error::NotInAModel));
 }

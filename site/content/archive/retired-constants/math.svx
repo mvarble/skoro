@@ -1,0 +1,260 @@
+---
+summary: Which nodes of the compilation graph a retirement leaves needed by nothing, why removing them changes no query, and why reference counting finds exactly those nodes, since the graph is acyclic.
+depends_on: [archive/core/math]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as freeing from './statements/freeing.md';
+</script>
+
+## The problem
+
+A retirement removes the quantities $E$, the terms $\mathcal T_E$ joined to them, and the mapped
+values reached from $E$ in the compilation graph, as the core's
+[retirement](../core/math/#retirement) says. Every other node stays. That rule is safe, but it
+leaves things behind. A constant is reached from no quantity, so it is never removed, even after
+the last term that read it is gone. The same holds for a value folded from constants. In a
+sliding window, every tick adds scales, anchors and other constants. Each replacement adds a
+matrix and a right-hand side. The replacement is retired in its turn, and all of those constants
+stay. In the loop of the `sliding_window` example the model held 854 nodes after tick 9 and 4,121
+after tick 79, while its quantities and terms stayed between 33 and 50. The cost is memory, not
+time, since a program is compiled only from what its targets reach. But it grows without bound,
+so a model that runs indefinitely is not supported.
+
+This entry works out which nodes a retirement should also remove: those it leaves needed by
+nothing. It shows that removing them changes nothing that a query, a proposal or a role reads, and
+that one walk from the retirement's removals finds them.
+
+## Setting
+
+The objects are the core's, in [its mathematics](../core/math/). The
+[compilation graph](../core/math/#the-compilation-graph) has the model's values as nodes:
+quantities, constants and mapped values. It has an edge from each input of an operation to the
+operation's output. It is acyclic, and its roots are the quantities and the constants. A node's
+*consumers* are the nodes its outgoing edges lead to, and its *ancestors* are the nodes it is
+reached from. A node is *fixed* when it is a constant or is reached from no quantity. The core
+folds every operation whose inputs are all fixed, so a fixed mapped node has its value in the
+model.
+
+The compilation graph's edges are not the only things that refer to a node. The model also holds
+nodes by name, outside those edges:
+
+- each term's log-density $\logterm_t$;
+- each node bound to a role of a term, which the term reads through the role and need not consume
+  (a normal's scale, bound to its role, is read by estimators as well as consumed by the density);
+- each sampler's inputs and its log-density, if it has one: the nodes a term's quantity is drawn
+  from, which the term's log-density need not consume (a normal may be drawn through a Cholesky
+  factor of its covariance while its density reads its precision);
+- each proposal's inputs and its log-density.
+
+Write $H(M)$ for the nodes a model $M$ holds this way. The user may also keep nodes alive
+deliberately, by *pinning* them; $P(M)$ is the nodes pinned when $M$ is retired from, and
+[Handles the user holds](#handles-the-user-holds) says why pinning is how a user keeps a node. The
+mathematics below holds for any $P$. Write $K(M) = H(M) \cup P(M)$ for what the model keeps.
+
+## What a retirement leaves behind
+
+The core's retirement removes the set
+
+$$
+	R = E \cup \{\, n : n \text{ is reached from } E \,\}, @tag(removed)
+$$
+
+which contains the log-density of every term of $\mathcal T_E$, since such a term is joined to a
+quantity of $E$. It also drops references that are not edges: the role bindings and the samplers of the terms of
+$\mathcal T_E$, and the proposals it removes, those of $E$ and of the parameters whose proposal
+read $E$. It then adds the replacement $\logterm_B$, built in the retirement's own scope.
+
+Four kinds of node can lose their last use. Together they are the *candidates*:
+
+$$
+	C = \bigl(\operatorname{in}(R) \setminus R\bigr) \cup \bigl(H(M) \setminus H(M') \setminus R\bigr) \cup S \cup (U \setminus R), @tag(candidates)
+$$
+
+where $M$ and $M'$ are the model before and after the retirement, $\operatorname{in}(R)$ is the
+inputs of the removed nodes, $S$ is the nodes created in the retirement's scope, and $U$ is the
+nodes that a pin protected from an earlier retirement and that are no longer pinned. The first
+part is the nodes that fed something removed. The second is the nodes the model held through a
+dropped term or proposal. The third is everything the caller computed while building the
+replacement, including intermediate values the replacement does not use. The fourth is what a
+released pin hands back: a node an earlier retirement would have freed, had it not been pinned.
+
+A candidate need not be fixed. Take a retired term $\logterm_t(\point_0, g(\point_1))$, in which
+$g(\point_1)$ is a mapped value computed from a blanket quantity alone. $g(\point_1)$ is not
+reached from $E$, so it is not removed, and its only consumer is. Such a node is not reached by
+the growth above, since it is removed when $\point_1$ itself is retired. But nothing needs it in
+between. The rule below makes no distinction between fixed and unfixed nodes: it removes any
+non-quantity that nothing needs any more. Fixed nodes are the ones that matter for growth, and the
+only ones that would otherwise stay forever.
+
+## Freeing
+
+The nodes to free are those that lead to nothing that remains. Let $F$ be the largest set of nodes
+of $M'$ such that every $n \in F$
+
+- is neither a quantity nor in $K(M')$,
+- is a candidate or an ancestor of one, and
+- has every consumer in $F$:
+
+$$
+	F = \bigcup \bigl\{\, X \subseteq \operatorname{anc}^*(C) \setminus (Q \cup K(M')) : \operatorname{cons}(X) \subseteq X \,\bigr\}, @tag(freed)
+$$
+
+where $Q$ is the quantities, $\operatorname{anc}^*(C)$ is the candidates and their ancestors in
+$M'$, and $\operatorname{cons}(X)$ is the consumers of the nodes of $X$ in $M'$. A union of sets
+closed under consumers is closed under consumers, so the largest such set exists and is their
+union. Quantities are never freed: whether a quantity is in the model is the model's meaning, and
+only a retirement takes one out.
+
+The restriction to $\operatorname{anc}^*(C)$ is what makes the rule local. A node the user made
+and never used, such as a mapped value computed from a surviving quantity to be read as a query's
+target, has no consumer. Without the restriction it would satisfy the closure trivially and be
+freed by a retirement that never touched it. With the restriction, a retirement frees only what
+it has itself left unused.
+
+<Statement {...freeing} />
+
+<Proof>
+
+(1) Let $n \in F$ and let $u$ be reached from $n$, along a path $n = u_0, u_1, \dots, u_k = u$.
+Each $u_{i+1}$ is a consumer of $u_i$, so if $u_i \in F$ then $u_{i+1} \in F$, since $F$ is
+closed under consumers. By induction $u \in F$. A value of a node outside $F$ is a function of its
+ancestors alone, and none of them is in $F$, so it is unchanged when $F$ is removed. Every node that a remaining term, binding,
+sampler or proposal names is in $K(M')$, so it is outside $F$.
+
+(2) Let $n \in M' \setminus F$ have no consumer in $M'$, and suppose it had a consumer before the
+retirement, and is not a quantity and not in $K(M')$. Its consumers in $M$ were all removed, so
+they are in $R$ and $n \in \operatorname{in}(R) \setminus R \subseteq C$. Then $\{n\}$ is a subset
+of $\operatorname{anc}^*(C) \setminus (Q \cup K(M'))$ whose consumers, there being none, lie in
+it, so $n \in F$, a contradiction. A node of $S$, or a released pin of $U$, with no consumer is a candidate in the same way.
+
+(3) The compilation graph is acyclic, so it has a topological order. Run reference counting from
+the candidates. A node is visited only when it is a candidate or the input of a removed node, so
+everything it removes lies in $\operatorname{anc}^*(C)$. It removes a node only when that node is
+not a quantity, not in $K(M')$, and has all its consumers removed already. So the set it removes
+is closed under consumers and is contained in $F$. Conversely, suppose some node of $F$ is never
+removed, and take the latest such node $n$ in the topological order. Every consumer of $n$ is in
+$F$ and later than $n$, so each was removed. When the last of them was removed, $n$ was visited as
+its input, or $n$ was a candidate with no consumer to wait for. Then $n$ had no consumer left and
+was removed, a contradiction. Acyclicity is what this step uses: on a graph with a cycle, the
+nodes of an unused cycle each keep a consumer, and reference counting never frees them.
+
+</Proof>
+
+Part (1) is what makes freeing safe: no query, sampler, proposal or role that remains can tell
+the difference. A program is compiled from the ancestors of its targets, so every program the new
+model can compile is the one it compiled before freeing, as long as no target is in $F$. Part (2)
+is what stops the growth. After any number of retirements, every node of the model is a quantity,
+or an ancestor of something kept, or an ancestor of a node the user made and left unused. In a
+sliding window whose ticks the user builds entirely from terms, the model's size is therefore
+bounded by what its current quantities, terms, samplers, proposals and pins need. It no longer grows with
+the number of ticks retired.
+
+Freeing happens after the replacement is added, against $M'$. A caller may build the replacement
+from a node that a retired term used, such as a scale shared by the retired terms and the factor
+that replaces them. That node then has a consumer in $M'$ and stays. Freeing against $M$ would
+remove it from under the replacement.
+
+## An example
+
+Take the core's test chain,
+
+$$
+	\randomPoint_0 \sim \mathcal N(a, s^2), \quad
+	\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2), \quad
+	\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2), \quad
+	\bfz_1 \mid \randomPoint_1 \sim \mathcal N(\randomPoint_1, r^2),
+$$
+
+with constants $a$, $s$, $r$ and $q$. Each normal's log-density reads its scale through folded
+values: its square, its logarithm. Each normal also binds the scale to its role. Retiring
+$E = \{\randomPoint_0, \bfz_0\}$ removes the terms of $\randomPoint_0$, $\bfz_0$ and
+$\randomPoint_1$, and every mapped value reached from $\randomPoint_0$ or $\bfz_0$. Then:
+
+- $a$ and $s$, with the values folded from $s$, fed only the term of $\randomPoint_0$. They are
+  candidates with no consumer left, and are freed.
+- $q$ and its folded values fed only the term of $\randomPoint_1$, and are freed. The
+  replacement [](eq:archive/core/math/kalman) is written with new constants, the variance
+  $P + q^2$ among them. If the caller instead built $P + q^2$ from the node $q$ in the
+  retirement's scope, $q$ would have a consumer in $M'$ and would stay.
+- $r$, if one node serves both measurement terms, still feeds the term of $\bfz_1$, and stays. If
+  each term was given its own constant, the one the term of $\bfz_0$ read is freed.
+- Any value computed in the retirement's scope and not reached by the replacement, such as an
+  intermediate the caller computed and did not use, is freed.
+
+Extend the chain by a step and retire $\randomPoint_1$: the replacement just added is in
+$\mathcal T_E$, and its constants are freed in turn. This is the pattern of a sliding window, and
+the reason its node count stops growing.
+
+## Handles the user holds
+
+A handle is an identifier, cheap to copy and bound to no writer. The model cannot tell which
+handles a user still holds. Identifiers are never reused, so a handle to a freed node never names
+another node: using it fails as a handle to an unknown node does, and the snapshot before the
+retirement still holds the node for any reader of that snapshot.
+
+Holding a handle is therefore not enough to keep a node, and some nodes must be kept. A constant
+fixed when the model is configured, such as a measurement noise used by every tick's terms, is
+made once and its handle kept for the whole run. If a loop adds the next tick before retiring the
+oldest, as the `sliding_window` example does, the noise always has a consumer and is never freed.
+If a loop retires before adding, the noise may lose its last consumer at a retirement, be freed,
+and the next tick's use of its handle fails. Asking the user to make such a constant again, or to
+order the loop so that it never loses its consumers, puts a rule of the core's memory management
+into every model that uses one.
+
+So the user *pins* the nodes to keep, and $P$ is the pinned nodes. A pinned node is never freed,
+whether or not anything uses it. Three properties follow.
+
+- **A pin protects from freeing, not from retirement.** A pinned node reached from a retired
+  quantity is removed with it, by [](eq:removed): its value is a function of a quantity that is
+  gone. A pinned quantity is never freed, as no quantity is, and is retired only when it is in $E$.
+  A pin is useful on a node reached from no retired quantity: a fixed node, or a mapped value of
+  quantities that remain.
+- **A pin can be released.** A released pin returns its node to the rule: if a retirement passed
+  it over only because it was pinned, it is a candidate of the next retirement, through $U$ in
+  [](eq:candidates), and is freed there if nothing else needs it. A pin that is never released
+  keeps its node, and the nodes it is reached from, for as long as the model lives, as the user
+  asked.
+- **Pins and handles differ.** A handle names a node, in every snapshot that holds it; a pin is
+  part of the model's state, and says which nodes to keep. Pinning changes no value, term or
+  query, by [%full](statement:freeing), which holds for any $P$.
+
+Two alternatives were weighed and set aside. Keeping nothing for the user ($P = \emptyset$) is
+the least machinery, but fails the configured constant above. Counting every handle, so that $P$
+is the nodes whose handles are alive, would keep exactly what the user holds without asking, but a
+counted handle can no longer be copied freely. Every expression in which a handle appears twice,
+such as $(\point - m)(\point - m)$, would need explicit copies, and the model's own records of its
+terms and proposals would have to stop holding handles, or they would keep their own nodes alive.
+Counting would also make a forgotten handle in a list or a closure into a node that is never
+freed, which is hard to find. The cost of counting falls on every model, and the benefit on the few
+nodes that need keeping; pinning puts the cost on those nodes alone.
+
+## In skoro's terms
+
+- The compilation graph is the core's, with each node's consumers read forward. The nodes the
+  model holds outside its edges, $H(M)$, are the terms' log-densities, the nodes bound to their
+  roles, their samplers' inputs and log-densities, and the proposals' inputs and log-densities.
+- Freeing is part of a retirement, done in the same change as the removal of $R$ and the addition
+  of the replacement, against the model after both. No reader sees a model partly freed.
+- Pinned nodes are never freed; a released pin makes its node a candidate of the next retirement.
+- Quantities are never freed. Fixed nodes (constants and folded values) are freed when they lose
+  their last use, and so are mapped values of surviving quantities that a retirement leaves
+  unused.
+- No derivative, query or generation changes, by [%full](statement:freeing): every program over
+  the remaining model is compiled from the same nodes as before.
+- The work is proportional to the candidates and the ancestors visited from them, not to the
+  model, as the removal of $R$ already is.
+
+## Open questions
+
+None remain.
+
+## Revisions
+
+**2026-11-10.** Reopened because the nodes a model holds outside the compilation graph's edges,
+$H(M)$, omitted each term's sampler. A sampler's inputs and its log-density are nodes the term
+reads by name and need not consume, so a node read by a surviving term's sampler alone could be
+freed, and generation would then fail. $H(M)$ now includes them, and a retirement drops the
+samplers of the terms it removes along with their bindings.

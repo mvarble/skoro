@@ -11,15 +11,6 @@ The archive is the branch `archive`, tagged `archive-2026-10-09`; read it with `
 The goal is an initial release that shows what skoro does: a model built once, then estimated, filtered and sampled without being told its structure again.
 The items are in the order they should be taken.
 
-- **Retirement does not free constants.** `Retirement::replace` removes the retired quantities and every node computed from them (`remove` in `crates/skoro-core/src/retire.rs`).
-  A constant, or a value folded from constants, is computed from no quantity, so it is never removed: scales, anchors, and each replacement's matrix and right-hand side stay after the factor that used them is gone.
-  In the loop of the `sliding_window` example the model held 854 nodes after tick 9 and 4,121 after tick 79, while its quantities and terms stayed between 33 and 50.
-  The cost is memory, not time, but it is unbounded, so a model that runs indefinitely is not yet supported.
-  The entry drops the fixed nodes a retirement leaves with no consumer, and decides whether a handle the user still holds keeps a constant alive.
-  ```
-  /wf-start retired-constants feature Free the constants a retirement leaves with no consumer, revises core
-  ```
-
 - **An observed quaternion on the wrong side.** The type `Rotation` is the unit quaternions, a double cover of the rotations, and the normal tells `q` from `-q`.
   The caller must give an observed quaternion the sign of its prediction (`host::align`).
   One with the wrong sign sits beside the one point the chart cannot reach: its residual grows without bound, nothing refuses it, and no optimizer step can cross to the other sign.

@@ -350,6 +350,12 @@ test('frontmatter lists and paths are read as the rules need', () => {
     assert.deepEqual(frontmatterList('---\npages: [a/b, "c/d"]\n---\n', 'pages'), ['a/b', 'c/d']);
     assert.deepEqual(frontmatterList('---\npages:\n  - a/b\n  - c/d\nx: 1\n---\n', 'pages'), ['a/b', 'c/d']);
     assert.deepEqual(frontmatterList('---\npages: []\n---\n', 'pages'), []);
+    // A bracketed list spread over lines, as Prettier writes one too long for a line.
+    assert.deepEqual(
+        frontmatterList('---\npages:\n    [\n        a/b,\n        "c/d",\n    ]\nx: [e]\n---\n', 'pages'),
+        ['a/b', 'c/d'],
+    );
+    assert.deepEqual(frontmatterList('---\npages: [a/b,\n    c/d]\nx: 1\n---\n', 'pages'), ['a/b', 'c/d']);
     assert.equal(frontmatterList('no frontmatter', 'pages'), undefined);
     assert.deepEqual(placeOf('site/content/archive/normal/math.svx'), {
         area: 'entry',

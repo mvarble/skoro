@@ -1,6 +1,6 @@
 ---
 title: Terms and the probabilistic graph
-summary: A model's density is a sum of terms, each a log-density that scores one quantity or none, and the terms and quantities together make the probabilistic graph inference reads.
+summary: A model's density is a sum of terms, each a log-density that scores one quantity or none; the terms and quantities together make the probabilistic graph inference reads, and a retirement removes some quantities, replaces their terms, and frees what it leaves needed by nothing.
 order: 4
 depends_on: [concepts/building, generative-models]
 ---
@@ -26,7 +26,7 @@ the quantities, and what a snapshot can say about it.
 A term is added in one of two ways:
 
 ```rust
-{../../../../crates/skoro-core/src/term.rs:293..316}
+{../../../../crates/skoro-core/src/term.rs:328..351}
 ```
 
 `score` adds the term of the distribution a quantity was drawn from: its density, as a function of
@@ -43,7 +43,7 @@ implements `Distribution`, whose `score` adds its term at a quantity, with whate
 roles the distribution gives it:
 
 ```rust
-{../../../../crates/skoro-core/src/term.rs:278..291}
+{../../../../crates/skoro-core/src/term.rs:313..326}
 ```
 
 Most quantities are made and scored at once, so the scope has a function that does both: `sample`
@@ -52,7 +52,7 @@ the same for a space given as a value. What they build is exactly what `quantity
 distribution's `score` build, and a refusal by either is recorded at the line that called them:
 
 ```rust
-{../../../../crates/skoro-core/src/scope.rs:341..365}
+{../../../../crates/skoro-core/src/scope.rs:349..373}
 ```
 
 > [!DECISION] `sample` returns the quantity alone
@@ -74,7 +74,7 @@ reached from, which for a term's log-density is what it involves, and for a node
 a normal's scale, says whether the node moves with the free quantities of a query.
 
 ```rust
-{../../../../crates/skoro-core/src/model.rs:302..307}
+{../../../../crates/skoro-core/src/model.rs:353..358}
 ```
 
 ## An example
@@ -108,7 +108,7 @@ constant. For the first tick of the example:
 <Walkthrough spec={blanket}>
 
 ```rust
-{../../../../crates/skoro-core/src/model.rs:235..278}
+{../../../../crates/skoro-core/src/model.rs:274..317}
 ```
 
 </Walkthrough>
@@ -123,3 +123,99 @@ parameter may carry a **proposal**, which draws it when the model is generated.
 > A term scores a quantity whether or not that quantity is later observed; which quantities are
 > observed is part of each query. See
 > [position 1 of the charter](../../archive/charter/writeup.md#1-a-model-is-the-joint-conditioning-belongs-to-the-query).
+
+## Retirement
+
+A model that runs indefinitely must forget: once some quantities stop mattering, they are removed,
+and what their terms said about the rest is kept in a smaller form. That is a **retirement**. The
+writer reads one for the quantities at some addresses, named one by one or as the namespaces they
+lie under, with the values of those it fixes rather than integrates out:
+
+```rust
+{../../../../crates/skoro-core/src/retire.rs:113..122}
+```
+
+Reading changes nothing. The plan says what the change will be: the retired quantities, the terms
+joined to them, and their Markov blanket, the quantities those terms involve beyond the retired
+ones:
+
+```rust
+{../../../../crates/skoro-core/src/retire.rs:69..84}
+```
+
+The caller builds a **replacement** for those terms, a likelihood factor over the blanket that
+stands in for their integral over what is retired. Its log-density is built in a scope the
+retirement opens, from the plan, by the same functions as any term, and the retirement applies the
+whole change in one snapshot:
+
+```rust
+{../../../../crates/skoro-core/src/retire.rs:223..242}
+```
+
+The [normal](../the-normal/#as-a-likelihood-factor) builds a replacement in the
+blanket's stacked tangent, and [linearization](../linearization/#a-retirement-s-replacement)
+computes one from the retired terms themselves.
+
+### What a retirement frees
+
+Removing the retired quantities removes every value computed from them, but a value computed from
+no quantity is not reached that way: a constant, or a value folded from constants. The scales of a
+retired term's normal, its mean's anchor, and an earlier replacement's matrix and right-hand side
+are all such values, and once their terms are gone nothing reads them. So a retirement also
+**frees** every node it leaves needed by nothing: a node that is no quantity, has no consumer in the
+[compilation graph](../building/#the-compilation-graph), and is held by nothing outside its edges,
+which is to say it is no term's log-density and is named by no binding, no sampler and no proposal.
+Freeing a node may leave its inputs with no consumer, and they are freed in turn.
+
+Freeing is local. It visits only what the change touched: the inputs of the nodes removed, the nodes
+the dropped terms and proposals named, and the nodes the replacement's scope made. A value that
+nothing has read since it was built, and that the retirement never touched, stays. It changes no
+value of the model: every term, sampler and proposal left reads only nodes that are left, so the
+model's density, and every query of it, is what it would have been with the freed nodes kept. The
+mathematics, and the proof of both, are in
+[the entry that added it](../../archive/retired-constants/math.svx#freeing).
+
+Freeing is what keeps a model that retires as it grows to a bounded size: its nodes are those its
+current quantities, terms, samplers, proposals and pins need, with at most the values that no
+retirement has touched since they were built. A window that keeps its
+last few ticks holds a number of nodes that stops growing once it is full, as
+[the sliding window](../../guide/sliding-window/#what-is-reported) checks. `Snapshot::nodes` lists
+a snapshot's nodes, and `Snapshot::len` counts them.
+
+### Pins
+
+A handle names a node and is bound to no writer, so the model cannot know which handles a user
+still holds, and holding one does not keep its node. A handle to a freed node fails as any handle
+the model does not hold does, with `UnknownNode`, and never names another node, since identifiers
+are never reused. Most nodes need no keeping, but some do: a constant made when the model is
+configured, such as a measurement noise that every tick reads, may lose its last consumer at a
+retirement that comes before the next tick is added. A node the user wants kept, whether or not
+anything uses it, is **pinned**:
+
+```rust
+{../../../../crates/skoro-core/src/scope.rs:455..487}
+```
+
+A pin keeps a node from being freed, not from being retired: a pinned value computed from a retired
+quantity is removed with it. A released pin returns its node to the rule, and the next retirement
+frees it if nothing else needs it, even a retirement that touches nothing near it. Pins are part
+of the model, so a snapshot carries them, `Snapshot::is_pinned` reads them, and a branch forked
+from a snapshot changes its own. In the retirement tests, a first tick whose measurement alone reads a
+noise constant:
+
+```rust
+{../../../../crates/skoro/tests/retirement.rs:1587..1611}
+```
+
+keeps the noise through the retirement of that tick when it is pinned, and a second tick reads it;
+unpinned, the same retirement frees it, and the second tick's build fails:
+
+```rust
+{../../../../crates/skoro/tests/retirement.rs:1622..1640}
+```
+
+> [!DECISION] A pin, rather than a counted handle
+> Counting live handles would keep exactly what the user holds, but a counted handle can no longer
+> be copied freely, and a forgotten copy would keep its node forever. Pins put the cost on the few
+> nodes that need keeping. See
+> [Handles the user holds](../../archive/retired-constants/math.svx#handles-the-user-holds).

@@ -323,7 +323,8 @@ export function defaultBase(root: string): string | undefined {
 
 // ---------------------------------------------------------------------------
 // Frontmatter, read only as far as the workflow needs: a list field such as
-// `pages: [guide/first-model]`, written inline or as a block.
+// `pages: [guide/first-model]`, written inline, as a block, or as a bracketed list spread over
+// several lines, as Prettier writes one too long for a line.
 
 export function frontmatterList(text: string, field: string): string[] | undefined {
     const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
@@ -333,8 +334,13 @@ export function frontmatterList(text: string, field: string): string[] | undefin
     if (at < 0) return undefined;
     const value = lines[at]!.slice(field.length + 1).trim();
     const unquote = (item: string) => item.trim().replace(/^(['"])(.*)\1$/, '$2');
-    if (value.startsWith('[')) {
-        const inner = value.replace(/^\[|\]$/g, '').trim();
+    // A bracketed list opens on the field's line or, indented, on the next one, and runs to the
+    // line that closes it.
+    const opens = value.startsWith('[') ? at : !value && /^\s+\[/.test(lines[at + 1] ?? '') ? at + 1 : -1;
+    if (opens >= 0) {
+        let flow = opens == at ? value : lines[opens]!.trim();
+        for (let i = opens + 1; !flow.includes(']') && i < lines.length; i++) flow += ' ' + lines[i]!.trim();
+        const inner = flow.replace(/^\[/, '').replace(/\].*$/, '').trim();
         return inner ? inner.split(',').map(unquote).filter(Boolean) : [];
     }
     if (value) return [unquote(value)];
