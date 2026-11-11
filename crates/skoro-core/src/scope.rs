@@ -43,6 +43,8 @@ pub(crate) struct Draft {
     pub(crate) failure: Option<Failure>,
     /// Whether the draft is a model, rather than a composite's body.
     in_model: bool,
+    /// The nodes this draft inserted, in order: `S` when the draft is a retirement's scope.
+    pub(crate) created: Vec<NodeId>,
 }
 
 thread_local! {
@@ -91,6 +93,7 @@ impl Draft {
             model,
             failure: None,
             in_model: true,
+            created: Vec::new(),
         }
     }
 
@@ -104,7 +107,14 @@ impl Draft {
             model,
             failure: None,
             in_model: false,
+            created: Vec::new(),
         }
+    }
+
+    /// Inserts `node` into the model and records it in `created`.
+    fn insert(&mut self, node: Node) {
+        self.created.push(node.id());
+        self.model.insert(node);
     }
 
     fn record(&mut self, error: Error, location: &'static Location<'static>) {
@@ -143,7 +153,7 @@ impl Draft {
         let inputs: Box<[NodeId]> = inputs.iter().map(QDyn::id).collect();
         let folded = self.fold(operation.as_ref(), &inputs, &spaces)?;
         let id = NodeId::fresh();
-        self.model.insert(Node::new(
+        self.insert(Node::new(
             id,
             space,
             NodeKind::Mapped {
@@ -215,8 +225,7 @@ impl Draft {
             return Err(Error::AddressTaken { address });
         }
         let id = NodeId::fresh();
-        self.model
-            .insert(Node::new(id, space, NodeKind::Quantity { address }));
+        self.insert(Node::new(id, space, NodeKind::Quantity { address }));
         Ok(id)
     }
 
@@ -231,8 +240,7 @@ impl Draft {
                 space: space.clone(),
             })?;
         let id = NodeId::fresh();
-        self.model
-            .insert(Node::new(id, space, NodeKind::Constant { value }));
+        self.insert(Node::new(id, space, NodeKind::Constant { value }));
         Ok(id)
     }
 }

@@ -323,6 +323,13 @@ impl Snapshot {
             .bound(role)
     }
 
+    /// Every node of the compilation graph, sorted: the order they were made in.
+    pub fn nodes(&self) -> Vec<NodeId> {
+        let mut nodes: Vec<NodeId> = self.0.nodes.keys().copied().collect();
+        nodes.sort_unstable();
+        nodes
+    }
+
     /// The number of nodes in the compilation graph.
     pub fn len(&self) -> usize {
         self.0.nodes.size()
