@@ -1,5 +1,5 @@
 ---
-summary: An observed quaternion is a measured rotation, whose sign carries no information; the sign-free normal is its exact law, computed by the residual of the sign on the side of the prediction and a correction that is negligible near it, and it replaces aligning on the host, which is right only while the estimate stays within a half-turn of where it was aligned.
+summary: A unit quaternion names a rotation twice, and its sign carries no information; the normal on the rotations, the rigid motions and the extended poses becomes the sign-free normal, the equal mixture of the normal and its mirror, which is the exact law of the rotation, is computed by the residual of the sign on the side of the mean and a correction negligible near it, and makes aligning a measurement on the host unnecessary.
 depends_on: [chart-volume, archive/core/math, archive/normal/math, archive/rotations/math]
 ---
 
@@ -38,7 +38,9 @@ path has not met outside data.
 This entry works out what an observed quaternion of arbitrary sign is as a random variable, which
 law scores it without reference to its sign, what a misaligned one does to an estimate, and how a
 measurement given in the format of g2o, the usual source of pose-graph datasets, becomes one of
-skoro's.
+skoro's. Its answer changes the normal rather than adding a law beside it: on a type whose points
+$q$ and $-q$ are one element, the normal is the sign-free law, so that a model writes the one
+normal it writes today and the sign of a quaternion stops mattering to it.
 
 ## Setting
 
@@ -269,9 +271,9 @@ at a small rotation residual if the translation's is large, does not allow the c
 dropped at a fixed cutoff; its cutoff is then set from the scale, or the correction is kept on
 every row with the argument guarded only where $c$ would overflow.
 
-## Three ways to choose the sign
+## Four ways to choose the sign
 
-A model can avoid the far side in three ways, which differ in where the sign is chosen and in what
+A model can avoid the far side in four ways, which differ in where the sign is chosen and in what
 they do to the probabilistic graph ([the core's mathematics](../core/math.svx#the-probabilistic-graph):
 quantities and terms as nodes, an edge from each quantity a term is conditioned on to the term, and
 an edge from the term to the quantity it scores).
@@ -308,27 +310,89 @@ honest, with a sampler, and at $c = z$ its term is the near side. But the model 
 twice, as the observed value and as a constant, and a query that frees the measurement or observes
 another value keeps the old sign.
 
-> [!DECISION] An observed rotation is scored by the sign-free normal
-> A measured rotation, motion or extended pose is a quantity scored by $\mathcal N^{\pm}(h(\point),
-> \Sigma)$ rather than by $\mathcal N(h(\point), \Sigma)$. It is the exact law of the measured
-> rotation, so the sign in which a measurement and a prediction are given changes nothing; it needs
-> no estimate on the host and no alignment by the caller; its sampler is the normal's with a fair
-> sign; and it is computed by the near side's residual and a correction that vanishes near the
-> prediction. Aligning on the host stays what it is, a way to give the plain normal a measurement
-> on the near side, right while the estimate stays within the half-turn this section bounds.
+**In the law.** The fourth way chooses no sign at all: the measurement is scored by the sign-free
+normal, whose density is the same at $z$ and $-z$, computed by its near side as
+[%full](statement:near-side) says. The term scores $z$, is conditioned on $\point$, is a density of
+$z$, and has a sampler. Nothing is computed on the host, and the selection the near side makes is
+inside the law, where it changes the value by no more than the correction.
+
+> [!DECISION] The normal on a double cover is the sign-free normal
+> The normal on the rotations, the rigid motions and the extended poses, and on any product with
+> one of them among its factors, is the sign-free normal of
+> [The normal on a double cover](#the-normal-on-a-double-cover), not the normal of $S^3$ alone.
+> It is the exact law of the rotation, so the sign in which a value, a mean or a prediction is given
+> changes nothing; it needs no estimate on the host and no alignment by the caller; its sampler is
+> the normal's with a fair sign; and it is computed by the near side's residual and a correction
+> that vanishes near the mean. A model writes one normal, as it does today, and its type decides
+> which law that is. The one-sheet normal survives inside it, as the component the mixture is made
+> of, and not as a law a model can choose on these types: what it adds is a preference for one
+> sign, which means nothing for a rotation. A model that wants the law of $S^3$ as a sphere wants a
+> different type.
+
+## The normal on a double cover
+
+Each of the three types is a double cover of its group, and the cover has one nontrivial deck
+transformation, $\iota(q) = -q$: the left translation by the central element $-1$, or $(-1, 0)$
+and $(-1, 0, 0)$ on the motions, which preserves $\nu$, commutes with every left translation, and
+satisfies $\iota(\mu \oplus \tangent) = \iota(\mu) \oplus \tangent$. The type declares it, and the
+normal on such a type is the average of the normal over it,
+
+$$
+	\density^{\pm}_\mu(q) = \tfrac12 \bigl( \density_\mu(q) + \density_\mu(\iota(q)) \bigr) , @tag(average)
+$$
+
+which is [%full](statement:sign-free). Its term is [](eq:archive/normal/math/term) at the near side,
+plus $\log(1 + \rho)$ and $-\log 2$, by [%full](statement:near-side). Every property of the normal
+that holds near its mean holds unchanged, since there the two laws differ by $\rho$, which vanishes
+to every order: its mean is a mode under the same condition, and a measurement weighs on the state
+with the same precision. What changes is far from the mean, where the mixture puts back near $\mu$
+the mass the normal put on the far side, and where the near side's sign changes at the half-turn.
+
+**Products.** A product of spaces is a double cover in each factor that is one, and the deck
+transformations of a product with $k$ such factors are the $2^k$ sign patterns $\epsilon \in
+\{\pm 1\}^k$, applied factor by factor. The normal on it is the average over them,
+
+$$
+	\density^{\pm}_\mu(q) = 2^{-k} \sum_{\epsilon} \density_\mu(\epsilon q) , @tag(product-average)
+$$
+
+and its near side takes each factor's sign separately, $s_i = \operatorname{sign} \langle q_i,
+\mu_i \rangle$. Its correction is $\log \sum_\epsilon \rho_\epsilon$, with $\rho_\epsilon$ the
+ratio of the density at the pattern $\epsilon$ applied to $sq$ to the density at $sq$, so that the
+pattern of no flips contributes $1$. Where $\Sigma$ couples no two factors, the density is a product
+of the factors' densities and so is the average, and the correction is $\sum_i \log(1 + \rho_i)$, one
+term per factor as [%full](statement:near-side) gives it: $k$ terms, not $2^k$. Where $\Sigma$
+couples them, each $\rho_\epsilon$ involves the whole residual, and the $2^k$ terms do not separate.
+The usual product, $S^3 \times \R^3$ for a pose whose position's noise is in a fixed frame, has
+$k = 1$.
+
+The likelihood factors of the normal's mathematics are untouched: the replacement
+[](eq:archive/normal/math/joint) that a retirement adds is a Gaussian of the stacked tangent
+coordinates $\point_i \ominus p_i$ at fixed anchors, a function on $\R^D$ rather than the normal of a
+type, and it reads each state on the sheet of its anchor.
+
+**The broad normal.** The correction's fixed cutoff holds for a rotation's standard deviation below
+$4 / \sqrt 3 \approx 2.3$ rad, as [Computing the correction](#the-observed-value-is-a-rotation) says.
+A prior on an attitude about which little is known is broader than that, and meets the correction on
+every row; for it, the correction is the law. It is the regime in which the rotations' mathematics
+found the normal's mean no longer a mode, and in which a uniform law, not a broad normal, is the way
+to say that an attitude is unknown.
 
 ## Estimates and their mirrors
 
 When every term that reads a state's quaternion is invariant under its sign, because it reads it
-through $\pi$ or through the sign-free normal of a prediction the sign flips, the joint density is
-invariant under negating that state. A model with $n$ such states has $2^n$ copies of each mode, one
+through $\pi$ or through the normal of a prediction the sign flips, which is now sign-free, the joint
+density is invariant under negating that state. That is now the rule rather than the exception,
+since the normal of every quantity of these types, a state's prior among them, is sign-free. A model with $n$ such states has $2^n$ copies of each mode, one
 for each choice of signs, all the same rotations. An optimizer converges to the copy on the side it
 starts from, and a Laplace approximation, which is local, is the same at each. A sampler moving
 continuously passes from one copy to another only by carrying a state's rotation at least a
 half-turn from where it was, since a path from $q$ to $-q$ on $S^3$ passes a point orthogonal to
 $q$, so for a concentrated posterior it stays in one; that is no loss, since every copy is the same law
-on the rotations. A state scored by the plain normal, a prior with a fixed mean among them, keeps
-the symmetry broken as [the rotations' mathematics](../rotations/math.svx#the-double-cover) says.
+on the rotations. What still breaks the symmetry is a term that reads a quaternion's coordinates
+other than through $\pi$, such as a model that computes with $w(q)$ directly, and a retirement's
+replacement, which reads its states at their anchors; each keeps its states on one sheet, which is
+harmless for the same reason.
 
 ## Measurements as g2o gives them
 
@@ -358,7 +422,7 @@ chart applies it.
 
 **The error is free of the sign.** It reads the measurement through the matrix of $\Delta$, so the
 sign in which $Z$ is written never reaches it: g2o scores the measured rotation, as the sign-free
-normal does, by choosing the shorter turn, as `log_shorter` does on skoro's rotations. Its law is
+normal does, but by choosing the shorter turn, as `log_shorter` does on skoro's rotations. Its law is
 not a normal, though. It is the likelihood factor
 $\exp(-\tfrac12 e\transpose \Omega e)$ of
 [the normal's mathematics](../normal/math.svx#without-a-volume-or-a-global-chart), with no volume
@@ -407,30 +471,46 @@ alone.
 
 ## In skoro's terms
 
-- **A measured rotation, motion or extended pose** is a quantity of its type, observed, and scored
-  by the sign-free normal with the prediction $h(\point)$ as its mean, a mapped value of the
-  states, and the scale as a constant or a quantity. Its term is conditioned on the states and the
-  scale, as the normal's would be; the probabilistic graph is the one the normal gives.
+- **A quantity of the rotations, the rigid motions or the extended poses**, or of a product with one
+  of them among its factors, when scored by the normal, is scored by the sign-free law
+  [](eq:average) or [](eq:product-average). A measured rotation, motion or extended pose is such a
+  quantity, observed, with the prediction $h(\point)$, a mapped value of the states, as its mean and
+  the scale a constant or a quantity; a state's prior is another. The probabilistic graph is the one
+  the normal gives: the term scores the quantity and is conditioned on the quantities its mean and
+  its scale are reached from.
+- **Each type declares its deck transformation**, $q \mapsto -q$, as it declares its chart and its
+  volume; on a type that declares none, the normal is unchanged.
 - **The term** is the normal's term [](eq:archive/normal/math/term) at the near side $s z$, with $s$
-  a selection on the sign of $\langle z_R, h(\point)_R \rangle$, plus $\log(1 + \rho)$ and the
-  constant $-\log 2$. Its whitened residual is $W ((s z) \ominus h(\point))$, the residual a
-  linearization reads, and $\log(1 + \rho)$ joins the log-volume as the varying part of the
-  remainder. Its derivatives with respect to the states, the scale and the measurement are the
-  passes' over the selected branch, and the term as a whole is smooth.
+  a selection on the sign of $\langle z_R, \mu_R \rangle$ for each factor that is a double cover,
+  plus the correction and the constant $-k \log 2$. Its whitened residual is $W ((s z) \ominus \mu)$,
+  the residual a linearization reads, and the correction joins the log-volume as the varying part of
+  the remainder. Its derivatives with respect to the mean, the scale and the value are the passes'
+  over the selected branch, and the term as a whole is smooth.
 - **Its expected information** is the normal's to within the far-side mass. The near-side residual of
   a draw $b(\mu \oplus \varepsilon)$ is $\varepsilon$ when $\lVert \varepsilon_R \rVert < 4$ and its
   inversion otherwise, so the normal's scale block, exact because the residual of a draw is its
   noise, is exact here up to terms of the order of $\Pr(\lVert \varepsilon_R \rVert > 4)$, and the
   blocks of the state and the mean are the normal's, the correction adding terms of the order of
   $\rho$.
-- **Its sampler** is the normal's at $h(\point)$, followed by a fair sign, which takes a random key
-  of its own; the sampler is exact.
+- **Its sampler** is the normal's at $\mu$, followed by a fair sign for each factor that is a double
+  cover, which takes a random key of its own; the sampler is exact. A draw's sign is therefore
+  arbitrary, which nothing reads but a computation with a quaternion's coordinates.
 - **A measurement read from g2o** is a quaternion and a translation in g2o's order, normalized, in
-  whatever sign the file gives, observed under the sign-free normal with the precision
-  [](eq:g2o-precision); a vertex's pose is a state's initial value, in whatever sign the file gives.
-- **Aligning on the host** remains for the plain normal, and for reporting a quaternion with $w \ge
-  0$; nothing in a model needs it once its measurements are scored by the sign-free normal.
+  whatever sign the file gives, observed under the normal with the precision [](eq:g2o-precision);
+  a vertex's pose is a state's initial value, in whatever sign the file gives.
+- **Aligning on the host** is no longer needed by a model: a measurement aligned by its caller is
+  scored as it would be unaligned. It remains for reporting a quaternion with $w \ge 0$.
+- **The normal's own mathematics** is revised on these types: its definition gains the average over
+  the deck transformation, its sampler the sign, its term the correction, and the scale block of
+  its expected information is exact to within the far-side mass rather than exactly.
 
 ## Open questions
 
-None remain.
+> [!TODO] A normal coupling several double covers
+> On a product with $k$ factors that are double covers and a scale that couples them, the exact
+> correction is a sum of $2^k$ terms, [](eq:product-average). A pose, or a pose with a fixed-frame
+> position, has $k = 1$, and a product of uncoupled factors separates into $k$ terms; a normal over
+> several coupled rotations, such as a prior taken from a joint marginal, does not. Either it is
+> computed exactly, at a cost exponential in $k$ that is fixed when the model is built; or only the
+> patterns that flip one factor are kept, an approximation whose error is of the order of the
+> products $\rho_i \rho_j$ of two flips; or such a normal is refused above some $k$.
