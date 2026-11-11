@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "implementation",
+    "stage": "plan",
     "started": "2026-11-11",
     "events": [
         {
@@ -26,6 +26,12 @@
             "action": "approve",
             "stage": "math",
             "commit": "50c685b"
+        },
+        {
+            "date": "2026-11-11",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "082a3da"
         }
     ],
     "approvals": {
@@ -33,6 +39,11 @@
             "date": "2026-11-11",
             "commit": "50c685b",
             "hash": "945d6b6b83adb8dbca16681219d8615f698308a6809ee7dfa9f42c594d86b421"
+        },
+        "implementation": {
+            "date": "2026-11-11",
+            "commit": "082a3da",
+            "hash": "af87833b838bfcbdb8e5815bae55e8e9f9811d8fbac79a96247b7808e149b132"
         }
     }
 }
