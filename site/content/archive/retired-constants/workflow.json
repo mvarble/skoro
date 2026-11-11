@@ -1,6 +1,6 @@
 {
     "kind": "feature",
-    "stage": "math",
+    "stage": "implementation",
     "started": "2026-11-11",
     "events": [
         {
@@ -20,14 +20,19 @@
             "stage": "math",
             "reason": "The nodes a model holds outside the compilation graph's edges omitted each sampler's inputs and log-density, so a retirement could free a node a surviving term's sampler reads.",
             "commit": "57a91ec"
+        },
+        {
+            "date": "2026-11-11",
+            "action": "approve",
+            "stage": "math",
+            "commit": "50c685b"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-11",
-            "commit": "8601ef8",
-            "hash": "99be69aecbf4cb876140e42021dbedfb2f9d0ea5ced62b1d203474c46964a08a",
-            "stale": true
+            "commit": "50c685b",
+            "hash": "945d6b6b83adb8dbca16681219d8615f698308a6809ee7dfa9f42c594d86b421"
         }
     }
 }
