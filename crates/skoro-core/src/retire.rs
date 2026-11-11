@@ -1,6 +1,7 @@
 //! Retirement: the quantities at a collection of addresses removed, and what they said about the
 //! rest kept as a replacement the caller builds, in [the three steps](math.svx#retirement) of the mathematics,
-//! with the caller's step between two of the core's.
+//! with the caller's step between two of the core's; and the nodes the change leaves needed by
+//! nothing freed with it, as the archive's entry `retired-constants` works out.
 
 use std::collections::{BTreeSet, HashSet};
 use std::panic::Location;
@@ -226,8 +227,12 @@ impl Retirement<'_> {
     /// and each binding be of a node reached from no quantity outside the replacement's
     /// (`BindingOutsideTerm`). Then `E`, the terms of `𝒯_E`, the proposals of `E` and of
     /// `unproposed`, and every mapped node reached from `E` are removed, the replacement is added
-    /// as a likelihood factor with its bindings and the proposals attached, and one snapshot is
-    /// published; the factor's handle is given back. A failure at any point leaves the model as
+    /// as a likelihood factor with its bindings and the proposals attached, every node the change
+    /// leaves needed by nothing is freed (one that is no quantity, has no consumer, and is no
+    /// term's log-density, named by no binding, sampler or proposal, and not pinned), and one
+    /// snapshot is published; the factor's handle is given back. Freeing visits only what the
+    /// change touched: the inputs of removed nodes, what the dropped terms and proposals named,
+    /// and the nodes `body` made, so a node the retirement never touched stays. A failure at any point leaves the model as
     /// it was. A retirement of nothing changes nothing, does not call `body`, and gives back no
     /// factor.
     #[track_caller]
@@ -295,7 +300,7 @@ impl Retirement<'_> {
         }
 
         // 2. The removal.
-        remove(&mut draft.model, &plan, &retired, &unproposed);
+        let mut candidates = remove(&mut draft.model, &plan, &retired, &unproposed);
 
         // 3. The replacement, its bindings, and its proposals.
         let factor = draft.add_term(None, log_density).map_err(fail)?;
@@ -315,14 +320,27 @@ impl Retirement<'_> {
         for (q, proposal) in replacement.proposals {
             draft.add_proposal(q, proposal).map_err(fail)?;
         }
+
+        // 4. What the change left needed by nothing, against the model after it.
+        candidates.extend(draft.created.iter().copied());
+        free(&mut draft.model, candidates);
         writer.publish(draft.model);
         Ok(Some(TermHandle::from_id(factor)))
     }
 }
 
 /// Removes `E`, the terms of `𝒯_E`, the proposals of `E` and of `unproposed`, and every node
-/// reached from `E` through the consumers, with every edge that names one of them.
-fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed: &HashSet<NodeId>) {
+/// reached from `E` through the consumers, with every edge that names one of them, and releases
+/// the nodes those terms and proposals named. Returns the candidates it found for freeing: the
+/// inputs of the removed nodes, and the nodes the dropped terms and proposals named, some of
+/// which may be removed themselves.
+fn remove(
+    model: &mut Model,
+    plan: &Plan,
+    retired: &HashSet<NodeId>,
+    unproposed: &HashSet<NodeId>,
+) -> Vec<NodeId> {
+    let mut candidates: Vec<NodeId> = Vec::new();
     let mut removed: HashSet<NodeId> = retired.clone();
     let mut stack: Vec<NodeId> = retired.iter().copied().collect();
     while let Some(id) = stack.pop() {
@@ -336,6 +354,7 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
     for term in &plan.terms {
         for node in named(term) {
             model.release(node);
+            candidates.push(node);
         }
         model.terms.remove_mut(&term.log_density);
         if let Some(scored) = term.scores {
@@ -357,6 +376,7 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
         if let Some(proposal) = model.proposals.get(q).cloned() {
             for node in named_by(&proposal) {
                 model.release(node);
+                candidates.push(node);
             }
         }
         model.proposals.remove_mut(q);
@@ -370,20 +390,51 @@ fn remove(model: &mut Model, plan: &Plan, retired: &HashSet<NodeId>, unproposed:
             if removed.contains(input) {
                 continue;
             }
-            if let Some(consumers) = model.consumers.get(input) {
-                let consumers = consumers.remove(id);
-                if consumers.is_empty() {
-                    model.consumers.remove_mut(input);
-                } else {
-                    model.consumers.insert_mut(*input, consumers);
-                }
-            }
+            detach(model, *input, *id);
+            candidates.push(*input);
         }
         if let Some(address) = node.address() {
             model.addresses.remove_mut(address);
         }
         model.consumers.remove_mut(id);
         model.nodes.remove_mut(id);
+    }
+    candidates
+}
+
+/// Drops `consumer` from the consumers of `input`, and the entry when it empties.
+fn detach(model: &mut Model, input: NodeId, consumer: NodeId) {
+    if let Some(consumers) = model.consumers.get(&input) {
+        let consumers = consumers.remove(&consumer);
+        if consumers.is_empty() {
+            model.consumers.remove_mut(&input);
+        } else {
+            model.consumers.insert_mut(input, consumers);
+        }
+    }
+}
+
+/// Frees the nodes the change left needed by nothing, by reference counting from `candidates`:
+/// a node that is no quantity, has no consumer, and is kept by nothing is removed, and its inputs
+/// are visited in turn. A node visited while it still has a consumer is visited again when its
+/// last consumer is freed; the compilation graph is acyclic, so nothing is left that only a cycle
+/// keeps.
+fn free(model: &mut Model, candidates: Vec<NodeId>) {
+    let mut stack = candidates;
+    while let Some(id) = stack.pop() {
+        let Some(node) = model.nodes.get(&id).cloned() else {
+            continue;
+        };
+        let consumed = model.consumers.get(&id).is_some_and(|c| !c.is_empty());
+        if node.is_quantity() || consumed || model.keeps(id) {
+            continue;
+        }
+        for input in node.inputs() {
+            detach(model, *input, id);
+            stack.push(*input);
+        }
+        model.consumers.remove_mut(&id);
+        model.nodes.remove_mut(&id);
     }
 }
 

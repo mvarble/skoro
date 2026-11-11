@@ -16,7 +16,7 @@ depends_on: [archive/retired-constants/implementation]
 
 - [x] Record the nodes a draft inserts in `Draft::created`, through a `Draft::insert` that
       `mapped`, `constant` and `quantity` call. Add `Snapshot::nodes`.
-- [ ] Make `remove` return its candidates, add `free`, and call it at the end of
+- [x] Make `remove` return its candidates, add `free`, and call it at the end of
       `Retirement::replace` with the candidates and `draft.created`, before publishing. Extend the
       documentation of `Retirement::replace`, `Writer::retire` and the `retire` module to say what
       is freed. Move `a` to the removed nodes in the existing test. Tests:

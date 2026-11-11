@@ -190,6 +190,12 @@ impl Model {
         }
     }
 
+    /// Whether the model keeps `id` outside the compilation graph's edges, `K(M)`: as a term's
+    /// log-density, named by a binding, a sampler or a proposal, or pinned.
+    pub(crate) fn keeps(&self, id: NodeId) -> bool {
+        self.terms.contains_key(&id) || self.held.contains_key(&id) || self.pinned.contains(&id)
+    }
+
     pub(crate) fn insert(&mut self, node: Node) {
         let id = node.id;
         for input in node.inputs() {
