@@ -10,7 +10,7 @@ quantity or in $K$, each an ancestor of a candidate or a candidate itself, and e
 consumer in $F$. Then
 
 1. no node outside $F$ is reached from a node of $F$, so removing $F$ changes no value that a node
-   of $M' \setminus F$ computes, and so no term, binding, proposal or target that remains;
+   of $M' \setminus F$ computes, and so no term, binding, sampler, proposal or target that remains;
 2. a node of $M' \setminus F$ with no consumer is a quantity, in $K$, or had no consumer before
    the retirement either;
 3. $F$ is what reference counting computes: start from the candidates, and remove a node once it

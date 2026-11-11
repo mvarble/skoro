@@ -44,6 +44,9 @@ nodes by name, outside those edges:
 - each term's log-density $\logterm_t$;
 - each node bound to a role of a term, which the term reads through the role and need not consume
   (a normal's scale, bound to its role, is read by estimators as well as consumed by the density);
+- each sampler's inputs and its log-density, if it has one: the nodes a term's quantity is drawn
+  from, which the term's log-density need not consume (a normal may be drawn through a Cholesky
+  factor of its covariance while its density reads its precision);
 - each proposal's inputs and its log-density.
 
 Write $H(M)$ for the nodes a model $M$ holds this way. The user may also keep nodes alive
@@ -60,7 +63,7 @@ $$
 $$
 
 which contains the log-density of every term of $\mathcal T_E$, since such a term is joined to a
-quantity of $E$. It also drops references that are not edges: the role bindings of the terms of
+quantity of $E$. It also drops references that are not edges: the role bindings and the samplers of the terms of
 $\mathcal T_E$, and the proposals it removes, those of $E$ and of the parameters whose proposal
 read $E$. It then adds the replacement $\logterm_B$, built in the retirement's own scope.
 
@@ -118,8 +121,8 @@ it has itself left unused.
 (1) Let $n \in F$ and let $u$ be reached from $n$, along a path $n = u_0, u_1, \dots, u_k = u$.
 Each $u_{i+1}$ is a consumer of $u_i$, so if $u_i \in F$ then $u_{i+1} \in F$, since $F$ is
 closed under consumers. By induction $u \in F$. A value of a node outside $F$ is a function of its
-ancestors alone, and none of them is in $F$, so it is unchanged when $F$ is removed. Every term,
-binding and proposal that remains is in $K(M')$, so it is outside $F$.
+ancestors alone, and none of them is in $F$, so it is unchanged when $F$ is removed. Every node that a remaining term, binding,
+sampler or proposal names is in $K(M')$, so it is outside $F$.
 
 (2) Let $n \in M' \setminus F$ have no consumer in $M'$, and suppose it had a consumer before the
 retirement, and is not a quantity and not in $K(M')$. Its consumers in $M$ were all removed, so
@@ -140,13 +143,13 @@ nodes of an unused cycle each keep a consumer, and reference counting never free
 
 </Proof>
 
-Part (1) is what makes freeing safe: no query, proposal or role that remains can tell the
-difference. A program is compiled from the ancestors of its targets, so every program the new
+Part (1) is what makes freeing safe: no query, sampler, proposal or role that remains can tell
+the difference. A program is compiled from the ancestors of its targets, so every program the new
 model can compile is the one it compiled before freeing, as long as no target is in $F$. Part (2)
 is what stops the growth. After any number of retirements, every node of the model is a quantity,
 or an ancestor of something kept, or an ancestor of a node the user made and left unused. In a
 sliding window whose ticks the user builds entirely from terms, the model's size is therefore
-bounded by what its current quantities, terms, proposals and pins need. It no longer grows with
+bounded by what its current quantities, terms, samplers, proposals and pins need. It no longer grows with
 the number of ticks retired.
 
 Freeing happens after the replacement is added, against $M'$. A caller may build the replacement
@@ -232,7 +235,7 @@ nodes that need keeping; pinning puts the cost on those nodes alone.
 
 - The compilation graph is the core's, with each node's consumers read forward. The nodes the
   model holds outside its edges, $H(M)$, are the terms' log-densities, the nodes bound to their
-  roles, and the proposals' inputs and log-densities.
+  roles, their samplers' inputs and log-densities, and the proposals' inputs and log-densities.
 - Freeing is part of a retirement, done in the same change as the removal of $R$ and the addition
   of the replacement, against the model after both. No reader sees a model partly freed.
 - Pinned nodes are never freed; a released pin makes its node a candidate of the next retirement.
