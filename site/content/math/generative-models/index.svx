@@ -360,7 +360,8 @@ allows, of which evaluating $\density$ is only one.
   $$
 
   up to a constant: the likelihood of the observations and of the likelihood factors at the drawn
-  point.
+  point. What such a weighted draw estimates, and what a quantity drawn from something other than
+  its own kernel adds to the weight, is the subject of [a later note](../importance-weights/).
 - **Parameters are quantities without a seed.** An improper prior is a parameter with a score
   [](eq:parameter). Nothing generates a parameter, so a sampler draws it from a proposal and an
   optimizer is given its starting value, and in every other way it is treated as a quantity.
