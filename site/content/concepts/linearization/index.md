@@ -2,7 +2,16 @@
 title: Linearization and elimination
 summary: A density query is linearized at a batch of points into factored least-squares problems over its free quantities, by its residuals or by its information roots, and each problem is eliminated in square-root form on the host into a step, marginals, an evidence, draws, or a retirement's replacement; the Levenberg–Marquardt method iterates the steps to the mode.
 order: 8
-depends_on: [concepts/queries, concepts/the-normal, square-root-elimination]
+depends_on:
+    [
+        concepts/queries,
+        concepts/the-normal,
+        square-root-elimination,
+        linearization,
+        levenberg-marquardt,
+        laplace-approximation,
+        fisher-scoring,
+    ]
 ---
 
 Every method that reads a model as least squares rests on two pieces. Linearization replaces a
@@ -13,8 +22,12 @@ Laplace approximation and a Kalman filter's update all end in them. skoro has th
 `skoro-elimination` is the note [elimination in square-root form](../../math/square-root-elimination/)
 as code, numbers and matrices alone. `skoro-linearize` turns a [query](../queries/) into such
 problems, reading the roles that [the normal](../the-normal/#the-roles) binds. This page shows each
-piece. The mathematics, and why each choice was made, is in
-[the entry](../../archive/linearization/math.svx).
+piece. The mathematics is in the notes on
+[linearization and the Gauss–Newton step](../../math/linearization/),
+[the Levenberg–Marquardt method](../../math/levenberg-marquardt/),
+[the Laplace approximation](../../math/laplace-approximation/) and
+[Fisher scoring](../../math/fisher-scoring/), and why skoro made each of its choices is in
+[the entry](../../archive/linearization/).
 
 ## The factored problem
 
@@ -222,13 +235,13 @@ them all:
 ```
 
 Each iteration damps each row by Marquardt's diagonal
-[](eq:archive/examples/math/marquardt), the squared norm of each coordinate's column of its rows, so
+[](eq:math/levenberg-marquardt/marquardt), the squared norm of each coordinate's column of its rows, so
 that the damping is invariant to the units of the coordinates. It eliminates the row with its own
 `Damping`, retracts every row's step in one pass, and reads $f$ at the trial points by
 `Linearizer::objective`, one forward pass of the query's density program. The gain
-[](eq:archive/examples/math/gain), the decrease obtained over the decrease promised, decides each
+[](eq:math/levenberg-marquardt/gain), the decrease obtained over the decrease promised, decides each
 row alone: a step that decreased $f$ is taken, and the damping follows Nielsen's schedule
-[](eq:archive/examples/math/schedule):
+[](eq:math/levenberg-marquardt/schedule):
 
 ```rust
 {../../../../crates/skoro-linearize/src/minimize.rs:167..185}

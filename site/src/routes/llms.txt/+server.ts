@@ -21,7 +21,9 @@ export const GET: RequestHandler = () => {
         '',
         'Every document below links to its Markdown source. The pages have two reading orders: ' +
             'the Guide is top-down (start from usage), and Concepts is bottom-up (from the ' +
-            'foundations up). The pages say what skoro is now; the Archive keeps how each part ' +
+            'foundations up). Mathematics is listed in the order it is read: each note rests only ' +
+            'on the notes before it, and none depends on skoro. The pages say what skoro is now; ' +
+            'the Archive keeps how each part ' +
             'came to be, and may describe what has since changed. ' +
             `Everything concatenated: ${origin}${resolve('/llms-full.txt')}`,
         `Source: ${SITE.repo}`,

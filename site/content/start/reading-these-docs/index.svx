@@ -1,6 +1,6 @@
 ---
 title: Reading these docs
-summary: Two tracks that say what skoro is, notes of the mathematics, and an archive of how it came to be.
+summary: Two tracks that say what skoro is, the mathematics under them read in order, and an archive of how it came to be.
 order: 90
 ---
 
@@ -26,9 +26,19 @@ glossary, the notation.
 
 ## What it rests on
 
-The [mathematics](../../math/) is a library of notes, one idea to a note: a retraction, a tangent
-space, the Fisher information. A note says what it builds on, and the map on that page draws the
-whole network, together with the archive's writeups that use it.
+The [mathematics](../../math/) is bottom-up too, and independent of skoro. It holds every piece
+of mathematics the pages rely on that would be true if the library did not exist, one idea to a
+note: a retraction, the normal distribution on a curved space, the Laplace approximation. The notes
+stand in an order, in three parts: spaces and their charts, probability on those spaces, and least
+squares with the Gaussian approximations built on it. Each note rests only on the notes before it,
+so that read from the first to the last they tell the whole of the mathematics once. A page links
+the notes it needs, and a note says which earlier notes it builds on, so a reader who arrives in
+the middle knows how far back to go. The map on that page draws the whole network, together with
+the archive's documents that use it.
+
+What is skoro's own, a choice among true things or a statement about something the library
+defines, is not in the notes. It is in the concepts, which say what it is, and in the archive,
+which argued for it.
 
 ## How it came to be
 
@@ -37,7 +47,9 @@ holds the mathematics worked out for it, the implementation companion that turne
 into a design, and the plan it was built by, each kept as it was approved. A decision's entry holds
 the argument for it.
 
-The archive is history, and history is not rewritten. Where the concepts track _tells_ you what is,
+The archive is history, and history is not rewritten. One thing in a finished entry may change:
+where a note it refers to has since been rewritten, the reference is brought up to date, and the
+entry says which later entry did so. Where the concepts track _tells_ you what is,
 an entry _discusses_ what might be, as it stood when it was written. When the library later
 changes, a new entry revises the old one, and the old one says so at its top. Every page lists the
 entries that made it what it is, under "How this came to be", and every entry lists the pages it

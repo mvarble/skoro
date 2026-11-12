@@ -111,7 +111,7 @@ above; the log-volumes of the terms on $SE(3)$ are folded into $r$, so that $m$ 
 first order. Its gradient at $\tangent = 0$ is the gradient of $f$ in the chart,
 $g = J\transpose r$. A Levenberg–Marquardt step minimizes $m$ with a penalty on its length,
 $\tfrac12 \lambda\, \tangent\transpose D \tangent$, with $D$ Marquardt's diagonal
-[](eq:archive/examples/math/marquardt), so that
+[](eq:math/levenberg-marquardt/marquardt), so that
 $(J\transpose J + \lambda D)\, \tangent = -g$, and the decrease of $m$ it promises is
 
 $$
@@ -124,8 +124,8 @@ chart's coordinates are scaled, where the norm of $g$ or of $\tangent$ would.
 ### When a row stops
 
 The step is taken if $f$ actually decreased, if the gain
-[](eq:archive/examples/math/gain), the decrease obtained over $\Delta(\tangent)$, is positive, and
-$\lambda$ is updated from the gain by Nielsen's schedule [](eq:archive/examples/math/schedule). The
+[](eq:math/levenberg-marquardt/gain), the decrease obtained over $\Delta(\tangent)$, is positive, and
+$\lambda$ is updated from the gain by Nielsen's schedule [](eq:math/levenberg-marquardt/schedule). The
 row stops, `Status::Converged`, at the first step that promises $\Delta(\tangent) \le \epsilon$,
 with $\epsilon = 10^{-9}$ nats, whether that step was taken or not. Near the mode a step promises
 little more than the rounding of $f$, $u \lvert f \rvert \approx 4 \times 10^{-13}$ nats with
@@ -162,7 +162,7 @@ gives every pose and landmark a normal marginal in its own chart. The truth's ta
 estimate, from `Layout::local`, whitened by the marginal, is the normalized error; if the marginals
 are calibrated it follows the chi-squared law with as many degrees of freedom as the quantity has
 dimensions, and the 90% ellipsoid holds the truth nine times in ten, over datasets drawn from the
-model. [The mathematics](../../archive/examples/math.svx#calibration) says why, and how large a
+model. [The note on calibration](../../math/calibration/) says why, and how large a
 difference the approximation itself should make.
 
 <ExampleFigure
