@@ -21,8 +21,8 @@ summary: Why an abstract probability space serves modelling as an abstract vecto
 
 This note is for the reader who knows measure theory far better than statistics, and who wants to
 know what a probabilistic model *is* before being told how to compute with one. Its argument is an
-analogy with linear algebra, and its conclusion is that the models skoro builds sit in a corner of
-probability theory where the analogy is exact: one can reason abstractly and compute concretely,
+analogy with linear algebra, and its conclusion is that models built forward from densities sit in
+a corner of probability theory where the analogy is exact: one can reason abstractly and compute concretely,
 and move between the two without meeting the edge cases that usually make the move painful.
 
 ## The abstraction, and the way back
@@ -325,12 +325,14 @@ starting value, and a sampler must draw it from a proposal $\proposal_\Theta$ of
 density that may depend on earlier quantities like a kernel, and contributes
 $S / \proposal_\Theta$ in all to the weight.
 
-## How skoro is built on this
+<!-- The anchor of the heading this section had, which a document of the archive still links to. -->
+<span id="how-skoro-is-built-on-this"></span>
 
-Skoro is designed by this philosophy. A skoro model is not a function $\density$ to be evaluated,
-but a probability space built forward, quantity by quantity, and the library sets out to let its
-users work with that space in every way the measure theory above allows, of which evaluating
-$\density$ is only one.
+## Working with a model built forward
+
+A model built forward is not a function $\density$ to be evaluated, but a probability space built
+quantity by quantity, and the measure theory above lets it be worked with in every way such a space
+allows, of which evaluating $\density$ is only one.
 
 - **Quantities are specified by their augmenting kernels.** Each quantity $\randomPoint_i$ enters the model
   with the kernel that augments the space built so far,
@@ -347,32 +349,25 @@ $\density$ is only one.
   as a function of the quantities that exist when it is added, and the model's likelihood is their
   product $L = \prod_j L_j$. The measure the model describes is then $L\, \mu$, normalized, by
   [%full](statement:likelihood-factor).
-- **The model can be sampled, with weights.** Drawing from the kernels in order samples $\mu$. In a
-  query that observes $\randomPoint_O$, drawing the free quantities from their kernels, with the observed
-  ones held at their values, samples a measure whose density with respect to $\nu_F$ is the product
-  of the free quantities' conditional densities, and the target of the query, the conditional law of
-  [%full](statement:conditioning) reweighted by $L$, differs from it by the weight
+- **The model can be sampled, with weights.** Drawing from the kernels in order samples $\mu$. With
+  $\randomPoint_O$ observed, drawing the free quantities from their kernels, the observed ones held
+  at their values, samples a measure that differs from the conditional law of
+  [%full](statement:conditioning), reweighted by $L$, by the weight
 
   $$
   	\weight(\point_F) = L(\point) \prod_{i \in O} \density_i(\point_i \mid \point_{<i}),
   	@tag(sampling-weight)
   $$
 
-  the likelihood of the observations and of the likelihood factors at the drawn point. A kernel
-  drawn from a sampler with a density of its own, $\proposal_i \ne \density_i$, contributes
-  $\density_i / \proposal_i$ to the weight as well. The weight distorts the sampling measure into the
-  target only up to a constant, $\density_O(\point_O)$ and $Z$ among others, and that is all an
-  algorithm needs: a self-normalized estimate
-  $\E[\weight\, h] / \E[\weight]$, a Metropolis–Hastings ratio, a gradient of $\log \weight$ or a
-  resampling step in a particle filter is unchanged when every weight is multiplied by the same
-  number.
+  up to a constant: the likelihood of the observations and of the likelihood factors at the drawn
+  point.
 - **Parameters are quantities without a seed.** An improper prior is a parameter with a score
-  [](eq:parameter). The model carries a proposal for it, from which a sampler draws it and an
-  optimizer may take its starting value, and in every other way it is treated as a quantity.
-- **Mapped values live in the model.** A mapped value $\otherRandomPoint = f(\randomPoint)$ is
-  carried by the model as a value computed from its arguments: sampling them samples it, weighing
-  them weighs it, its expectations are integrals by [%full](statement:integral), and, most of all,
-  later kernels may be parameterized by it. A kernel
+  [](eq:parameter). Nothing generates a parameter, so a sampler draws it from a proposal and an
+  optimizer is given its starting value, and in every other way it is treated as a quantity.
+- **Mapped values live in the model.** A mapped value $\otherRandomPoint = f(\randomPoint)$ is a
+  value computed from its arguments: sampling them samples it, weighing them weighs it, its
+  expectations are integrals by [%full](statement:integral), and, most of all, later kernels may be
+  parameterized by it. A kernel
   $\kernel_j(\dd\point_j \mid \point_{<j}) = \phi_j(\point_j; \eta_j(\point_{<j}))\, \nu_j(\dd\point_j)$ is
   written by building its parameters $\eta_j$ out of mapped values, composed as freely as any measurable map allows,
   and derivatives flow through them to the quantities they are built from.
@@ -384,34 +379,40 @@ $\density$ is only one.
   	\log \weight(\point_F) = \sum_j \log L_j(\point) + \sum_{i \in O} \log \density_i(\point_i \mid \point_{<i}),
   $$
 
-  and skoro states a model in that form, as a sum of log-densities, its
-  [terms](../../archive/core/math.svx#the-probabilistic-graph), one for each kernel, likelihood
-  factor and score. Sums suit what is done with them. A product of many densities underflows where a
-  sum of their logarithms does not; the derivative of a sum is the sum of the derivatives of its
-  terms, each reading only the few quantities it involves; and a normalizing constant becomes an
-  additive constant, which every algorithm that ignores the normalization simply drops.
-- **Dependence on predecessors is a directed graph.** A quantity's density seldom reads every
-  quantity before it: it reads a few, its *parents* $\operatorname{pa}(i) \subseteq \{1, \dots, i - 1\}$,
-  so that $\density_i(\point_i \mid \point_{<i}) = \density_i(\point_i \mid \point_{\operatorname{pa}(i)})$.
-  The quantities, with an edge from each parent to its child, form the model's *dependence graph*.
-  It is acyclic, because every edge points forward in the order the model was built, and the joint
-  density factorizes over it:
+  with one *term* for each kernel, likelihood factor and score. Sums suit what is done with them.
+  A product of many densities underflows where a sum of their logarithms does not; the derivative
+  of a sum is the sum of the derivatives of its terms, each reading only the few quantities it
+  involves; and a normalizing constant becomes an additive constant, which every algorithm that
+  ignores the normalization simply drops.
 
-  $$
-  	\density(\point) = \prod_{i=1}^n \density_i(\point_i \mid \point_{\operatorname{pa}(i)}) .
-  $$
+## The dependence graph
 
-  The dependence graph serves intuition, since a model can be read off a picture of it, and
-  computation, since its sparsity is what makes large models tractable: a quantity's Markov
-  blanket, the terms that touch it, an order in which to generate, and conditional independences
-  are all read off it. Skoro keeps two graphs in its place, the
-  [probabilistic graph](../../archive/core/math.svx#the-probabilistic-graph) of quantities and terms,
-  and the [compilation graph](../../archive/core/math.svx#the-compilation-graph) of the values each
-  term is computed from, over which derivatives are taken; both are drawn there. Contracting each
-  term of the probabilistic graph into edges from the quantities it is conditioned on to the
-  quantity it scores gives back the dependence graph.
+A quantity's density seldom reads every quantity before it. It reads a few, its *parents*
+$\operatorname{pa}(i) \subseteq \{1, \dots, i - 1\}$, so that $\density_i(\point_i \mid \point_{<i}) =
+\density_i(\point_i \mid \point_{\operatorname{pa}(i)})$. The quantities, with an edge from each
+parent to its child, form the model's *dependence graph*. Its nodes are the quantities, its roots
+are the quantities with no parent, and it is acyclic, because every edge points forward in the
+order the model was built. The joint density factorizes over it:
 
-And so on: the gradient of $\log \density$ or of $\log \weight$ in tangent charts for optimizers and
-Hamiltonian samplers, marginalizing quantities out when they retire, conditioning anew in every
-query, and holding several models at once when the structure itself is uncertain. Each is an
-operation on the probability space the kernels built, rather than on a single density function.
+$$
+	\density(\point) = \prod_{i=1}^n \density_i(\point_i \mid \point_{\operatorname{pa}(i)}) . @tag(factorization)
+$$
+
+Two things are read off the graph, and both are what make large models tractable.
+
+**An ancestral order** is any order of the quantities in which every parent comes before its
+children. The order the model was built in is one, and there are usually others. Drawing the
+quantities in any ancestral order, each from its kernel, samples $\mu$, since each kernel reads
+only quantities already drawn.
+
+**The Markov blanket** of a quantity is the set of other quantities that appear with it in some
+factor of [](eq:factorization) or in some likelihood factor: its parents, its children, the other
+parents of its children, and whatever a likelihood factor ties it to. Given its blanket, a quantity
+is conditionally independent of everything else. By [%full](statement:conditioning) its
+conditional density given all the others is the joint density divided by a function of the others,
+and so is proportional, as a function of $\point_i$, to the product of the factors that read
+$\point_i$, which read nothing outside the blanket. Whatever is done to one quantity, whether it is
+resampled, optimized or integrated out, therefore touches only the factors that read it and
+concerns only its blanket.
+
+A picture of the graph is a picture of the model, and a model is commonly given by one.
