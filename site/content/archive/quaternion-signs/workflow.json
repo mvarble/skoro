@@ -1,0 +1,68 @@
+{
+    "kind": "feature",
+    "stage": "done",
+    "started": "2026-11-11",
+    "events": [
+        {
+            "date": "2026-11-11",
+            "action": "start",
+            "stage": "math"
+        },
+        {
+            "date": "2026-11-11",
+            "action": "approve",
+            "stage": "math",
+            "commit": "6b413be"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "approve",
+            "stage": "implementation",
+            "commit": "e26405b"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "approve",
+            "stage": "plan",
+            "commit": "ddbb45b"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "approve",
+            "stage": "build",
+            "commit": "814d71e"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "9ec419c"
+        }
+    ],
+    "approvals": {
+        "math": {
+            "date": "2026-11-11",
+            "commit": "6b413be",
+            "hash": "6f9d8dfdffeacf16108625dcd5859252acba3611aa9a6ab5bccd2752af8af1ba"
+        },
+        "implementation": {
+            "date": "2026-11-12",
+            "commit": "e26405b",
+            "hash": "a4897a09552436b019b06063425e5aa5080901bec5dab69b4f0c13bf5ccaf992"
+        },
+        "plan": {
+            "date": "2026-11-12",
+            "commit": "ddbb45b",
+            "hash": "2fc4665fcbe19119673bd81d22057cd8b8b0da8ea5b21c7082ecc054702c8349"
+        },
+        "build": {
+            "date": "2026-11-12",
+            "commit": "814d71e"
+        },
+        "publish": {
+            "date": "2026-11-12",
+            "commit": "9ec419c"
+        }
+    },
+    "finished": "2026-11-12"
+}

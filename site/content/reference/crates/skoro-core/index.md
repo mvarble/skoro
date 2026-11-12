@@ -3,8 +3,11 @@ quantities live in (the Euclidean and positive types, products, the discrete typ
 types that later crates declare from a retraction and its inverse) and the typed handles code holds
 them by, and gives every continuous space a reference measure through the log-volume of its chart:
 Lebesgue measure on its own types, and on an embedded type that declares its chart's volume, the
-measure its retraction normalizes. A space without one has no densities, and the core refuses to
-score, propose or integrate out a quantity of it. It holds [operations](../../../concepts/operations/): the trait every operation implements,
+measure its retraction normalizes. An embedded type may be [stored up to a
+group](../../../concepts/spaces/#types-stored-up-to-a-group) of signed permutations of its storage,
+as the rotations are stored as quaternions of either sign, and its charts and volume are then read
+on its points. A space without a measure has no densities, and the core refuses to score, propose
+or integrate out a quantity of it. It holds [operations](../../../concepts/operations/): the trait every operation implements,
 the kernels they are lowered to with derivatives up to second order, the primitives, composites, and
 the registry that makes an operation again from its name and parameters.
 
@@ -32,7 +35,9 @@ is built on these alone.
 
 Its `testing` module is public, so that a later crate checks its own operations and embedded types
 the way the core checks its primitives: against finite differences, at both precisions, with the
-`precision_tests!` macro, and a declared chart volume against the area formula. Its wgpu target
+`precision_tests!` macro, a declared chart volume against the area formula, and a type stored up
+to a group against each condition its group asks, with `close_up_to` to compare stored values as
+points. Its wgpu target
 is admitted before any test uses it: `Admission` measures the adapter's sine and cosine against
 double precision, and refuses an adapter whose absolute error exceeds what the removable
 singularities' cutoffs are designed for, as [Accuracy on the

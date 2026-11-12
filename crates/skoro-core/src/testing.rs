@@ -6,8 +6,8 @@ use skoro_tensor::{Device, Frame, HostData, HostValue, Precision, Target, Value}
 use std::sync::Arc;
 
 use crate::{
-    Composite, Embedded, Error, Frames, Kernel, Key, Lowered, Lowering, Operation, Pass, Program,
-    QDyn, Query, Space, Values, Writer,
+    Composite, Embedded, Error, Frames, Kernel, Key, Linear, Lowered, Lowering, Operation, Pass,
+    Program, QDyn, Query, Space, Values, Writer,
 };
 
 #[doc(hidden)]
@@ -469,10 +469,149 @@ pub fn check_agreement(
 /// - `B(x) = ∂₂R(x, 0)` has rank `d`;
 /// - when a projection is declared, its inner passes are finite at `x` and `P(x) = x`;
 /// - `check_operation` holds on the inclusion, on the retraction at `t = 0` and away from it,
-///   and on the projection at the points and off the manifold.
+///   and on the projection at the points and off the manifold;
+/// - when the type is stored up to a group, for each generator `g`: no row is fixed, `g x ≠ x`
+///   (freedom); every check above holds at the points `g x` (on the manifold); `R(g x, t) =
+///   g R(x, t)` at `t = 0`, at small `t` and away from it (equivariance of R); `Q(g x, y) = Q(x,
+///   y) = Q(x, g y)` at `y = R(x, t)` (invariance of Q); and, when a projection is declared,
+///   `P(g w) = g P(w)` at the points and off the manifold (equivariance of P).
 ///
-/// A failure names the boundary operation and the pass.
+/// A failure names the boundary operation and the pass, or the generator, by its index among the
+/// declaration's, and the condition.
 pub fn check_embedded(
+    declaration: &Arc<Embedded>,
+    points: &HostValue,
+    target: &Target,
+) -> Result<(), String> {
+    check_embedded_at(declaration, points, target)?;
+    check_group(declaration, points, target)
+}
+
+/// Each row of `data`, of storage `n`, carried by `g`.
+fn image(g: &Linear, data: &[f64], n: usize) -> Vec<f64> {
+    data.chunks(n).flat_map(|row| g.apply(row)).collect()
+}
+
+/// The conditions of a type stored up to a group, generator by generator, as `check_embedded`
+/// lists them.
+fn check_group(
+    declaration: &Arc<Embedded>,
+    points: &HostValue,
+    target: &Target,
+) -> Result<(), String> {
+    if declaration.identification().is_empty() {
+        return Ok(());
+    }
+    let (name, n, d) = (
+        declaration.name(),
+        declaration.storage(),
+        declaration.dimension(),
+    );
+    let rows = points.rows().unwrap_or(1);
+    let relative = Tolerance::of(target.precision()).relative;
+    let value = |data: Vec<f64>, width: usize| -> Result<Value, String> {
+        HostValue::new(Some(rows), width, HostData::Continuous(data))
+            .ok_or("a value of the rows")?
+            .load(rows, target)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "the points do not fit their batch".to_string())
+    };
+    let x = points
+        .load(rows, target)
+        .map_err(|e| e.to_string())?
+        .ok_or("the points do not fit their batch")?;
+    let x = continuous_or_discrete(&x);
+    let r = declaration.retraction().compile(target).map_err(describe)?;
+    let q = declaration.inverse().compile(target).map_err(describe)?;
+    let p = declaration
+        .projection()
+        .map(|p| p.compile(target).map_err(describe))
+        .transpose()?;
+    let run = |program: &Program, inputs: &[&Value]| -> Result<Vec<f64>, String> {
+        let values = program
+            .free()
+            .iter()
+            .zip(inputs)
+            .fold(Values::new(), |values, (free, &input)| {
+                values.with(free.node, input.clone())
+            });
+        let out = program.forward(&values).map_err(describe)?;
+        out.get(program.targets()[0])
+            .map(continuous_or_discrete)
+            .ok_or_else(|| "a program computes its output".to_string())
+    };
+    let tangents = [
+        ("t = 0", vec![0.0; rows * d]),
+        (
+            "small t",
+            signed(904, rows * d).iter().map(|t| 0.1 * t).collect(),
+        ),
+        (
+            "t away from 0",
+            signed(901, rows * d).iter().map(|t| 0.5 * t).collect(),
+        ),
+    ];
+    let small: Vec<f64> = tangents[1].1.clone();
+    for (k, g) in declaration.identification().iter().enumerate() {
+        let failed =
+            |condition: &str, e: String| format!("{name}: generator {k}, {condition}: {e}");
+        let gx = image(g, &x, n);
+
+        // Freedom.
+        for row in 0..rows {
+            let moved = (0..n)
+                .map(|i| (gx[row * n + i] - x[row * n + i]).abs())
+                .fold(0.0f64, f64::max);
+            if moved <= relative {
+                return Err(failed("freedom", format!("it fixes row {row}")));
+            }
+        }
+
+        // On the manifold.
+        let images = HostValue::new(Some(rows), n, HostData::Continuous(gx.clone()))
+            .ok_or("the images of the points")?;
+        check_embedded_at(declaration, &images, target)
+            .map_err(|e| failed("on the manifold at the images of the points", e))?;
+
+        // Equivariance of R.
+        let (xv, gxv) = (value(x.clone(), n)?, value(gx.clone(), n)?);
+        for (at, t) in &tangents {
+            let t = value(t.clone(), d)?;
+            let moved = run(&r, &[&gxv, &t])?;
+            let expected = image(g, &run(&r, &[&xv, &t])?, n);
+            close(&moved, &expected, relative)
+                .map_err(|e| failed(&format!("equivariance of R at {at}"), e))?;
+        }
+
+        // Invariance of Q.
+        let y = run(&r, &[&xv, &value(small.clone(), d)?])?;
+        let (yv, gyv) = (value(y.clone(), n)?, value(image(g, &y, n), n)?);
+        let expected = run(&q, &[&xv, &yv])?;
+        close(&run(&q, &[&gxv, &yv])?, &expected, relative)
+            .map_err(|e| failed("invariance of Q in its first argument", e))?;
+        close(&run(&q, &[&xv, &gyv])?, &expected, relative)
+            .map_err(|e| failed("invariance of Q in its second argument", e))?;
+
+        // Equivariance of P.
+        if let Some(p) = &p {
+            let off: Vec<f64> = x
+                .iter()
+                .zip(signed(902, rows * n))
+                .map(|(x, e)| 1.25 * x + 0.05 * e)
+                .collect();
+            for (at, w) in [("the points", x.clone()), ("off the manifold", off)] {
+                let projected = run(p, &[&value(image(g, &w, n), n)?])?;
+                let expected = image(g, &run(p, &[&value(w, n)?])?, n);
+                close(&projected, &expected, relative)
+                    .map_err(|e| failed(&format!("equivariance of P at {at}"), e))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The checks of `check_embedded` but the group's, at the points given.
+fn check_embedded_at(
     declaration: &Arc<Embedded>,
     points: &HostValue,
     target: &Target,
@@ -629,7 +768,9 @@ pub fn check_embedded(
 ///   `Λ(x, t)` agrees with the area formula,
 ///   `½ log det(∂₂R(x, t)ᵀ ∂₂R(x, t)) - ½ log det(B(y)ᵀ B(y))` with `y = R(x, t)`;
 /// - `check_operation` holds on `Λ`, and on the space's log-volume through the inclusion, at
-///   `t = 0` and away from it.
+///   `t = 0` and away from it;
+/// - when the type is stored up to a group, `Λ(g x, t) = Λ(x, t)` for each generator `g` at
+///   `t = 0` and away from it (invariance of Λ).
 ///
 /// A failure names the check, the row and the tangent's length.
 pub fn check_volume(
@@ -816,6 +957,64 @@ pub fn check_volume(
             target,
         )
         .map_err(|e| format!("the log-volume through ι {at}: {e}"))?;
+    }
+
+    // Invariance of Λ.
+    let stored = continuous_or_discrete(&x);
+    let (zeros, away) = (zero, load(&away)?);
+    for (k, g) in declaration.identification().iter().enumerate() {
+        let gx = load(
+            &HostValue::new(Some(rows), n, HostData::Continuous(image(g, &stored, n)))
+                .ok_or("the images of the points")?,
+        )?;
+        for (t, at) in [(&zeros, "t = 0"), (&away, "t away from 0")] {
+            close(
+                &output(&lambda, &gx, t)?,
+                &output(&lambda, &x, t)?,
+                relative,
+            )
+            .map_err(|e| format!("{name}: generator {k}, invariance of Λ at {at}: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether two batches of stored points, one per row, are within `tolerance` of each other as
+/// points of the type: some element of its group carries each row of `b` within it of the row
+/// of `a`, relative to the larger of 1 and the row's largest entry.
+pub fn close_up_to(
+    declaration: &Embedded,
+    a: &[f64],
+    b: &[f64],
+    tolerance: f64,
+) -> Result<(), String> {
+    let n = declaration.storage();
+    if a.len() != b.len() || !a.len().is_multiple_of(n) {
+        return Err(format!(
+            "{} values against {}, not rows of storage {n}",
+            a.len(),
+            b.len()
+        ));
+    }
+    let group = declaration.group();
+    for (row, (a, b)) in a.chunks(n).zip(b.chunks(n)).enumerate() {
+        let scale = a.iter().fold(1.0f64, |m, v| m.max(v.abs()));
+        let error = group
+            .iter()
+            .map(|g| {
+                g.apply(b)
+                    .iter()
+                    .zip(a)
+                    .map(|(b, a)| (b - a).abs())
+                    .fold(0.0f64, f64::max)
+            })
+            .fold(f64::INFINITY, f64::min);
+        if error.is_nan() || error > tolerance * scale {
+            return Err(format!(
+                "row {row}: {b:?} is {error:e} from {a:?} up to the group, against {:e} allowed",
+                tolerance * scale
+            ));
+        }
     }
     Ok(())
 }

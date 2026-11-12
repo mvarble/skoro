@@ -1,34 +1,38 @@
-//! The three types: the unit quaternions `S³`, the rigid motions `S³ ⋉ ℝ³` and the extended poses
-//! `S³ ⋉ (ℝ³ × ℝ³)`, each declared once with the composites of its boundary, and their markers and
-//! host values.
+//! The three types: the rotations `SO(3)`, the rigid motions `SE(3)` and the extended poses
+//! `SE₂(3)`, stored as unit quaternions with their translations up to the sign of the quaternion,
+//! each declared once with the composites of its boundary, and their markers and host values.
 //!
 //! A type's storage is the quaternion `(w, x, y, z)` followed by its translations, and its tangent
 //! coordinates are the rotation's `φ` followed by one of each translation's, in the frame of the
-//! point:
+//! point, under the Cayley chart:
 //!
 //! ```text
-//! R(x, t) = (q̂ ⊗ δ(φ), v + π(q̂) η, …)       q̂ = q / |q|
-//! Q(x, y) = (δ⁻¹(q̄ ⊗ q'), π(q)ᵀ (v' - v), …)
+//! R(x, t) = (q̂ ⊗ γ(φ), v + π(q̂) η, …)       q̂ = q / |q|,  γ(φ) = (1, φ/2) / √(1 + |φ|²/4)
+//! Q(x, y) = (γ⁻¹(q̄ ⊗ q'), π(q)ᵀ (v' - v), …)  γ⁻¹(r) = 2 w(r) vec(r) / w(r)²
 //! P(x)    = (q̂, v, …)
-//! Λ(x, t) = -3 log(1 + |φ|² / 16)
+//! Λ(x, t) = -2 log(1 + |φ|² / 4)
 //! ```
 //!
+//! A point is stored at `q` and at `-q` alike: `R` carries the sign of its base point, and `Q`, `P`
+//! and `Λ` do not read it, so every value a model computes from a point is the same at either.
 //! The retraction normalizes its base point: on the type that changes nothing, and off it, it
 //! keeps the rounding of a long run of retractions from being carried into every later step. The
-//! inverse does not: its inputs are points of the type. It is undefined at `q' = -q`, the chart's
-//! cut: non-finite at a row exactly there, and growing without bound near it, as `4 tan(θ/4)` of
-//! the relative angle `θ`, so that within rounding of the cut it is large rather than wrong.
+//! inverse does not: its inputs are points of the type. It is undefined at the half-turns from
+//! the base point, the chart's cut: non-finite at a row exactly there, and growing without bound
+//! near it, as `2 tan(θ/2)` of the relative angle `θ`, so that within rounding of the cut it is
+//! large rather than wrong. The cut is left non-finite: a value a half-turn from its mean is an
+//! error a linearization refuses, naming its term.
 
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::concatenate;
 use skoro_core::{
-    Composite, Declares, Embedded, Error, IntoHostValue, Param, QDyn, Registry, Space, Typed,
-    Volume,
+    Composite, Declares, Embedded, Error, IntoHostValue, Linear, Param, QDyn, Registry, Space,
+    Typed, Volume,
 };
 use skoro_tensor::{HostData, HostValue};
 
-use crate::algebra::{conjugate, delta, delta_inverse, mul, normalize, rotate, unrotate};
+use crate::algebra::{cayley, cayley_inverse, conjugate, mul, normalize, rotate, unrotate};
 
 /// Which of the three types, by its number of translations.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -103,7 +107,7 @@ fn declare(kind: Kind) -> Result<Arc<Embedded>, Error> {
         let moved = (0..k)
             .map(|i| block(x, 4, i) + rotate(unit, block(t, 3, i)))
             .collect();
-        assemble(mul(unit, delta(t.slice(0..3))), moved, storage.clone())
+        assemble(mul(unit, cayley(t.slice(0..3))), moved, storage.clone())
     })?;
     let q = define(local, &[storage.clone(), storage.clone()], &|q| {
         let (x, y) = (q[0], q[1]);
@@ -111,7 +115,7 @@ fn declare(kind: Kind) -> Result<Arc<Embedded>, Error> {
         let moved = (0..k)
             .map(|i| unrotate(a, block(y, 4, i) - block(x, 4, i)))
             .collect();
-        assemble(delta_inverse(mul(conjugate(a), b)), moved, tangent.clone())
+        assemble(cayley_inverse(mul(conjugate(a), b)), moved, tangent.clone())
     })?;
     let p = define(project, std::slice::from_ref(&storage), &|q| {
         let x = q[0];
@@ -120,9 +124,17 @@ fn declare(kind: Kind) -> Result<Arc<Embedded>, Error> {
     })?;
     let lambda = define(log_volume, &[storage.clone(), tangent.clone()], &|q| {
         let phi = q[1].slice(0..3);
-        ((phi * phi).sum() * (1.0 / 16.0) + 1.0).log() * -3.0
+        ((phi * phi).sum() * 0.25 + 1.0).log() * -2.0
     })?;
-    Embedded::declare(name, Vec::new(), n, d, r, q, Some(p))?.with_volume(Volume::global(lambda))
+    // The sign of the quaternion, the translations kept.
+    let signs: Vec<i8> = (0..n).map(|i| if i < 4 { -1 } else { 1 }).collect();
+    let sign = Linear::signs(&signs).ok_or_else(|| Error::InvalidDeclaration {
+        name: name.to_string(),
+        reason: "its sign is not a signed permutation".to_string(),
+    })?;
+    Embedded::declare(name, Vec::new(), n, d, r, q, Some(p))?
+        .stored_up_to(vec![sign])?
+        .with_volume(Volume::global(lambda))
 }
 
 /// The declaration of `kind`, which `types_are_declared` shows is made without error.
@@ -140,16 +152,18 @@ pub static POSE: LazyLock<Arc<Embedded>> = LazyLock::new(|| declared(Kind::Pose)
 /// `skoro.spatial.extended_pose`: storage 10, dimension 9.
 pub static EXTENDED_POSE: LazyLock<Arc<Embedded>> = LazyLock::new(|| declared(Kind::ExtendedPose));
 
-/// A unit quaternion `(w, x, y, z)`: a rotation, and its double cover. Tangent coordinates are the
-/// rotation vector in the frame of the point, to first order.
+/// A rotation, stored as a unit quaternion `(w, x, y, z)` of either sign. Tangent coordinates are
+/// the Cayley coordinates in the frame of the point, the rotation vector to first order.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Rotation;
 
-/// `(q, p)`: a rigid motion, its tangent coordinates `(φ, ρ)` in the frame of the motion.
+/// `(q, p)`: a rigid motion, its quaternion of either sign, its tangent coordinates `(φ, ρ)` in the
+/// frame of the motion.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Pose;
 
-/// `(q, v, p)`: an extended pose, its tangent coordinates `(φ, η, ρ)` in its own frame.
+/// `(q, v, p)`: an extended pose, its quaternion of either sign, its tangent coordinates
+/// `(φ, η, ρ)` in its own frame.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct ExtendedPose;
 

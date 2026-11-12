@@ -136,14 +136,15 @@ rows.
 **Embedded types.** A curved type has no Lebesgue measure. It may declare its chart's volume,
 against the measure its retraction normalizes, the one whose charts have volume $1$ at their
 centre: Haar measure on a group, surface measure on a sphere, the same however the type is
-stored.
+stored, and for a type [stored up to a group](#types-stored-up-to-a-group), the measure on its
+points.
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:42..60}
+{../../../../crates/skoro-core/src/embedded.rs:115..133}
 ```
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:217..221}
+{../../../../crates/skoro-core/src/embedded.rs:292..296}
 ```
 
 The log-volume $\Lambda(\iota(\point), \tangent)$ is an operation on the point's storage and the
@@ -174,3 +175,38 @@ does a product with it among its factors; `has_measure` says so. Such a space ha
 term may score a quantity of it, no proposal may draw it, and no retirement may integrate it out,
 each refused with `NoVolume`. It may still be conditioned on, observed, and estimated by
 optimization, and a measurement of it is held as a likelihood factor over the measured value.
+
+## Types stored up to a group
+
+Some types cannot be stored as a submanifold of their storage. A rotation stored as a unit
+quaternion is stored twice, at $q$ and at $-q$, so the rotations are not a set of quaternions but
+the quaternions taken up to their sign. An embedded type may declare such a storage: the finite
+group of maps of its storage that carry a stored point to another storage of the same point, given
+by its generators, each a signed permutation of the storage's entries:
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:45..54}
+```
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:331..361}
+```
+
+A point of such a type is the set of its stored values, and the type's charts are read on the
+points. The retraction must carry the group, $R(g \point, \tangent) = g\, R(\point, \tangent)$, so
+that a step from either representative reaches the same point; the inverse must not see it,
+$Q(g \point, \otherPoint) = Q(\point, \otherPoint) = Q(\point, g \otherPoint)$, so that a tangent
+coordinate is a property of the points; the projection must carry it as the retraction does; and a
+declared log-volume must not see it either. Then every function the core computes from a quantity
+of the type, its densities, its gradients and Hessians in the charts, its steps, is the same at
+every representative, and none of the core's derivatives changes, since they are taken at the
+stored value as before ([the mathematics](../../archive/quaternion-signs/math.svx#a-type-stored-up-to-a-group)
+proves it). A declared chart is global and full when it is so on the points: the Cayley chart of the
+rotations reaches only the quaternions on the side of its base point, but every rotation but the
+half-turns.
+
+`testing::check_embedded` and `check_volume` check each condition for each generator, and that no
+generator fixes a stored point; `testing::close_up_to` compares two stored values as points, up to
+the group. What the core cannot check is a map a model writes on the inclusion, which reads the
+stored value itself: it is a map of the points only if it gives the same at every representative,
+and a type's maps say which they are.

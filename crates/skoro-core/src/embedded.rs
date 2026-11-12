@@ -37,7 +37,80 @@ pub struct Embedded {
     projection: Option<Arc<Composite>>,
     volume: Option<Volume>,
     flat: bool,
+    /// The generators of the finite group the type is stored up to; empty when it is stored as
+    /// itself.
+    identification: Vec<Linear>,
 }
+
+/// A signed permutation of a type's storage: entry `i` of `g x` is `signs[i] · x[source[i]]`.
+///
+/// The maps a type is stored up to: a group of them composes exactly, so that its closure under
+/// composition ends, and each is a linear map of the storage, as the group of a type stored up
+/// to one must be.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Linear {
+    source: Vec<usize>,
+    signs: Vec<i8>,
+}
+
+impl Linear {
+    /// The map taking entry `source[i]` to entry `i` with sign `signs[i]`; `None` unless
+    /// `source` is a permutation of `0..n` and every sign is `1` or `-1`.
+    pub fn new(source: Vec<usize>, signs: Vec<i8>) -> Option<Linear> {
+        let n = source.len();
+        let mut seen = vec![false; n];
+        for &i in &source {
+            if i >= n || std::mem::replace(&mut seen[i], true) {
+                return None;
+            }
+        }
+        (signs.len() == n && signs.iter().all(|&s| s == 1 || s == -1))
+            .then_some(Linear { source, signs })
+    }
+
+    /// The diagonal map with these signs, each `1` or `-1`; `None` otherwise.
+    pub fn signs(signs: &[i8]) -> Option<Linear> {
+        Linear::new((0..signs.len()).collect(), signs.to_vec())
+    }
+
+    /// The identity of a storage of `n` entries.
+    pub fn identity(n: usize) -> Linear {
+        Linear {
+            source: (0..n).collect(),
+            signs: vec![1; n],
+        }
+    }
+
+    pub fn storage(&self) -> usize {
+        self.source.len()
+    }
+
+    /// `g x`, for one stored point.
+    pub fn apply(&self, x: &[f64]) -> Vec<f64> {
+        self.source
+            .iter()
+            .zip(&self.signs)
+            .map(|(&i, &s)| f64::from(s) * x[i])
+            .collect()
+    }
+
+    /// `self` first, then `other`: `x ↦ other(self(x))`.
+    pub fn then(&self, other: &Linear) -> Linear {
+        // Entry i of other(y) is other.signs[i] · y[other.source[i]], and entry j of y = self(x)
+        // is self.signs[j] · x[self.source[j]].
+        let (source, signs) = other
+            .source
+            .iter()
+            .zip(&other.signs)
+            .map(|(&j, &s)| (self.source[j], s * self.signs[j]))
+            .unzip();
+        Linear { source, signs }
+    }
+}
+
+/// The most elements a group a type is stored up to may have: the comparisons up to the group
+/// enumerate it.
+const LARGEST_GROUP: usize = 64;
 
 /// A chart's declared volume: its log-volume `Λ` and its domain, against the measure the
 /// type's retraction normalizes. Declaring one says that the chart is full: its image is the
@@ -136,6 +209,7 @@ impl Embedded {
             projection,
             volume: None,
             flat: false,
+            identification: Vec::new(),
         }))
     }
 
@@ -175,6 +249,7 @@ impl Embedded {
             projection: Some(projection),
             volume: Some(Volume::global(log_volume)),
             flat: true,
+            identification: Vec::new(),
         }))
     }
 
@@ -252,6 +327,70 @@ impl Embedded {
     pub fn volume(&self) -> Option<&Volume> {
         self.volume.as_ref()
     }
+
+    /// This declaration, stored up to the finite group `generators` generate: a point of the
+    /// type is the orbit of a stored point, `R`, `Q`, `P` and `Λ` must meet the conditions of a
+    /// type stored up to a group, which `check_embedded` and `check_volume` check, and every
+    /// function the core computes is then the same at every representative. Refuses no
+    /// generators, a generator of another storage, a group of more than 64 elements, which the
+    /// comparisons up to the group would enumerate, a flat declaration, and one already stored
+    /// up to a group (`InvalidDeclaration`).
+    pub fn stored_up_to(self: Arc<Self>, generators: Vec<Linear>) -> Result<Arc<Embedded>, Error> {
+        let invalid = |reason: &str| Error::InvalidDeclaration {
+            name: self.name.to_string(),
+            reason: reason.to_string(),
+        };
+        if self.flat {
+            return Err(invalid("a flat type is stored as itself"));
+        }
+        if !self.identification.is_empty() {
+            return Err(invalid("it is already stored up to a group"));
+        }
+        if generators.is_empty() {
+            return Err(invalid("a group needs a generator"));
+        }
+        if generators.iter().any(|g| g.storage() != self.storage) {
+            return Err(invalid("a generator is of another storage"));
+        }
+        if closure(self.storage, &generators).is_none() {
+            return Err(invalid("its group has more than 64 elements"));
+        }
+        let mut declaration = Arc::unwrap_or_clone(self);
+        declaration.identification = generators;
+        Ok(Arc::new(declaration))
+    }
+
+    /// The generators of the group the type is stored up to, empty for a type stored as itself.
+    pub fn identification(&self) -> &[Linear] {
+        &self.identification
+    }
+
+    /// Every element of the group the type is stored up to, the identity first: the identity
+    /// alone for a type stored as itself.
+    pub fn group(&self) -> Vec<Linear> {
+        closure(self.storage, &self.identification)
+            .unwrap_or_else(|| vec![Linear::identity(self.storage)])
+    }
+}
+
+/// The group the generators generate, the identity first, by closing them under composition;
+/// `None` once it passes `LARGEST_GROUP` elements.
+fn closure(n: usize, generators: &[Linear]) -> Option<Vec<Linear>> {
+    let mut group = vec![Linear::identity(n)];
+    let mut next = 0;
+    while next < group.len() {
+        for g in generators {
+            let h = group[next].then(g);
+            if !group.contains(&h) {
+                if group.len() == LARGEST_GROUP {
+                    return None;
+                }
+                group.push(h);
+            }
+        }
+        next += 1;
+    }
+    Some(group)
 }
 
 /// Two declarations are one type when their names and parameters are.

@@ -79,17 +79,18 @@ type ScaleOf = Box<dyn Fn() -> Scale>;
 
 #[test]
 fn normal_density_on_rotations() {
-    // ∫ exp(term(μ ⊕ t) + λ_μ(t)) dt over ℝ³, in polar coordinates with r = 4 tan(u/4), u the
-    // angle of the rotation 1 ⊕ t, in (0, 2π).
+    // ∫ exp(term(μ ⊕ t) + λ_μ(t)) dt over ℝ³, in polar coordinates with r = 2 tan(u/2), u the
+    // angle of the rotation 1 ⊕ t, in (0, π): the chart reaches all of SO(3) but the half-turns,
+    // and the law has no second sheet.
     let mean = common::unit([0.4, -0.3, 0.8, 0.2]);
     let (n_u, sphere) = (160, directions(20, 40));
-    let du = 2.0 * PI / n_u as f64;
+    let du = PI / n_u as f64;
     let mut points = Vec::new();
     let mut weights = Vec::new();
     for i in 0..n_u {
         let u = (i as f64 + 0.5) * du;
-        let r = 4.0 * (u / 4.0).tan();
-        let dr = 1.0 / (u / 4.0).cos().powi(2);
+        let r = 2.0 * (u / 2.0).tan();
+        let dr = 1.0 / (u / 2.0).cos().powi(2);
         for (n, w) in &sphere {
             points.push(n.map(|v| v * r));
             weights.push(w * r * r * dr * du);
@@ -190,29 +191,26 @@ fn normal_draws_on_rotations() {
         .map(|q| functions([q[0], q[1], q[2], q[3]]))
         .collect();
 
-    // The quadratures against p(q) + p(-q) over the hemisphere w > 0, through the chart at the
-    // identity, which reaches it at |t| < 4, against ν, whose density there is e^{λ(t)}.
+    // The quadratures against p(q) over SO(3), through the Cayley chart at the identity, which
+    // reaches every rotation but the half-turns, against ν, whose density there is e^{λ(t)}: in
+    // polar coordinates with r = 2 tan(u/2), u in (0, π) by Gauss–Legendre.
     let (radial, sphere) = (gauss_legendre(48), directions(32, 64));
     let mut points = Vec::new();
     let mut weights = Vec::new();
     for (x, w) in &radial {
-        let r = 2.0 * (x + 1.0);
+        let u = PI / 2.0 * (x + 1.0);
+        let (r, dr) = (2.0 * (u / 2.0).tan(), 1.0 / (u / 2.0).cos().powi(2));
         for (n, v) in &sphere {
             points.push(n.map(|c| c * r));
-            weights.push(w * 2.0 * v * r * r * (-3.0 * (1.0 + r * r / 16.0).ln()).exp());
+            let lambda = -2.0 * (1.0 + r * r / 4.0).ln();
+            weights.push(w * PI / 2.0 * v * r * r * dr * lambda.exp());
         }
     }
     let at_identity = |t: &[f64; 3]| {
-        let s = dot(t, t) / 16.0;
-        [
-            (1.0 - s) / (1.0 + s),
-            t[0] / 2.0 / (1.0 + s),
-            t[1] / 2.0 / (1.0 + s),
-            t[2] / 2.0 / (1.0 + s),
-        ]
+        let s = (1.0 + dot(t, t) / 4.0).sqrt();
+        [1.0 / s, t[0] / 2.0 / s, t[1] / 2.0 / s, t[2] / 2.0 / s]
     };
     let qs: Vec<[f64; 4]> = points.iter().map(at_identity).collect();
-    let minus: Vec<[f64; 4]> = qs.iter().map(|q| q.map(|v| -v)).collect();
     let density = |qs: &[[f64; 4]]| {
         common::on_host(
             |h| {
@@ -226,12 +224,7 @@ fn normal_draws_on_rotations() {
             &[Rows::new(Rotation.space(), qs.concat())],
         )
     };
-    let (plus, negated) = (density(&qs), density(&minus));
-    let law: Vec<f64> = plus
-        .iter()
-        .zip(&negated)
-        .map(|(a, b)| a.exp() + b.exp())
-        .collect();
+    let law: Vec<f64> = density(&qs).iter().map(|l| l.exp()).collect();
     let mass: f64 = law.iter().zip(&weights).map(|(p, w)| p * w).sum();
     assert!(
         (mass - 1.0).abs() < 1e-6,
@@ -283,5 +276,100 @@ skoro_core::precision_tests! {
         close(&read(tangent), &read(local), tolerance(&target));
         let whitened: Vec<f64> = read(local).iter().map(|t| t / sigma).collect();
         close(&read(residual), &whitened, tolerance(&target));
+    }
+}
+
+/// The normal's term on `space`, at the values `x` and the means `mu`, one row each, with the
+/// covariance `sigma`; and its gradient's chart coordinates at both.
+fn term_and_gradient<T: Declares + skoro_core::Typed + Copy>(
+    marker: T,
+    x: &[f64],
+    mu: &[f64],
+    sigma: &[f64],
+    target: &Target,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    let space = marker.space();
+    let d = space.dimension().unwrap();
+    let mut writer = Writer::new();
+    let (xq, mq, out) = writer
+        .build(|| {
+            let xq = quantity("x", marker);
+            let mq = quantity("mu", marker);
+            let parts = Normal::on(marker, mq, Scale::covariance(sigma, d)).log_density(xq);
+            (xq.untyped(), mq.untyped(), parts.log_density.untyped())
+        })
+        .unwrap();
+    let program = writer
+        .snapshot()
+        .compile(&skoro_core::Query::of([out]), target)
+        .unwrap();
+    let rows = x.len() / space.storage();
+    let load = |data: &[f64]| {
+        Rows::new(space.clone(), data.to_vec())
+            .host()
+            .load(rows, target)
+            .unwrap()
+            .unwrap()
+    };
+    let at = skoro_core::Values::new()
+        .with(xq, load(x))
+        .with(mq, load(mu));
+    let (values, alpha) = program.gradient(&at).unwrap();
+    let frame = |q: skoro_core::QDyn| alpha.get(q).unwrap().to_host();
+    (continuous(values.get(out).unwrap()), frame(xq), frame(mq))
+}
+
+skoro_core::precision_tests! {
+    fn the_term_is_the_same_at_either_sign(target) {
+        // On each type, the term and its gradient's chart coordinates at a value and a mean
+        // given in all four combinations of the sign of their quaternions.
+        check_signs(Rotation, &target);
+        check_signs(Pose, &target);
+        check_signs(skoro_spatial::ExtendedPose, &target);
+    }
+}
+
+fn check_signs<T: Declares + skoro_core::Typed + Copy>(marker: T, target: &Target) {
+    {
+        let space = marker.space();
+        let (n, d) = (space.storage(), space.dimension().unwrap());
+        let quaternions = [
+            common::unit([0.4, -0.3, 0.8, 0.2]),
+            common::unit([-0.2, 0.7, 0.1, -0.6]),
+        ];
+        let translations: Vec<f64> = (0..n - 4).map(|i| 0.3 * i as f64 - 0.5).collect();
+        let stored = |q: [f64; 4], sign: f64| -> Vec<f64> {
+            q.iter()
+                .map(|v| sign * v)
+                .chain(translations.iter().copied())
+                .collect()
+        };
+        let mut sigma = vec![0.0; d * d];
+        for i in 0..d {
+            sigma[i * d + i] = 0.25 + 0.05 * i as f64;
+            if i > 0 {
+                sigma[i * d + i - 1] = 0.02;
+                sigma[(i - 1) * d + i] = 0.02;
+            }
+        }
+        let reference = term_and_gradient(
+            marker,
+            &stored(quaternions[0], 1.0),
+            &stored(quaternions[1], 1.0),
+            &sigma,
+            target,
+        );
+        for (sx, sm) in [(1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
+            let (term, gx, gm) = term_and_gradient(
+                marker,
+                &stored(quaternions[0], sx),
+                &stored(quaternions[1], sm),
+                &sigma,
+                target,
+            );
+            close(&term, &reference.0, tolerance(target));
+            close(&gx, &reference.1, tolerance(target));
+            close(&gm, &reference.2, tolerance(target));
+        }
     }
 }

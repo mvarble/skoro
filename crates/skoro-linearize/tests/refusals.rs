@@ -318,3 +318,55 @@ fn a_free_scale_without_a_root_is_refused_by_fisher() {
         }
     );
 }
+
+#[test]
+fn a_non_finite_residual_is_refused() {
+    use skoro_core::{NodeId, Observations, Values};
+    use skoro_tensor::{Points, Value};
+    let target = Target::host();
+    let point = |x: NodeId, data: &[f64]| {
+        Values::new().with(
+            x,
+            Value::Continuous(Points::from_host(data, data.len(), 1, &target)),
+        )
+    };
+
+    // A mean that is a constant `NaN`: the residual is not finite at the first row.
+    let mut writer = Writer::new();
+    let (x, z, term) = writer
+        .build(|| {
+            let x = quantity("x", Vector::<1>);
+            Normal::on(Vector::<1>, constant(Vector::<1>, [0.0]), Scale::sd(1.0)).score(x);
+            let z = quantity("z", Vector::<1>);
+            let mean = x + constant(Vector::<1>, [f64::NAN]);
+            let term = Normal::on(Vector::<1>, mean, Scale::sd(0.1)).score(z);
+            (x, z, NodeId::from(term))
+        })
+        .unwrap();
+    let query = Query::log_density().given(Observations::new().observe(z, [1.0]));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let error = linearizer.at(&point(x.id(), &[0.0])).unwrap_err();
+    assert_eq!(error, Error::NotFinite { term, row: 0 });
+    assert_eq!(
+        error.to_string(),
+        format!("term {term:?} is not finite at row 0")
+    );
+
+    // A batch of two rows whose point is `NaN` in the second, `x` a parameter that `z` alone
+    // determines: the residual is finite at the first row and not at the second.
+    let mut writer = Writer::new();
+    let (x, z, term) = writer
+        .build(|| {
+            let x = quantity("x", Vector::<1>);
+            let z = quantity("z", Vector::<1>);
+            let term = Normal::on(Vector::<1>, x, Scale::sd(0.1)).score(z);
+            (x, z, NodeId::from(term))
+        })
+        .unwrap();
+    let query = Query::log_density().given(Observations::new().observe(z, [1.0]));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let error = linearizer.at(&point(x.id(), &[0.0, f64::NAN])).unwrap_err();
+    assert_eq!(error, Error::NotFinite { term, row: 1 });
+}
