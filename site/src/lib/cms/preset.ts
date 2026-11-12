@@ -48,6 +48,9 @@ export interface SkoroPresetOptions {
     // The tracks of pages, in reading order. Each is a folder under the content
     // directory, and the first segment of its pages' URLs.
     tracks: string[];
+    // The parts of the mathematics, in reading order. A math note names the one it belongs to
+    // as its `part`.
+    parts?: string[];
     // The documents an entry may hold besides its `index`, by file name, in
     // the order they are written, with the title each takes when its
     // frontmatter gives none.
@@ -101,18 +104,26 @@ type Place =
 // the entries that list it.
 //
 // Frontmatter: every document takes `title`, `summary`, `depends_on` and
-// `katex_macros`. A page also needs an `order` within its track; an entry may
-// list the `pages` it changed and the earlier entries it `revises`. A page that
+// `katex_macros`. A page also needs an `order` within its track, and a math
+// note a `part` and an `order` within it; an entry may list the `pages` it
+// changed, the earlier entries it `revises`, and what it `amends` in entries
+// that were done. A page that
 // moved lists the keys it had under `formerly`, so that an entry, frozen once
 // done, still names it by the key it had then. A bare slug
 // in `depends_on` names a math note, in `revises` an entry; anything else is
 // written as a key, such as `concepts/graph` or `archive/normal/math`.
+//
+// The math notes are read in order, part by part, and each rests only on the
+// notes before it: a note's `depends_on` names math notes alone, and none at
+// its own place or after it. A page's `depends_on` likewise names no page of
+// its own track at its place or after it.
 //
 // Each document numbers its own equations and statements, as mesearch's do.
 export function skoroPreset(options: SkoroPresetOptions): Preset {
     const contentDir = (options.contentDir ?? 'content').replace(/\/+$/, '');
     const base = options.base ?? '';
     const tracks = [...options.tracks];
+    const parts = [...(options.parts ?? [])];
     const documentTitles = options.documents ?? DEFAULT_DOCUMENTS;
     const statementComponent = options.statementComponent ?? '$lib/components/Statement.svelte';
     let dates = options.dates;
@@ -204,6 +215,7 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
             dependsOn: fm.optionalStrings('depends_on') ?? [],
             pages: fm.optionalStrings('pages') ?? [],
             revises: fm.optionalStrings('revises') ?? [],
+            amends: fm.optionalStrings('amends') ?? [],
             formerly: fm.optionalStrings('formerly') ?? [],
         });
         numberContents(store, file, entry.key);
@@ -262,11 +274,19 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
         initialize(store, file) {
             const place = placeOf(file.id) as Extract<Place, { kind: 'math' }>;
             const fm = new Frontmatter(store.root, file.id, file.frontmatter, 'Math note');
+            const part = fm.raw('part');
+            const order = fm.raw('order');
+            if (typeof part != 'string' || !parts.includes(part)) {
+                fm.reject('part', `one of the parts of the mathematics (${parts.join(', ')})`);
+            }
+            if (typeof order != 'number') fm.reject('order', 'a number');
             const entry: SkoroMath = {
                 ...common(store, file, fm, `math/${place.slug}`),
                 kind: 'math',
                 slug: place.slug,
                 title: titleOf(fm, file, place.slug),
+                part: typeof part == 'string' ? part : '',
+                order: typeof order == 'number' ? order : Infinity,
             };
             register(store, file, entry, fm);
         },
@@ -293,6 +313,8 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
                 pages: [],
                 revises: [],
                 revisedBy: [],
+                amends: [],
+                amendedBy: [],
             };
             register(store, file, record, fm);
         },
@@ -322,6 +344,7 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
                 title: fm.has('title')
                     ? fm.requiredString('title') || documentTitles[place.name]!
                     : documentTitles[place.name]!,
+                amendedBy: [],
             };
             // Read here rather than from the entry's record, which may not be
             // registered yet: files are visited in name order.
@@ -402,6 +425,15 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
                         )
                         .filter((key): key is string => !!key && key != record.key),
                 );
+                record.amends = unique(
+                    raw.amends.filter((ref) => amendedEntry(store, record, ref) !== undefined),
+                );
+            }
+            if (record.kind != 'entry' && raw.amends.length) {
+                store.error(
+                    record.filename,
+                    `${record.filename}: only an entry's \`index\` lists what it \`amends\`.`,
+                );
             }
             if (raw.formerly.length && record.kind != 'page') {
                 store.error(
@@ -426,8 +458,87 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
             for (const key of record.pages) (all.get(key) as SkoroPage).entries.push(record.key);
             for (const key of record.revises)
                 (all.get(key) as SkoroEntry).revisedBy.push(record.key);
+            for (const key of record.amends) {
+                const amended = all.get(amendedEntry(store, record, key)!) as SkoroEntry;
+                if (!amended.amendedBy.includes(record.key)) amended.amendedBy.push(record.key);
+                const document = all.get(key);
+                if (document?.kind == 'entry-document') document.amendedBy.push(record.key);
+            }
         }
+        checkOrder(store, [...all.values()]);
         store.collection<Graph>('graph').set('graph', graphOf(store, [...all.values()]));
+    }
+
+    // The entry an `amends` item names, by key: `archive/<slug>/<name>` is one of its documents,
+    // and `archive/<slug>/statements/<name>` one of its statements.
+    function amendedEntry(store: Store, from: SkoroDocument, ref: string): string | undefined {
+        const all = documents(store);
+        const statement = /^(archive\/[a-z0-9-]+)\/statements\/([a-z0-9-]+)$/.exec(ref);
+        const entry = statement ? statement[1]! : ref.split('/').slice(0, 2).join('/');
+        const named = statement
+            ? hasFile(store, `${contentDir}/${ref}.md`)
+            : all.get(ref)?.kind == 'entry-document';
+        if (named && all.get(entry)?.kind == 'entry' && entry != from.key) return entry;
+        store.error(
+            from.filename,
+            `${from.filename}: \`amends\` entry '${ref}' names no document or statement of another entry.`,
+        );
+        return undefined;
+    }
+
+    // The math notes in reading order: by part, then by `order`, then by key.
+    const noteOrder = (a: SkoroMath, b: SkoroMath) =>
+        parts.indexOf(a.part) - parts.indexOf(b.part) ||
+        a.order - b.order ||
+        a.key.localeCompare(b.key);
+
+    // The notes are a story read in order, each resting only on the notes before it, and a
+    // track's pages likewise.
+    function checkOrder(store: Store, records: SkoroDocument[]) {
+        const byKey = new Map(records.map((record) => [record.key, record]));
+        // A note without a place has been reported already, and is held to nothing here.
+        const notes = records
+            .filter((record): record is SkoroMath => record.kind == 'math')
+            .filter((note) => parts.includes(note.part) && Number.isFinite(note.order))
+            .sort(noteOrder);
+        const placed = new Set(notes.map((note) => note.key));
+        const place = (note: SkoroMath) => `${note.part} ${note.order}`;
+        notes.forEach((note, i) => {
+            const before = notes[i - 1];
+            if (before && before.part == note.part && before.order == note.order) {
+                store.error(
+                    note.filename,
+                    `${note.filename}: '${before.key}' is at ${place(note)} too; two notes cannot stand at one place.`,
+                );
+            }
+            for (const key of note.dependsOn) {
+                const dependency = byKey.get(key)!;
+                if (dependency.kind != 'math') {
+                    store.error(
+                        note.filename,
+                        `${note.filename}: \`depends_on\` names '${key}', which is no math note; a note rests on the notes before it alone.`,
+                    );
+                } else if (placed.has(key) && noteOrder(dependency, note) >= 0) {
+                    store.error(
+                        note.filename,
+                        `${note.filename}: \`depends_on\` names '${key}', which stands at ${place(dependency)}, not before ${place(note)}.`,
+                    );
+                }
+            }
+        });
+        for (const page of records) {
+            if (page.kind != 'page') continue;
+            for (const key of page.dependsOn) {
+                const dependency = byKey.get(key)!;
+                if (dependency.kind != 'page' || dependency.track != page.track) continue;
+                if (dependency.order >= page.order) {
+                    store.error(
+                        page.filename,
+                        `${page.filename}: \`depends_on\` names '${key}', which does not come before it in its track.`,
+                    );
+                }
+            }
+        }
     }
 
     function graphOf(store: Store, records: SkoroDocument[]): Graph {
@@ -512,6 +623,7 @@ export function skoroPreset(options: SkoroPresetOptions): Preset {
         snapshot: (store): SkoroSnapshot => ({
             landing: store.collection<string>('site').get('landing'),
             tracks,
+            parts,
             documents: [...documents(store).values()],
             graph: store.collection<Graph>('graph').get('graph') ?? { nodes: [], edges: [] },
             headings: Object.fromEntries([...store.docs].map(([id, doc]) => [id, doc.headings])),
@@ -526,6 +638,7 @@ interface Written {
     dependsOn: string[];
     pages: string[];
     revises: string[];
+    amends: string[];
     /** A page's keys before it moved. */
     formerly: string[];
 }
@@ -569,6 +682,15 @@ function statusOf(workflow: WorkflowRecord | undefined): EntryStatus {
     if (workflow?.stage == 'done') return 'done';
     if (workflow?.stage == 'abandoned') return 'abandoned';
     return 'active';
+}
+
+function hasFile(store: Store, id: string): boolean {
+    try {
+        store.file(id);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 const isIndex = (id: string) => /(^|\/)index\.(md|svx)$/.test(id);

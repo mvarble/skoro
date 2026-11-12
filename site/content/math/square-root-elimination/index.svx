@@ -1,5 +1,7 @@
 ---
 title: Elimination in square-root form
+part: estimation
+order: 1
 summary: A sum of squared linear residuals and linear terms is minimized, integrated or marginalized one block of variables at a time by orthogonal factorizations of its rows, without ever forming its normal equations; each elimination leaves a conditional and a smaller problem of the same form.
 depends_on: []
 ---

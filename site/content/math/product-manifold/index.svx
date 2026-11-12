@@ -1,5 +1,7 @@
 ---
 title: Product manifolds
+part: geometry
+order: 4
 summary: A product of manifolds is a manifold whose tangent space stacks its factors', and whose retraction acts factor by factor; derivatives in its charts are block matrices of the factors'.
 depends_on: [retraction, derivatives-in-charts]
 ---

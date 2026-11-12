@@ -31,7 +31,14 @@ export function bind(snapshot: SkoroSnapshot) {
             a.order - b.order ||
             a.key.localeCompare(b.key),
     );
-    const math = readingOrder(ofKind('math'));
+    // In reading order: part by part, and by `order` within a part.
+    const partRank = new Map(snapshot.parts.map((id, i) => [id, i]));
+    const math = ofKind('math').toSorted(
+        (a, b) =>
+            (partRank.get(a.part) ?? Infinity) - (partRank.get(b.part) ?? Infinity) ||
+            a.order - b.order ||
+            a.key.localeCompare(b.key),
+    );
     // Newest first.
     const entries = ofKind('entry').toSorted(
         (a, b) => b.created.valueOf() - a.created.valueOf() || a.key.localeCompare(b.key),
@@ -74,7 +81,17 @@ export function bind(snapshot: SkoroSnapshot) {
             },
         },
         math: {
-            list: (): SkoroMath[] => math,
+            // Every note in reading order, or those of one part.
+            list: (part?: string): SkoroMath[] =>
+                part === undefined ? math : math.filter((note) => note.part == part),
+            parts: () => snapshot.parts,
+            // A note's place in the whole order, from one.
+            position: (key: string) => math.findIndex((note) => note.key == key) + 1,
+            // The notes before and after one, across the parts.
+            neighbours: (key: string): { prev?: SkoroMath; next?: SkoroMath } => {
+                const i = math.findIndex((note) => note.key == key);
+                return i < 0 ? {} : { prev: math[i - 1], next: math[i + 1] };
+            },
             get: (key: string) => {
                 const record = byKey.get(key);
                 return record?.kind == 'math' ? record : undefined;
@@ -110,24 +127,3 @@ export function bind(snapshot: SkoroSnapshot) {
 }
 
 export type SkoroCms = ReturnType<typeof bind>;
-
-// The math notes in reading order: each after every note it depends on, and of the notes whose
-// prerequisites have all been read, the first by title next. A cycle, which the content should not
-// have, leaves its notes to the end, by title.
-export function readingOrder(notes: SkoroMath[]): SkoroMath[] {
-    const byTitle = notes.toSorted((a, b) => a.title.localeCompare(b.title));
-    const keys = new Set(notes.map((note) => note.key));
-    const read = new Set<string>();
-    const order: SkoroMath[] = [];
-    for (;;) {
-        const next = byTitle.find(
-            (note) =>
-                !read.has(note.key) &&
-                note.dependsOn.every((key) => !keys.has(key) || read.has(key)),
-        );
-        if (!next) break;
-        read.add(next.key);
-        order.push(next);
-    }
-    return [...order, ...byTitle.filter((note) => !read.has(note.key))];
-}

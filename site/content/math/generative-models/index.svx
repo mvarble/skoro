@@ -1,5 +1,7 @@
 ---
 title: Models built forward, for the measure theorist
+part: probability
+order: 1
 summary: Why an abstract probability space serves modelling as an abstract vector space serves linear algebra, why the way back to coordinates is harder in probability, and how building a model forward from densities restores it, so that every random variable factors through the quantities and every expectation is an explicit integral.
 ---
 

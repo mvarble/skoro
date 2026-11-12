@@ -1,5 +1,7 @@
 ---
 title: Automatic differentiation over frames
+part: geometry
+order: 2
 summary: How a straight-line program is differentiated by composing each step's derivative maps over its computation graph, forward with frames of tangents, backwards over its backpropagation graph with frames of cotangents, and forward-over-reverse for Hessian products.
 ---
 

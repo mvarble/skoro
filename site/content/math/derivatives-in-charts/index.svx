@@ -1,5 +1,7 @@
 ---
 title: Derivatives in tangent charts
+part: geometry
+order: 3
 summary: The derivative of a map between manifolds, its gradient and its Hessian product, all read in the tangent charts a retraction provides, and why automatic differentiation computes them unchanged.
 depends_on: [retraction, automatic-differentiation]
 ---

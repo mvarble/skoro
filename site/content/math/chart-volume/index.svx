@@ -1,5 +1,7 @@
 ---
 title: Densities in tangent charts
+part: probability
+order: 2
 summary: A retraction's chart at a point carries the manifold's reference measure to a density on the tangent space, the chart's volume; with it, a random tangent vector pushed through the chart has a density on the manifold, given here for the charts of the rotations, the poses and the sphere.
 depends_on: [retraction, product-manifold]
 ---
