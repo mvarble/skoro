@@ -35,7 +35,7 @@ At $\lambda = 0$ it is the Gauss–Newton step. As $\lambda$ grows it turns towa
 The diagonal is Marquardt's, the squared norms of the columns of $J$,
 
 $$
-	D_{ii} = \max\bigl( \lVert J_{:, i} \rVert^2,\ \delta \bigr) , @tag(marquardt)
+	D_{ii} = \max\bigl( \lvert J_{:, i} \rvert^2,\ \delta \bigr) , @tag(marquardt)
 $$
 
 so that the damping does not depend on the units of the coordinates: a rotation in radians and a
@@ -49,7 +49,7 @@ along each coordinate.
 The damped step $\tangent$ promises a decrease of the undamped linearization,
 
 $$
-	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent , @tag(promised)
+	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lvert J \tangent \rvert^2 + \lambda\, \tangent\transpose D \tangent , @tag(promised)
 $$
 
 since $m(0) - m(\tangent) = -g\transpose \tangent - \tfrac12 \tangent\transpose J\transpose J
@@ -118,7 +118,7 @@ The stopping rule bounds the damped step, not the undamped one. The damped promi
 $\tfrac12 g\transpose (J\transpose J + \lambda D)^{-1} g$, which bounds the Gauss–Newton decrement
 when $\lambda$ is small and not when it is large, as it may be at a stop that followed rejections.
 So convergence is checked apart from the rule: at the final point, with $\lambda = 0$, one
-elimination gives the Gauss–Newton step $\tangent_0$ and its decrement $\tfrac12 \lVert J \tangent_0
-\rVert^2$, which must be at most a small multiple of $\epsilon$. That is the statement that the
+elimination gives the Gauss–Newton step $\tangent_0$ and its decrement $\tfrac12 \lvert J \tangent_0
+\rvert^2$, which must be at most a small multiple of $\epsilon$. That is the statement that the
 point is stationary for $f$, since when the rows have full rank $\tangent_0 = 0$ exactly where $g =
 0$ ([](eq:math/linearization/step)).

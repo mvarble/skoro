@@ -20,8 +20,8 @@ $$
 The _Fisher linearization_ of $f$ at $\hat \point$ is
 
 $$
-	m_F(\tangent) = c_F + \sum_t \tfrac12 \bigl\lVert J^\mu_t \tangent + r_t + \hat c_t \bigr\rVert^2
-	+ \sum_{t \text{ free scale}} \tfrac12 \bigl\lVert J^\theta_t \tangent + u_t \bigr\rVert^2 + \eta\transpose \tangent ,
+	m_F(\tangent) = c_F + \sum_t \tfrac12 \bigl\lvert J^\mu_t \tangent + r_t + \hat c_t \bigr\rvert^2
+	+ \sum_{t \text{ free scale}} \tfrac12 \bigl\lvert J^\theta_t \tangent + u_t \bigr\rvert^2 + \eta\transpose \tangent ,
 $$
 
 with $J^\mu_t = J_t$ for a term whose scale is fixed, $\hat c_t$ and $\eta$ as in the linearization,

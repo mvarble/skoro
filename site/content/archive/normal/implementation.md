@@ -694,7 +694,7 @@ In `crates/skoro/tests/`, where the spheres are:
   [%full](statement:archive/normal/math/density) on a curved space, the log-volume of the
   declaration included.
 - `normal.rs::sphere_term_reads_the_declared_volume`: the term at points of the sphere equals the
-  Gaussian of $\point \ominus \mu$ less $-2 \log(1 + \lVert \point \ominus \mu \rVert^2/4)$, and the
+  Gaussian of $\point \ominus \mu$ less $-2 \log(1 + \lvert \point \ominus \mu \rvert^2/4)$, and the
   log-volume's role binds that node.
 - `normal.rs::sphere_sampler_matches_the_density`: expectations of three bounded test functions over
   $10^5$ draws agree, within five standard errors, with their quadratures against the density.
@@ -711,7 +711,7 @@ In `crates/skoro/tests/`, where the spheres are:
   fails with `SpaceMismatch` of `skoro.normal`; `factor_at` on it is accepted.
 - `normal.rs::refuses_a_type_without_a_volume`: on the sphere declared without a volume, `score`
   fails with `NoVolume`, and `factor_at` at a constant measurement is accepted, its gradient in the
-  mean that of $-\tfrac12 \lVert W(z \ominus \mu) \rVert^2$.
+  mean that of $-\tfrac12 \lvert W(z \ominus \mu) \rvert^2$.
 - `normal.rs::stacked_tangent_on_the_sphere`: a stacked tangent of a sphere and a real at constant
   anchors is their tangents laid end to end, and its factor's residual is $W(\delta - m)$.
 - `retirement.rs::replacements_written_with_stacked`: the two replacements of the core's retirement

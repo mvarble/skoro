@@ -103,7 +103,7 @@ point. Linearized there, in the chart at $\hat \point$, it is a least-squares pr
 tangent step $\tangent$:
 
 $$
-	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + \tfrac12 \lVert J \tangent + r \rVert^2 - \tfrac12 \lVert r \rVert^2 ,
+	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + \tfrac12 \lvert J \tangent + r \rvert^2 - \tfrac12 \lvert r \rvert^2 ,
 $$
 
 with $r$ the stacked whitened residuals of every term and $J$ their Jacobian, the matrix drawn
@@ -115,7 +115,7 @@ $\tfrac12 \lambda\, \tangent\transpose D \tangent$, with $D$ Marquardt's diagona
 $(J\transpose J + \lambda D)\, \tangent = -g$, and the decrease of $m$ it promises is
 
 $$
-	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent ,
+	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lvert J \tangent \rvert^2 + \lambda\, \tangent\transpose D \tangent ,
 $$
 
 which is `Problem::promised`. It is measured in nats, like $f$, and it does not depend on how the
@@ -145,7 +145,7 @@ damping. With $\lambda = 0$ the step is Gauss–Newton's, $\tangent_0 = -(J\tran
 and its promise, the **decrement**, is
 
 $$
-	\delta = \tfrac12 \lVert J \tangent_0 \rVert^2 = \tfrac12\, g\transpose (J\transpose J)^{-1} g \ \ge\ \frac{\lVert g \rVert^2}{2\, h_{\max}} ,
+	\delta = \tfrac12 \lvert J \tangent_0 \rvert^2 = \tfrac12\, g\transpose (J\transpose J)^{-1} g \ \ge\ \frac{\lvert g \rvert^2}{2\, h_{\max}} ,
 $$
 
 with $h_{\max}$ the largest eigenvalue of $J\transpose J$. Every pose has a prior or a motion term

@@ -21,5 +21,5 @@ $$
 Each is the left translation by the point of the chart at the identity, is global and full, has the
 inverse $\bigl(\phi, \rho\bigr) = \bigl((q' \ominus q),\ \pi(q)\transpose (p' - p)\bigr)$ (and likewise
 for $v$), and has, against the product $\nu \times$ Lebesgue, which is a Haar measure of the group,
-the log-volume $\lambda(\phi, \cdot) = -3 \log(1 + \lVert \phi \rVert^2 / 16)$ of its rotation
+the log-volume $\lambda(\phi, \cdot) = -3 \log(1 + \lvert \phi \rvert^2 / 16)$ of its rotation
 alone.

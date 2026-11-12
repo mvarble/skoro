@@ -21,7 +21,7 @@ $\Sigma$. Its log-density is the Gaussian log-density of $\point \ominus \mu$, l
 makes it a density against the space's reference measure:
 
 $$
-	\ell(\point;\, \mu, W) = -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
+	\ell(\point;\, \mu, W) = -\tfrac12 \bigl\lvert W (\point \ominus \mu) \bigr\rvert^2
 	+ \sum_{i} \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi - \lambda_\mu(\point \ominus \mu) ,
 $$
 
@@ -209,7 +209,7 @@ factor_ in the same stacked tangent $\delta$: a sum of squared affine rows of an
 part and a constant,
 
 $$
-	\logterm(\point_B) = -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + c ,
+	\logterm(\point_B) = -\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta + c ,
 $$
 
 which no normalization need make a density of $\delta$, and a likelihood factor never needed one.

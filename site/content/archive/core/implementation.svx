@@ -1972,14 +1972,14 @@ integration test of the umbrella crate enforces). The sphere is the embedded typ
 - `sphere_basis_is_the_derivative_of_its_retraction`: $\partial_2 R(x, 0)$, read off the tangent
   pass, is the $B(x)$ of [the acceptance test](math.svx#the-acceptance-test), with orthonormal
   columns orthogonal to $x$.
-- `sphere_retraction_reaches_the_far_side`: at $\lVert \tangent \rVert = 10$, $x \oplus \tangent$
+- `sphere_retraction_reaches_the_far_side`: at $\lvert \tangent \rvert = 10$, $x \oplus \tangent$
   is on the sphere and $(x \oplus \tangent) \ominus x = \tangent$: the stereographic inverse is
   defined wherever $x\transpose y > -1$, near the antipode too.
 - `boundary_orders_follow_the_composites`: with a first-order operation inside $Q$, `retract` and
   `project` have order one and `include` keeps order two; with one inside $P$, `project` alone has
   order one.
 - `removable_singularity_is_reported`: a private sphere whose $R$ is the exponential map written
-  as $\cos \lVert \tangent \rVert\, x + (\sin \lVert \tangent \rVert / \lVert \tangent \rVert)\,
+  as $\cos \lvert \tangent \rvert\, x + (\sin \lvert \tangent \rvert / \lvert \tangent \rvert)\,
   B(x)\, \tangent$ fails `check_embedded` at $\tangent = 0$, naming the boundary operation and
   the pass. The same formula switched to its series by `select` alone still fails, with NaN in the
   cotangent, and passes once the closed form's input is guarded by a second `select`, as

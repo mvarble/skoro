@@ -40,17 +40,17 @@ here the one that negates the quaternion and keeps the translations, so that $q$
 point. The rotation's chart is the Cayley chart, the first-order quaternion update, normalized,
 
 $$
-	q \oplus \tangent = q \otimes \frac{(1,\ \tangent / 2)}{\sqrt{1 + \lVert \tangent \rVert^2 / 4}},
+	q \oplus \tangent = q \otimes \frac{(1,\ \tangent / 2)}{\sqrt{1 + \lvert \tangent \rvert^2 / 4}},
 	\qquad
 	p \ominus q = \frac{2\, w\, \operatorname{vec}(r)}{w^2}, \quad r = \bar q \otimes p,\ w = w(r),
 $$
 
 rational but for one square root, and the same for $q$ and $-q$: negating either quaternion negates
 $r$, whose vector part and scalar part change sign together. To first order $\tangent$ is the
-rotation vector, and the angle of the turn $1 \oplus \tangent$ is $2 \arctan(\lVert \tangent \rVert
+rotation vector, and the angle of the turn $1 \oplus \tangent$ is $2 \arctan(\lvert \tangent \rvert
 / 2)$, so the chart reaches every rotation by less than a half-turn from its base point, which is
 all of $SO(3)$ but a set of measure zero. Its log-volume, against Haar measure, is $\lambda(\tangent)
-= -2 \log(1 + \lVert \tangent \rVert^2 / 4)$. The inverse is written over $w^2$ so that the only
+= -2 \log(1 + \lvert \tangent \rvert^2 / 4)$. The inverse is written over $w^2$ so that the only
 reciprocal it takes is of a positive number, the one kind the core's primitives take. A motion
 moves its rotation by this chart and its translations in its own frame, $(q, p) \oplus (\phi,
 \rho) = (q \oplus \phi,\ p + R \rho)$ with $R$ the rotation's matrix, which is global too, with the

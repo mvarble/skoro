@@ -86,7 +86,7 @@ precisions, so each changes the covariance by a relative amount of the order of 
 variance, $\sigma^2$.
 
 - **The chart's part is positive.** For the Cayley chart of the rotations and the stereographic
-  chart of the sphere, the log-volume is $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$, whose Hessian
+  chart of the sphere, the log-volume is $-2 \log(1 + \lvert \tangent \rvert^2 / 4)$, whose Hessian
   at zero is $-I$. So the chart adds $+I$ on each such variable that is integrated over.
 - **The terms' part is negative.** Let $G_t$ be the derivative of a term's tangent coordinate
   $\point \ominus \mu$ with respect to $\tangent$. The term's log-volume adds about

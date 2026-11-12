@@ -88,12 +88,12 @@ sets.
 
 For an isotropic scale in its logarithmic chart, $u = \log \sigma$, the root's scale block is
 $-\sqrt 2$ in each of the $\dimension$ diagonal rows, and the scale's information is $2
-\dimension$. The Hessian of the term in $u$ is $2 \lVert r_t \rVert^2$, which at a stationary point
-of the scale alone, $\lVert r_t \rVert^2 = \dimension$, is $2 \dimension$ too. The case that makes
+\dimension$. The Hessian of the term in $u$ is $2 \lvert r_t \rvert^2$, which at a stationary point
+of the scale alone, $\lvert r_t \rvert^2 = \dimension$, is $2 \dimension$ too. The case that makes
 the Gauss–Newton rate one has a rate of zero in the scale's own direction here. The scale
-residual's diagonal rows are $((r_t)_a^2 - 1) / \sqrt 2$, and the step in $u$ is $(\lVert r_t
-\rVert^2 - \dimension) / 2\dimension$, the first-order step toward $\tfrac12 \log (\lVert r_t
-\rVert^2 / \dimension)$: the logarithm of the root-mean-square whitened residual, which is the
+residual's diagonal rows are $((r_t)_a^2 - 1) / \sqrt 2$, and the step in $u$ is $(\lvert r_t
+\rvert^2 - \dimension) / 2\dimension$, the first-order step toward $\tfrac12 \log (\lvert r_t
+\rvert^2 / \dimension)$: the logarithm of the root-mean-square whitened residual, which is the
 factor by which the scale is off.
 
 ## Two linearizations

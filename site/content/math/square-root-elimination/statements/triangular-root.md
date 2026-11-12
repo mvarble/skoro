@@ -13,5 +13,5 @@ $$
 
 $R$ an $n \times n$ upper-triangular matrix with a nonzero diagonal, $d \in \R^n$ and
 $e \in \R^{m - n}$. For every $\tangent \in \R^n$,
-$\lVert A \tangent - b \rVert^2 = \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2$, and
+$\lvert A \tangent - b \rvert^2 = \lvert R \tangent - d \rvert^2 + \lvert e \rvert^2$, and
 $R\transpose R = A\transpose A$.

@@ -42,7 +42,7 @@ is
 
 $$
 	\logterm_{\mathcal N}(\point;\, \mu, W)
-	= -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
+	= -\tfrac12 \bigl\lvert W (\point \ominus \mu) \bigr\rvert^2
 	+ \sum_{i=1}^{\dimension} \log W_{ii}
 	- \tfrac{\dimension}{2} \log 2\pi
 	- \lambda_\mu(\point \ominus \mu) , @tag(log-density)
@@ -57,8 +57,8 @@ $\randomPoint$ is drawn from the normal.
 
 The vector $\varepsilon = W^{-1} \zeta = L \zeta$ is normal with mean zero and covariance
 $L L\transpose = \Sigma$, so its density at $\tangent$ is $(2\pi)^{-\dimension/2} \det W
-\exp(-\tfrac12 \lVert W \tangent \rVert^2)$, since $(\det \Sigma)^{-1/2} = \det W$ and
-$\tangent\transpose \Sigma^{-1} \tangent = \lVert W \tangent \rVert^2$; its logarithm at $\tangent =
+\exp(-\tfrac12 \lvert W \tangent \rvert^2)$, since $(\det \Sigma)^{-1/2} = \det W$ and
+$\tangent\transpose \Sigma^{-1} \tangent = \lvert W \tangent \rvert^2$; its logarithm at $\tangent =
 \point \ominus \mu$ is the first three terms of [](eq:log-density). The chart is global, so
 $\varepsilon$ lies in its domain always, and [%full](statement:math/chart-volume/pushforward) gives
 the density.
@@ -76,7 +76,7 @@ log-volume there, on every space alike.
   multiplicatively, through the space's chart.
 - On a product the factors are correlated through $\Sigma$ in their tangent coordinates, which is
   what a state with a position and a positive scale, or a rotation and a position, needs.
-- On a curved space the log-volume is the chart's: $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$ for
+- On a curved space the log-volume is the chart's: $-2 \log(1 + \lvert \tangent \rvert^2 / 4)$ for
   the Cayley chart of the rotations and the stereographic chart of the sphere, one scalar function
   of the residual that the Gaussian part already computes.
 
@@ -94,7 +94,7 @@ $$
 
 that is, $z \sim \mathcal N(h(\point), \Sigma)$, with the log-density [](eq:log-density) at $\mu =
 h(\point)$. The direction $u \in S^2$ to a landmark $\ell \in \R^3$ seen from a pose $(R, p)$, for
-one, has $h(R, p) = R\transpose (\ell - p) / \lVert \ell - p \rVert$.
+one, has $h(R, p) = R\transpose (\ell - p) / \lvert \ell - p \rvert$.
 
 ## Why the chart must be global
 
@@ -188,8 +188,8 @@ which depends on the rotation's angle alone.
 identifies the tangent plane with $\R^2$. No basis is smooth on all of $S^2$, so a field of bases
 turns as $\mu$ moves in a way that the field, not the geometry, decides. A scale that is not
 isotropic is read along the basis's axes, and so means something different at every $\mu$. An
-isotropic scale is free of the basis: with an orthonormal basis, the stereographic chart's $\lVert
-\point \ominus \mu \rVert = 2 \tan(\alpha/2)$ depends only on the angle $\alpha$ between $\point$
+isotropic scale is free of the basis: with an orthonormal basis, the stereographic chart's $\lvert
+\point \ominus \mu \rvert = 2 \tan(\alpha/2)$ depends only on the angle $\alpha$ between $\point$
 and $\mu$.
 
 **What the mean is.** The point $\mu$ is the centre of the chart in which the noise is normal. It
@@ -206,7 +206,7 @@ most, near the half-turns or the antipode, and is no way of saying that a rotati
 **The estimate a measurement gives.** When $z$ is observed and $\point$ is to be estimated, the
 log-density [](eq:log-density) at $\mu = h(\point)$ depends on $\point$ through the whitened
 residual and through $\lambda_{h(\point)}(z \ominus h(\point))$. Near a zero residual, $-\lambda$
-is $\lVert \tangent \rVert^2 / 2$ to second order for the Cayley and stereographic charts, so the
+is $\lvert \tangent \rvert^2 / 2$ to second order for the Cayley and stereographic charts, so the
 measurement weighs on $\point$ as a Gaussian of the residual would with the precision $\Lambda$
 replaced by $\Lambda - I$ on the rotation's or the direction's block. For a noise of $0.1$ rad that
 changes the measurement's weight by $1\,\%$. It is small, and it is the difference between the law
@@ -322,7 +322,7 @@ $C_\theta$ in the scale's, and its accuracy is that of each block.
 ## The Gaussian part alone
 
 Estimation on curved spaces is often done with the Gaussian part alone: the sum of squares
-$-\tfrac12 \lVert W (z \ominus h(\point)) \rVert^2$ of the whitened residual, with no log-volume.
+$-\tfrac12 \lvert W (z \ominus h(\point)) \rvert^2$ of the whitened residual, with no log-volume.
 That is not the log-likelihood of the law [](eq:measurement), from which it lacks $\lambda$, a
 function of $\point$. It is, exactly, the log-likelihood of another law, and it is available where
 the normal is not, on a space whose chart is not global.
@@ -333,13 +333,13 @@ the normal is not, on a space whose chart is not global.
 
 Substitute $z = \mu g$. The measure $\nu$ is invariant under left translation, $V_\mu = \mu V_e$,
 and $z \ominus \mu = \varphi^{-1}(\mu^{-1} z) = g \ominus e$, so $Z(\mu) = Z(e)$. The second form
-is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lVert W \tangent
-\rVert^2)$.
+is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lvert W \tangent
+\rvert^2)$.
 
 </Proof>
 
 So on a group whose chart translates one of the identity, the exponential chart of the rotations
-among them, $\exp(-\tfrac12 \lVert W (z \ominus \mu) \rVert^2) / Z$ is a density of $z$ with respect
+among them, $\exp(-\tfrac12 \lvert W (z \ominus \mu) \rvert^2) / Z$ is a density of $z$ with respect
 to Haar measure for every $\mu$, its log-likelihood in $\mu$ is the Gaussian part up to a constant,
 and least squares of the whitened residual is exact maximum likelihood for it. Its $z$ is not $\mu
 \oplus \varepsilon$ for a normal $\varepsilon$, so it has no sampler of that form, and $Z$ has no

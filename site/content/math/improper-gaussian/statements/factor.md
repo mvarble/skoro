@@ -10,7 +10,7 @@ $p_i$ and the stacked tangent $\delta(\point_B) \in \R^D$ of [](eq:stacked). Giv
 and a constant $c$, the _improper Gaussian factor_ is the function
 
 $$
-	\logterm(\point_B) = -\tfrac12 \bigl\lVert A\, \delta(\point_B) - b \bigr\rVert^2 - \eta\transpose \delta(\point_B) + c .
+	\logterm(\point_B) = -\tfrac12 \bigl\lvert A\, \delta(\point_B) - b \bigr\rvert^2 - \eta\transpose \delta(\point_B) + c .
 $$
 
 Its _whitened residual_ is $A \delta - b$, of $r$ components, and its _linear part_ is

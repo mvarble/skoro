@@ -11,7 +11,7 @@ with respect to the residual, and otherwise set $\hat c_t = 0$. The _linearizati
 point $\hat \point$ is the function of $\tangent \in \R^\dimension$
 
 $$
-	m(\tangent) = c_0 + \sum_t \tfrac12 \bigl\lVert J_t \tangent + r_t + \hat c_t \bigr\rVert^2 + \eta\transpose \tangent ,
+	m(\tangent) = c_0 + \sum_t \tfrac12 \bigl\lvert J_t \tangent + r_t + \hat c_t \bigr\rvert^2 + \eta\transpose \tangent ,
 $$
 
 where
@@ -19,7 +19,7 @@ where
 $$
 	\eta = \sum_{t \text{ not folded}} \nabla \lambda_t(\hat \point)
 	\qquad \text{and} \qquad
-	c_0 = f(\hat \point) - \tfrac12 \sum_t \lVert r_t + \hat c_t \rVert^2 ,
+	c_0 = f(\hat \point) - \tfrac12 \sum_t \lvert r_t + \hat c_t \rvert^2 ,
 $$
 
 with $r_t$ the residual at $\hat \point$, and $J_t = \D r_t(\hat \point)$ and $\nabla \lambda_t$

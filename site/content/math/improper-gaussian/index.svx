@@ -69,9 +69,9 @@ $\Lambda = A\transpose A = W\transpose W$ is positive definite, and
 
 $$
 	\begin{aligned}
-		-\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta
-		&= -\tfrac12 \delta\transpose \Lambda \delta + \delta\transpose (A\transpose b - \eta) - \tfrac12 \lVert b \rVert^2 \\
-		&= -\tfrac12 \lVert W (\delta - m) \rVert^2 + \tfrac12 \lVert W m \rVert^2 - \tfrac12 \lVert b \rVert^2 ,
+		-\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta
+		&= -\tfrac12 \delta\transpose \Lambda \delta + \delta\transpose (A\transpose b - \eta) - \tfrac12 \lvert b \rvert^2 \\
+		&= -\tfrac12 \lvert W (\delta - m) \rvert^2 + \tfrac12 \lvert W m \rvert^2 - \tfrac12 \lvert b \rvert^2 ,
 	\end{aligned}
 $$
 
@@ -161,7 +161,7 @@ a sum of squared rows and linear terms is part 2 of
 
 $$
 	\log \int e^{-\phi(\tangent_k, \tangent_S)}\, \dd \tangent_k
-	= -\tfrac12 \lVert A' \tangent_S - b' \rVert^2 - (\eta_S - T\transpose y)\transpose \tangent_S
+	= -\tfrac12 \lvert A' \tangent_S - b' \rvert^2 - (\eta_S - T\transpose y)\transpose \tangent_S
 	- \gamma + \tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert . @tag(eliminated)
 $$
 
@@ -205,15 +205,15 @@ measured, and the filter's covariance does not exist.
 
 <Proof>
 
-For part 1, $\lVert Q\transpose (A \delta - b) \rVert = \lVert A \delta - b \rVert$. For part 2, the
-squares of the zero rows are $\lVert 0 \cdot \delta - e \rVert^2 = \lVert e \rVert^2$. For part 3,
+For part 1, $\lvert Q\transpose (A \delta - b) \rvert = \lvert A \delta - b \rvert$. For part 2, the
+squares of the zero rows are $\lvert 0 \cdot \delta - e \rvert^2 = \lvert e \rvert^2$. For part 3,
 expanding the square,
 
 $$
 	\begin{aligned}
-		-\tfrac12 \lVert A \delta - (b - u) \rVert^2 - (\eta - A\transpose u)\transpose \delta
-		&= -\tfrac12 \lVert A \delta - b \rVert^2 - u\transpose (A \delta - b) - \tfrac12 \lVert u \rVert^2 - \eta\transpose \delta + u\transpose A \delta \\
-		&= -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + u\transpose b - \tfrac12 \lVert u \rVert^2 ,
+		-\tfrac12 \lvert A \delta - (b - u) \rvert^2 - (\eta - A\transpose u)\transpose \delta
+		&= -\tfrac12 \lvert A \delta - b \rvert^2 - u\transpose (A \delta - b) - \tfrac12 \lvert u \rvert^2 - \eta\transpose \delta + u\transpose A \delta \\
+		&= -\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta + u\transpose b - \tfrac12 \lvert u \rvert^2 ,
 	\end{aligned}
 $$
 
@@ -226,8 +226,8 @@ tangent $\delta'$, and substituting gives the new right-hand side and constant.
 
 Parts 1 and 2 together are an orthogonal factorization of $[A \;\, b]$. It leaves at most $D$
 rows, so a factor never needs more rows than its points have coordinates. Part 3 moves any part of
-$\eta$ that lies in the row space into $b$. Choosing $u$ to minimize $\lVert \eta - A\transpose u
-\rVert$ leaves only the part of $\eta$ in the null space, which no form removes. When $A$ has rank
+$\eta$ that lies in the row space into $b$. Choosing $u$ to minimize $\lvert \eta - A\transpose u
+\rvert$ leaves only the part of $\eta$ in the null space, which no form removes. When $A$ has rank
 $D$, that part is zero, and the form is the normal's of [%full](statement:full-rank). None of
 these changes the value: a factor is the function it is, whichever form it is given in.
 

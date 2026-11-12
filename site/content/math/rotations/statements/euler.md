@@ -17,8 +17,8 @@ $\epsilon = \pm 1$ with $e_i \times e_j = \epsilon\, e_l$. Write $q_e(\theta) = 
     $$
 
     So for $\beta \in (0, \pi)$ the angles are recovered, modulo $2\pi$, from any positive multiple
-    of $q$ or of $-q$ as $\beta = 2 \operatorname{atan2}\bigl(\lVert (u_j, u_l) \rVert,\ \lVert (w,
-    u_i) \rVert\bigr)$, $\alpha = \sigma + \delta$ and $\gamma = \sigma - \delta$, where $\sigma =
+    of $q$ or of $-q$ as $\beta = 2 \operatorname{atan2}\bigl(\lvert (u_j, u_l) \rvert,\ \lvert (w,
+    u_i) \rvert\bigr)$, $\alpha = \sigma + \delta$ and $\gamma = \sigma - \delta$, where $\sigma =
     \operatorname{atan2}(u_i, w)$ and $\delta = \operatorname{atan2}(\epsilon\, u_l, u_j)$.
 
 2. _Tait–Bryan angles_, $k = l$. If $q = q_i(\alpha) \otimes q_j(\beta) \otimes q_k(\gamma)$ with

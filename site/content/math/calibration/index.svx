@@ -53,7 +53,7 @@ $W_q$ that elimination computes without forming a covariance. Its credible set o
 is an ellipsoid in that chart, and the truth $q^\star$ lies in it when its *normalized error*
 
 $$
-	\varepsilon_q = \bigl\lVert W_q \bigl( q^\star \ominus \hat q \bigr) \bigr\rVert^2 @tag(normalized-error)
+	\varepsilon_q = \bigl\lvert W_q \bigl( q^\star \ominus \hat q \bigr) \bigr\rvert^2 @tag(normalized-error)
 $$
 
 is at most $\chi^2_{d_q}(\alpha)$, the $\alpha$-quantile of the chi-squared law with as many

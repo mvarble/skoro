@@ -34,7 +34,7 @@ piece. The mathematics is in the notes on
 A problem is a sum of factors of rows over blocks of variables, with a linear term and a constant:
 
 $$
-	m(\tangent) = c + \sum_f \tfrac12 \bigl\lVert A_f\, \tangent_{K_f} - b_f \bigr\rVert^2 + \eta\transpose \tangent .
+	m(\tangent) = c + \sum_f \tfrac12 \bigl\lvert A_f\, \tangent_{K_f} - b_f \bigr\rvert^2 + \eta\transpose \tangent .
 $$
 
 Which blocks each factor involves is its _structure_, kept apart from the numbers so that one
@@ -264,7 +264,7 @@ iterations, and the caller decides what a row that ran out of damping or iterati
 
 The damped promise bounds the distance to the mode only while the damping is small, so stationarity
 is checked apart from the stop, by `decrement`: the undamped promise
-$\tfrac12 \lVert J \tangent_0 \rVert^2$, which is zero exactly where the query's gradient is.
+$\tfrac12 \lvert J \tangent_0 \rvert^2$, which is zero exactly where the query's gradient is.
 
 ```rust
 {../../../../crates/skoro-linearize/src/minimize.rs:195..219}

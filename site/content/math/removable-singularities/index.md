@@ -20,7 +20,7 @@ closed form. The answer depends on how accurately the machine computes a sine.
 
 The coefficients of [the rotations](../rotations/) and of [the rigid motions](../rigid-motions/)
 are each a function of $\theta^2$, with $\theta$ the angle of a rotation vector, or for the
-logarithm of $n^2$ and $w$, with $n = \lVert \operatorname{vec}(q) \rVert$.
+logarithm of $n^2$ and $w$, with $n = \lvert \operatorname{vec}(q) \rvert$.
 
 | coefficient | closed form                                                   | series                                                                                                                | used by                                                |
 | ----------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |

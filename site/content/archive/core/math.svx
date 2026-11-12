@@ -240,7 +240,7 @@ a boundary operation's derivatives goes through them. [%full](statement:embedded
 to be smooth there, and they are, but the operations that compute them must also *compute* them
 smoothly there, which is a stronger requirement. A retraction from an exponential map, such as
 $R \operatorname{Exp}(\tangent)$ on the rotations, is smooth at $\tangent = 0$, yet its textbook
-formula divides $\sin \theta$ by $\theta = \lVert \tangent \rVert$, and the coefficients of its
+formula divides $\sin \theta$ by $\theta = \lvert \tangent \rvert$, and the coefficients of its
 derivatives, $(1 - \cos \theta) / \theta^2$ and the like, divide too: computed as written, each is
 $0/0$ at $\tangent = 0$, and so is every derivative taken there. A logarithm written with
 $\operatorname{atan2}$ over $\theta$ does the same on the diagonal. So a type's $R$ and $Q$ must be
@@ -619,7 +619,7 @@ derivatives under test are zeros on both sides. The test is therefore run on a p
 includes a curved factor, and composed with a function whose second derivative does not vanish.
 
 **A sphere outside the core.** The test's curved factor is the unit sphere
-$S^2 = \{\point \in \R^3 : \lVert \point \rVert = 1\}$, of dimension $2$ and storage size $3$,
+$S^2 = \{\point \in \R^3 : \lvert \point \rvert = 1\}$, of dimension $2$ and storage size $3$,
 declared as an embedded type. The test is written as a later entry's crate would be written,
 outside the core and with nothing but its public interface, so that it also shows a curved type
 being added with no derivative written by hand. The sphere is not a type of the core. skoro means
@@ -646,7 +646,7 @@ $\point_1^2 + \point_2^2 = (1 - \point_3)(1 + \point_3)$ shows: the first column
 $\point$, for one, is $\point_1 (1 - \point_3) - c\, \point_1 (1 - \point_3^2) = 0$. The test's
 retraction is the inverse of the stereographic projection from $-\point$, in coordinates scaled so
 that its derivative at $0$ is $B(\point)$, and needs no projection: with
-$s = \lVert \tangent \rVert^2 / 4$,
+$s = \lvert \tangent \rvert^2 / 4$,
 
 $$
 	\point \oplus \tangent = \frac{(1 - s)\, \point + B(\point)\,\tangent}{1 + s},
@@ -657,7 +657,7 @@ $$
 
 The retraction stays on the sphere because $\point\transpose B(\point) = 0$ and
 $B(\point)\transpose B(\point) = I$ give
-$\lVert (1 - s)\, \point + B(\point)\,\tangent \rVert^2 = (1 - s)^2 + 4 s = (1 + s)^2$, and its
+$\lvert (1 - s)\, \point + B(\point)\,\tangent \rvert^2 = (1 - s)^2 + 4 s = (1 + s)^2$, and its
 derivative in $\tangent$ at $0$ is $B(\point)$, since $s$ is quadratic. For the inverse, the same
 identities give $\point\transpose \otherPoint = (1 - s)/(1 + s)$ and
 $B(\point)\transpose \otherPoint = \tangent / (1 + s)$, so $1 + \point\transpose \otherPoint = 2/(1 + s)$
@@ -667,12 +667,12 @@ is undefined. It is not of the form $P(\point + B(\point)\,\tangent)$ for the no
 projection, which would go in the direction of $\point + B(\point)\,\tangent$ rather than of
 $(1 - s)\, \point + B(\point)\,\tangent$, so the test exercises a retraction that the core knows
 only as an operation. The sphere also declares that normalizing projection,
-$P(w) = w / \lVert w \rVert$, defined where $w \ne 0$ and $w$ is not a positive multiple of the
+$P(w) = w / \lvert w \rvert$, defined where $w \ne 0$ and $w$ is not a positive multiple of the
 south pole, which plays no part in its retraction. Each of $R$, $Q$ and $P$ is a composite of the
 core's Euclidean primitives. The reciprocals are exponentials of logarithms,
 $c = e^{-\log(1 + \point_3)}$, $1 / (1 + s) = e^{-\log(1 + s)}$,
 $1 / (1 + \point\transpose \otherPoint) = e^{-\log(1 + \point\transpose \otherPoint)}$ and
-$1 / \lVert w \rVert = e^{-\frac12 \log \sum_i w_i^2}$, each logarithm taken of a number positive
+$1 / \lvert w \rvert = e^{-\frac12 \log \sum_i w_i^2}$, each logarithm taken of a number positive
 on the domain; the rest is products, sums, slicing and concatenation.
 
 Unlike the core's types, the sphere is curved: its tangent charts do not commute, the correction term of

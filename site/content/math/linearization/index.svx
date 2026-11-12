@@ -29,7 +29,7 @@ manifolds with retractions, with the stacked tangent $\R^\dimension$ at each poi
 be linearized is
 
 $$
-	f(\point) = \sum_t \Bigl( \tfrac12 \lVert r_t(\point) \rVert^2 + \lambda_t(\point) \Bigr) + \text{a constant}, @tag(objective)
+	f(\point) = \sum_t \Bigl( \tfrac12 \lvert r_t(\point) \rvert^2 + \lambda_t(\point) \Bigr) + \text{a constant}, @tag(objective)
 $$
 
 a sum over *terms* $t$, each with a smooth *whitened residual* $r_t$, of any number of components,
@@ -37,7 +37,7 @@ and a smooth scalar $\lambda_t$, which for many terms is zero. Each term reads o
 factors of $\point$, its *variables* $K_t$.
 
 This is the negative log-density of a model of normals whose scales are fixed. A normal's
-log-density [](eq:math/normal/log-density) is $-\tfrac12 \lVert r \rVert^2$ with $r = W(\point
+log-density [](eq:math/normal/log-density) is $-\tfrac12 \lvert r \rvert^2$ with $r = W(\point
 \ominus \mu)$, plus a normalizer that is constant when the scale is, less the log-volume
 $\lambda_\mu(\point \ominus \mu)$ of the chart, which is zero on a Euclidean space and is a function
 of the point on a positive or a curved one. An
@@ -70,7 +70,7 @@ J_t\transpose \hat c_t$, and the two gradients agree term by term.
 own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, and not by a linear
 term. The normal's log-volume is folded on the Euclidean spaces, where it is zero, and on the
 curved ones, where it is a function of $s_t = \point \ominus \mu$ alone: of $s_t$ itself on a group
-whose chart translates the identity's, and of $\lVert s_t \rVert$ on the sphere with orthonormal
+whose chart translates the identity's, and of $\lvert s_t \rvert$ on the sphere with orthonormal
 bases. On a positive space it is $\sum_i \log \point_i$, which depends on the point and not only on
 $s_t$, and it stays in $\eta$. Folding costs nothing, since $\hat c_t$ is a gradient of the size of
 $s_t$, and it gains two things. A folded linear term is solved with the residuals, at the condition
@@ -82,8 +82,8 @@ Euclidean and curved quantities has $\eta = 0$ exactly, before and after any eli
 **Where $\eta$ comes from.** In exact arithmetic $\eta = g - \sum_t J_t\transpose (r_t + \hat
 c_t)$, and both terms of that difference are derivatives the linearization needs anyway. It should
 not be computed so. On a model of normals with fixed scales on Euclidean and curved spaces, $\eta$
-is exactly zero, while $g$ and $\sum_t J_t\transpose r_t$ are each of the size of $\lVert J \rVert
-\lVert r \rVert$ and each rounded: their difference is rounding of that size, not zero, and a
+is exactly zero, while $g$ and $\sum_t J_t\transpose r_t$ are each of the size of $\lvert J \rvert
+\lvert r \rvert$ and each rounded: their difference is rounding of that size, not zero, and a
 linear term is amplified by $\kappa(J)^2$ in the solve. Read off the log-volumes that are not
 folded, $\eta$ is exactly zero wherever there are none, and otherwise only as large, and as
 rounded, as their own gradients.
@@ -163,8 +163,8 @@ With $s = \sum_t \lambda_t$, this is the iteration of the linearization, and thr
   \lambda_i\, A_i$, besides terms in $\nabla \lambda_i$ that vanish at $t_i = 0$, while $J\transpose
   J = \sum_i A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq \nabla^2 \lambda_i \preceq
   \kappa \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq \D^2 s \preceq \kappa
-  J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with $\kappa = \max_i \lVert
-  \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rVert$. Near $t = 0$ that is $\sigma^2$ for the
+  J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with $\kappa = \max_i \lvert
+  \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rvert$. Near $t = 0$ that is $\sigma^2$ for the
   Cayley and stereographic charts, with $\sigma^2$ the largest variance of a rotation's or a
   direction's noise: $0.01$ per iteration at $\sigma = 0.1$ rad. The rest of $E$ is the residuals'
   curvature, which on a curved space includes the second derivatives of $\ominus$, of the same
@@ -187,8 +187,8 @@ On a space flat in disguise the chart at $\hat \point$ and the chart at any othe
 translation, by [](eq:math/normal/translation), so a function affine in one chart's coordinates is
 affine in every chart's, and the hypothesis does not depend on $\hat \point$. An affine residual
 has $r_t(\hat \point \oplus \tangent) = r_t + J_t \tangent$ exactly, and an affine log-volume is
-equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t \tfrac12 \lVert r_t
-+ J_t \tangent \rVert^2 + \sum_t \lambda_t(\hat \point \oplus \tangent)$, plus the constant, is
+equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t \tfrac12 \lvert r_t
++ J_t \tangent \rvert^2 + \sum_t \lambda_t(\hat \point \oplus \tangent)$, plus the constant, is
 $m(\tangent)$.
 
 </Proof>
@@ -205,8 +205,8 @@ A scale that is itself a variable breaks it, and carrying the normalizer's gradi
 would not mend it. The residual depends on the scale, and the residual's own curvature in the
 scale's coordinates, which the rows omit, is as large as what they keep. For an isotropic scale in
 its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in $u$ is
-$\lVert r \rVert^2$ and the squares' is $2 \lVert r \rVert^2$, while the normalizer $-\dimension u$
-is linear. At the stationary point $\lVert r \rVert^2 = \dimension$, the omitted part equals the
+$\lvert r \rvert^2$ and the squares' is $2 \lvert r \rvert^2$, while the normalizer $-\dimension u$
+is linear. At the stationary point $\lvert r \rvert^2 = \dimension$, the omitted part equals the
 kept part, and the rate of [%full](statement:gauss-newton) is one: the iteration need not
 converge. A scale is estimated with the expected information in the Hessian's place, by
 [Fisher scoring](../fisher-scoring/).

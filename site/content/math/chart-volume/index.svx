@@ -284,7 +284,7 @@ The two claims are the two ways of putting a law on the rotations. A law on the 
 with the density $\density$ is, as a law on the rotations, the law with the density $\density(q) +
 \density(-q)$: for a point drawn as $\mu \oplus \varepsilon$ in the stereographic chart, which is a
 chart of $S^3$, the second term is the density at the quaternion on the far side of $\mu$, reached
-exactly when $\lVert \varepsilon \rVert > 4$
+exactly when $\lvert \varepsilon \rvert > 4$
 ([%full](statement:math/rotations/antipode)). It is negligible when $\varepsilon$ is concentrated
 and is not when $\varepsilon$ is broad. A point drawn as $\mu \oplus \varepsilon$ in the Cayley
 chart, which descends to the rotations, has a density on the rotations with one term,
@@ -296,7 +296,7 @@ and $\mu$ are given by.
 The charts of the [rotations](../rotations/) and of the [rigid motions](../rigid-motions/) are
 those of their notes, and this section gives their volumes.
 
-Write $\theta = \lVert \phi \rVert$ for the angle of a rotation's tangent coordinate $\phi$ in the
+Write $\theta = \lvert \phi \rvert$ for the angle of a rotation's tangent coordinate $\phi$ in the
 exponential chart, $\operatorname{sinc} u = \sin u / u$, and $[\phi]_\times$ for the skew matrix of
 $\phi$. Each row is with respect to the normalized measure of
 [%full](statement:normalized): Haar measure on the groups, and surface measure on the sphere with
@@ -307,12 +307,12 @@ an orthonormal basis $B(\point)$ of $\point^\perp$.
 | $SO(3)$, exponential | $\mu \operatorname{Exp}(\phi)$ | $\operatorname{Log}(\mu\transpose \point)$ | $2 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
 | $SE(3)$, exponential | $\mu \operatorname{Exp}(\phi, \rho)$ | $\operatorname{Log}(\mu^{-1} \point)$ | $4 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
 | $SE_2(3)$, exponential | $\mu \operatorname{Exp}(\phi, w, \rho)$ | $\operatorname{Log}(\mu^{-1} \point)$ | $6 \log \operatorname{sinc}(\theta / 2)$ | no, $\theta < \pi$ | yes |
-| $SO(3)$, Cayley | $\mu\, (I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12 [\tangent]_\times)$ | [](eq:cayley-inverse) | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
+| $SO(3)$, Cayley | $\mu\, (I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12 [\tangent]_\times)$ | [](eq:cayley-inverse) | $-2 \log\bigl(1 + \tfrac14 \lvert \tangent \rvert^2\bigr)$ | yes | yes |
 | $SO(3)$, polar | $\mu \operatorname{polar}(I + [\tangent]_\times)$ | $\frac{\operatorname{vee}(R - R\transpose)}{\operatorname{tr} R - 1}$, $R = \mu\transpose \point$ | [](eq:polar) | yes | no, angles $< \pi / 2$ |
-| $S^3$, stereographic | $\mu \otimes \frac{(1 - s,\ \tangent / 2)}{1 + s}$, $s = \frac1{16} \lVert \tangent \rVert^2$ | $\frac{4 \operatorname{vec}(q)}{1 + w(q)}$, $q = \mu^{-1} \otimes \point$ | $-3 \log\bigl(1 + \tfrac1{16} \lVert \tangent \rVert^2\bigr)$ | yes | yes |
+| $S^3$, stereographic | $\mu \otimes \frac{(1 - s,\ \tangent / 2)}{1 + s}$, $s = \frac1{16} \lvert \tangent \rvert^2$ | $\frac{4 \operatorname{vec}(q)}{1 + w(q)}$, $q = \mu^{-1} \otimes \point$ | $-3 \log\bigl(1 + \tfrac1{16} \lvert \tangent \rvert^2\bigr)$ | yes | yes |
 | $SE(3)$, translated | $(\mu_R \oplus \phi,\ \mu_p + \mu_R\, \rho)$ | $(R \ominus \mu_R,\ \mu_R^{-1} (p - \mu_p))$, $\point = (R, p)$ | the rotation chart's | as the rotation chart | as the rotation chart |
-| $S^2$, stereographic | $\frac{(1 - s)\, \mu + B(\mu)\, \tangent}{1 + s}$, $s = \frac14 \lVert \tangent \rVert^2$ | $\frac{2 B(\mu)\transpose \point}{1 + \mu\transpose \point}$ | $-2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr)$ | yes | yes |
-| $S^2$, normalization | $\frac{\mu + B(\mu)\, \tangent}{\lVert \mu + B(\mu)\, \tangent \rVert}$ | $\frac{B(\mu)\transpose \point}{\mu\transpose \point}$ | $-\tfrac32 \log\bigl(1 + \lVert \tangent \rVert^2\bigr)$ | yes | no, a hemisphere |
+| $S^2$, stereographic | $\frac{(1 - s)\, \mu + B(\mu)\, \tangent}{1 + s}$, $s = \frac14 \lvert \tangent \rvert^2$ | $\frac{2 B(\mu)\transpose \point}{1 + \mu\transpose \point}$ | $-2 \log\bigl(1 + \tfrac14 \lvert \tangent \rvert^2\bigr)$ | yes | yes |
+| $S^2$, normalization | $\frac{\mu + B(\mu)\, \tangent}{\lvert \mu + B(\mu)\, \tangent \rvert}$ | $\frac{B(\mu)\transpose \point}{\mu\transpose \point}$ | $-\tfrac32 \log\bigl(1 + \lvert \tangent \rvert^2\bigr)$ | yes | no, a hemisphere |
 
 **The exponential charts.** On $SO(3)$, $\operatorname{ad}_\phi = [\phi]_\times$ has the
 eigenvalues $0$ and $\pm i \theta$, so by [%full](statement:group)
@@ -335,8 +335,8 @@ of $\{\theta < \pi\}$ onto the motions whose rotation is by less than $\pi$. In 
 the chart wraps beyond $\theta = \pi$, and the volume depends on the rotation alone.
 
 **The Cayley chart.** The rotation $(I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12
-[\tangent]_\times)$ is by the angle $\theta = 2 \arctan(\lVert \tangent \rVert / 2)$ about
-$\tangent$, and as a unit quaternion it is $(1, \tangent / 2) / \lVert (1, \tangent / 2) \rVert$:
+[\tangent]_\times)$ is by the angle $\theta = 2 \arctan(\lvert \tangent \rvert / 2)$ about
+$\tangent$, and as a unit quaternion it is $(1, \tangent / 2) / \lvert (1, \tangent / 2) \rvert$:
 the chart is the familiar first-order quaternion update $\mu \otimes (1, \tangent / 2)$,
 normalized. Its inverse needs no trigonometry,
 
@@ -351,17 +351,17 @@ parts and $\operatorname{vee}$ inverts $[\cdot]_\times$; the first is the same f
 The chart is a diffeomorphism of all of $\R^3$ onto the rotations by less than $\pi$. In the
 exponential chart, in polar coordinates $(\theta, a)$ with $a$ a unit axis, the normalized Haar
 measure is $\operatorname{sinc}^2(\theta/2)\, \theta^2 \, \dd \theta \, \dd a = 4 \sin^2(\theta/2)
-\, \dd \theta \, \dd a$. With $r = \lVert \tangent \rVert = 2 \tan(\theta / 2)$ along the same axis,
+\, \dd \theta \, \dd a$. With $r = \lvert \tangent \rvert = 2 \tan(\theta / 2)$ along the same axis,
 $\dd \theta = \dd r / (1 + r^2/4)$ and $\sin^2(\theta/2) = (r^2/4) / (1 + r^2/4)$, so the measure
 is $r^2 \, \dd r \, \dd a / (1 + r^2/4)^2$, and Lebesgue measure in $\tangent$ is
-$r^2 \, \dd r \, \dd a$: $v(\tangent) = (1 + \lVert \tangent \rVert^2 / 4)^{-2}$.
+$r^2 \, \dd r \, \dd a$: $v(\tangent) = (1 + \lvert \tangent \rvert^2 / 4)^{-2}$.
 
 **The polar chart.** The polar factor of $I + [\tangent]_\times$, the rotation nearest it, which
-an SVD also gives, is the rotation by $\arctan \lVert \tangent \rVert$ about $\tangent$. The same
+an SVD also gives, is the rotation by $\arctan \lvert \tangent \rvert$ about $\tangent$. The same
 substitution as for the Cayley chart, with $\theta = \arctan r$, gives
 
 $$
-	v(\tangent) = \frac{2 \bigl(1 - (1 + r^2)^{-1/2}\bigr)}{r^2 (1 + r^2)}, \qquad r = \lVert \tangent \rVert . @tag(polar)
+	v(\tangent) = \frac{2 \bigl(1 - (1 + r^2)^{-1/2}\bigr)}{r^2 (1 + r^2)}, \qquad r = \lvert \tangent \rvert . @tag(polar)
 $$
 
 The chart is global but reaches only the rotations by less than $\pi / 2$: a point $\mu \oplus
@@ -369,8 +369,8 @@ The chart is global but reaches only the rotations by less than $\pi / 2$: a poi
 
 **The quaternion stereographic chart.** On the unit quaternions $S^3$, which cover the rotations
 twice, with Haar measure normalized at the identity by the same derivative, the quaternion
-$(1 - s, \tangent / 2) / (1 + s)$ is the rotation by the angle $\theta = 4 \arctan(\lVert
-\tangent \rVert / 4)$ about $\tangent$, so that $\lVert \tangent \rVert = \theta + \theta^3/48 +
+$(1 - s, \tangent / 2) / (1 + s)$ is the rotation by the angle $\theta = 4 \arctan(\lvert
+\tangent \rvert / 4)$ about $\tangent$, so that $\lvert \tangent \rvert = \theta + \theta^3/48 +
 O(\theta^5)$: these are the modified Rodrigues parameters, scaled by $4$. The chart is the inverse
 of the stereographic projection of $S^3$ from $-\mu$, at $\tangent / 4$, and reaches every
 quaternion but $-\mu$, so every rotation, $\theta$ running over $[0, 2\pi)$. In the exponential
@@ -392,17 +392,17 @@ exponential, $(\operatorname{Exp} \phi, V(\phi)\, \rho)$, though the two agree t
 
 **The stereographic chart.** The chart is the inverse of the stereographic projection from $-\mu$,
 with coordinates halved so that its derivative at $0$ is $B(\mu)$. The inverse stereographic projection
-$u \mapsto ((1 - \lVert u \rVert^2)\, \mu + 2 B(\mu)\, u) / (1 + \lVert u \rVert^2)$ is conformal,
-with scale factor $2 / (1 + \lVert u \rVert^2)$ and so area factor $4 / (1 + \lVert u \rVert^2)^2$,
+$u \mapsto ((1 - \lvert u \rvert^2)\, \mu + 2 B(\mu)\, u) / (1 + \lvert u \rvert^2)$ is conformal,
+with scale factor $2 / (1 + \lvert u \rvert^2)$ and so area factor $4 / (1 + \lvert u \rvert^2)^2$,
 and $u = \tangent / 2$ multiplies it by $\tfrac14$. The chart reaches every point but $-\mu$.
 
 **The normalization chart.** The point $\mu + B(\mu)\, \tangent$ of the tangent plane at $\mu$ lies
-at the distance $r = (1 + \lVert \tangent \rVert^2)^{1/2}$ from the centre, and the ray to it meets
+at the distance $r = (1 + \lvert \tangent \rvert^2)^{1/2}$ from the centre, and the ray to it meets
 the plane's normal at an angle $\alpha$ with $\cos \alpha = 1/r$; a small area of the plane is
 projected along the ray onto the sphere with the factor $\cos \alpha / r^2 = r^{-3}$. The chart, the gnomonic projection, reaches
 the open hemisphere around $\mu$ alone.
 
 **Computing the log-volumes.** The log-volume [](eq:so3-exp) has a
 [removable singularity](../removable-singularities/) at $\theta = 0$, as $\operatorname{Exp}$
-itself does, and is computed there from its series in $\theta^2$. The Cayley and stereographic log-volumes are $-2 \log(1 + \lVert \tangent
-\rVert^2 / 4)$, the quaternion stereographic $-3 \log(1 + \lVert \tangent \rVert^2 / 16)$, and the normalization chart's is of the same kind, smooth everywhere as written.
+itself does, and is computed there from its series in $\theta^2$. The Cayley and stereographic log-volumes are $-2 \log(1 + \lvert \tangent
+\rvert^2 / 4)$, the quaternion stereographic $-3 \log(1 + \lvert \tangent \rvert^2 / 16)$, and the normalization chart's is of the same kind, smooth everywhere as written.

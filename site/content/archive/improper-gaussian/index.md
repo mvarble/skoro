@@ -9,7 +9,7 @@ revises: [normal]
 
 A retirement whose terms do not determine its whole blanket, as for a landmark seen by bearing from
 one retired pose, now has a replacement that keeps exactly what those terms said: the improper
-Gaussian factor $-\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + c$ in the
+Gaussian factor $-\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta + c$ in the
 blanket's stacked tangent at constant anchors, of any number of rows, none included, which no
 normalization need make a density. `Stacked::improper` builds it in `skoro-normal`, with its
 numbers shared or given row by row of a batch, as a retirement's `Replacement` or a likelihood

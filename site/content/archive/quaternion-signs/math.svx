@@ -76,10 +76,10 @@ with the precision $\Lambda = \Sigma^{-1} = W\transpose W$, its residual $\point
 the density with respect to the measure $\nu$ the chart normalizes,
 
 $$
-	\density_\mu(\point) = \frac{\det W}{(2\pi)^{\dimension / 2}} \exp\Bigl(-\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2\Bigr) e^{-\lambda(\point \ominus \mu)} , @tag(density)
+	\density_\mu(\point) = \frac{\det W}{(2\pi)^{\dimension / 2}} \exp\Bigl(-\tfrac12 \bigl\lvert W (\point \ominus \mu) \bigr\rvert^2\Bigr) e^{-\lambda(\point \ominus \mu)} , @tag(density)
 $$
 
-with $\lambda$ the chart's log-volume, $-3 \log(1 + \lVert \tangent_R \rVert^2 / 16)$ for the
+with $\lambda$ the chart's log-volume, $-3 \log(1 + \lvert \tangent_R \rvert^2 / 16)$ for the
 stereographic chart. A measurement $z$ of a state $\point$ is predicted by a map $h(\point)$, such
 as the relative motion $h(\point) = X_i^{-1} X_j$ of a pose graph, whose quaternion is $\bar q_i
 \otimes q_j$.
@@ -93,18 +93,18 @@ rotation.
 
 <Proof>
 
-Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and, since $\lVert u
-\rVert^2 = 1 - w^2$,
+Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and, since $\lvert u
+\rvert^2 = 1 - w^2$,
 
 $$
-	\lVert \tangent \rVert^2 = \frac{16 \lVert u \rVert^2}{(1 + w)^2} = \frac{16 (1 - w)}{1 + w} ,
+	\lvert \tangent \rvert^2 = \frac{16 \lvert u \rvert^2}{(1 + w)^2} = \frac{16 (1 - w)}{1 + w} ,
 $$
 
 which is below $16$ exactly when $w = \langle q, \mu \rangle > 0$. Both $\bar\mu \otimes (-q)$ and $\overline{(-\mu)} \otimes q$ are $(-w,
 -u)$, whose coordinate is $-4u / (1 - w)$, and
 
 $$
-	-\frac{16}{\lVert \tangent \rVert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
+	-\frac{16}{\lvert \tangent \rvert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
 $$
 
 The lengths follow from [%full](statement:archive/rotations/math/chart): the point on the side of
@@ -181,10 +181,10 @@ rotations, is written on quaternions as the familiar first-order update, normali
 
 <Proof>
 
-The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lVert \tangent \rVert^2 / 4}$, so $\gamma(\tangent)
-\in S^3$, with $w(\gamma) > 0$ and $\lVert \operatorname{vec}(\gamma) \rVert / w(\gamma) =
-\lVert \tangent \rVert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
-\lVert \tangent \rVert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
+The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lvert \tangent \rvert^2 / 4}$, so $\gamma(\tangent)
+\in S^3$, with $w(\gamma) > 0$ and $\lvert \operatorname{vec}(\gamma) \rvert / w(\gamma) =
+\lvert \tangent \rvert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
+\lvert \tangent \rvert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
 negates $q \otimes \gamma$. Negating $p$ or $q$ negates $\bar q \otimes p$, whose $\operatorname{vec}$
 and $w$ change sign together, so their ratio does not. For $p = q \otimes \gamma(\tangent)$, $\bar q
 \otimes p = \gamma(\tangent)$ and $2 \operatorname{vec}(\gamma) / w(\gamma) = \tangent$; and every
@@ -192,8 +192,8 @@ rotation by less than $\pi$ from $\pi(q)$ is $\pi(q \otimes \delta)$ for a $\del
 $w(\delta) > 0$, which is $\gamma$ of $2 \operatorname{vec}(\delta) / w(\delta)$. The first-order form and the
 last identity follow as for the stereographic chart
 ([%full](statement:archive/rotations/math/chart) and
-[](eq:archive/rotations/math/conjugation)): $\gamma(\tangent) = (1, \tangent / 2) + O(\lVert \tangent
-\rVert^2)$, and $\gamma$ depends on $\tangent$ only through its direction and its length.
+[](eq:archive/rotations/math/conjugation)): $\gamma(\tangent) = (1, \tangent / 2) + O(\lvert \tangent
+\rvert^2)$, and $\gamma$ depends on $\tangent$ only through its direction and its length.
 
 </Proof>
 
@@ -207,7 +207,7 @@ Its volume against the Haar measure of $SO(3)$ normalized at the
 chart's centre is
 
 $$
-	\lambda(\tangent) = -2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr) , @tag(cayley-volume)
+	\lambda(\tangent) = -2 \log\bigl(1 + \tfrac14 \lvert \tangent \rvert^2\bigr) , @tag(cayley-volume)
 $$
 
 by [the note](../../math/chart-volume/#the-usual-charts), whose derivation in the exponential chart
@@ -225,7 +225,7 @@ $$
 
 whose numerator and denominator are each even in the sign of $p$ and of $q$, and whose reciprocal
 is of a positive number wherever the inverse is defined. The retraction's normalization is the
-reciprocal of $\sqrt{1 + \lVert \tangent \rVert^2 / 4} \ge 1$, and the log-volume is a logarithm of
+reciprocal of $\sqrt{1 + \lvert \tangent \rvert^2 / 4} \ge 1$, and the log-volume is a logarithm of
 a number at least $1$; both are composites as written.
 
 **The half-turns.** The chart misses, at each $\mu$, the rotations a half-turn from it: not one
@@ -352,8 +352,8 @@ charts are invariant already.
 The three types become the groups.
 
 - **The rotations**, $SO(3)$, stored as $S^3 \subset \R^4$ up to $G = \{\pm 1\}$, with the Cayley
-  retraction and inverse of [%full](statement:cayley), the normalizing projection $P(x) = x / \lVert
-  x \rVert$, and the log-volume [](eq:cayley-volume). The retraction is equivariant and the inverse
+  retraction and inverse of [%full](statement:cayley), the normalizing projection $P(x) = x / \lvert
+  x \rvert$, and the log-volume [](eq:cayley-volume). The retraction is equivariant and the inverse
   invariant by [%full](statement:cayley), $P(-x) = -P(x)$, and the log-volume reads $\tangent$
   alone.
 - **The rigid motions**, $SE(3)$, stored as $S^3 \times \R^3$ up to $(q, p) \mapsto (-q, p)$, with
@@ -374,8 +374,8 @@ choice of representative that no term reads.
 
 **What the change of chart costs.** The figures of the rotations'
 [normal on these types](../rotations/math.svx#the-normal-on-these-types) follow from the log-volume,
-whose negative is now $2 \log(1 + \lVert \tangent \rVert^2 / 4) = \tfrac12 \lVert \tangent \rVert^2 +
-O(\lVert \tangent \rVert^4)$, with the Hessian $I$ in place of $\tfrac38 I$:
+whose negative is now $2 \log(1 + \lvert \tangent \rvert^2 / 4) = \tfrac12 \lvert \tangent \rvert^2 +
+O(\lvert \tangent \rvert^4)$, with the Hessian $I$ in place of $\tfrac38 I$:
 
 - a measurement of a rotation weighs on the state as a Gaussian of its residual would with the
   precision $\Lambda - I$ on the rotation's block, a change of $1\,\%$ for a noise of $0.1$ rad;
@@ -385,7 +385,7 @@ O(\lVert \tangent \rVert^4)$, with the Hessian $I$ in place of $\tfrac38 I$:
   residuals' own.
 
 A broad normal is no better than before. Its draws go to the half-turns as its scale grows, since
-$\theta = 2 \arctan(\lVert \varepsilon \rVert / 2) \to \pi$, where the stereographic chart's went to the
+$\theta = 2 \arctan(\lvert \varepsilon \rvert / 2) \to \pi$, where the stereographic chart's went to the
 far side of $S^3$, which as a rotation is the mean again; neither is a way to say that an attitude
 is unknown, which a uniform law will be. The coordinate is farther from the angle at third order,
 $\theta^3 / 12$ against $\theta^3 / 48$, which a model meets only through the log-volume's
@@ -467,25 +467,25 @@ chart applies it.
 of $\Delta$, so the sign in which $Z$ is written never reaches it, and its rotation coordinate is a
 function of the Cayley coordinate. skoro observes $Z$ with the mean $h = X_i^{-1} X_j$ and reads the
 residual $\tangent = Z \ominus h$, rotation first. Since $\bar h \otimes Z$ is the conjugate of $\bar Z
-\otimes h$, the two have the same $w$ and opposite vector parts, and with $|w| = (1 - \lVert e_R
-\rVert^2)^{1/2}$ the sign $s_\Delta$ makes positive, the rotation coordinates are related exactly,
+\otimes h$, the two have the same $w$ and opposite vector parts, and with $|w| = (1 - \lvert e_R
+\rvert^2)^{1/2}$ the sign $s_\Delta$ makes positive, the rotation coordinates are related exactly,
 and the translations to first order, $p_h - p_Z$ being $-\pi(q_h)\, \tangent_T$:
 
 $$
 	\begin{gathered}
-		\tangent_R = \frac{2 \operatorname{vec}(\bar h \otimes Z)}{w(\bar h \otimes Z)} = -\frac{2\, e_R}{\sqrt{1 - \lVert e_R \rVert^2}} , \\
-		e_T = \pi(q_Z)\transpose (p_h - p_Z) = -\pi(q_Z)\transpose \pi(q_h)\, \tangent_T = -\tangent_T + O(\lVert \tangent \rVert^2) .
+		\tangent_R = \frac{2 \operatorname{vec}(\bar h \otimes Z)}{w(\bar h \otimes Z)} = -\frac{2\, e_R}{\sqrt{1 - \lvert e_R \rvert^2}} , \\
+		e_T = \pi(q_Z)\transpose (p_h - p_Z) = -\pi(q_Z)\transpose \pi(q_h)\, \tangent_T = -\tangent_T + O(\lvert \tangent \rvert^2) .
 	\end{gathered} @tag(g2o-coordinates)
 $$
 
-Both coordinates are cut at the half-turns, where $w = 0$, $\lVert e_R \rVert = 1$ and $\tangent_R$
+Both coordinates are cut at the half-turns, where $w = 0$, $\lvert e_R \rvert = 1$ and $\tangent_R$
 is unbounded. g2o's law is not a normal: it is the likelihood factor $\exp(-\tfrac12 e\transpose
 \Omega e)$ of [the normal's mathematics](../normal/math.svx#without-a-volume-or-a-global-chart),
 with no volume, so it has no sampler of the normal's form and its normalization depends on
 $\Omega$.
 
 **Its information in skoro's coordinates.** By [](eq:g2o-coordinates), $e = -A \tangent +
-O(\lVert \tangent \rVert^2)$ with $A(\tangent_R, \tangent_T) = (\tangent_T, \tfrac12 \tangent_R)$,
+O(\lvert \tangent \rvert^2)$ with $A(\tangent_R, \tangent_T) = (\tangent_T, \tfrac12 \tangent_R)$,
 and the precision of $\tangent$ that gives the same quadratic form to second order is
 
 $$

@@ -40,11 +40,11 @@ $$
 $$
 
 the conjugate is $\bar q = (w, -u)$, and we write $\operatorname{vec}(q) = u$ and $w(q) = w$. The
-unit quaternions $S^3 = \{q : \lVert q \rVert = 1\}$ are a group under $\otimes$, with identity
+unit quaternions $S^3 = \{q : \lvert q \rvert = 1\}$ are a group under $\otimes$, with identity
 $1 = (1, 0)$ and inverse $\bar q$. Each is a rotation,
 
 $$
-	\pi(q) = (w^2 - \lVert u \rVert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
+	\pi(q) = (w^2 - \lvert u \rvert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
 $$
 
 where $[u]_\times$ is the skew matrix with $[u]_\times x = u \times x$. It is the rotation by the
@@ -66,7 +66,7 @@ Tangent coordinates of a rotation are, throughout, a rotation vector in the fram
 retraction of this note satisfies
 
 $$
-	\pi(q \oplus \tangent) = \pi(q) \bigl(I + [\tangent]_\times\bigr) + O(\lVert \tangent \rVert^2) , @tag(frame)
+	\pi(q \oplus \tangent) = \pi(q) \bigl(I + [\tangent]_\times\bigr) + O(\lvert \tangent \rvert^2) , @tag(frame)
 $$
 
 a perturbation on the right, in the body's own axes. Since $q \otimes (w, u) \otimes \bar q = (w,
@@ -101,7 +101,7 @@ $$
 	c_3(X) &= (X_{21} - X_{12},\ X_{13} + X_{31},\ X_{23} + X_{32},\ 1 - X_{11} - X_{22} + X_{33}),
 	\end{aligned}
 	\qquad
-	q = \frac{c_m(X)}{\lVert c_m(X) \rVert}, @tag(from-matrix)
+	q = \frac{c_m(X)}{\lvert c_m(X) \rvert}, @tag(from-matrix)
 $$
 
 with $m$ the index of the largest of the four entries $c_m(X)_m$. At $X = \pi(q)$, with $q = (q_0,
@@ -117,7 +117,7 @@ The exponential takes a rotation vector to the rotation about it by its length:
 
 $$
 	\Exp(\omega) = \Bigl(\cos \tfrac\theta2,\ \frac{\sin(\theta/2)}{\theta}\, \omega\Bigr),
-	\qquad \theta = \lVert \omega \rVert . @tag(exp)
+	\qquad \theta = \lvert \omega \rvert . @tag(exp)
 $$
 
 It is a diffeomorphism of the open ball of radius $2\pi$ onto $S^3 \setminus \{-1\}$. It is how a
@@ -126,7 +126,7 @@ t$ moves from $q_k$ to $q_{k+1} = q_k \otimes \Exp(\omega\, \Delta t)$, exactly.
 $S^3 \setminus \{-1\}$ is the logarithm,
 
 $$
-	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lVert u \rVert, @tag(log)
+	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lvert u \rvert, @tag(log)
 $$
 
 a rotation vector of length $2 \atantwo(n, w) \in [0, 2\pi)$. The logarithm is a map of the unit
@@ -178,7 +178,7 @@ the two charts that are defined, and invertible, on all of $\R^3$.
 The first is the stereographic projection of the sphere $S^3$ from the point opposite the centre:
 
 $$
-	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lVert \tangent \rVert^2;
+	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lvert \tangent \rvert^2;
 	\qquad
 	p \ominus q = \frac{4\, \operatorname{vec}(\bar q \otimes p)}{1 + w(\bar q \otimes p)} . @tag(stereographic)
 $$
@@ -189,17 +189,17 @@ $$
 
 Write $\delta = \delta(\tangent)$. Its norm is $((1 - s)^2 + 4s)^{1/2} / (1 + s) = 1$, so
 $q \otimes \delta$ is a unit quaternion. With $w(\delta) = (1 - s)/(1 + s)$ and
-$\lVert \operatorname{vec}(\delta) \rVert = (\lVert \tangent \rVert / 2)/(1 + s)$, $\delta$ is the
+$\lvert \operatorname{vec}(\delta) \rvert = (\lvert \tangent \rvert / 2)/(1 + s)$, $\delta$ is the
 rotation by $\theta$ about $\tangent$ with $\cos \tfrac\theta2 = (1-s)/(1+s)$ and $\sin
-\tfrac\theta2 = (\lVert \tangent \rVert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
-(1 + \cos \tfrac\theta2) = \lVert \tangent \rVert / 4$. As $\lVert \tangent \rVert$ runs over
+\tfrac\theta2 = (\lvert \tangent \rvert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
+(1 + \cos \tfrac\theta2) = \lvert \tangent \rvert / 4$. As $\lvert \tangent \rvert$ runs over
 $[0, \infty)$, $\theta$ runs over $[0, 2\pi)$, so $\delta$ runs over every unit quaternion but $-1$,
 once each; $\delta$ is the inverse of the stereographic projection of $S^3$ from $-1$ onto the
 hyperplane $w = 0$, at $\tangent / 4$. Left multiplication by $q$ carries $S^3 \setminus \{-1\}$ to
 $S^3 \setminus \{-q\}$. The inverse follows from $\delta = \bar q \otimes p$ and $\operatorname{vec}(
 \delta) / (1 + w(\delta)) = \tangent / 4$, which $s$ cancels from. Last, $\delta(\tangent) = (1,
-\tangent / 2) + O(\lVert \tangent \rVert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
-O(\lVert \tangent \rVert^2)$; $\pi$ is a homomorphism.
+\tangent / 2) + O(\lvert \tangent \rvert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
+O(\lvert \tangent \rvert^2)$; $\pi$ is a homomorphism.
 
 </Proof>
 
@@ -224,18 +224,18 @@ Where it puts the two is the whole of what the sign costs.
 
 <Proof>
 
-Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and, since $\lVert u
-\rVert^2 = 1 - w^2$,
+Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and, since $\lvert u
+\rvert^2 = 1 - w^2$,
 
 $$
-	\lVert \tangent \rVert^2 = \frac{16 \lVert u \rVert^2}{(1 + w)^2} = \frac{16 (1 - w)}{1 + w} ,
+	\lvert \tangent \rvert^2 = \frac{16 \lvert u \rvert^2}{(1 + w)^2} = \frac{16 (1 - w)}{1 + w} ,
 $$
 
 which is below $16$ exactly when $w = \langle q, \mu \rangle > 0$. Both $\bar\mu \otimes (-q)$ and
 $\overline{(-\mu)} \otimes q$ are $(-w, -u)$, whose coordinate is $-4u / (1 - w)$, and
 
 $$
-	-\frac{16}{\lVert \tangent \rVert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
+	-\frac{16}{\lvert \tangent \rvert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
 $$
 
 For the lengths, the point on the side of $\mu$ is at the angle $\theta \in [0, \pi]$ from $\mu$ by
@@ -267,17 +267,17 @@ first-order update of a quaternion, normalized.
 
 <Proof>
 
-The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lVert \tangent \rVert^2 / 4}$, so $\gamma(\tangent)
-\in S^3$, with $w(\gamma) > 0$ and $\lVert \operatorname{vec}(\gamma) \rVert / w(\gamma) =
-\lVert \tangent \rVert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
-\lVert \tangent \rVert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
+The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lvert \tangent \rvert^2 / 4}$, so $\gamma(\tangent)
+\in S^3$, with $w(\gamma) > 0$ and $\lvert \operatorname{vec}(\gamma) \rvert / w(\gamma) =
+\lvert \tangent \rvert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
+\lvert \tangent \rvert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
 negates $q \otimes \gamma$. Negating $p$ or $q$ negates $\bar q \otimes p$, whose $\operatorname{vec}$
 and $w$ change sign together, so their ratio does not. For $p = q \otimes \gamma(\tangent)$, $\bar q
 \otimes p = \gamma(\tangent)$ and $2 \operatorname{vec}(\gamma) / w(\gamma) = \tangent$; and every
 rotation by less than $\pi$ from $\pi(q)$ is $\pi(q \otimes \delta)$ for a $\delta$ with
 $w(\delta) > 0$, which is $\gamma$ of $2 \operatorname{vec}(\delta) / w(\delta)$. The first-order
 form and the last identity follow as for the stereographic chart: $\gamma(\tangent) = (1, \tangent /
-2) + O(\lVert \tangent \rVert^2)$, and $\gamma$ depends on $\tangent$ only through its direction
+2) + O(\lvert \tangent \rvert^2)$, and $\gamma$ depends on $\tangent$ only through its direction
 and its length.
 
 </Proof>
@@ -316,10 +316,10 @@ which is used.
 
 <Proof>
 
-From $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$ with $s = \lVert \tangent \rVert^2 / 16$, the
-stereographic chart has $1 \oplus \tangent = \bigl(1 - \tfrac18 \lVert \tangent \rVert^2,\ \tfrac12
-\tangent\bigr) + O(\lVert \tangent \rVert^3)$. From $(1 + \lVert \tangent \rVert^2 / 4)^{-1/2} = 1 -
-\tfrac18 \lVert \tangent \rVert^2 + O(\lVert \tangent \rVert^4)$, the Cayley chart has the same
+From $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$ with $s = \lvert \tangent \rvert^2 / 16$, the
+stereographic chart has $1 \oplus \tangent = \bigl(1 - \tfrac18 \lvert \tangent \rvert^2,\ \tfrac12
+\tangent\bigr) + O(\lvert \tangent \rvert^3)$. From $(1 + \lvert \tangent \rvert^2 / 4)^{-1/2} = 1 -
+\tfrac18 \lvert \tangent \rvert^2 + O(\lvert \tangent \rvert^4)$, the Cayley chart has the same
 expansion, and so has $\Exp(\tangent)$, from $\cos \tfrac\theta2 = 1 - \tfrac18 \theta^2 +
 O(\theta^4)$ and $\sin(\theta/2)/\theta = \tfrac12 + O(\theta^2)$. All three charts are left
 translations of their charts at the identity, so they agree at every point to second order, and so
@@ -328,8 +328,8 @@ $\point$ is the Jacobian at $0$ of $\tangent \mapsto R_\otherPoint^{-1}(\map(R_\
 and the local representatives of $\map$ in two charts that agree to second order agree to second
 order at $0$, with their first and second derivatives there. Last, $\Exp(\omega + \varepsilon)
 \ominus \Exp(\omega)$ is the chart coordinate at $1$ of $\Exp(\omega)^{-1} \otimes \Exp(\omega +
-\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lVert \varepsilon \rVert^2)$, which is
-$J_r(\omega)\, \varepsilon + O(\lVert \varepsilon \rVert^2)$; and $\Log$ is the inverse of $\Exp$.
+\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lvert \varepsilon \rvert^2)$, which is
+$J_r(\omega)\, \varepsilon + O(\lvert \varepsilon \rvert^2)$; and $\Log$ is the inverse of $\Exp$.
 
 </Proof>
 
@@ -355,8 +355,8 @@ two agree whenever $\langle q_1, q_2 \rangle \ge 0$.
 The angle between two rotations, the length of the shorter turn from one to the other, is
 
 $$
-	\angle(q_1, q_2) = \lVert \rv(\bar q_1 \otimes q_2) \rVert = 2 \atantwo\bigl(\lVert
-	\operatorname{vec}(r) \rVert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
+	\angle(q_1, q_2) = \lvert \rv(\bar q_1 \otimes q_2) \rvert = 2 \atantwo\bigl(\lvert
+	\operatorname{vec}(r) \rvert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
 	q_2 . @tag(angle)
 $$
 
@@ -370,7 +370,7 @@ Rotations are given and reported as an axis and an angle, as a pair of direction
 angles. Each is a way in and out, and none is a chart.
 
 **Axis and angle.** The rotation by $\theta$ about an axis $a \ne 0$ is $(\cos \tfrac\theta2,\ \sin
-\tfrac\theta2\, a / \lVert a \rVert)$, smooth in both. The way back is the rotation vector split
+\tfrac\theta2\, a / \lvert a \rvert)$, smooth in both. The way back is the rotation vector split
 into its length and its direction, and the direction is undefined at the identity. A computation
 that differentiates through an axis and an angle is better served by the rotation vector, which
 has no such point.
@@ -379,7 +379,7 @@ has no such point.
 the normalization of
 
 $$
-	\bigl(\lVert a \rVert \lVert b \rVert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
+	\bigl(\lvert a \rvert \lvert b \rvert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
 $$
 
 since for unit vectors at the angle $\theta$ about the axis $n$ this is $(1 + \cos \theta,
@@ -420,7 +420,7 @@ $$
 $$
 
 which are the stated forms by the addition formulas. For $\beta \in (0, \pi)$ both $c_\beta$ and
-$s_\beta$ are positive, so $\lVert (w, u_i) \rVert = \lambda c_\beta$ and $\lVert (u_j, u_l) \rVert
+$s_\beta$ are positive, so $\lvert (w, u_i) \rvert = \lambda c_\beta$ and $\lvert (u_j, u_l) \rvert
 = \lambda s_\beta$ for $q$ scaled by $\lambda > 0$, and the $\atantwo$s return $\beta / 2$, and
 $\sigma$ and $\delta$ modulo $2\pi$; for $-q$ they return $\sigma + \pi$ and $\delta + \pi$ modulo
 $2\pi$, which change $\alpha$ and $\gamma$ by multiples of $2\pi$. For the second claim, let $r =

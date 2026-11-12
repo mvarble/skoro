@@ -131,7 +131,7 @@ impl Problem {
 
 `promised` is [](eq:archive/linearization/math/promised) and the $\Delta$ of
 [](eq:archive/examples/math/gain); with $\lambda = 0$ it is the decrement
-$\tfrac12 \lVert J \tangent_0 \rVert^2$. `value(0)` is $f$ at the point of the linearization, the
+$\tfrac12 \lvert J \tangent_0 \rvert^2$. `value(0)` is $f$ at the point of the linearization, the
 constant having been chosen so ([](eq:archive/linearization/math/agreement)). A factor's rows
 `Rows { a, b }` have the columns of its blocks in the structure's order, which
 `Structure::factors()` and `Structure::range(k)` locate; the diagonal of
@@ -497,7 +497,7 @@ impl Scenario {
 }
 ```
 
-The sightings are the pairs with $\lVert \bar p_k - \bar m_j \rVert \le h$, the norm being invariant
+The sightings are the pairs with $\lvert \bar p_k - \bar m_j \rvert \le h$, the norm being invariant
 under the pose's rotation, so no map of the motions is needed to choose them. The scales are the
 same for both scenarios: $\Sigma_0$ of $0.01$ rad and $0.01$ m, $\Sigma_u$ of $0.02$ rad and
 $0.05$ m, $\Sigma_y$ of $0.005$ rad and $0.02$ m, $\Sigma_m$ of $2$ m and $\Sigma_z$ of $0.05$ m.
@@ -696,19 +696,19 @@ crate's own models in `tests/common`.
   points, every row converges and its decrement $\delta$ is at most $10\, \epsilon$. Then two
   checks in the terms the rule bounds, both in nats or derived from them:
   - the query's gradient $g$ by the cotangent pass satisfies
-    $\lVert g \rVert^2 \le 2 \cdot 10\, \epsilon \cdot \operatorname{tr}(J\transpose J)$, with
+    $\lvert g \rvert^2 \le 2 \cdot 10\, \epsilon \cdot \operatorname{tr}(J\transpose J)$, with
     $J\transpose J$ from the linearization at the mode. The decrement is
-    $\tfrac12 g\transpose (J\transpose J)^{-1} g \ge \lVert g \rVert^2 / (2 h_{\max})$, and the
+    $\tfrac12 g\transpose (J\transpose J)^{-1} g \ge \lvert g \rvert^2 / (2 h_{\max})$, and the
     largest eigenvalue $h_{\max}$ is at most the trace, so this is what a decrement of $10\, \epsilon$
-    allows. A fixed bound on $\lVert g \rVert$ would depend on the curvature and on the units of
+    allows. A fixed bound on $\lvert g \rvert$ would depend on the curvature and on the units of
     the coordinates, as [the stopping rule](math.svx#a-levenberg-marquardt-method) says of a
     gradient's norm.
   - the undamped loop of `steps_converge_on_rotations`, run from the same points, reaches a mode
     whose decrement is also at most $10\, \epsilon$. With $\tangent$ = `Layout::local` of the loop's
-    mode at the method's, $\tfrac12 \lVert J \tangent \rVert^2$, which is `promised(τ, 0)` of the
+    mode at the method's, $\tfrac12 \lvert J \tangent \rvert^2$, which is `promised(τ, 0)` of the
     method's linearization, is at most $40\, \epsilon$: each point is within its decrement of the
     mode in the metric of $J$, and the triangle inequality gives
-    $\tfrac12 \lVert J \tangent \rVert^2 \le 2 (\delta_1 + \delta_2)$.
+    $\tfrac12 \lvert J \tangent \rvert^2 \le 2 (\delta_1 + \delta_2)$.
 
   Shows the method stops at a stationary point of $f$, log-volumes included, to its tolerance, and
   at the point Gauss–Newton reaches.

@@ -34,7 +34,7 @@ $f(x)$ is small, which is exactly where a removable singularity is computed: $\s
 The coefficients are those of the rotations' table, each a function of $\theta^2$: $b = \sin(\theta /
 2) / \theta$; $A = (1 - \cos \theta) / \theta^2$; $B = (\theta - \sin \theta) / \theta^3$; $C$,
 with $\cot(\theta/2)$; and the motions' $D$ and $E$, whose closed forms divide by $\theta^4$ and
-$\theta^5$. The sphere's is $\Lambda(r) = \log(\sin r / r)$ with $r^2 = \lVert \tangent \rVert^2$,
+$\theta^5$. The sphere's is $\Lambda(r) = \log(\sin r / r)$ with $r^2 = \lvert \tangent \rvert^2$,
 from [the measures' exponential sphere](../measures/math.svx). Their derivatives are taken by the
 core's passes: each primitive's derivative is a formula ($\sin' = \cos$, $\log' = 1/x$) evaluated at
 the computed values, so a pass differentiates the formula as written, never the rounding.

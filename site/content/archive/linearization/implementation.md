@@ -630,7 +630,7 @@ children left, and the damping rows of its frontals ($\sqrt{\lambda D_k}$, diago
 zero), are stacked into one `[A_front | A_sep | b]`, frontal columns first, and reduced by faer's
 unpivoted `Qr`, as [%full](statement:math/square-root-elimination/eliminate-one) says. The linear
 terms of the frontal blocks are pushed by one forward substitution $R\transpose y = \eta_k$, which
-gives $\gamma = y\transpose d - \tfrac12 \lVert y \rVert^2$ and the separator's new linear term
+gives $\gamma = y\transpose d - \tfrac12 \lvert y \rvert^2$ and the separator's new linear term
 $\eta_S - T\transpose y$. Pivoting would mix frontal and separator columns, so it is never used.
 A frontal row whose diagonal entry is negative has its sign changed, row and right-hand side
 together, so that every $R$ has a positive diagonal.
@@ -668,13 +668,13 @@ one elimination, and each answer reads the constant it needs.
 **The rank test.** A frontal diagonal entry with
 
 $$
-	\lvert R_{ii} \rvert \le u^{3/4} \lVert a_i \rVert ,
+	\lvert R_{ii} \rvert \le u^{3/4} \lvert a_i \rvert ,
 $$
 
 where $a_i$ is the column of the stacked front before its reduction and $u$ the problem's
 `roundoff`, refuses its block as undetermined. An exact dependence, a gauge freedom or a quantity
 no row reaches, leaves a diagonal entry at the level of the rows' rounding, a small multiple of
-$u \lVert a_i \rVert$; a determined direction leaves one of order $\lVert a_i \rVert / \kappa$. The
+$u \lvert a_i \rvert$; a determined direction leaves one of order $\lvert a_i \rvert / \kappa$. The
 threshold $u^{3/4}$ sits between them with a margin of $u^{-1/4}$ on the side of rounding: about
 $1.1 \times 10^{-12}$ for rows computed in double precision, where the archive's fixed $10^{-12}$
 was, and about $3.8 \times 10^{-6}$ for rows computed in single precision, where the archive's
@@ -738,7 +738,7 @@ right-hand sides, so back substitution gives it, the part from $\eta$ at $\kappa
 at $\kappa(J)$. The constant of `reduced` is
 [](eq:archive/linearization/math/improper) with $c_0$ the problem's constant: $\tfrac{d_E}{2}
 \log 2\pi$, less the log-determinant of the eliminated blocks, less the constant left, which holds
-$c_0$, $\Gamma$ and both residuals $\tfrac12 \lVert e \rVert^2$, the fronts' and the last QR's.
+$c_0$, $\Gamma$ and both residuals $\tfrac12 \lvert e \rvert^2$, the fronts' and the last QR's.
 
 The number of rows of `Reduced::a` is decided by shapes alone: the factors left have $m'$ rows in
 all, and the last QR keeps $\min(m', D)$ of them whatever the numbers.
@@ -1005,8 +1005,8 @@ The linear term is $\eta = \sum_t \nabla \lambda_t$ over the bound log-volumes t
 each the tangent frame of its target, added into its blocks; it is `None` when no factor has one,
 and then exactly zero. It is never formed as $g - \sum_t J_t\transpose (r_t + \hat c_t)$
 ([Why $\eta$ is read off the log-volumes](math.svx#linearizing-a-query)), and no pass of the query's
-gradient is run at all. The constant is $c_0 = f(\hat \point) - \tfrac12 \sum_t \lVert \hat r_t +
-\hat c_t \rVert^2$, less $\tfrac12 \sum_t \lVert u_t \rVert^2$ in the Fisher assembly, so that
+gradient is run at all. The constant is $c_0 = f(\hat \point) - \tfrac12 \sum_t \lvert \hat r_t +
+\hat c_t \rvert^2$, less $\tfrac12 \sum_t \lvert u_t \rvert^2$ in the Fisher assembly, so that
 $m(0) = f(\hat \point)$. The roundoff is the target precision's: $2^{-53}$ or $2^{-24}$.
 
 `at_in_chart` adds the chart's term for the named quantities: for each, `space.log_volume()`'s
@@ -1321,7 +1321,7 @@ In `crates/skoro-linearize/tests/fisher.rs`:
 - `fisher_scoring_converges_to_the_estimate`, [](eq:archive/linearization/math/scoring-step): on
   draws from normals with free means and an isotropic or a diagonal scale, iterated scoring steps
   reach the maximum-likelihood estimate in closed form; the isotropic scale's step is
-  $(\lVert r \rVert^2 - \dimension) / 2 \dimension$.
+  $(\lvert r \rvert^2 - \dimension) / 2 \dimension$.
 - `fisher_marginals_are_the_inverse_information`: the marginal covariances equal the blocks of the
   inverse expected information, a free scale's among them.
 - `fisher_shares_the_schedule`: both assemblies of one query have one structure, and one schedule

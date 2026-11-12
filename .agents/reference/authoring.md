@@ -143,7 +143,7 @@ Lay equations out so that they read the way the argument runs:
 
 - **Chains are displayed.** A chain of equations, `a = b = c`, never goes inline, least of all one
   with stacked vectors. An equation between stacked vectors is displayed even when it is a single
-  equality. A lone short equation, such as $w\transpose x = \lVert x \rVert^2 - \alpha x_1$, may
+  equality. A lone short equation, such as $w\transpose x = \lvert x \rvert^2 - \alpha x_1$, may
   stay in the sentence.
 - **A short chain takes one line.** If the reader can take it in at once, it goes on one line. Several
   such chains in a row go in one `gathered` block, a chain to a row. Give a chain one relation per
