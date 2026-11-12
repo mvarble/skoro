@@ -411,7 +411,8 @@ impl RotationMaps for Q<Rotation> {
     }
 }
 
-/// The identity rotation, `(1, 0, 0, 0)`.
+/// The identity rotation, stored as `(1, 0, 0, 0)`; `(-1, 0, 0, 0)` stores the same rotation,
+/// and every map gives the same at either.
 #[track_caller]
 pub fn identity() -> Q<Rotation> {
     constant(Rotation, [1.0, 0.0, 0.0, 0.0])
