@@ -11,15 +11,6 @@ The archive is the branch `archive`, tagged `archive-2026-10-09`; read it with `
 The goal is an initial release that shows what skoro does: a model built once, then estimated, filtered and sampled without being told its structure again.
 The items are in the order they should be taken.
 
-- **An observed quaternion on the wrong side.** The type `Rotation` is the unit quaternions, a double cover of the rotations, and the normal tells `q` from `-q`.
-  The caller must give an observed quaternion the sign of its prediction (`host::align`).
-  One with the wrong sign sits beside the one point the chart cannot reach: its residual grows without bound, nothing refuses it, and no optimizer step can cross to the other sign.
-  Both examples draw their measurements from the model, so their signs are right by construction, and this path has never been run on outside data.
-  The entry observes quaternions of arbitrary sign, among them a loop closure given with the opposite sign to its prediction, on a standard g2o dataset if loading one is cheap enough, and works out whether alignment stays the caller's or becomes a helper that aligns each row against a prediction.
-  ```
-  /wf-start quaternion-signs feature Observed quaternions of arbitrary sign on outside data, revises rotations
-  ```
-
 - **A broad normal on a rotation is not a weak prior.** The mean of a normal on `Rotation` stops being a mode once its standard deviation passes about 1.6 rad, and the mass then goes to the far side of the quaternion sphere, which as a rotation is the mean again.
   The median angle between a drawn rotation and the mean was 1.47 rad at σ = 1, 2.48 rad at σ = 3, 1.01 rad at σ = 10, 0.10 rad at σ = 100 and 0.010 rad at σ = 1000.
   So a very large standard deviation, the common way to write "unknown", gives a tight prior, and during optimization such a term pushes the estimate away from its mean.
