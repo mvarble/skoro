@@ -2,7 +2,7 @@
 title: "Observed quaternions of arbitrary sign on outside data"
 pages: []
 crates: []
-revises: [rotations, core, measures]
+revises: [rotations, core, measures, linearization]
 ---
 
 The type `Rotation` is the unit quaternions, a double cover of the rotations, and the normal on it

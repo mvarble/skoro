@@ -1,6 +1,6 @@
 ---
 summary: The core declares a type stored up to a finite group of linear maps and checks it; skoro-spatial's rotations, motions and extended poses become SO(3), SE(3) and SE₂(3) under the Cayley chart, stored up to the quaternion's sign; their maps that read the sign are replaced by those of the shorter turn; and a pose graph read from g2o text is estimated in whatever signs it is given.
-depends_on: [archive/quaternion-signs/math, archive/core/implementation, archive/measures/implementation, archive/rotations/implementation]
+depends_on: [archive/quaternion-signs/math, archive/core/implementation, archive/measures/implementation, archive/rotations/implementation, archive/linearization/implementation]
 ---
 
 ## Overview
@@ -17,7 +17,7 @@ Normal::on(Pose, x[i].between(x[j]), Scale::precision(&edge.precision, 6)).score
 let given = Observations::new().observe(z, edge.measurement); // either sign
 ```
 
-Three things change.
+Four things change.
 
 1. **The core** gains the declaration of an embedded type stored up to a finite group of linear
    maps of its storage, [%full](statement:archive/quaternion-signs/math/quotient):
@@ -33,12 +33,15 @@ Three things change.
    ([The maps of the rotations](math.svx#the-rotations-the-rigid-motions-and-the-extended-poses)):
    `log`, `axis_angle`, `slerp`, the poses' `log`, `interpolate` and `interpolate_parts`, and the
    extended poses' `log`, are those of the shorter turn, and the `*_shorter` names are removed.
-3. **An example**, `g2o`, reads a 3D pose graph in g2o's text format, converts each edge's
+3. **skoro-linearize** refuses a linearization point at which a factor's residual or Jacobian is
+   not finite, naming the term and the row (`Error::NotFinite`), which is how a value a half-turn
+   from its mean fails, as the mathematics promised, rather than carrying a `NaN` into a step.
+4. **An example**, `g2o`, reads a 3D pose graph in g2o's text format, converts each edge's
    information by [](eq:archive/quaternion-signs/math/g2o-precision), and estimates it. Without a
    file it writes and reads the one-turn loop of
-   [The problem](math.svx#the-problem), whose loop closure is on the far side
-   of its prediction at the states composed from odometry, the case the stereographic chart got
-   wrong.
+   [The problem](math.svx#the-problem), with its vertices in the signs that composing the odometry
+   gives, so that the loop closure is on the far side of its prediction at the start, the case the
+   stereographic chart got wrong.
 
 ## Constraints
 
@@ -163,8 +166,30 @@ $[0, 2\pi)$, and `align`.
 and the spatial types' host values normalize the quaternion and keep its sign. `Scale::precision`
 takes a $d \times d$ precision row by row and refuses one that is not symmetric positive definite.
 A pose graph's first vertex is held by a constant, and every other vertex is a parameter, scored
-by no term; the linearizer accepts parameters
-([the probabilistic graph](../core/math.svx#the-probabilistic-graph)).
+by no term ([the probabilistic graph](../core/math.svx#the-probabilistic-graph)). The linearizer
+takes such a quantity as free and refuses it only when its rows do not determine it:
+`crates/skoro-linearize/tests/refusals.rs` builds two unscored quantities `a` and `b` with one
+measurement of `b - a`, and is refused `Error::Undetermined` for the second, the gauge. With the
+first vertex constant, a connected graph of relative measurements determines every other.
+
+**What the linearizer does with a non-finite value**, `crates/skoro-linearize/src/assemble.rs`
+and `minimize.rs`. `Linearizer::at` reads each factor's residual and Jacobian onto the host once,
+
+```rust
+let residuals: Vec<(Vec<f64>, Vec<f64>)> = self
+    .factors
+    .iter()
+    .map(|f| Ok((host(&pass.values, f.residual)?, frame(&pass.frames, f.residual)?)))
+    .collect::<Result<_, Error>>()?;
+```
+
+and checks neither for finiteness. `LevenbergMarquardt::minimize` accepts a step when
+`gain > 0.0`, which a `NaN` gain fails, and ends a row with `Status::DampingExceeded` or
+`IterationsExceeded`; its `Error`, `#[non_exhaustive]`, has no variant for a value that is not
+finite. A non-finite residual at the start is therefore not refused today: it reaches the
+elimination, and the row ends without saying why. The mathematics settled that a value a half-turn
+from its mean is left non-finite and that "a model evaluated there fails, saying where"; that
+needs a refusal the linearizer does not have.
 
 ## Design
 
@@ -173,22 +198,23 @@ by no term; the linearizer accepts parameters
 In `crates/skoro-core/src/embedded.rs`:
 
 ```rust
-/// A linear map of a type's storage, `n × n`, row by row.
-#[derive(Clone, Debug, PartialEq)]
+/// A signed permutation of a type's storage: entry `i` of `g x` is `signs[i] · x[source[i]]`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Linear {
-    n: usize,
-    rows: Vec<f64>,
+    source: Vec<usize>,
+    signs: Vec<i8>,
 }
 
 impl Linear {
-    /// The map with these rows; `None` unless there are `n × n` finite entries.
-    pub fn new(n: usize, rows: Vec<f64>) -> Option<Linear>;
-    /// The diagonal map with these entries, each `1` or `-1`; `None` otherwise.
-    pub fn signs(signs: &[f64]) -> Option<Linear>;
+    /// The map taking entry `source[i]` to entry `i` with sign `signs[i]`; `None` unless
+    /// `source` is a permutation of `0..n` and every sign is `1` or `-1`.
+    pub fn new(source: Vec<usize>, signs: Vec<i8>) -> Option<Linear>;
+    /// The diagonal map with these signs, each `1` or `-1`; `None` otherwise.
+    pub fn signs(signs: &[i8]) -> Option<Linear>;
     pub fn storage(&self) -> usize;
     /// `g x`, for one stored point.
     pub fn apply(&self, x: &[f64]) -> Vec<f64>;
-    /// `g h`.
+    /// `self` first, then `other`: `x ↦ other(self(x))`.
     pub fn then(&self, other: &Linear) -> Linear;
 }
 
@@ -204,8 +230,9 @@ impl Embedded {
     /// type is the orbit of a stored point, `R`, `Q`, `P` and `Λ` must meet the conditions of
     /// the statement, which `check_embedded` and `check_volume` check, and every function the
     /// core computes is the same at every representative. Refuses a generator of another
-    /// storage, a group of more than 64 elements, which is taken to be no finite group of
-    /// interest, a flat declaration, and one already stored up to a group (`InvalidDeclaration`).
+    /// storage, a group of more than 64 elements, which the comparisons up to the group would
+    /// enumerate, a flat declaration, and one already stored up to a group
+    /// (`InvalidDeclaration`).
     pub fn stored_up_to(self: Arc<Self>, generators: Vec<Linear>) -> Result<Arc<Embedded>, Error>;
     /// The generators, empty for a type stored as itself.
     pub fn identification(&self) -> &[Linear];
@@ -216,14 +243,17 @@ impl Embedded {
 
 Both `Linear` and the new methods are re-exported from `skoro_core` beside `Embedded`.
 
-**Why generators, and why general linear maps.** The statement allows any finite group of linear
+**Why generators, and why signed permutations.** The statement allows any finite group of linear
 maps acting freely, and the checks need only the generators: each condition is preserved under
 composition, so it holds on the group when it holds on the generators. `group` exists for the
-comparisons up to the group in tests, below. A diagonal sign is all the spatial types need, and
-`Linear::signs` makes it in one line, but a general matrix costs nothing more to store or apply
-and does not tie the core to the one group this entry uses. The alternative, a dedicated
-`Antipodal` flag on the first four storage entries, would put the rotations' storage layout in
-the core, which knows nothing of quaternions.
+comparisons up to the group in tests, below. A general matrix would be closed under composition
+only within rounding, so that the cube of a rotation by $120°$ would not equal the identity and
+`group` could not tell when it was done; the signed permutations compose exactly, are always a
+finite group, and are still linear maps, as the statement asks. Every deck transformation skoro
+has a use for is one: the sign of a quaternion, of a sphere's point, an exchange of two blocks. A
+diagonal sign is all the spatial types need, and `Linear::signs` makes it in one line. The
+alternative, a dedicated `Antipodal` flag on the first four storage entries, would put the
+rotations' storage layout in the core, which knows nothing of quaternions.
 
 **Why nothing else in the core changes.** The derivative maps of
 [%full](statement:archive/core/math/embedded) are those of the statement on $\manifold$, at the
@@ -284,7 +314,7 @@ let lambda = define(log_volume, &[storage.clone(), tangent.clone()], &|q| {
     let phi = q[1].slice(0..3);
     ((phi * phi).sum() * 0.25 + 1.0).log() * -2.0
 })?;
-let sign = Linear::signs(&sign_of_quaternion(n)).expect("±1 entries");
+let sign = Linear::signs(&sign_of_quaternion(n)).ok_or_else(|| invalid("signs"))?;
 Embedded::declare(name, Vec::new(), n, d, r, q, Some(p))?
     .stored_up_to(vec![sign])?
     .with_volume(Volume::global(lambda))
@@ -336,6 +366,30 @@ signs.
 density depend on the sign again, which is what this entry removes; a deprecated method still
 compiles into such a term.
 
+### skoro-linearize: a point that is not finite
+
+In `crates/skoro-linearize/src/error.rs`:
+
+```rust
+/// A factor whose residual or Jacobian is not finite at the point linearized, at a batch row:
+/// a value outside its term's chart, such as a rotation a half-turn from its mean.
+NotFinite { term: NodeId, row: usize },
+```
+
+displayed as "term {term:?} is not finite at row {row}". `Linearizer::at` and `at_in_chart` scan
+each factor's residual and Jacobian rows as they read them onto the host, and return the first
+factor and row with an entry that is not finite, in the factors' order. Nothing else changes: a
+trial point the minimizer evaluates only through `objective`, and a step that lands on a cut gives
+a non-finite objective there, a `NaN` gain, and a rejected step, as now.
+
+**Why refuse at the linearization point.** It is where every estimator meets the model's value
+first, with the residuals already on the host, so the check costs a scan of data that is read
+anyway. Refusing in the core, at every term's evaluation, would cost a read back from the device
+on every pass, and would refuse values that a caller evaluating a density on purpose at a cut may
+want to see as non-finite. The alternative within the minimizer, a new `Status`, would let the
+other rows of a batch go on, but would not name the term, which is what a user needs to find a
+bad measurement.
+
 ### The example: a pose graph from g2o
 
 `crates/skoro/examples/common/g2o.rs`, read by a new example `crates/skoro/examples/g2o.rs`:
@@ -363,8 +417,11 @@ pub struct Edge {
 /// malformed one is an error naming its line.
 pub fn read(text: &str) -> Result<Graph>;
 
-/// The text of a one-turn loop of `n` poses on a circle, every quaternion written with `w ≥ 0`
-/// and the loop closure near the identity, measurements exact or perturbed by `noise`.
+/// The text of a one-turn loop of `n` poses on a circle: every measurement written with `w ≥ 0`,
+/// the loop closure near the identity, each perturbed by `noise`; and every vertex at the pose
+/// that composing the measured odometry from vertex 0 gives, in the sign the composition gives,
+/// so that the last vertex's quaternion is near `-1` and the loop closure is on the far side of
+/// its prediction.
 pub fn one_turn_loop(n: usize, noise: f64, seed: u64) -> String;
 ```
 
@@ -375,14 +432,34 @@ of `Pose`, scored by `Normal::on(Pose, x[from].between(x[to]), Scale::precision(
 the file gives. The example runs Levenberg–Marquardt, reports the final cost, and checks it
 converged; given a path as its argument it reads that file, and without one it reads
 `one_turn_loop(100, 0.01, SEED)`, so that it runs in CI with no dataset. The library gains no file
-format: a reader belongs to an example until a second caller needs it.
+format: a reader belongs to an example until a second caller needs it. `g2o.rs` uses only the
+standard library and `skoro_spatial::host`, and returns its own `Result<T, String>`, so that the
+test below can include it by path without the rest of the examples' common modules.
 
 **Why no dataset is vendored.** The usual datasets are megabytes, and their licences are each
 their own. The example reads any 3D g2o file a user has, and its own loop exercises the case that
 matters.
 
 The example joins the checks of `AGENTS.md` and `.github/workflows/ci.yml`:
-`cargo run --release -p skoro --example g2o`.
+`cargo run --release -p skoro --example g2o`. Both files are outside the workflow's gates, and the
+change is made with the build.
+
+### What else the change touches
+
+Every use of a removed or renamed map is in skoro-spatial: in its sources (`rotation.rs`,
+`pose.rs`, `extended.rs`, including `ExtendedPoseMaps::interpolate_shorter`, `host.rs`, and the
+list of `series.rs`) and its tests, `checks.rs`, whose `composites_pass_check_operation` runs
+`log_shorter`, `axis_angle`, `slerp`, `slerp_shorter` and the motions' `*_shorter` maps by name,
+`interpolations.rs`, `motions.rs`, `rotations.rs` and `types.rs`. No other crate calls any of
+them. skoro-linearize's tests use `Rotation` in `linearize.rs` and `replacement.rs` only for the
+shape of a linearization, not the chart's values, and are unchanged.
+
+The site's pages quote the changed files by line range: `concepts/rotations-and-motions` quotes
+`types.rs`, `rotation.rs`, `pose.rs`, `host.rs` and `series.rs`, and `guide/rotations-and-poses`
+quotes `tests/normal.rs`. The pages are closed until the publish stage, so between the build and
+the publish they quote whatever lines then stand at those ranges, and `pnpm build` fails if a
+range runs past the end of its file. The build keeps every quoted file at least as long as its
+ranges reach, so that the site builds throughout, and the publish stage rewrites the quotes.
 
 ## Tests
 
@@ -400,8 +477,9 @@ global, and full on the quotient, missing only the line orthogonal to $x$. The t
 the core's primitives, the reciprocal of $x \cdot y$ as that of its square, as the rotations do:
 
 - `stored_up_to_refuses_what_it_cannot_accept`: a generator of another storage, a group of more
-  than 64 elements (a rotation of the plane by an irrational angle, whose closure does not end),
-  a flat declaration, and a second call, each `InvalidDeclaration`.
+  than 64 elements (the signed permutations of seven entries generated by a cycle and a sign), a
+  flat declaration, and a second call, each `InvalidDeclaration`; and `Linear::new` refuses a
+  `source` that is not a permutation and a sign other than $\pm 1$.
 - `group_closes_the_generators`: the group of one sign is two elements, the identity first; of two
   commuting signs, four.
 - `the_checks_hold_on_the_lines`: `check_embedded` and `check_volume` pass.
@@ -415,8 +493,8 @@ the core's primitives, the reciprocal of $x \cdot y$ as that of its square, as t
 `chart_is_cayley`: the angle of $\gamma(t)$ is $2 \arctan(\lVert t \rVert / 2)$; $Q(x, R(x, t)) = t$
 at lengths up to $10$; $Q(-x, y) = Q(x, y) = Q(x, -y)$ exactly; $(-x) \oplus t = -(x \oplus t)$;
 $\pi(x \oplus t) = \pi(x)(I + [t]_\times) + O(\lVert t \rVert^2)$ against
-[](eq:archive/rotations/math/rotation); $Q$ non-finite at a stored half-turn $y = x \otimes (0, a)$
-and of length $2 \tan(\varphi/2)$ just short of it. `volume_has_the_stated_mass` integrates
+[](eq:archive/rotations/math/rotation); $Q(x, y)$ non-finite at $x = (1, 0, 0, 0)$ and $y = (0, 1, 0, 0)$, exactly a half-turn at either
+precision, and of length $2 \tan(\varphi/2)$ at $\varphi = 3$ rad. `volume_has_the_stated_mass` integrates
 $e^{\lambda}$ [](eq:archive/quaternion-signs/math/cayley-volume) over $\R^3$ to $8\pi^2$, the mass of
 $\nu_{SO(3)}$ normalized at the chart's centre, half that of $S^3$'s, by the same quadrature.
 `types_pass_the_core_checks` now exercises the group's checks on all three types.
@@ -450,24 +528,34 @@ $\nu_{SO(3)}$ normalized at the chart's centre, half that of $S^3$'s, by the sam
   above, and the series check's list renames `log_shorter` to `log` on all three types.
 - `host_maps_agree_with_the_graph` adds `host::log` and `host::canonical`.
 
+**The refusal**, in `crates/skoro-linearize/tests/refusals.rs`:
+
+- `a_non_finite_residual_is_refused`: a normal on a vector whose mean is a constant `NaN` is
+  refused at the linearizer's `at` with `Error::NotFinite`, naming its term and row `0`, and in a
+  batch of two rows with the `NaN` in the second, naming row `1`.
+
 **The sign of a measurement**, in a new `crates/skoro/tests/signs.rs`, on `one_turn_loop(24, 0,
 seed)` and on the same loop with noise, read through `g2o::read` (the test includes the module
 by path, as the examples' common modules are shared):
 
-- `a_one_turn_loop_closes`: from the start composed from odometry, where the loop closure is on the
-  far side of its prediction, Levenberg–Marquardt converges to a cost at the noise level, and every
-  relative rotation of the estimate is within the noise of its measurement: no turn is wound into
-  it. Under the stereographic chart this test fails, with every edge wrong by about
-  $2\pi / 25$, which is why it is here.
+- `a_one_turn_loop_closes`: the fixture's loop closure is on the far side of its prediction at the
+  start, which the test asserts first, $\langle z, h(\hat\point) \rangle < 0$; from that start,
+  Levenberg–Marquardt converges to a cost at the noise level, and every relative rotation of the
+  estimate is within the noise of its measurement: no turn is wound into it. This is the case
+  [In a cycle](math.svx#what-a-misaligned-measurement-does) shows the stereographic chart
+  cannot satisfy.
 - `the_estimate_ignores_every_sign`: negating the quaternion of every measurement, of every
   vertex's start, and of a random half of each, gives estimates equal up to the group, by
   `close_up_to`, and the same final cost to rounding.
 - `g2o_information_is_converted`: an edge with a diagonal $\Omega$ and one with a coupling block
-  give the precision [](eq:archive/quaternion-signs/math/g2o-precision); and at a small residual the
-  normal's quadratic form agrees with g2o's $e\transpose \Omega e$, computed on the host from
-  [](eq:archive/quaternion-signs/math/g2o-error), to third order in the residual.
-- `a_half_turn_is_non_finite`: a measurement given exactly a half-turn from its prediction makes
-  the term non-finite, and the linearizer's evaluation fails rather than returning a number.
+  give the precision [](eq:archive/quaternion-signs/math/g2o-precision); and the normal's quadratic
+  form $\tangent\transpose \Lambda \tangent$ and g2o's $e\transpose \Omega e$, computed on the host from
+  [](eq:archive/quaternion-signs/math/g2o-error), differ by $O(\lVert \tangent \rVert^3)$: at a
+  residual of length $0.1$ and again at half of it, the difference falls by a factor between $6$
+  and $10$.
+- `a_half_turn_is_non_finite`: a rotation observed at $(0, 1, 0, 0)$ with the mean $(1, 0, 0, 0)$,
+  exactly a half-turn at either precision, makes the term non-finite, and the linearizer refuses
+  it with `Error::NotFinite`, naming that term and row.
 
 **The examples.** `pose_graph` and `sliding_window` run as before; their measurements are drawn
 from the model, so their results change only through the chart's third-order term and its
