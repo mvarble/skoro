@@ -99,35 +99,29 @@ block of variables out of a sum of squared rows leaves one factor on its neighbo
 [the note on elimination](../../math/square-root-elimination/#eliminating-one-block), and what a
 retirement does to a model is not.
 
-The test leaves a few cases to rule on.
+The test does not settle every case by itself. These are the ones that needed a ruling.
 
-> [!TODO] The line, case by case
-> These are the cases the test does not settle by itself, each with the ruling this draft
-> proposes.
->
-> - **The compilation graph** is skoro's own. It is a computation graph in the sense of
->   [the note on automatic differentiation](../../math/automatic-differentiation/), with skoro's
->   kinds of node, and nothing general about it is missing from that note.
-> - **The probabilistic graph** is skoro's own as an object, a graph of quantities and terms. What
->   is general is the *dependence graph* of a model built forward, with its ancestral orders and
->   Markov blankets, which
->   [the note on such models](../../math/generative-models/#how-skoro-is-built-on-this) already
->   introduces under the heading "How skoro is built on this". That section is the one place where
->   a note speaks of skoro and links into the archive. Proposed: its general content stays in the
->   note as a section on the dependence graph, and what it says of skoro moves to the page
->   [Terms and the probabilistic graph](../../concepts/terms/).
-> - **The sliding window** is skoro's own: it is an example, a model and a schedule of retirements.
->   The general fact inside it, that eliminating a block of a linear-Gaussian model is the update
->   and prediction of a Kalman filter, becomes an example in the note on the improper Gaussian.
-> - **Storage up to a group** splits. That a retraction which commutes with a finite group acting
->   freely descends to the quotient, with its chart volume and its densities, is general and gets a
->   note. That a type is *stored* as a point of the covering space, and how it declares so, is
->   skoro's own.
-> - **The measurements of one GPU** are not mathematics and stay in the archive. The analysis they
->   prompted, of how absolute and relative error reach a closed form and what a cutoff must
->   satisfy, is general.
->
-> Is each of these right?
+- **The compilation graph** is skoro's own. It is a computation graph in the sense of
+  [the note on automatic differentiation](../../math/automatic-differentiation/), with skoro's
+  kinds of node, and nothing general about it is missing from that note.
+- **The probabilistic graph** is skoro's own as an object, a graph of quantities and terms. What
+  is general is the *dependence graph* of a model built forward, with its ancestral orders and
+  Markov blankets, which
+  [the note on such models](../../math/generative-models/#how-skoro-is-built-on-this) already
+  introduces under the heading "How skoro is built on this". That section is the one place where
+  a note speaks of skoro and links into the archive. Its general content stays in the note, as a
+  section on the dependence graph, and what it says of skoro moves to the page
+  [Terms and the probabilistic graph](../../concepts/terms/).
+- **The sliding window** is skoro's own: it is an example, a model and a schedule of retirements.
+  The general fact inside it, that eliminating a block of a linear-Gaussian model is the update
+  and prediction of a Kalman filter, becomes an example in the note on the improper Gaussian.
+- **Storage up to a group** splits. That a retraction which commutes with a finite group acting
+  freely descends to the quotient, with its chart volume and its densities, is general and gets a
+  note. That a type is *stored* as a point of the covering space, and how it declares so, is
+  skoro's own.
+- **The measurements of one GPU** are not mathematics and stay in the archive. The analysis they
+  prompted, of how absolute and relative error reach a closed form and what a cutoff must
+  satisfy, is general.
 
 ### The order is explicit, and the build checks it
 
@@ -155,14 +149,12 @@ The build sorts the notes by part and then by `order`, and refuses
 arrows of the map. The order is a second, stronger statement, that everything before a note may be
 assumed, and the check ties the two together in the one direction a build can check.
 
-> [!TODO] Flat, or in parts
-> The alternative is one flat sequence, as a track is. This draft proposes parts, for two reasons.
-> The mathematics is not a chain: geometry and probability do not meet until densities are pushed
-> through charts, and elimination is linear algebra that rests on neither until linearization
-> joins all three. A flat list of some nineteen notes hides that a reader who knows manifolds may
-> begin at the seventh, and parts say so. And an insertion renumbers the notes after it, which in
-> a part is at most a handful of files. The cost is one more field and one more list to keep. Are
-> parts wanted, and are three the right ones?
+The notes stand in parts, and not in one flat sequence as a track's pages do, for two reasons.
+The mathematics is not a chain: geometry and probability do not meet until densities are pushed
+through charts, and elimination is linear algebra that rests on neither until linearization joins
+all three. A flat list of nineteen notes would hide that a reader who knows manifolds may begin at
+the ninth, and parts say so. And an insertion renumbers the notes after it, which within a part is
+at most a handful of files. The cost is one more field in a note and one more list to keep.
 
 ### A note is a chapter
 
@@ -219,26 +211,27 @@ part. A new note also names the archive documents its mathematics is drawn from.
 | 6 | `fisher-scoring` (new) | the expected information in place of the Hessian, and its roots as a second set of rows. From `normal` and `linearization`. | probability 3; 3 |
 | 7 | `calibration` (new) | credible sets that contain the truth as often as they claim, under the model, and the error an approximation adds. From `examples`. | probability 1; 5 |
 
-That is nineteen notes, twelve of them new.
+That is nineteen notes, twelve of them new. Several choices in the tables could have gone the
+other way, and each went the way of "one idea to a note".
 
-> [!TODO] The list and the order
-> The tables are a proposal. The choices in them that could go the other way:
->
-> - **Reference measures have no note of their own.** What `measures` holds that is general (the
->   flat and positive spaces, the area formula) is a few paragraphs beside what `chart-volume`
->   already says of the measure a retraction normalizes and of products, so it is folded in.
-> - **`quotient-manifold` is its own note,** short as `product-manifold` is, and not a section of
->   `rotations`, because it is one idea and the rigid motions use it too.
-> - **`rotations` and `rigid-motions` are two notes,** and `levenberg-marquardt`, `linearization`,
->   `laplace-approximation` and `fisher-scoring` are four where they could be two.
-> - **`importance-weights` is a note.** It was not among the ideas first counted as missing, and it
->   is general.
-> - **`removable-singularities` closes the first part** and is not a part of its own, since one
->   note does not make a part and its subject is the maps of the two notes before it.
-> - **`retraction` comes first,** before automatic differentiation, though neither rests on the
->   other, because the first concept page rests on it.
->
-> Which of these should change, and is anything missing or misplaced?
+- **Reference measures have no note of their own.** What `measures` holds that is general (the
+  flat and positive spaces, the area formula) is a few paragraphs beside what `chart-volume`
+  already says of the measure a retraction normalizes and of products, so it is folded in.
+- **`quotient-manifold` is its own note,** short as `product-manifold` is, and not a section of
+  `rotations`, because it is one idea and the rigid motions use it too.
+- **`rotations` and `rigid-motions` are two notes,** and `linearization`, `levenberg-marquardt`,
+  `laplace-approximation` and `fisher-scoring` are four where they could have been two. Each is a
+  method with a name of its own, which a reader looks for by that name.
+- **`importance-weights` is a note.** It is general, and no page can say what a weighted draw is
+  without it.
+- **`removable-singularities` closes the first part** and is not a part of its own, since one
+  note does not make a part and its subject is the maps of the two notes before it.
+- **`retraction` comes first,** before automatic differentiation, though neither rests on the
+  other, because the first concept page rests on it.
+
+The list is what the publish stage sets out to write. Writing may still show that a note is two
+ideas, or that two are one, and the list bends to that; what does not bend is the order's rule and
+the test for what belongs.
 
 ### This entry writes the notes
 
@@ -281,21 +274,54 @@ general mathematics becomes a link to the note that holds it, and its `depends_o
 note. A page keeps its links to the archive for what the archive is for, why skoro is the way it
 is. [Reading these docs](../../start/reading-these-docs/) and
 [How skoro is developed](../../reference/how-skoro-is-developed/) are rewritten where they
-describe the section. The archive's documents are frozen and keep their links to one another.
+describe the section. The archive's documents keep their links to one another.
 
-**Frozen documents hold the notes in place.** The archive's documents refer to the notes' numbered
+**The archive's references are kept true.** The archive's documents refer to the notes' numbered
 equations and statements 98 times, 36 distinct ones, and to ten of their sections by heading. A
-frozen document cannot be changed to follow a note, so the note must not move from under it.
+note that is rewritten must not leave those references pointing at nothing, or at something that
+no longer says what the document meant. In order of preference:
 
-> [!TODO] What a rewrite must keep
-> Proposed: a note's slug, and every equation tag, statement and heading that a frozen document
-> refers to, are kept where they are. A rewrite may add to a note, reword it and reorder it, and
-> may not move a cited statement into another note or rename a cited heading. For this entry that
-> decides one thing: the table of the usual charts stays in `chart-volume`, where the archive
-> points six times, and the new `rotations` note comes before it and derives what the table
-> lists. The alternative is to teach the site an alias, as a moved page has `formerly`, so that a
-> statement could move and still resolve. This draft proposes not to build that until a note
-> first needs it. Is that the right constraint, or should the alias come now?
+1. **What is cited stays.** An equation, statement or heading that an archive document refers to
+   keeps its name and its note wherever the story has a place for it there. A rewrite adds to the
+   note, rewords it and reorders it around what is cited. The table of the usual charts, to which
+   the archive points six times, stays in `chart-volume` on these grounds: the new `rotations`
+   note comes before it and derives what the table lists.
+2. **What moves is followed.** Where the story is told better with a cited equation or statement
+   in another note, it moves, and the archive's reference is changed to its new place.
+3. **What has no place is embedded.** Where something cited belongs in no note any longer, it is
+   written into the archive document that cites it: a statement moves into the entry's
+   `statements/`, and an equation or a passage is set down where it was referred to. The document
+   then says by itself what it said with the note's help.
+
+The second and third change a document of an entry that is done, and the workflow has so far
+allowed no such change: an approved document is frozen, a done entry is never edited again, and a
+branch changes the files of one entry only. `bin/wf guard` refuses the edit, and `bin/wf check`
+refuses both a document whose hash is not the approved one and a branch that touches another
+entry. This decision therefore makes an exception, and a narrow one. A later entry may change a
+done entry's document to keep true a reference into the notes, and for nothing else. The argument
+of the document, what it claimed and how it weighed things, is as frozen as before.
+
+> [!TODO] How a done entry's document is changed
+> The exception needs a mechanism, since the tooling refuses the edit today, and the freeze is
+> the archive's one promise to its reader. Two ways to build it:
+>
+> - **The amending entry declares it, and its approval records it.** At its publish stage an
+>   entry may edit a done entry's document, and lists the documents it changed under `amends` in
+>   its `index.md`, as it lists `pages` and `crates`. `wf approve` refuses the publish if a done
+>   entry's document changed and is not listed. On approval it records the new hash and an
+>   `amend` event, naming the amending entry, in the amended entry's history, and the site shows
+>   on the amended document which entry changed its references. Nothing mechanical limits the
+>   edit to references: the person approving the publish reads the diff.
+> - **The tool makes the change.** `bin/wf relink <from> <to>` replaces one reference by another
+>   wherever the archive has it, and records the hashes and the event itself, so that no hand
+>   touches a frozen document and the change cannot reach its argument. It covers a move and a
+>   statement embedded by moving its file. It cannot write an equation or a passage into a
+>   document, so the third case would still need the first mechanism.
+>
+> This draft proposes the first alone: the third case needs it whatever is done for the second,
+> one mechanism is less to build and to explain than two, and the amendments are in front of the
+> person at the approval that records them. Is that right, or is the mechanical limit of `relink`
+> worth having for the moves?
 
 **What it costs.**
 
@@ -305,6 +331,10 @@ frozen document cannot be changed to follow a note, so the note must not move fr
 - A note is not frozen. An approved `math` document that leans on a note leans on text that may be
   rewritten later, and what the note said at the time of approval is in git and nowhere else. That
   is already so of the 36 equations and statements above.
+- The archive's freeze has an exception where it had none. `workflow.md`, the page
+  [How skoro is developed](../../reference/how-skoro-is-developed/) and the tooling say so, and
+  the promise to a reader of the archive becomes that a document's argument is as it was approved,
+  while its references into the notes may have been brought up to date, on the record.
 - The check sees only what a note declares. It refuses a dependency that points forward; it cannot
   find one that was never listed, and it does not read a note's links. Whether a note truly rests
   only on those before it is still a matter of reading it.
@@ -335,6 +365,18 @@ mathematics needed. But the mathematics missing from the section belongs to feat
 done, and no entry is coming that would have reason to write it: a chore cannot open the notes,
 and a decision opened only to write a note has nothing to decide. The section would have claimed
 to be the whole story for as long as that took.
+
+**One flat sequence.** A track's pages stand in one sequence, and the notes could have. Nineteen
+notes in a row would have interleaved three strands that do not depend on one another in whatever
+way the author chose, with nothing to show a reader where one could be entered, and every
+insertion would have renumbered all that followed.
+
+**Holding the notes in place under the archive.** The archive could have stayed untouched, with
+every cited equation, statement and heading kept where it is for good. The notes would then have
+been shaped by what was once cited from where, and not by what reads best, with that weight
+growing as entries accumulate. An alias on the site, as a moved page has `formerly`, would have
+let a statement move without the archive changing, and would have had no answer for something
+that leaves the notes altogether.
 
 **Keeping the order in one file.** A single list of slugs, with the parts as its headings, would
 make an insertion a one-line change and show the whole table of contents in one place. It would
