@@ -1,0 +1,267 @@
+---
+title: The improper Gaussian factor
+part: estimation
+order: 2
+summary: A sum of squared affine rows of any number, a linear term and a constant, in the tangent coordinates of several points at fixed anchors, is Gaussian along its rows and flat or linear across them; such factors add, are a normal exactly when their rows have full rank, and are what integrating a variable out of a linear-Gaussian model leaves on its neighbours, the Kalman filter's update and prediction among them.
+depends_on: [normal, square-root-elimination]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as factor from './statements/factor.md';
+	import * as fullRank from './statements/full-rank.md';
+	import * as forms from './statements/forms.md';
+</script>
+
+Integrating a quantity out of a model leaves a function of the quantities it was tied to, its
+[Markov blanket](../generative-models/#the-dependence-graph). For a model of
+[normals](../normal/) that function is Gaussian in shape, and it is tempting to write it as a
+normal density of the blanket. A normal density has a covariance, though, and so can only describe
+a function that pins down every direction of the blanket. Many do not. A landmark seen by bearing
+from a single pose is the standard case: once the pose is integrated out, the bearing has said in
+which direction the landmark lies, and nothing about how far. What is left is Gaussian across the
+bearing and constant along it, and no covariance describes it. Forced into a normal, it must either
+be refused or be given a depth that the data never supplied.
+
+This note defines the function that needs neither: the *improper Gaussian factor*. It keeps exactly
+what was said and nothing more, such factors add, and when one does determine its blanket it is a
+normal.
+
+## The factor
+
+Let $\point_1, \dots, \point_k$ be points of manifolds of dimensions $\dimension_1, \dots,
+\dimension_k$, each with a retraction, and fix for each an *anchor* $p_i$ in its manifold. The
+*stacked tangent* is the vector of their coordinates in the charts at the anchors,
+
+$$
+	\delta(\point_B) = (\point_1 \ominus p_1,\ \dots,\ \point_k \ominus p_k) \in \R^D,
+	\qquad D = \sum_i \dimension_i , @tag(stacked)
+$$
+
+the tuple standing, here and below, for the column vector with its entries stacked. The anchors
+are fixed points, and do not move with the points the factor is a function of.
+
+<Statement {...factor} />
+
+The rows say what the factor determines. Write $\delta = \delta_\parallel + \delta_\perp$, with
+$\delta_\parallel$ in the row space of $A$ and $\delta_\perp$ in its null space. Along the row
+space the squares are a Gaussian. Along the null space the squares do not change, and the factor
+is linear, with slope $-\eta\transpose \delta_\perp$. A factor with $r = 0$ rows is linear and a
+constant alone.
+
+The factor is a [likelihood factor](../generative-models/#conditioning-and-likelihoods): a
+nonnegative function $e^\logterm$ of quantities of a model, which reweights the model's law and is
+not the density of anything. It therefore needs no reference measure and no log-volume, even over
+a curved or a positive quantity. Whatever measure an integral was taken in before the factor was
+written is already in its values.
+
+## When it is a normal
+
+<Statement {...fullRank} />
+
+<Proof>
+
+If $A$ has rank less than $D$, take $n \ne 0$ with $A n = 0$. Along the line $\delta + t n$ the
+factor is $\logterm(\delta) - t\, \eta\transpose n$, so $e^{\logterm}$ is constant or grows
+exponentially along every such line, and the integral over $\R^D$ diverges. If $A$ has rank $D$,
+$\Lambda = A\transpose A = W\transpose W$ is positive definite, and
+
+$$
+	\begin{aligned}
+		-\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta
+		&= -\tfrac12 \delta\transpose \Lambda \delta + \delta\transpose (A\transpose b - \eta) - \tfrac12 \lVert b \rVert^2 \\
+		&= -\tfrac12 \lVert W (\delta - m) \rVert^2 + \tfrac12 \lVert W m \rVert^2 - \tfrac12 \lVert b \rVert^2 ,
+	\end{aligned}
+$$
+
+since $\Lambda m = A\transpose b - \eta$. The first term is
+$\logterm_{\mathcal N}(\delta;\, m, W) - \sum_i \log W_{ii} + \tfrac{D}{2} \log 2\pi$
+by [](eq:math/normal/log-density) on $\R^D$, where the log-volume vanishes, and it is integrable.
+Adding $c$ gives $c_{\mathcal N}$.
+
+</Proof>
+
+So the factors of full rank are the normal densities of the stacked tangent, and the improper
+factors are everything else of the same shape. Integrability in $\delta$ is the only difference
+between them, and a likelihood factor never needed it. Integrability in $\delta$ is also not
+integrability against the reference measure of the points' own spaces, which carries the chart's
+volume: on a compact curved space such as the rotations, a bounded factor of any rank is
+integrable against the space's measure, and on a positive space the two differ by the factor
+$\point$. What matters below is the reading in $\delta$, where the factor is Gaussian or flat.
+
+What integrability does change is drawing. A quantity whose only information is an improper
+factor has no law to be drawn from, and is a
+[parameter with a score](../generative-models/#parameters-and-improper-priors). Where the factor
+has full rank over Euclidean points, drawing $\delta$ from the normal of
+[%full](statement:full-rank) and setting $\point_i = p_i \oplus \delta_i$ is a proposal under which
+every draw has the same [weight](../importance-weights/).
+
+## Two examples
+
+**A bearing in the plane.** Take a landmark $\ell \in \R^2$ and poses $\point_k \in \R^2$, each with
+its own prior $\mathcal N(p_k, P_k)$, and a measurement of each pose along a known unit direction
+$a_k$,
+
+$$
+	z_k = a_k\transpose (\ell - \point_k) + \varepsilon_k , \qquad \varepsilon_k \sim \mathcal N(0, \sigma^2) ,
+$$
+
+a linear stand-in for a bearing, which measures the landmark's offset from the pose across one
+direction only. Integrate the pose $\point_k$ out, with $z_k$ observed at $\hat z_k$. Then
+$a_k\transpose \ell - z_k$ is normal with mean $a_k\transpose p_k$ and variance
+$s_k^2 = \sigma^2 + a_k\transpose P_k a_k$, so that, with the anchor $q$ for $\ell$ and
+$\delta = \ell - q$,
+
+$$
+	\logterm_k(\ell) = -\frac{1}{2 s_k^2} \bigl(a_k\transpose \delta - (\hat z_k + a_k\transpose p_k - a_k\transpose q)\bigr)^2 - \tfrac12 \log (2\pi s_k^2) .
+$$
+
+This is the factor with one row, $A = a_k\transpose / s_k$, $b = (\hat z_k + a_k\transpose p_k -
+a_k\transpose q) / s_k$, $\eta = 0$ and $c = -\tfrac12 \log (2\pi s_k^2)$, exactly. It has rank one
+on $\R^2$ and is constant along the direction orthogonal to $a_k$: the line on which the
+measurement places the landmark. A second pose with a direction $a_{k'}$ not parallel to $a_k$
+gives a second such factor. Their sum has two rows of rank two, and is by
+[%full](statement:full-rank) a normal, whose mean is the point at which the two lines cross.
+
+**A positive quantity.** Let a positive quantity $\point$ have the normal on the positive reals
+with the mean $e^{\theta + \varphi}$ and the scale $\sigma$, where $\theta \sim \mathcal N(0, 1)$ is
+real, and integrate $\theta$ out, keeping $\varphi$ and $\point$. The normal's log-density on the
+positive reals is the Gaussian of $\log \point$ less the log-volume $\log \point$, so
+
+$$
+	\begin{aligned}
+		\logterm_B(\varphi, \point)
+		&= \log \int \mathcal N(\theta;\, 0, 1)\, \frac{1}{\point}\, \mathcal N(\log \point;\, \theta + \varphi, \sigma^2) \, \dd \theta \\
+		&= -\log \point - \frac{(\log \point - \varphi)^2}{2 s^2} - \tfrac12 \log (2\pi s^2) ,
+	\end{aligned}
+$$
+
+with $s^2 = 1 + \sigma^2$. In the stacked tangent at the anchors $(\hat \varphi, \hat \point)$,
+$\delta = (\varphi - \hat \varphi,\, \log \point - \log \hat \point)$, it is the factor with
+
+$$
+	A = \tfrac{1}{s} \begin{bmatrix} -1 & 1 \end{bmatrix} , \qquad
+	b = -\frac{\log \hat \point - \hat \varphi}{s} , \qquad
+	\eta = (0, 1) , \qquad
+	c = -\log \hat \point - \tfrac12 \log (2\pi s^2) .
+$$
+
+The linear term is not in the row space of $A$: by part 3 of [%full](statement:forms) below, at
+most its projection onto that space, $(-\tfrac12, \tfrac12)$, can be moved into $b$, and
+$(\tfrac12, \tfrac12)$ remains. Along the null direction $(1, 1)$ the factor falls linearly. This
+is why the factor carries $\eta$: a log-volume that depends on the point and not only on a
+residual, as the positive reals' does, leaves a slope that no row can hold.
+
+## What elimination leaves
+
+The two examples were integrals done by hand. In general, integrating a block of variables out of
+a sum of squared rows and linear terms is part 2 of
+[%full](statement:math/square-root-elimination/eliminate-one): with the notation of that lemma,
+
+$$
+	\log \int e^{-\phi(\tangent_k, \tangent_S)}\, \dd \tangent_k
+	= -\tfrac12 \lVert A' \tangent_S - b' \rVert^2 - (\eta_S - T\transpose y)\transpose \tangent_S
+	- \gamma + \tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert . @tag(eliminated)
+$$
+
+That is an improper Gaussian factor of the variables left: its rows are the rows the
+factorization did not use, its linear term is what is left of the linear terms, and its constant
+collects the rest. Nothing requires $A'$ to have full rank, and when the eliminated block was the
+only thing tying down some direction of $\tangent_S$, it has not. The factor is the exact answer
+all the same.
+
+**The Kalman filter.** Take the scalar chain
+
+$$
+	\randomPoint_0 \sim \mathcal N(a, s^2), \quad
+	\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2), \quad
+	\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2) ,
+$$
+
+and integrate $\randomPoint_0$ out with $\bfz_0$ observed at $\hat z_0$. Completing the square in
+$\point_0$ gives $\mathcal N(a, s^2)(\point_0)\, \mathcal N(\point_0, r^2)(\hat z_0) = \mathcal N(a,
+s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P)(\point_0)$, writing $\mathcal N(m, v)(\point)$ for the
+normal density of mean $m$ and variance $v$ at $\point$, and integrating the motion against it
+gives
+
+$$
+	\logterm_B(\point_1) = \log \mathcal N(a, s^2 + r^2)(\hat z_0) + \log \mathcal N(\mu, P + q^2)(\point_1),
+	\qquad
+	K = \frac{s^2}{s^2 + r^2}, \quad \mu = a + K(\hat z_0 - a), \quad P = (1 - K)\, s^2 . @tag(kalman)
+$$
+
+The factor on $\point_1$ has full rank, and reads as two things. Its normal is the filter's
+*prediction* of $\randomPoint_1$, made from the *update* $\mathcal N(\mu, P)$ of $\randomPoint_0$
+by the measurement, with $K$ the gain. Its constant is the *evidence*, the density of the
+measurement that was integrated over. A Kalman filter is this elimination repeated along a chain,
+one state at a time, and it is exact because every term is linear and Gaussian. The improper
+factor is what the same elimination gives when a state is not yet determined by what has been
+measured, and the filter's covariance does not exist.
+
+## Forms of one factor
+
+<Statement {...forms} />
+
+<Proof>
+
+For part 1, $\lVert Q\transpose (A \delta - b) \rVert = \lVert A \delta - b \rVert$. For part 2, the
+squares of the zero rows are $\lVert 0 \cdot \delta - e \rVert^2 = \lVert e \rVert^2$. For part 3,
+expanding the square,
+
+$$
+	\begin{aligned}
+		-\tfrac12 \lVert A \delta - (b - u) \rVert^2 - (\eta - A\transpose u)\transpose \delta
+		&= -\tfrac12 \lVert A \delta - b \rVert^2 - u\transpose (A \delta - b) - \tfrac12 \lVert u \rVert^2 - \eta\transpose \delta + u\transpose A \delta \\
+		&= -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + u\transpose b - \tfrac12 \lVert u \rVert^2 ,
+	\end{aligned}
+$$
+
+and the new constant restores $c$. For the anchors,
+$\point_i \ominus p_i' = (\point_i \ominus p_i) - w_i$ by [](eq:math/normal/translation),
+and the blocks of the anchors kept are unchanged, so $\delta = \delta' + w$ in the new stacked
+tangent $\delta'$, and substituting gives the new right-hand side and constant.
+
+</Proof>
+
+Parts 1 and 2 together are an orthogonal factorization of $[A \;\, b]$. It leaves at most $D$
+rows, so a factor never needs more rows than its points have coordinates. Part 3 moves any part of
+$\eta$ that lies in the row space into $b$. Choosing $u$ to minimize $\lVert \eta - A\transpose u
+\rVert$ leaves only the part of $\eta$ in the null space, which no form removes. When $A$ has rank
+$D$, that part is zero, and the form is the normal's of [%full](statement:full-rank). None of
+these changes the value: a factor is the function it is, whichever form it is given in.
+
+## Accumulation
+
+Factors over the same points add. Two factors over sets of points $B_1$ and $B_2$, with the same
+anchor for each point they share, sum to a factor over $B_1 \cup B_2$, whose rows are the two sets
+of rows, each with zero columns for the points it does not involve, whose linear term is the sum of
+the two, each extended by zeros, and whose constant is the sum. The sum's value is the sum of the
+values, at every point, by the definition alone. Its rows can then be reduced by
+[%full](statement:forms) to at most $D$, and once they have rank $D$ it is a normal.
+
+The sum is exact when the anchors agree, and whatever the anchors of the points of spaces flat in
+disguise, since the last part of [%full](statement:forms) moves those anchors without changing the
+factor's value. On a curved space, the stacked tangent at one anchor is not an affine function of
+the stacked tangent at another, and two factors anchored differently are two functions, not one
+factor.
+
+The example of the bearings shows what accumulation buys. A filter that drops each pose as it is
+done with it is left with one row on the landmark each time. The landmark is undetermined until
+two rows of different directions have accumulated, and until then a question that needs it
+determined has no unique answer. After that it is estimated, and nothing was lost on the way.
+
+## Derivatives
+
+The factor is a function of its points through $\delta$, and its
+[derivatives in charts](../derivatives-in-charts/) are those of its two parts. In the chart at
+$\point_i$, the block of $\delta$ for $\point_i$ has the derivative $\D(\point_i \ominus p_i)$,
+which is the identity at $\point_i = p_i$ and everywhere on a space flat in disguise, and on a
+curved space moves with $\point_i$. So the residual $A \delta - b$ has the Jacobian $A\, \D \delta$,
+and the linear part has the gradient $\D \delta\transpose \eta$.
+
+On the spaces flat in disguise, $\delta$ is affine in every chart of its points, so the factor is
+exactly quadratic in it. Its residual's Jacobian is constant, the matrix $\D \delta\transpose
+A\transpose A\, \D \delta$ is its exact negative Hessian, and the linear part has no curvature. On
+a curved space the factor has the curvature that $\delta$ has: it vanishes at the anchors and is of
+first order in $\delta$ near them.
