@@ -37,13 +37,21 @@
             "action": "approve",
             "stage": "publish",
             "commit": "ec1b5bb"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "math",
+            "document": "archive/wgpu-accuracy/math",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-05",
             "commit": "cfa49da",
-            "hash": "3ee816addd515e843d15c415b1de6c65e9933205e6c2a05511a5dee3116ee130"
+            "hash": "3683522647ca64abbf3ddb6827f345b1d55d379f0e754cfd24e2a94dbe3961bc"
         },
         "implementation": {
             "date": "2026-11-05",

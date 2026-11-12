@@ -88,18 +88,34 @@
             "action": "approve",
             "stage": "publish",
             "commit": "9a7ba48"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "implementation",
+            "document": "archive/examples/implementation",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "math",
+            "document": "archive/examples/math",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-10",
             "commit": "df80282",
-            "hash": "66a181737c5b5b08c1e83226088ca0b8759a926ab1c8213d4b687d114af4cb29"
+            "hash": "a8ed7c613312aaed9143e41665c5b38dd4a05780c9d2d167c21120c95edd3978"
         },
         "implementation": {
             "date": "2026-11-10",
             "commit": "f6f7c9d",
-            "hash": "7a88cb3cbad257af2638e316782477c40cf7f0f34572149c8bab4c296dbbeffd"
+            "hash": "520c6e0662d45e66d3dde3c06b660c5d285bf970abd8e14e75dc619d7271ca2c"
         },
         "plan": {
             "date": "2026-11-10",
