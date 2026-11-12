@@ -376,7 +376,7 @@ In `crates/skoro-linearize/src/error.rs`:
 NotFinite { term: NodeId, row: usize },
 ```
 
-displayed as "term {term:?} is not finite at row {row}". `Linearizer::at` and `at_in_chart` scan
+displayed as `"term {term:?} is not finite at row {row}"`. `Linearizer::at` and `at_in_chart` scan
 each factor's residual and Jacobian rows as they read them onto the host, and return the first
 factor and row with an entry that is not finite, in the factors' order. Nothing else changes: a
 trial point the minimizer evaluates only through `objective`, and a step that lands on a cut gives
