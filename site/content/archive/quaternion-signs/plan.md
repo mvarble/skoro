@@ -53,7 +53,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
       edge's information to skoro's precision, and `one_turn_loop`, its vertices in the signs that
       composing the odometry gives; and `tests/signs.rs`, including it by path, with the model of a
       pose graph read from it. Tests: `g2o_information_is_converted`.
-- [ ] The estimates on outside signs, in `tests/signs.rs`. Tests: `a_one_turn_loop_closes`,
+- [x] The estimates on outside signs, in `tests/signs.rs`. Tests: `a_one_turn_loop_closes`,
       `the_estimate_ignores_every_sign`, `a_half_turn_is_non_finite`.
 - [ ] The example `examples/g2o.rs`: a file's path as its argument, or `one_turn_loop(100, 0.01,
       SEED)` without one, estimated by Levenberg–Marquardt with its convergence checked; and

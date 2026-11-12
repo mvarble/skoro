@@ -6,7 +6,14 @@
 #[allow(dead_code)]
 mod g2o;
 
-use skoro_spatial::host;
+use std::collections::BTreeMap;
+
+use skoro::scope::{constant, quantity};
+use skoro::tensor::{Points, Value};
+use skoro::{Declares, NodeId, Observations, Q, Query, Snapshot, Target, Values, Writer};
+use skoro_linearize::{Assembly, Error, LevenbergMarquardt, Linearizer, Status};
+use skoro_normal::{Normal, Scale};
+use skoro_spatial::{POSE, Pose, PoseMaps, Rotation, host};
 
 /// `(γ(φ), ρ)`: the Cayley chart's step at the identity, in storage order.
 fn cayley_step(tau: [f64; 6]) -> [f64; 7] {
@@ -122,5 +129,216 @@ fn g2o_information_is_converted() {
     assert!(
         (6.0..10.0).contains(&ratio),
         "{large:e} then {small:e}: a ratio of {ratio}"
+    );
+}
+
+/// A pose graph read from g2o's format, as a model: vertex 0 a constant at its initial pose, every
+/// other vertex a parameter scored by no term, and each edge a measured motion scored by the
+/// normal of the vertices' relative motion with the edge's precision.
+struct Model {
+    snapshot: Snapshot,
+    vertices: BTreeMap<usize, Q<Pose>>,
+    edges: Vec<(Q<Pose>, NodeId)>,
+}
+
+fn model(graph: &g2o::Graph) -> Model {
+    let mut writer = Writer::new();
+    let (vertices, edges) = writer
+        .build(|| {
+            let vertices: BTreeMap<usize, Q<Pose>> = graph
+                .vertices
+                .iter()
+                .map(|(&k, x)| {
+                    let q = if k == 0 {
+                        constant(Pose, *x)
+                    } else {
+                        quantity(format!("vertex/{k}"), Pose)
+                    };
+                    (k, q)
+                })
+                .collect();
+            let edges: Vec<(Q<Pose>, NodeId)> = graph
+                .edges
+                .iter()
+                .enumerate()
+                .map(|(e, edge)| {
+                    let z = quantity(format!("edge/{e}"), Pose);
+                    let mean = vertices[&edge.from].between(vertices[&edge.to]);
+                    let term =
+                        Normal::on(Pose, mean, Scale::precision(&edge.precision, 6)).score(z);
+                    (z, NodeId::from(term))
+                })
+                .collect();
+            (vertices, edges)
+        })
+        .unwrap();
+    Model {
+        snapshot: writer.snapshot(),
+        vertices,
+        edges,
+    }
+}
+
+/// The observations of the edges' measurements and the start at the vertices' initial poses.
+fn given(graph: &g2o::Graph, model: &Model, target: &Target) -> (Observations, Values) {
+    let mut observations = Observations::new();
+    for ((z, _), edge) in model.edges.iter().zip(&graph.edges) {
+        observations = observations.observe(*z, edge.measurement);
+    }
+    let mut start = Values::new();
+    for (k, x) in &graph.vertices {
+        if *k != 0 {
+            let value = Value::Continuous(Points::from_host(x, 1, 7, target));
+            start = start.with(model.vertices[k].id(), value);
+        }
+    }
+    (observations, start)
+}
+
+/// The estimate of a graph: every vertex but the first, in order, and the final cost.
+fn estimate(graph: &g2o::Graph) -> (Vec<[f64; 7]>, f64) {
+    let target = Target::host();
+    let model = model(graph);
+    let (observations, start) = given(graph, &model, &target);
+    let query = Query::log_density().given(observations);
+    let linearizer = Linearizer::new(&model.snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    let minimized = LevenbergMarquardt::default()
+        .minimize(&linearizer, &schedule, &start)
+        .unwrap();
+    assert_eq!(
+        minimized.rows[0].status,
+        Status::Converged,
+        "{:?}",
+        minimized.rows[0]
+    );
+    let cost = linearizer.objective(&minimized.point).unwrap()[0];
+    let poses = graph
+        .vertices
+        .keys()
+        .filter(|&&k| k != 0)
+        .map(|k| {
+            let Value::Continuous(points) = minimized.point.get(model.vertices[k].id()).unwrap()
+            else {
+                panic!("a pose is continuous");
+            };
+            points.to_host().try_into().unwrap()
+        })
+        .collect();
+    (poses, cost)
+}
+
+/// The angle between two rotations, `2 atan2(|vec r|, |w(r)|)` of `r = q̄₁ q₂`.
+fn angle(a: [f64; 4], b: [f64; 4]) -> f64 {
+    let r = host::compose([a[0], -a[1], -a[2], -a[3]], b);
+    2.0 * (r[1] * r[1] + r[2] * r[2] + r[3] * r[3])
+        .sqrt()
+        .atan2(r[0].abs())
+}
+
+fn quaternion(x: &[f64; 7]) -> [f64; 4] {
+    [x[0], x[1], x[2], x[3]]
+}
+
+#[test]
+fn a_one_turn_loop_closes() {
+    for (noise, tolerance) in [(0.0, 1e-6), (0.01, 0.05)] {
+        let graph = g2o::read(&g2o::one_turn_loop(24, noise, 20_261_111)).unwrap();
+        let closure = graph.edges.last().unwrap();
+        let (from, to) = (graph.vertices[&closure.from], graph.vertices[&closure.to]);
+
+        // At the start, composed from the odometry, the loop closure is on the far side of its
+        // prediction: the case the stereographic chart could not satisfy.
+        let predicted = g2o::between(from, to);
+        let inner: f64 = (0..4).map(|i| predicted[i] * closure.measurement[i]).sum();
+        assert!(inner < 0.0, "the closure is on the near side: {inner}");
+
+        // From there the estimate converges, and every relative rotation is within the noise of
+        // its measurement: no turn is wound into it.
+        let (poses, _) = estimate(&graph);
+        let mut at = graph.vertices.clone();
+        for (k, x) in graph.vertices.keys().filter(|&&k| k != 0).zip(&poses) {
+            at.insert(*k, *x);
+        }
+        for edge in &graph.edges {
+            let relative = g2o::between(at[&edge.from], at[&edge.to]);
+            let misfit = angle(quaternion(&relative), quaternion(&edge.measurement));
+            assert!(
+                misfit < tolerance,
+                "edge {} → {}: {misfit} rad",
+                edge.from,
+                edge.to
+            );
+        }
+    }
+}
+
+/// Which edges or vertices to negate, by index.
+type Choice<'a> = &'a dyn Fn(usize) -> bool;
+
+#[test]
+fn the_estimate_ignores_every_sign() {
+    let text = g2o::one_turn_loop(24, 0.01, 20_261_112);
+    let (reference, cost) = estimate(&g2o::read(&text).unwrap());
+    let negate = |x: &mut [f64; 7]| {
+        for v in &mut x[..4] {
+            *v = -*v;
+        }
+    };
+    // Every measurement, every start, and half of each, chosen by parity.
+    let variants: [(Choice, Choice); 3] = [
+        (&|_| true, &|_| false),
+        (&|_| false, &|_| true),
+        (&|i| i % 2 == 0, &|i| i % 3 == 1),
+    ];
+    for (edges, vertices) in variants {
+        let mut graph = g2o::read(&text).unwrap();
+        for (e, edge) in graph.edges.iter_mut().enumerate() {
+            if edges(e) {
+                negate(&mut edge.measurement);
+            }
+        }
+        for (k, x) in graph.vertices.iter_mut() {
+            if *k != 0 && vertices(*k) {
+                negate(x);
+            }
+        }
+        let (poses, other) = estimate(&graph);
+        skoro::testing::close_up_to(&POSE, &poses.concat(), &reference.concat(), 1e-6).unwrap();
+        assert!(
+            (other - cost).abs() <= 1e-9 * cost.abs().max(1.0),
+            "{other} against {cost}"
+        );
+    }
+}
+
+#[test]
+fn a_half_turn_is_non_finite() {
+    // A rotation observed at (0, 1, 0, 0), a half-turn from its mean (1, 0, 0, 0) at the start.
+    let target = Target::host();
+    let mut writer = Writer::new();
+    let (x, z, term) = writer
+        .build(|| {
+            let x = quantity("x", Rotation);
+            let z = quantity("z", Rotation);
+            let term = Normal::on(Rotation, x, Scale::sd(0.1)).score(z);
+            (x, z, NodeId::from(term))
+        })
+        .unwrap();
+    let query = Query::log_density().given(Observations::new().observe(z, [0.0, 1.0, 0.0, 0.0]));
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    let start = Values::new().with(
+        x.id(),
+        Value::Continuous(Points::from_host(
+            &[1.0, 0.0, 0.0, 0.0],
+            1,
+            Rotation.space().storage(),
+            &target,
+        )),
+    );
+    assert_eq!(
+        linearizer.at(&start).unwrap_err(),
+        Error::NotFinite { term, row: 0 }
     );
 }
