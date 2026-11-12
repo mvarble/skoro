@@ -1,0 +1,13 @@
+{
+    "kind": "decision",
+    "stage": "writeup",
+    "started": "2026-11-12",
+    "events": [
+        {
+            "date": "2026-11-12",
+            "action": "start",
+            "stage": "writeup"
+        }
+    ],
+    "approvals": {}
+}
