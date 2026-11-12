@@ -12,6 +12,41 @@ pages:
     - concepts/linearization
     - reference/how-skoro-is-developed
 crates: []
+amends:
+    - archive/core/implementation
+    - archive/core/math
+    - archive/examples/implementation
+    - archive/examples/math
+    - archive/improper-gaussian/implementation
+    - archive/improper-gaussian/math
+    - archive/improper-gaussian/statements/factor
+    - archive/improper-gaussian/statements/forms
+    - archive/improper-gaussian/statements/full-rank
+    - archive/linearization/implementation
+    - archive/linearization/math
+    - archive/linearization/statements/fisher
+    - archive/linearization/statements/linearization
+    - archive/linearization/statements/replacement
+    - archive/measures/implementation
+    - archive/measures/math
+    - archive/measures/plan
+    - archive/normal/implementation
+    - archive/normal/math
+    - archive/normal/statements/gauss-newton
+    - archive/normal/statements/invariant
+    - archive/quaternion-signs/implementation
+    - archive/quaternion-signs/math
+    - archive/quaternion-signs/statements/antipode
+    - archive/quaternion-signs/statements/cayley
+    - archive/rotations/implementation
+    - archive/rotations/math
+    - archive/rotations/statements/chart
+    - archive/rotations/statements/cover
+    - archive/rotations/statements/euler
+    - archive/rotations/statements/first-order
+    - archive/rotations/statements/motions
+    - archive/rotations/statements/volume
+    - archive/wgpu-accuracy/math
 ---
 
 The Mathematics section was a collection of notes, one idea to a note, linked by what each builds
