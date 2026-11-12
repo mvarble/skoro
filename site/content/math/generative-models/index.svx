@@ -80,11 +80,12 @@ to justify every step back from $(\Omega, \scrF, \rmP)$, and usually does not.
 Applied models are almost never as general as the theory allows. They are built from two
 ingredients, and both remove an edge case.
 
-**Seeds with densities.** Every quantity lives in a space with a *reference measure*: Lebesgue
-measure on $\R^\dimension$ (or an open subset of it, such as the positive orthant), or counting
-measure on a countable set, which may itself sit inside a vector space, such as the integers. Every
-distribution a quantity is drawn from is absolutely continuous with respect to its reference
-measure, so it is given by a function.
+**Seeds with densities.** Every quantity lives in a space with a *reference measure*, a
+$\sigma$-finite measure against which its distributions are written as functions. The two examples
+to keep in mind are Lebesgue measure on $\R^\dimension$ (or an open subset of it, such as the
+positive orthant) and counting measure on a countable set, which may itself sit inside a vector
+space, such as the integers. Every distribution a quantity is drawn from is absolutely continuous
+with respect to its reference measure, so it is given by a function.
 
 <Statement {...radonNikodym} />
 
@@ -111,9 +112,18 @@ can be treated as one: a density is always with respect to a reference measure, 
 is a density with respect to counting measure.
 
 Nothing in what follows needs these two in particular: a reference measure $\nu$ need only be
-$\sigma$-finite, for [%full](statement:radon-nikodym) and Tonelli's theorem to apply. But Lebesgue
-measure and counting measure, and products of them, are typically the only reference measures
-adopted in practice, and they are the ones meant below.
+$\sigma$-finite, for [%full](statement:radon-nikodym) and Tonelli's theorem to apply, and Lebesgue
+measure and counting measure, and products of them, are examples, not the only choices. The
+choice is a modelling decision, though, and a good one makes the density values mean something.
+A density is a likelihood only relative to its reference measure: $\density(\point)$ compares how
+much probability the model puts near $\point$ with how much $\nu$ puts there. So the reference
+measure should be the one that is as uniform, or as uninformative, as the space allows: Lebesgue
+measure on a vector space, counting measure on a finite set, and in general the invariant measure
+of a symmetry the space has, or, loosely, the measure of maximal entropy. Then the factor $\nu$
+contributes is the same everywhere, and a larger value of $\density$ means, without correction, a
+more likely point. With a reference measure that is not uniform, the density absorbs the
+difference: it is larger where $\nu$ is small, and compares points by something other than their
+likelihood.
 
 **Quantities introduced one at a time.** Each quantity is drawn from a distribution whose
 parameters may depend on any quantity introduced before it, through any measurable map, however
