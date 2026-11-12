@@ -25,7 +25,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
 
 ## The refusal (`skoro-linearize`)
 
-- [ ] `Error::NotFinite { term, row }` and its display; the scan of each factor's residual and
+- [x] `Error::NotFinite { term, row }` and its display; the scan of each factor's residual and
       Jacobian in `Linearizer::at` and `at_in_chart`, returning the first factor and row in the
       factors' order. Tests: `a_non_finite_residual_is_refused`.
 

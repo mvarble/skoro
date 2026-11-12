@@ -101,6 +101,28 @@ impl Linearizer {
         Ok(density.into_iter().map(|l| -l).collect())
     }
 
+    /// `NotFinite` for the first factor, in the factors' order, and the first row at which its
+    /// residual or its Jacobian, `residuals[f]` as `at` reads it, has an entry that is not
+    /// finite.
+    fn finite(&self, residuals: &[(Vec<f64>, Vec<f64>)], rows: usize) -> Result<(), Error> {
+        for (factor, (values, jacobian)) in self.factors.iter().zip(residuals) {
+            let d = factor.components;
+            let width = jacobian.len() / (rows * d).max(1);
+            for row in 0..rows {
+                let finite = |data: &[f64]| data.iter().all(|v| v.is_finite());
+                if !finite(&values[row * d..(row + 1) * d])
+                    || !finite(&jacobian[row * d * width..(row + 1) * d * width])
+                {
+                    return Err(Error::NotFinite {
+                        term: factor.term,
+                        row,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The columns of a factor's blocks in a frame of `dimension` rows at batch row `row`: the
     /// matrix `dimension × width` of its Jacobian, its blocks in the structure's order.
     pub(crate) fn cut(
@@ -145,6 +167,7 @@ impl Linearizer {
                 ))
             })
             .collect::<Result<_, Error>>()?;
+        self.finite(&residuals, pass.rows)?;
         let log_volumes: Vec<Option<Vec<f64>>> = self
             .factors
             .iter()

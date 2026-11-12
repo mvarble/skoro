@@ -33,6 +33,9 @@ pub enum Error {
     /// observed as it should: a kept quantity outside the blanket, or one observed, or a quantity
     /// given no value.
     Blanket { quantity: NodeId },
+    /// A factor whose residual or Jacobian is not finite at the point linearized, at a batch
+    /// row: a value outside its term's chart, such as a rotation a half-turn from its mean.
+    NotFinite { term: NodeId, row: usize },
 }
 
 impl fmt::Display for Error {
@@ -63,6 +66,9 @@ impl fmt::Display for Error {
             ),
             Error::NotAnIntegral => {
                 f.write_str("the Fisher linearization approximates no integral")
+            }
+            Error::NotFinite { term, row } => {
+                write!(f, "term {term:?} is not finite at row {row}")
             }
             Error::Blanket { quantity } => write!(
                 f,
