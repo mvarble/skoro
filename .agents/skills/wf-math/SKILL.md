@@ -61,9 +61,12 @@ parameters, what is differentiated with respect to what. No types or traits; tha
 Each as a `> [!TODO]` callout, until it is answered.
 ```
 
-An idea that stands on its own and is needed by more than this entry becomes a math note in
-`site/content/math/<slug>/index.md` (the math notes are open at this stage), and the writeup
-links to it.
+Whatever in the mathematics is general, true without naming anything skoro defines, is written
+as a math note in `site/content/math/<slug>/index.md`, or as a section of an existing note, at its
+place in the order (`authoring.md`, under "The math notes"; the notes are open at this stage). The
+document links to the note and keeps what is skoro's own: the problem, the choices, and the
+reading in skoro's terms. A new note is given its `part` and `order`, and the notes after it are
+reread and rewritten where they explained what it now explains.
 
 After a reopening, keep a `## Revisions` section at the end: for each reopening, the date, what
 changed and why, in a short paragraph. The earlier text is not kept there; git has it.

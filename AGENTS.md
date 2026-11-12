@@ -55,8 +55,9 @@ Rules that hold whether or not a command was invoked:
 ## Writing documents
 
 Everything in `site/content/` is written as `.agents/reference/authoring.md` says. The short of
-it: pages say what is and quote real code; math notes say what is true, one idea to a note;
-archive documents discuss what may be, sketch code inline, and are frozen once approved.
+it: pages say what is and quote real code; math notes say what is true, one idea to a note, in an
+order in which each rests only on the notes before it; archive documents discuss what may be,
+sketch code inline, and are frozen once approved.
 
 ## The archive branch
 

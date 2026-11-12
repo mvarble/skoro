@@ -41,6 +41,10 @@ landing page) before changing them.
   directory under `crates/`) under `crates`, which the archive links to the crates' pages.
   `wf approve` refuses a changed page or crate that is not listed, a listed one the branch did not
   change, and a changed crate with no description.
+- **What it amends.** If the entry rewrote a math note, the archive's references into that note
+  must still be true (`authoring.md`, under "The math notes"). Where one had to change, change it
+  in the done entry's document, and list the document under `amends` in the entry's `index.md`
+  (`workflow.md`, under "Amending a done entry"). Change nothing else there.
 
 Build the site (`cd site && pnpm build`) and fix every warning and broken link. Commit as you go.
 
