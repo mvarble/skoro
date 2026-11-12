@@ -10,7 +10,7 @@ katex_macros:
 
 The exponential of a rotation, its logarithm and their Jacobians are smooth maps, and their
 formulas are not: each has a coefficient such as $\sin(\theta/2)/\theta$ whose closed form is
-$0/0$ at the identity, the point computations visit most. The singularity is *removable*: the
+$0/0$ at the identity, the point computations visit most. The singularity is _removable_: the
 coefficient extends smoothly through $\theta = 0$, and its power series says how. This note lists
 the coefficients, says how each is computed so that its value and its derivatives are right on
 both sides of the identity, and works out what decides where the series should hand over to the
@@ -22,16 +22,16 @@ The coefficients of [the rotations](../rotations/) and of [the rigid motions](..
 are each a function of $\theta^2$, with $\theta$ the angle of a rotation vector, or for the
 logarithm of $n^2$ and $w$, with $n = \lVert \operatorname{vec}(q) \rVert$.
 
-| coefficient | closed form | series | used by |
-| --- | --- | --- | --- |
-| $a$ | $\cos \tfrac\theta2$ | $\sum_k \frac{(-1)^k \theta^{2k}}{4^k (2k)!} = 1 - \frac{\theta^2}{8} + \frac{\theta^4}{384} - \cdots$ | the exponential [](eq:math/rotations/exp) |
-| $b$ | $\sin(\theta/2)/\theta$ | $\sum_k \frac{(-1)^k \theta^{2k}}{2^{2k+1} (2k+1)!} = \frac12 - \frac{\theta^2}{48} + \frac{\theta^4}{3840} - \cdots$ | the exponential |
-| $A$ | $(1 - \cos \theta)/\theta^2$ | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+2)!} = \frac12 - \frac{\theta^2}{24} + \frac{\theta^4}{720} - \cdots$ | the Jacobians [](eq:math/rotations/jacobians) |
-| $B$ | $(\theta - \sin \theta)/\theta^3$ | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+3)!} = \frac16 - \frac{\theta^2}{120} + \frac{\theta^4}{5040} - \cdots$ | the Jacobians |
-| $C$ | $\bigl(1 - \frac\theta2 \cot \frac\theta2\bigr)/\theta^2$ | $\frac1{12} + \frac{\theta^2}{720} + \frac{\theta^4}{30240} + \cdots$ | their inverses [](eq:math/rotations/jacobian-inverses) |
-| $L$ | $2 \atantwo(n, w)/n$ | $\frac2w \sum_k \frac{(-1)^k x^k}{2k+1} = \frac2w \bigl(1 - \frac x3 + \frac{x^2}5 - \cdots\bigr)$, $x = n^2/w^2$ | the logarithm [](eq:math/rotations/log) |
-| $D$ | $(\theta^2 + 2 \cos \theta - 2)/(2 \theta^4)$ | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+4)!} = \frac1{24} - \frac{\theta^2}{720} + \cdots$ | the motions' Jacobians [](eq:math/rigid-motions/q) |
-| $E$ | $(2\theta - 3 \sin \theta + \theta \cos \theta)/(2 \theta^5)$ | $\sum_k \frac{(-1)^k (k+1)\, \theta^{2k}}{(2k+5)!} = \frac1{120} - \frac{\theta^2}{2520} + \cdots$ | the motions' Jacobians |
+| coefficient | closed form                                                   | series                                                                                                                | used by                                                |
+| ----------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| $a$         | $\cos \tfrac\theta2$                                          | $\sum_k \frac{(-1)^k \theta^{2k}}{4^k (2k)!} = 1 - \frac{\theta^2}{8} + \frac{\theta^4}{384} - \cdots$                | the exponential [](eq:math/rotations/exp)              |
+| $b$         | $\sin(\theta/2)/\theta$                                       | $\sum_k \frac{(-1)^k \theta^{2k}}{2^{2k+1} (2k+1)!} = \frac12 - \frac{\theta^2}{48} + \frac{\theta^4}{3840} - \cdots$ | the exponential                                        |
+| $A$         | $(1 - \cos \theta)/\theta^2$                                  | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+2)!} = \frac12 - \frac{\theta^2}{24} + \frac{\theta^4}{720} - \cdots$           | the Jacobians [](eq:math/rotations/jacobians)          |
+| $B$         | $(\theta - \sin \theta)/\theta^3$                             | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+3)!} = \frac16 - \frac{\theta^2}{120} + \frac{\theta^4}{5040} - \cdots$         | the Jacobians                                          |
+| $C$         | $\bigl(1 - \frac\theta2 \cot \frac\theta2\bigr)/\theta^2$     | $\frac1{12} + \frac{\theta^2}{720} + \frac{\theta^4}{30240} + \cdots$                                                 | their inverses [](eq:math/rotations/jacobian-inverses) |
+| $L$         | $2 \atantwo(n, w)/n$                                          | $\frac2w \sum_k \frac{(-1)^k x^k}{2k+1} = \frac2w \bigl(1 - \frac x3 + \frac{x^2}5 - \cdots\bigr)$, $x = n^2/w^2$     | the logarithm [](eq:math/rotations/log)                |
+| $D$         | $(\theta^2 + 2 \cos \theta - 2)/(2 \theta^4)$                 | $\sum_k \frac{(-1)^k \theta^{2k}}{(2k+4)!} = \frac1{24} - \frac{\theta^2}{720} + \cdots$                              | the motions' Jacobians [](eq:math/rigid-motions/q)     |
+| $E$         | $(2\theta - 3 \sin \theta + \theta \cos \theta)/(2 \theta^5)$ | $\sum_k \frac{(-1)^k (k+1)\, \theta^{2k}}{(2k+5)!} = \frac1{120} - \frac{\theta^2}{2520} + \cdots$                    | the motions' Jacobians                                 |
 
 The series of $C$ is that of $\tfrac\theta2 \cot \tfrac\theta2 = 1 - \tfrac{\theta^2}{12} -
 \tfrac{\theta^4}{720} - \tfrac{\theta^6}{30240} - \cdots$, and that of $L$ is $\atantwo(n, w) / n =
@@ -72,8 +72,8 @@ at $w \le 0$, a harmless one where the closed form is.
 A computed value carries an error, the difference between what the machine returns and the exact
 value at the same, already rounded, input. Write $u$ for the unit roundoff of the arithmetic,
 $2^{-24} \approx 6.0 \cdot 10^{-8}$ in single precision and $2^{-53}$ in double. A function has
-*relative error* $\eta$ when its computed value is $f(x)(1 + \delta)$ with $\lvert \delta \rvert \le
-\eta$, and *absolute error* $\varepsilon$ when it is $f(x) + \delta$ with $\lvert \delta \rvert \le
+_relative error_ $\eta$ when its computed value is $f(x)(1 + \delta)$ with $\lvert \delta \rvert \le
+\eta$, and _absolute error_ $\varepsilon$ when it is $f(x) + \delta$ with $\lvert \delta \rvert \le
 \varepsilon$. The two differ only where $f(x)$ is small, which is exactly where a removable
 singularity is computed, since $\sin \theta \approx \theta$ near $0$.
 

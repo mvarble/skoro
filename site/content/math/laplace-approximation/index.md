@@ -8,8 +8,8 @@ depends_on: [linearization, square-root-elimination, chart-volume]
 
 Once a mode has been found, the question is how sure the answer is: the spread of the density
 around the mode, the spread of a few of its coordinates with the rest integrated out, the total
-mass under it. Each is an integral that has no closed form for anything but a Gaussian. A *Laplace
-approximation* replaces the density by a Gaussian fitted at a point, and reads the answers off the
+mass under it. Each is an integral that has no closed form for anything but a Gaussian. A _Laplace
+approximation_ replaces the density by a Gaussian fitted at a point, and reads the answers off the
 Gaussian. This note fits it from the [linearization](../linearization/), says what each answer
 costs to compute, and measures what the fitted covariance leaves out when the space is curved.
 
@@ -28,8 +28,8 @@ $$
 $$
 
 with $\lambda_{\hat \point}$ the log-volume of the chart at $\hat \point$. What is approximated by a
-Gaussian in $\tangent$ is therefore the *chart objective* $f(\hat \point \oplus \tangent) -
-\lambda_{\hat \point}(\tangent)$, and not $f$ alone. Its linearization, the *chart linearization*,
+Gaussian in $\tangent$ is therefore the _chart objective_ $f(\hat \point \oplus \tangent) -
+\lambda_{\hat \point}(\tangent)$, and not $f$ alone. Its linearization, the _chart linearization_,
 has the rows of the linearization of $f$, with $\eta - \nabla \lambda_{\hat \point}(0)$ and $c_0 -
 \lambda_{\hat \point}(0)$ in place of $\eta$ and $c_0$. The difference shows in two places.
 
@@ -54,12 +54,12 @@ density on $\R^\dimension$, and everything asked of the approximation is a compu
 by [elimination](../square-root-elimination/#what-the-eliminated-problem-answers), with $R$ the
 triangular root the elimination leaves and $\tangent^*$ the minimizer of $m$.
 
-| asked for | computed by |
-| --- | --- |
-| the mean, in the tangent at $\hat \point$ | the minimizer $\tangent^*$, zero at the centre |
-| the covariance, and its marginal on some variables $K$ | partial elimination of the others ([%full](statement:math/square-root-elimination/marginal)), and the triangular root $W$ of what is left on $K$: $W^{-1} W^{-\top}$ |
-| a draw | $\hat \point \oplus (\tangent^* + R^{-1} z)$, with $z$ standard normal |
-| the evidence | $\log \int e^{-f} \dd \nu \approx \tfrac{\dimension}{2} \log 2\pi - m(\tangent^*) - \sum_i \log \lvert R_{ii} \rvert$, by [](eq:math/square-root-elimination/integral) |
+| asked for                                              | computed by                                                                                                                                                            |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the mean, in the tangent at $\hat \point$              | the minimizer $\tangent^*$, zero at the centre                                                                                                                         |
+| the covariance, and its marginal on some variables $K$ | partial elimination of the others ([%full](statement:math/square-root-elimination/marginal)), and the triangular root $W$ of what is left on $K$: $W^{-1} W^{-\top}$   |
+| a draw                                                 | $\hat \point \oplus (\tangent^* + R^{-1} z)$, with $z$ standard normal                                                                                                 |
+| the evidence                                           | $\log \int e^{-f} \dd \nu \approx \tfrac{\dimension}{2} \log 2\pi - m(\tangent^*) - \sum_i \log \lvert R_{ii} \rvert$, by [](eq:math/square-root-elimination/integral) |
 
 No covariance matrix is formed for any of them. A marginal on one variable is a normal in the
 chart at that variable's estimate, with a whitening of its own, and costs one partial elimination.
@@ -117,12 +117,12 @@ The first example is a rotation with a prior of fixed mean and $k$ measurements 
 at the mode. The table gives the trace of each covariance divided by the true one, averaged over
 six data sets.
 
-| $\sigma$ | $k$ | rows | rows and log-volumes | full Hessian |
-| --- | --- | --- | --- | --- |
-| $0.3$ | $1$ | $0.976$ | $1.021$ | $1.004$ |
-| $0.3$ | $3$ | $0.971$ | $1.038$ | $1.003$ |
-| $0.15$ | $1$ | $0.993$ | $1.004$ | $1.000$ |
-| $0.15$ | $3$ | $0.992$ | $1.008$ | $0.999$ |
+| $\sigma$ | $k$ | rows    | rows and log-volumes | full Hessian |
+| -------- | --- | ------- | -------------------- | ------------ |
+| $0.3$    | $1$ | $0.976$ | $1.021$              | $1.004$      |
+| $0.3$    | $3$ | $0.971$ | $1.038$              | $1.003$      |
+| $0.15$   | $1$ | $0.993$ | $1.004$              | $1.000$      |
+| $0.15$   | $3$ | $0.992$ | $1.008$              | $0.999$      |
 
 The rows are over-confident by about half of the $\sigma^2 k / (k + 1)$ that the log-volumes alone
 would predict. Adding the log-volumes' curvature overshoots, to an under-confidence of about the
@@ -135,10 +135,10 @@ every residual is zero. The residuals' curvature therefore vanishes, and the row
 log-volumes' curvature are the full Hessian. The variance of $\randomPoint_1$, per axis, is as
 follows.
 
-| $\sigma$ | rows | full Hessian | true |
-| --- | --- | --- | --- |
-| $0.3$ | $0.180$ | $0.159$ | $0.194$ |
-| $0.15$ | $0.0450$ | $0.0435$ | $0.0457$ |
+| $\sigma$ | rows     | full Hessian | true     |
+| -------- | -------- | ------------ | -------- |
+| $0.3$    | $0.180$  | $0.159$      | $0.194$  |
+| $0.15$   | $0.0450$ | $0.0435$     | $0.0457$ |
 
 Both approximations are over-confident here, and the rows are the closer. They are exact on
 $\randomPoint_0$, where the full Hessian gives $0.083$ against $0.09$ at $\sigma = 0.3$. The
@@ -193,10 +193,10 @@ $\randomPoint_1$. The exact factor is the logarithm of the marginal density of $
 whose curvature at the anchor was computed numerically from draws of $\randomPoint_0$. These are
 precisions per axis.
 
-| $\sigma$ | rows | with [](eq:omitted) | with [](eq:omitted) and the log-determinant | exact |
-| --- | --- | --- | --- | --- |
-| $0.3$ | $5.556$ | $5.294$ | $5.457$ | $5.455$ |
-| $0.15$ | $22.22$ | $21.97$ | $22.10$ | $22.10$ |
+| $\sigma$ | rows    | with [](eq:omitted) | with [](eq:omitted) and the log-determinant | exact   |
+| -------- | ------- | ------------------- | ------------------------------------------- | ------- |
+| $0.3$    | $5.556$ | $5.294$             | $5.457$                                     | $5.455$ |
+| $0.15$   | $22.22$ | $21.97$             | $22.10$                                     | $22.10$ |
 
 The rows are over-confident at the anchor, by $2\,\%$ at $\sigma = 0.3$ and $0.6\,\%$ at $0.15$.
 The second-order Schur complement overshoots, by about as much, the other way. The exact curvature
@@ -211,9 +211,9 @@ A filter that predicts without measuring integrates one state out after another,
 variance grows. Its error grows with it. At $\sigma = 0.15$, after $k$ such steps along the chain,
 the variance that the factor gives the newest state, divided by the exact one, is as follows.
 
-| $k$ | $1$ | $2$ | $3$ | $4$ | $5$ |
-| --- | --- | --- | --- | --- | --- |
-| rows | $0.94$ | $0.91$ | $0.88$ | $0.85$ | $0.82$ |
+| $k$                 | $1$    | $2$    | $3$    | $4$    | $5$    |
+| ------------------- | ------ | ------ | ------ | ------ | ------ |
+| rows                | $0.94$ | $0.91$ | $0.88$ | $0.85$ | $0.82$ |
 | with [](eq:omitted) | $0.94$ | $0.90$ | $0.84$ | $0.77$ | $0.71$ |
 
 This is the over-confidence of an extended Kalman filter on a curved state. It is a cost of

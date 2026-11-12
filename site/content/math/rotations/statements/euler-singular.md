@@ -4,7 +4,7 @@ kind: proposition
 title: No continuous Euler angles
 ---
 
-Fix a sequence of axes $(i, j, k)$, and call a rotation *at the lock* when its $\beta$ is $0$ or
+Fix a sequence of axes $(i, j, k)$, and call a rotation _at the lock_ when its $\beta$ is $0$ or
 $\pi$ for a proper sequence, $\pm\tfrac\pi2$ for a Tait–Bryan one.
 
 1. Away from the lock, $\alpha$ and $\gamma$ are smooth maps of the rotation into the circle

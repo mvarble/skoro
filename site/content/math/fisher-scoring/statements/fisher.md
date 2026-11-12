@@ -10,14 +10,14 @@ term $t$ may depend on $\point$ through coordinates $\theta_t$, with the scale b
 of the root [](eq:math/normal/root). For such a term, write its residual as $r_t = W_t\, s_t$, let
 $J^\mu_t = W_t \D s_t$ be the Jacobian of the residual with the scale held fixed, and $J^\theta_t =
 C_{\theta, t} \D \theta_t$ its scale block composed with the Jacobian of the scale's coordinates,
-both in the charts at $\hat \point$. Let its *scale residual* $u_t$ be the vector, indexed as the
+both in the charts at $\hat \point$. Let its _scale residual_ $u_t$ be the vector, indexed as the
 rows of $C_{\theta, t}$, with
 
 $$
 	(u_t)_{(a, a)} = \frac{(r_t)_a^2 - 1}{\sqrt 2} , \qquad (u_t)_{(a, b)} = (r_t)_a (r_t)_b \quad (a > b) .
 $$
 
-The *Fisher linearization* of $f$ at $\hat \point$ is
+The _Fisher linearization_ of $f$ at $\hat \point$ is
 
 $$
 	m_F(\tangent) = c_F + \sum_t \tfrac12 \bigl\lVert J^\mu_t \tangent + r_t + \hat c_t \bigr\rVert^2

@@ -14,8 +14,8 @@ $$
 $$
 
 with $J\transpose J$ invertible near the iterates. Then $\delta_k = 0$ if and only if $q_k$ is a
-stationary point of $f$. If $q^*$ is a stationary point, $H^*$ the chart Hessian of $f$ there and
-$E = H^* - J\transpose J$ at $q^*$, and the spectral radius $\rho$ of $(J\transpose J)^{-1} E$ is
-less than $1$, then the iteration converges to $q^*$ from every start near enough to it, and
-$\limsup_k \lVert q_{k+1} \ominus q^* \rVert / \lVert q_k \ominus q^* \rVert \le \rho$ in any norm
+stationary point of $f$. If $q^\ast$ is a stationary point, $H^\ast$ the chart Hessian of $f$ there and
+$E = H^\ast - J\transpose J$ at $q^\ast$, and the spectral radius $\rho$ of $(J\transpose J)^{-1} E$ is
+less than $1$, then the iteration converges to $q^\ast$ from every start near enough to it, and
+$\limsup_k \lVert q_{k+1} \ominus q^\ast \rVert / \lVert q_k \ominus q^\ast \rVert \le \rho$ in any norm
 for which the spectral radius is attained.

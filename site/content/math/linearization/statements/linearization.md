@@ -4,10 +4,10 @@ kind: definition
 title: The linearization of a sum of squares
 ---
 
-Let $f$ be as in [](eq:objective), and call the log-volume $\lambda_t$ *folded* when the residual
+Let $f$ be as in [](eq:objective), and call the log-volume $\lambda_t$ _folded_ when the residual
 is $r_t = W_t\, s_t$ for a constant invertible $W_t$ and $\lambda_t$ is a function of $s_t$ alone.
 For a folded term set $\hat c_t = W_t^{-\top} \nabla \lambda_t(s_t)$, the gradient of the log-volume
-with respect to the residual, and otherwise set $\hat c_t = 0$. The *linearization* of $f$ at a
+with respect to the residual, and otherwise set $\hat c_t = 0$. The _linearization_ of $f$ at a
 point $\hat \point$ is the function of $\tangent \in \R^\dimension$
 
 $$
