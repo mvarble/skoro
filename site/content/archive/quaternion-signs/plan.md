@@ -49,7 +49,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
 
 ## Outside data (`skoro`)
 
-- [ ] `examples/common/g2o.rs`, self-contained: `Graph`, `Edge`, `read`, the conversion of each
+- [x] `examples/common/g2o.rs`, self-contained: `Graph`, `Edge`, `read`, the conversion of each
       edge's information to skoro's precision, and `one_turn_loop`, its vertices in the signs that
       composing the odometry gives; and `tests/signs.rs`, including it by path, with the model of a
       pose graph read from it. Tests: `g2o_information_is_converted`.

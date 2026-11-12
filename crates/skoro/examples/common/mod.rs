@@ -4,6 +4,7 @@
 
 pub mod batch;
 pub mod figures;
+pub mod g2o;
 pub mod laplace;
 pub mod live;
 pub mod model;
