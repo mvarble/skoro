@@ -1,0 +1,118 @@
+---
+title: Fisher scoring
+part: estimation
+order: 6
+summary: Where a scale is itself estimated, the Gauss–Newton rows omit as much curvature as they keep; Fisher scoring puts the expected information in the Hessian's place, assembled from roots as a second set of rows whose gradient is exact, and it is the Gauss–Newton linearization again when every scale is fixed.
+depends_on: [normal, linearization]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import * as fisher from './statements/fisher.md';
+</script>
+
+The [linearization](../linearization/) of a model of normals assumes every scale fixed, and
+[fails](../linearization/#where-it-fails) when one is not: in the scale's own direction the rows
+omit as much curvature as they keep, and the Gauss–Newton iteration need not converge. A noise
+whose size is to be estimated is common enough to need an answer. *Fisher scoring* is the answer.
+It replaces the Hessian by the *expected information*, the expectation, over the quantity a
+distribution is the law of, of the Hessian of its negative log-density. That matrix is positive
+semidefinite by construction, and the normal's has a closed form with a root
+([the expected information](../normal/#the-expected-information)). This note assembles the roots
+into rows, so that the same elimination serves, and shows what the result is and is not.
+
+## The rows
+
+<Statement {...fisher} />
+
+The rows are of the linearization's shape, a matrix and a right-hand side for each term over the
+variables the term reads, whether through its point, its mean or its scale. The factor structure
+is therefore the same, and the problem is eliminated as the linearization is.
+
+**They are a root of the expected information.** The root [](eq:math/normal/root) composed with the
+Jacobians of the term's point, mean and scale coordinates is
+
+$$
+	C_t \begin{bmatrix} \D \point \\ \D \mu \\ \D \theta_t \end{bmatrix}
+	= \begin{bmatrix} W_t (\D \point - \D \mu) \\ C_{\theta, t} \D \theta_t \end{bmatrix} ,
+$$
+
+since its blocks are $\pm W_t$, the derivatives of $s_t = \point \ominus \mu$ at a zero residual.
+On the spaces flat in disguise those derivatives are $\pm I$ everywhere, so the first block row is
+$W_t \D s_t = J^\mu_t$ exactly, and the matrix of $m_F$,
+
+$$
+	\nabla^2 m_F = \sum_t J^{\mu\top}_t J^\mu_t + \sum_{t \text{ free scale}} J^{\theta\top}_t J^\theta_t , @tag(fisher-matrix)
+$$
+
+is the sum of the terms' expected information, each an expectation over its own point with its
+arguments at their values at $\hat \point$. On a curved space the derivatives of $\ominus$ at the
+current residual stand where the root has their values at zero. The two differ at first order in
+the residual, and in a quadratic form at second order, which is the accuracy the normal's root has
+in its blocks of the point and the mean. The residual's own Jacobian is the better of the two
+derivatives to use, for the reason that follows.
+
+**Their gradient is exact.** The gradient of $m_F$ at zero is
+
+$$
+	\nabla m_F(0) = \sum_t J^{\mu\top}_t (r_t + \hat c_t) + \sum_{t \text{ free scale}} J^{\theta\top}_t u_t + \eta = g .
+$$
+
+The first sum and $\eta$ are the gradients of the squares through the point and the mean, and of
+the log-volumes, as in [](eq:math/linearization/agreement). The second is the gradient through the
+scale. With $T_i = L\transpose\, \partial_i \Lambda\, L$ as for the root, $z = r_t$ and
+$\varepsilon = L z$, the negative log-density's derivative in $\theta_i$ is
+
+$$
+	\tfrac12 \varepsilon\transpose \partial_i \Lambda\, \varepsilon - \tfrac12 \operatorname{tr}(\Sigma\, \partial_i \Lambda)
+	= \tfrac12 \bigl(z\transpose T_i z - \operatorname{tr} T_i\bigr)
+	= \sum_a \frac{(T_i)_{aa}}{\sqrt 2} \cdot \frac{z_a^2 - 1}{\sqrt 2} + \sum_{a > b} (T_i)_{ab}\, z_a z_b ,
+$$
+
+which is $(C_{\theta, t}\transpose u_t)_i$. So the scale's score lies in the row space of its root,
+and the scale residual carries it, as $\hat c_t$ carries a folded log-volume. Had the first block
+row used $\pm W_t$ on a curved space, the gradient through the point and the mean would have
+missed a term of first order in the residual, and the iteration would have stopped short of the
+stationary point. With $J^\mu_t$, a *Fisher scoring step*
+
+$$
+	\tangent^*_F = -\bigl(\nabla^2 m_F\bigr)^{-1} g @tag(scoring-step)
+$$
+
+stops only where $g = 0$, at a stationary point of $f$, log-volumes included, by the argument of
+[%full](statement:math/linearization/gauss-newton) with this matrix on the left. It converges
+there at the linear rate that the difference between the Hessian and the expected information
+sets.
+
+## Where the expected information is exact
+
+For an isotropic scale in its logarithmic chart, $u = \log \sigma$, the root's scale block is
+$-\sqrt 2$ in each of the $\dimension$ diagonal rows, and the scale's information is $2
+\dimension$. The Hessian of the term in $u$ is $2 \lVert r_t \rVert^2$, which at a stationary point
+of the scale alone, $\lVert r_t \rVert^2 = \dimension$, is $2 \dimension$ too. The case that makes
+the Gauss–Newton rate one has a rate of zero in the scale's own direction here. The scale
+residual's diagonal rows are $((r_t)_a^2 - 1) / \sqrt 2$, and the step in $u$ is $(\lVert r_t
+\rVert^2 - \dimension) / 2\dimension$, the first-order step toward $\tfrac12 \log (\lVert r_t
+\rVert^2 / \dimension)$: the logarithm of the root-mean-square whitened residual, which is the
+factor by which the scale is off.
+
+## Two linearizations
+
+With every scale fixed, no term has a scale block, every $J^\mu_t$ is $J_t$, and $m_F = m$, on
+every space. The two differ only where a scale is free. They are worth keeping apart all the
+same, because they answer different questions.
+
+The residual linearization is the Gauss–Newton model of $f$. Its curvature at a mode is a
+[Laplace approximation's](../laplace-approximation/), and with it come an evidence and the factor
+that integrating variables out leaves. The Fisher linearization is the expected information.
+Its marginal covariances are those of the inverse of [](eq:fisher-matrix), a free scale's among
+them, and where the variables are parameters and not themselves drawn from the model, that
+inverse is the asymptotic covariance of their maximum-likelihood estimator. It gives no evidence
+and no marginal factor: those approximate an integral of the density, whose curvature in a free
+scale is not the expected information.
+
+A [likelihood factor](../generative-models/#conditioning-and-likelihoods) has no expected
+information, since that is an expectation over the quantity a distribution is the law of, and a
+likelihood factor is the law of none. Its scale must be fixed, and it contributes the rows of its
+residual, which for an [improper Gaussian factor](../improper-gaussian/) on flat spaces is its
+exact negative Hessian.

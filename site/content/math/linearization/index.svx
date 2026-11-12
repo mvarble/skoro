@@ -208,4 +208,5 @@ its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' 
 $\lVert r \rVert^2$ and the squares' is $2 \lVert r \rVert^2$, while the normalizer $-\dimension u$
 is linear. At the stationary point $\lVert r \rVert^2 = \dimension$, the omitted part equals the
 kept part, and the rate of [%full](statement:gauss-newton) is one: the iteration need not
-converge.
+converge. A scale is estimated with the expected information in the Hessian's place, by
+[Fisher scoring](../fisher-scoring/).
