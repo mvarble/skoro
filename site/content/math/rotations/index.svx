@@ -163,8 +163,8 @@ Each is a polynomial in $[\omega]_\times$, so the inverses are checked by multip
 $[\omega]_\times^3 = -\theta^2 [\omega]_\times$, and $J_r(\omega) = J_l(\omega)\transpose$, since
 $[\omega]_\times$ is skew. The coefficients $A$, $B$ and $C$, like $\sin(\theta/2)/\theta$ in
 [](eq:exp) and $2\atantwo(n, w)/n$ in [](eq:log), are smooth functions whose closed forms divide by
-a quantity that vanishes at the identity. How such a coefficient is computed is the subject of a
-later note.
+a quantity that vanishes at the identity. How such a coefficient is computed is the subject of
+[a later note](../removable-singularities/).
 
 The exponential gives a retraction, $q \oplus \tangent = q \otimes \Exp(\tangent)$, the
 *exponential chart*. It is the chart most often written down, and it is not global: it is
