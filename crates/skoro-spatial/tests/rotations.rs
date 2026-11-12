@@ -111,9 +111,9 @@ skoro_core::precision_tests! {
         }
         let want = flat(angles.iter().zip(&axes).map(|(t, a)| common::about(*a, *t)));
         close(&out[3], &want, tol);
-        // axis_angle inverts about, its angle in [0, 2π).
-        close(&out[4], &out[3], tol);
-        assert!(out[5].iter().all(|t| (0.0..2.0 * std::f64::consts::PI).contains(t)));
+        // axis_angle inverts about, as a rotation, its angle in [0, π].
+        close(&matrices(&split::<4>(&out[4])), &matrices(&split::<4>(&out[3])), tol);
+        assert!(out[5].iter().all(|t| (0.0..=std::f64::consts::PI * (1.0 + tol)).contains(t)));
 
         // At the identity: the fixed axis, the angle zero, and finite.
         let out = common::evaluate_many(
@@ -203,11 +203,20 @@ skoro_core::precision_tests! {
         close(&out[0], &exp, tol);
         let on_host: Vec<f64> = omega.iter().flat_map(|w| host::exp(*w)).collect();
         close(&on_host, &exp, 1e-14);
+        // log inverts exp on the ball of radius π, and beyond it gives the shorter turn,
+        // ω (1 - 2π / |ω|), the same rotation.
+        let shorter: Vec<f64> = omega
+            .iter()
+            .flat_map(|w| {
+                let theta = common::host::norm(w);
+                let scale = if theta > std::f64::consts::PI { 1.0 - 2.0 * std::f64::consts::PI / theta } else { 1.0 };
+                w.map(|v| v * scale)
+            })
+            .collect();
         let back: Vec<f64> = split::<4>(&on_host).iter().flat_map(|q| host::log(*q)).collect();
-        close(&back, &omega.concat(), 1e-12);
-        assert!(host::log([-1.0, 0.0, 0.0, 0.0]).iter().all(|v| !v.is_finite()));
-        // Log inverts Exp on the ball of radius 2π.
-        close(&out[1], &omega.concat(), tol);
+        close(&back, &shorter, 1e-12);
+        close(&host::log([-1.0, 0.0, 0.0, 0.0]), &[0.0; 3], 1e-15);
+        close(&out[1], &shorter, tol);
         // Exp at a constant rate is the matrix exponential of [ω]×.
         let integrated: Vec<f64> = omega
             .iter()
@@ -219,29 +228,33 @@ skoro_core::precision_tests! {
             .collect();
         close(&out[2], &integrated, tol);
 
-        // The shorter turn: the same at ±q, Log where w > 0, of length at most π.
-        let a = quaternions(5, 62);
+        // The same at ±q, of length at most π, and against the host's; the axis and angle are
+        // its direction and length, the angle in [0, π], and rebuild the rotation through about.
+        let a: Vec<[f64; 4]> = quaternions(5, 62).into_iter().filter(|q| q[0].abs() > 0.1).collect();
         let minus: Vec<[f64; 4]> = a.iter().map(|q| q.map(|v| -v)).collect();
         let out = common::evaluate_many(
             |q| {
                 let (a, minus) = (r(q[0]), r(q[1]));
+                let (axis, angle) = a.axis_angle();
                 vec![
-                    a.log_shorter().untyped(),
-                    minus.log_shorter().untyped(),
                     a.log().untyped(),
+                    minus.log().untyped(),
+                    angle.untyped(),
+                    rotation::about(axis, angle).untyped(),
                 ]
             },
             &[rotations(&a), rotations(&minus)],
             &target,
         );
         close(&out[0], &out[1], tol);
-        for (row, q) in a.iter().enumerate() {
-            let shorter = &out[0][3 * row..3 * row + 3];
-            assert!(common::host::norm(shorter) <= std::f64::consts::PI * (1.0 + tol));
-            if q[0] > 0.0 {
-                close(shorter, &out[2][3 * row..3 * row + 3], tol);
-            }
+        let on_host: Vec<f64> = a.iter().flat_map(|q| host::log(*q)).collect();
+        close(&out[0], &on_host, tol);
+        for row in 0..a.len() {
+            let length = common::host::norm(&out[0][3 * row..3 * row + 3]);
+            assert!(length <= std::f64::consts::PI * (1.0 + tol));
+            close(&[out[2][row]], &[length], tol);
         }
+        close(&matrices(&split::<4>(&out[3])), &matrices(&a), tol);
     }
 
     fn group_laws(target) {

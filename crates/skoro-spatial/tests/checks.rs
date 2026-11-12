@@ -172,6 +172,27 @@ fn length(v: QDyn) -> QDyn {
     ((v * v).sum().log() * 0.5).exp()
 }
 
+/// `Log(q) = 2 atan2(n, w) u / n` of a stored rotation, with no selection of a side: the formula
+/// the shorter turn's discretization selects where `w > 0`.
+fn raw_log(q: QDyn) -> QDyn {
+    let x = q.include();
+    let (w, u) = (x.slice(0..1).reshape(Space::Real), x.slice(1..4));
+    let n = length(u);
+    (n.atan2(w) * 2.0 * ((u * u).sum().log() * -0.5).exp()) * u
+}
+
+/// `(φ, J_l(φ)⁻¹ tᵢ)` with `φ = Log q` of a stored motion with `k` translations, with no
+/// selection of a side.
+fn raw_log_motion(x: QDyn, k: usize) -> QDyn {
+    let s = x.include();
+    let phi = raw_log(project(Rotation, s.slice(0..4)).untyped());
+    let inverse = so3::jl_inv(phi.narrow()).untyped();
+    let parts: Vec<QDyn> = std::iter::once(phi)
+        .chain((0..k).map(|i| inverse.matmul(s.slice(4 + 3 * i..7 + 3 * i))))
+        .collect();
+    concatenate(&parts, Space::Vector(3 + 3 * k))
+}
+
 skoro_core::precision_tests! {
     fn composites_pass_check_operation(target) {
         let qs = quaternions(4, 501);
@@ -182,7 +203,6 @@ skoro_core::precision_tests! {
         let v3 = Rows::vectors(&vectors::<3>(n, 503, -1.5, 1.5));
         let v3b = Rows::vectors(&vectors::<3>(n, 504, -1.5, 1.5));
         let omega = twists(3, n, 505);
-        let t = reals(n, 506, -0.5, 1.5);
         let angle = reals(n, 507, -3.0, 3.0);
         let poses = rows_of(Pose.space(), with_translations(&qs, 1, 508));
         let poses_b = rows_of(Pose.space(), with_translations(&others, 1, 509));
@@ -231,13 +251,12 @@ skoro_core::precision_tests! {
         run("unrotate", &[rot_rows.clone(), v3.clone()], Box::new(|q| r(q[0]).unrotate(q[1].narrow()).untyped()));
         run("matrix", std::slice::from_ref(&rot_rows), Box::new(|q| r(q[0]).matrix().untyped()));
         run("exp", std::slice::from_ref(&omega), Box::new(|q| rotation::exp(q[0].narrow()).untyped()));
-        run("log", std::slice::from_ref(&rot_rows), Box::new(|q| r(q[0]).log().untyped()));
         let (a, _, _) = own_w(0);
-        run("log_shorter", &[a], Box::new(|q| r(q[0]).log_shorter().untyped()));
+        run("log", &[a], Box::new(|q| r(q[0]).log().untyped()));
         run("jl", std::slice::from_ref(&omega), Box::new(|q| so3::jl(q[0].narrow()).untyped()));
         run("jl_inv", std::slice::from_ref(&omega), Box::new(|q| so3::jl_inv(q[0].narrow()).untyped()));
         run("about", &[v3.clone(), angle.clone()], Box::new(|q| rotation::about(q[0].narrow(), q[1].narrow()).untyped()));
-        let (a, _, _) = away(&|a, _| (1.0 - a[0] * a[0]).sqrt() > 0.1, 0);
+        let (a, _, _) = away(&|a, _| (1.0 - a[0] * a[0]).sqrt() > 0.1 && a[0].abs() > 0.1, 0);
         run("axis_angle", &[a], Box::new(|q| {
             let (axis, angle) = r(q[0]).axis_angle();
             concatenate(&[axis.untyped(), angle.untyped()], Space::Vector(4))
@@ -252,9 +271,8 @@ skoro_core::precision_tests! {
             .flat_map(|(i, q)| stored(rot(*q)).into_iter().enumerate().map(move |(j, v)| v + 0.01 * ((i * 9 + j) as f64).sin()))
             .collect();
         run("from_matrix", &[Rows::new(Space::Matrix(3, 3), matrices)], Box::new(|q| rotation::from_matrix(q[0].narrow()).untyped()));
-        run("slerp", &[rot_rows.clone(), other_rows.clone(), t.clone()], Box::new(|q| r(q[0]).slerp(r(q[1]), q[2].narrow()).untyped()));
         let (a, b, tt) = shorter_rows(0);
-        run("slerp_shorter", &[a.clone(), b.clone(), tt], Box::new(|q| r(q[0]).slerp_shorter(r(q[1]), q[2].narrow()).untyped()));
+        run("slerp", &[a, b, tt], Box::new(|q| r(q[0]).slerp(r(q[1]), q[2].narrow()).untyped()));
         let (a, b, _) = away(&|a, b| {
             let w = relative_w(a, b);
             w.abs() > 0.1 && (1.0 - w * w).sqrt() > 0.1
@@ -295,16 +313,13 @@ skoro_core::precision_tests! {
         run("pose.matrix", std::slice::from_ref(&poses), Box::new(|q| p(q[0]).matrix().untyped()));
         run("pose.adjoint", std::slice::from_ref(&poses), Box::new(|q| p(q[0]).adjoint().untyped()));
         run("pose.exp", std::slice::from_ref(&xi6), Box::new(|q| pose::exp(q[0].narrow()).untyped()));
-        run("pose.log", std::slice::from_ref(&poses), Box::new(|q| p(q[0]).log().untyped()));
         let (a, _, _) = own_w(1);
-        run("pose.log_shorter", &[a], Box::new(|q| p(q[0]).log_shorter().untyped()));
+        run("pose.log", &[a], Box::new(|q| p(q[0]).log().untyped()));
         run("pose.jl", std::slice::from_ref(&xi6), Box::new(|q| pose::jl(q[0].narrow()).untyped()));
         run("pose.jl_inv", std::slice::from_ref(&xi6), Box::new(|q| pose::jl_inv(q[0].narrow()).untyped()));
-        run("pose.interpolate", &[poses.clone(), poses_b.clone(), t.clone()], Box::new(|q| p(q[0]).interpolate(p(q[1]), q[2].narrow()).untyped()));
-        run("pose.interpolate_parts", &[poses.clone(), poses_b.clone(), t.clone()], Box::new(|q| p(q[0]).interpolate_parts(p(q[1]), q[2].narrow()).untyped()));
         let (a, b, tt) = shorter_rows(1);
-        run("pose.interpolate_shorter", &[a.clone(), b.clone(), tt.clone()], Box::new(|q| p(q[0]).interpolate_shorter(p(q[1]), q[2].narrow()).untyped()));
-        run("pose.interpolate_parts_shorter", &[a, b, tt], Box::new(|q| p(q[0]).interpolate_parts_shorter(p(q[1]), q[2].narrow()).untyped()));
+        run("pose.interpolate", &[a.clone(), b.clone(), tt.clone()], Box::new(|q| p(q[0]).interpolate(p(q[1]), q[2].narrow()).untyped()));
+        run("pose.interpolate_parts", &[a, b, tt], Box::new(|q| p(q[0]).interpolate_parts(p(q[1]), q[2].narrow()).untyped()));
 
         // The extended poses.
         run("extended_pose.compose", &[extended.clone(), extended_b.clone()], Box::new(|q| (e(q[0]) * e(q[1])).untyped()));
@@ -313,14 +328,12 @@ skoro_core::precision_tests! {
         run("extended_pose.matrix", std::slice::from_ref(&extended), Box::new(|q| e(q[0]).matrix().untyped()));
         run("extended_pose.adjoint", std::slice::from_ref(&extended), Box::new(|q| e(q[0]).adjoint().untyped()));
         run("extended_pose.exp", std::slice::from_ref(&xi9), Box::new(|q| extended_pose::exp(q[0].narrow()).untyped()));
-        run("extended_pose.log", std::slice::from_ref(&extended), Box::new(|q| e(q[0]).log().untyped()));
         let (a, _, _) = own_w(2);
-        run("extended_pose.log_shorter", &[a], Box::new(|q| e(q[0]).log_shorter().untyped()));
+        run("extended_pose.log", &[a], Box::new(|q| e(q[0]).log().untyped()));
         run("extended_pose.jl", std::slice::from_ref(&xi9), Box::new(|q| extended_pose::jl(q[0].narrow()).untyped()));
         run("extended_pose.jl_inv", std::slice::from_ref(&xi9), Box::new(|q| extended_pose::jl_inv(q[0].narrow()).untyped()));
-        run("extended_pose.interpolate", &[extended.clone(), extended_b.clone(), t.clone()], Box::new(|q| e(q[0]).interpolate(e(q[1]), q[2].narrow()).untyped()));
         let (a, b, tt) = shorter_rows(2);
-        run("extended_pose.interpolate_shorter", &[a, b, tt], Box::new(|q| e(q[0]).interpolate_shorter(e(q[1]), q[2].narrow()).untyped()));
+        run("extended_pose.interpolate", &[a, b, tt], Box::new(|q| e(q[0]).interpolate(e(q[1]), q[2].narrow()).untyped()));
     }
 }
 
@@ -477,40 +490,37 @@ skoro_core::precision_tests! {
         let rotations = |qs: &[[f64; 4]]| Rows::new(rotation_space(), qs.concat());
         let ts = |rows: usize| reals(rows, 603, 0.2, 0.8);
 
-        // The shorter turn, at w = ±h: Log of q, and of -q.
+        // The logarithm, the shorter turn, at w = ±h: Log of q, and of -q.
         for (sign, k) in [(1.0, 0), (-1.0, 0), (1.0, 1), (-1.0, 1), (1.0, 2), (-1.0, 2)] {
             let qs: Vec<[f64; 4]> = directions.iter().map(|d| with_w(sign * h, *d)).collect();
             let space = match k { 0 => rotation_space(), 1 => Pose.space(), _ => ExtendedPose.space() };
             let rows = Rows::new(space, with_translations(&qs, k, 604));
             let (map, alone): (Map, Map) = match (k, sign > 0.0) {
-                (0, true) => (Box::new(|q| r(q[0]).log_shorter().untyped()), Box::new(|q| r(q[0]).log().untyped())),
-                (0, false) => (Box::new(|q| r(q[0]).log_shorter().untyped()), Box::new(|q| (r(q[0]) * minus()).log().untyped())),
-                (1, true) => (Box::new(|q| p(q[0]).log_shorter().untyped()), Box::new(|q| p(q[0]).log().untyped())),
-                (1, false) => (Box::new(|q| p(q[0]).log_shorter().untyped()), Box::new(|q| (p(q[0]) * minus_pose()).log().untyped())),
-                (_, true) => (Box::new(|q| e(q[0]).log_shorter().untyped()), Box::new(|q| e(q[0]).log().untyped())),
-                (_, false) => (Box::new(|q| e(q[0]).log_shorter().untyped()), Box::new(|q| (e(q[0]) * minus_extended()).log().untyped())),
+                (0, true) => (Box::new(|q| r(q[0]).log().untyped()), Box::new(|q| raw_log(q[0]))),
+                (0, false) => (Box::new(|q| r(q[0]).log().untyped()), Box::new(|q| raw_log((r(q[0]) * minus()).untyped()))),
+                (1, true) => (Box::new(|q| p(q[0]).log().untyped()), Box::new(|q| raw_log_motion(q[0], 1))),
+                (1, false) => (Box::new(|q| p(q[0]).log().untyped()), Box::new(|q| raw_log_motion((p(q[0]) * minus_pose()).untyped(), 1))),
+                (_, true) => (Box::new(|q| e(q[0]).log().untyped()), Box::new(|q| raw_log_motion(q[0], 2))),
+                (_, false) => (Box::new(|q| e(q[0]).log().untyped()), Box::new(|q| raw_log_motion((e(q[0]) * minus_extended()).untyped(), 2))),
             };
-            agree(&format!("log_shorter of {k} translations at w = {}", sign * h), &[rows], map, alone, &target);
+            agree(&format!("log of {k} translations at w = {}", sign * h), &[rows], map, alone, &target);
         }
 
-        // The shorter interpolations and the angle, at w(q̄₁ q₂) = ±h.
+        // The interpolations, along the shorter turn, and the angle, at w(q̄₁ q₂) = ±h, against
+        // the formulas along the arc from q₁ to q₂, and to -q₂.
         for sign in [1.0, -1.0] {
             let relative: Vec<[f64; 4]> = directions.iter().map(|d| with_w(sign * h, *d)).collect();
             let ends: Vec<[f64; 4]> = starts.iter().zip(&relative).map(|(a, r)| qmul(*a, *r)).collect();
             let near = sign > 0.0;
             let label = |name: &str| format!("{name} at w = {}", sign * h);
             let rows = [rotations(&starts), rotations(&ends), ts(4)];
-            let alone: Map = if near {
-                Box::new(|q| r(q[0]).slerp(r(q[1]), q[2].narrow()).untyped())
-            } else {
-                Box::new(|q| r(q[0]).slerp(r(q[1]) * minus(), q[2].narrow()).untyped())
-            };
-            agree(&label("slerp_shorter"), &rows, Box::new(|q| r(q[0]).slerp_shorter(r(q[1]), q[2].narrow()).untyped()), alone, &target);
-            let alone: Map = if near {
-                Box::new(|q| length(r(q[0]).between(r(q[1])).log().untyped()))
-            } else {
-                Box::new(|q| length((r(q[0]).between(r(q[1])) * minus()).log().untyped()))
-            };
+            let far = move |b: skoro_core::Q<Rotation>| if near { b } else { b * minus() };
+            let alone: Map = Box::new(move |q| {
+                let (a, b, t) = (r(q[0]), far(r(q[1])), q[2]);
+                (a * rotation::exp((t * raw_log(a.between(b).untyped())).narrow())).untyped()
+            });
+            agree(&label("slerp"), &rows, Box::new(|q| r(q[0]).slerp(r(q[1]), q[2].narrow()).untyped()), alone, &target);
+            let alone: Map = Box::new(move |q| length(raw_log(r(q[0]).between(far(r(q[1]))).untyped())));
             agree(&label("angle"), &rows[..2], Box::new(|q| r(q[0]).angle_to(r(q[1])).untyped()), alone, &target);
             for k in [1, 2] {
                 let space = if k == 1 { Pose.space() } else { ExtendedPose.space() };
@@ -520,25 +530,26 @@ skoro_core::precision_tests! {
                     ts(4),
                 ];
                 if k == 1 {
-                    let alone: Map = if near {
-                        Box::new(|q| p(q[0]).interpolate(p(q[1]), q[2].narrow()).untyped())
-                    } else {
-                        Box::new(|q| p(q[0]).interpolate(p(q[1]) * minus_pose(), q[2].narrow()).untyped())
-                    };
-                    agree(&label("pose.interpolate_shorter"), &rows, Box::new(|q| p(q[0]).interpolate_shorter(p(q[1]), q[2].narrow()).untyped()), alone, &target);
-                    let alone: Map = if near {
-                        Box::new(|q| p(q[0]).interpolate_parts(p(q[1]), q[2].narrow()).untyped())
-                    } else {
-                        Box::new(|q| p(q[0]).interpolate_parts(p(q[1]) * minus_pose(), q[2].narrow()).untyped())
-                    };
-                    agree(&label("pose.interpolate_parts_shorter"), &rows, Box::new(|q| p(q[0]).interpolate_parts_shorter(p(q[1]), q[2].narrow()).untyped()), alone, &target);
+                    let far = move |b: skoro_core::Q<Pose>| if near { b } else { b * minus_pose() };
+                    let alone: Map = Box::new(move |q| {
+                        let (a, b, t) = (p(q[0]), far(p(q[1])), q[2]);
+                        (a * pose::exp((t * raw_log_motion(a.between(b).untyped(), 1)).narrow())).untyped()
+                    });
+                    agree(&label("pose.interpolate"), &rows, Box::new(|q| p(q[0]).interpolate(p(q[1]), q[2].narrow()).untyped()), alone, &target);
+                    let alone: Map = Box::new(move |q| {
+                        let (a, b, t) = (p(q[0]), far(p(q[1])), q[2]);
+                        let turned = a.rotation() * rotation::exp((t * raw_log(a.rotation().between(b.rotation()).untyped())).narrow());
+                        let line = a.position().untyped() * (t * -1.0 + 1.0) + b.position().untyped() * t;
+                        pose::from_parts(turned, line.narrow()).untyped()
+                    });
+                    agree(&label("pose.interpolate_parts"), &rows, Box::new(|q| p(q[0]).interpolate_parts(p(q[1]), q[2].narrow()).untyped()), alone, &target);
                 } else {
-                    let alone: Map = if near {
-                        Box::new(|q| e(q[0]).interpolate(e(q[1]), q[2].narrow()).untyped())
-                    } else {
-                        Box::new(|q| e(q[0]).interpolate(e(q[1]) * minus_extended(), q[2].narrow()).untyped())
-                    };
-                    agree(&label("extended_pose.interpolate_shorter"), &rows, Box::new(|q| e(q[0]).interpolate_shorter(e(q[1]), q[2].narrow()).untyped()), alone, &target);
+                    let far = move |b: skoro_core::Q<ExtendedPose>| if near { b } else { b * minus_extended() };
+                    let alone: Map = Box::new(move |q| {
+                        let (a, b, t) = (e(q[0]), far(e(q[1])), q[2]);
+                        (a * extended_pose::exp((t * raw_log_motion(a.between(b).untyped(), 2)).narrow())).untyped()
+                    });
+                    agree(&label("extended_pose.interpolate"), &rows, Box::new(|q| e(q[0]).interpolate(e(q[1]), q[2].narrow()).untyped()), alone, &target);
                 }
             }
         }

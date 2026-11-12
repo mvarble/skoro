@@ -64,10 +64,12 @@ skoro_core::precision_tests! {
                 |q| {
                     if k == 1 {
                         let t = pose::exp(q[0].narrow());
-                        vec![t.matrix().untyped(), t.log().untyped()]
+                        let back = pose::exp(t.log());
+                        vec![t.matrix().untyped(), t.log().untyped(), back.matrix().untyped()]
                     } else {
                         let t = extended_pose::exp(q[0].narrow());
-                        vec![t.matrix().untyped(), t.log().untyped()]
+                        let back = extended_pose::exp(t.log());
+                        vec![t.matrix().untyped(), t.log().untyped(), back.matrix().untyped()]
                     }
                 },
                 &[Rows::new(Space::Vector(d), xi.clone())],
@@ -79,11 +81,22 @@ skoro_core::precision_tests! {
                 .flat_map(|xi| dense_stored(&common::host::expm(&twist_matrix(xi, k))))
                 .collect();
             close(&out[0], &integrated, tol);
-            // Its logarithm inverts it on the ball of radius 2π.
-            close(&out[1], &xi, tol);
+            // Its logarithm inverts it on the ball of radius π in the rotation, and beyond it gives
+            // the shorter turn's twist, of the same motion.
+            for (row, xi) in xi.chunks(d).enumerate() {
+                if common::host::norm(&xi[..3]) < std::f64::consts::PI {
+                    close(&out[1][row * d..(row + 1) * d], xi, tol);
+                }
+                assert!(common::host::norm(&out[1][row * d..row * d + 3]) <= std::f64::consts::PI * (1.0 + tol));
+            }
+            close(&out[2], &out[0], tol);
 
-            // The shorter turn is the same at ±q.
-            let x = with_translations(&quaternions(5, 222), k, 223);
+            // The logarithm is the same at ±q.
+            let x = with_translations(
+                &quaternions(5, 222).into_iter().filter(|q| q[0].abs() > 0.1).collect::<Vec<_>>(),
+                k,
+                223,
+            );
             let minus: Vec<f64> = x
                 .chunks(n)
                 .flat_map(|x| x.iter().enumerate().map(|(i, v)| if i < 4 { -v } else { *v }).collect::<Vec<_>>())
@@ -91,9 +104,9 @@ skoro_core::precision_tests! {
             let out = common::evaluate_many(
                 |q| {
                     if k == 1 {
-                        vec![p(q[0]).log_shorter().untyped(), p(q[1]).log_shorter().untyped()]
+                        vec![p(q[0]).log().untyped(), p(q[1]).log().untyped()]
                     } else {
-                        vec![e(q[0]).log_shorter().untyped(), e(q[1]).log_shorter().untyped()]
+                        vec![e(q[0]).log().untyped(), e(q[1]).log().untyped()]
                     }
                 },
                 &[motions(&x, k), motions(&minus, k)],
@@ -299,5 +312,182 @@ skoro_core::precision_tests! {
             .collect();
         assert_eq!(jacobian.len(), rows * 36);
         close(&jacobian, &want, tol);
+    }
+}
+
+/// Rows of the rotations `a` and `b` away from every discretization the maps below have: the
+/// half-turns of `a` and of `b` from the identity, the half-turn between them, and their
+/// orthogonality, where alignment chooses.
+fn decided_pairs(seed: u64) -> (Vec<[f64; 4]>, Vec<[f64; 4]>) {
+    let a = quaternions(6, seed);
+    let b = common::random_quaternions(a.len(), seed + 1);
+    a.into_iter()
+        .zip(b)
+        .filter(|(a, b)| {
+            let r = common::host::qmul(common::host::conj(*a), *b);
+            a[0].abs() > 0.1
+                && b[0].abs() > 0.1
+                && r[0].abs() > 0.1
+                && common::host::dot(a, b).abs() > 0.1
+        })
+        .unzip()
+}
+
+/// Whether two batches of outputs agree: as stored points of `declaration` up to its group, or
+/// as Euclidean values.
+fn agree_up_to(
+    declaration: Option<&skoro_core::Embedded>,
+    got: &[f64],
+    want: &[f64],
+    tol: f64,
+    what: &str,
+) {
+    match declaration {
+        Some(declaration) => skoro_core::testing::close_up_to(declaration, got, want, tol)
+            .unwrap_or_else(|e| panic!("{what}: {e}")),
+        None => close(got, want, tol),
+    }
+}
+
+skoro_core::precision_tests! {
+    fn maps_of_the_group_ignore_the_sign(target) {
+        // Every map of the groups, at inputs given in each combination of the signs of their
+        // quaternions: the same value, or the same point of the group.
+        use skoro_spatial::{Euler, Frame, ROTATION, POSE, EXTENDED_POSE, RotationMaps, Sequence, rotation};
+        let tol = tolerance(&target);
+        let (a, b) = decided_pairs(901);
+        let rows = a.len();
+        let x = Rows::vectors(&vectors::<3>(rows, 903, -2.0, 2.0));
+        let t = Rows::new(Space::Real, vec![0.4; rows]);
+        let negate = |data: &[f64], n: usize| -> Vec<f64> {
+            data.chunks(n)
+                .flat_map(|row| row.iter().enumerate().map(|(i, v)| if i < 4 { -v } else { *v }).collect::<Vec<_>>())
+                .collect()
+        };
+        let r = |q: QDyn| q.narrow::<skoro_spatial::Rotation>();
+        let euler_rows: Vec<bool> = a
+            .iter()
+            .map(|q| {
+                Sequence::ALL.iter().all(|&sequence| {
+                    [Frame::Intrinsic, Frame::Extrinsic].iter().all(|&frame| {
+                        let angles = skoro_spatial::host::euler(*q, Euler { sequence, frame });
+                        let pi = std::f64::consts::PI;
+                        angles[0].abs() < pi - 0.1 && angles[2].abs() < pi - 0.1
+                            && (angles[1].abs() > 0.1 && (angles[1].abs() - pi).abs() > 0.1
+                                && (angles[1].abs() - pi / 2.0).abs() > 0.1)
+                    })
+                })
+            })
+            .collect();
+
+        // The rotations.
+        let rotation_maps = |q: &[QDyn]| -> Vec<QDyn> {
+            let (a, b, x, t) = (r(q[0]), r(q[1]), q[2].narrow::<Vector<3>>(), q[3].narrow());
+            let (axis, angle) = a.axis_angle();
+            let mut out = vec![
+                (a * b).untyped(),
+                (a * x).untyped(),
+                a.inverse().untyped(),
+                a.between(b).untyped(),
+                a.unrotate(x).untyped(),
+                a.matrix().untyped(),
+                a.adjoint().untyped(),
+                a.angle_to(b).untyped(),
+                a.log().untyped(),
+                axis.untyped(),
+                angle.untyped(),
+                a.slerp(b, t).untyped(),
+                a.aligned_with(b).untyped(),
+                rotation::exp(a.log()).untyped(),
+            ];
+            for sequence in Sequence::ALL {
+                for frame in [Frame::Intrinsic, Frame::Extrinsic] {
+                    out.push(a.euler(Euler { sequence, frame }).untyped());
+                }
+            }
+            out
+        };
+        // Which outputs are points of the rotations, compared up to sign.
+        let is_rotation = |i: usize| matches!(i, 0 | 2 | 3 | 11 | 12 | 13);
+        let (a_flat, b_flat) = (a.concat(), b.concat());
+        let inputs = |a: Vec<f64>, b: Vec<f64>| {
+            [
+                Rows::new(Space::Embedded(ROTATION.clone()), a),
+                Rows::new(Space::Embedded(ROTATION.clone()), b),
+                x.clone(),
+                t.clone(),
+            ]
+        };
+        let reference = common::evaluate_many(rotation_maps, &inputs(a_flat.clone(), b_flat.clone()), &target);
+        for (na, nb) in [(true, false), (false, true), (true, true)] {
+            let a = if na { negate(&a_flat, 4) } else { a_flat.clone() };
+            let b = if nb { negate(&b_flat, 4) } else { b_flat.clone() };
+            let out = common::evaluate_many(rotation_maps, &inputs(a, b), &target);
+            for (i, (got, want)) in out.iter().zip(&reference).enumerate() {
+                if i >= 14 {
+                    // An Euler convention: compared at the rows away from its wrap and its lock.
+                    let keep = |v: &[f64]| -> Vec<f64> {
+                        v.chunks(3).zip(&euler_rows).filter(|(_, k)| **k).flat_map(|(c, _)| c.to_vec()).collect()
+                    };
+                    close(&keep(got), &keep(want), tol);
+                } else {
+                    let declaration = is_rotation(i).then_some(&**ROTATION);
+                    agree_up_to(declaration, got, want, tol, &format!("rotation map {i}"));
+                }
+            }
+        }
+
+        // The motions.
+        for k in [1, 2] {
+            let n = 4 + 3 * k;
+            let declaration = if k == 1 { &**POSE } else { &**EXTENDED_POSE };
+            let space = Space::Embedded(if k == 1 { POSE.clone() } else { EXTENDED_POSE.clone() });
+            let xa = with_translations(&a, k, 904);
+            let xb = with_translations(&b, k, 905);
+            let motion_maps = move |q: &[QDyn]| -> Vec<QDyn> {
+                let t = q[3].narrow();
+                if k == 1 {
+                    let (a, b, x) = (p(q[0]), p(q[1]), q[2].narrow::<Vector<3>>());
+                    vec![
+                        (a * b).untyped(),
+                        a.inverse().untyped(),
+                        a.between(b).untyped(),
+                        a.interpolate(b, t).untyped(),
+                        a.interpolate_parts(b, t).untyped(),
+                        (a * x).untyped(),
+                        a.rotate(x).untyped(),
+                        a.untransform(x).untyped(),
+                        a.matrix().untyped(),
+                        a.adjoint().untyped(),
+                        a.log().untyped(),
+                    ]
+                } else {
+                    let (a, b) = (e(q[0]), e(q[1]));
+                    vec![
+                        (a * b).untyped(),
+                        a.inverse().untyped(),
+                        a.between(b).untyped(),
+                        a.interpolate(b, t).untyped(),
+                        a.matrix().untyped(),
+                        a.adjoint().untyped(),
+                        a.log().untyped(),
+                    ]
+                }
+            };
+            let points = if k == 1 { 5 } else { 4 };
+            let inputs = |a: Vec<f64>, b: Vec<f64>| {
+                [Rows::new(space.clone(), a), Rows::new(space.clone(), b), x.clone(), t.clone()]
+            };
+            let reference = common::evaluate_many(motion_maps, &inputs(xa.clone(), xb.clone()), &target);
+            for (na, nb) in [(true, false), (false, true), (true, true)] {
+                let a = if na { negate(&xa, n) } else { xa.clone() };
+                let b = if nb { negate(&xb, n) } else { xb.clone() };
+                let out = common::evaluate_many(motion_maps, &inputs(a, b), &target);
+                for (i, (got, want)) in out.iter().zip(&reference).enumerate() {
+                    let declaration = (i < points).then_some(declaration);
+                    agree_up_to(declaration, got, want, tol, &format!("motion map {i} of {k} translations"));
+                }
+            }
+        }
     }
 }

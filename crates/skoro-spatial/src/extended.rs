@@ -75,15 +75,7 @@ static LOG: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     composite(
         "skoro.spatial.extended_pose.log",
         &[extended_space()],
-        |q| log_motion_stored(q[0].include(), 2, false),
-    )
-});
-
-static LOG_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
-    composite(
-        "skoro.spatial.extended_pose.log_shorter",
-        &[extended_space()],
-        |q| log_motion_stored(q[0].include(), 2, true),
+        |q| log_motion_stored(q[0].include(), 2),
     )
 });
 
@@ -105,31 +97,7 @@ static INTERPOLATE: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     composite(
         "skoro.spatial.extended_pose.interpolate",
         &[extended_space(), extended_space(), Space::Real],
-        |q| {
-            onto_extended(interpolate_stored(
-                q[0].include(),
-                q[1].include(),
-                q[2],
-                2,
-                false,
-            ))
-        },
-    )
-});
-
-static INTERPOLATE_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
-    composite(
-        "skoro.spatial.extended_pose.interpolate_shorter",
-        &[extended_space(), extended_space(), Space::Real],
-        |q| {
-            onto_extended(interpolate_stored(
-                q[0].include(),
-                q[1].include(),
-                q[2],
-                2,
-                true,
-            ))
-        },
+        |q| onto_extended(interpolate_stored(q[0].include(), q[1].include(), q[2], 2)),
     )
 });
 
@@ -160,16 +128,13 @@ pub trait ExtendedPoseMaps: Sized {
     fn matrix(self) -> Q<Matrix<5, 5>>;
     /// The adjoint `((R, 0, 0), ([v]× R, R, 0), ([p]× R, 0, R))` in the order `(φ, η, ρ)`.
     fn adjoint(self) -> Q<Matrix<9, 9>>;
-    /// `Log(q, v, p) = (φ, J_l(φ)⁻¹ v, J_l(φ)⁻¹ p)` with `φ = Log q`. Undefined at `q = -1`:
-    /// non-finite exactly there, and near it `φ` ill-conditioned in direction, as `log` is, and
-    /// the translations' parts growing without bound.
+    /// `Log(q, v, p) = (φ, J_l(φ)⁻¹ v, J_l(φ)⁻¹ p)` with `φ = rv(q)`, the rotation vector of the
+    /// shorter turn: the same whichever sign the quaternion is stored in, and a discretization at
+    /// the half-turns.
     fn log(self) -> Q<Vector<9>>;
-    /// The same with the rotation vector of the shorter turn.
-    fn log_shorter(self) -> Q<Vector<9>>;
-    /// `T₁ Exp(t Log(T₁⁻¹ T₂))`, from `self` at `t = 0` to `other` at `t = 1`.
+    /// `T₁ Exp(t Log(T₁⁻¹ T₂))`, from `self` at `t = 0` to `other` at `t = 1`, along the shorter
+    /// turn; a discretization where the rotations are a half-turn apart.
     fn interpolate(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose>;
-    /// The same along the shorter turn.
-    fn interpolate_shorter(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose>;
 }
 
 impl ExtendedPoseMaps for Q<ExtendedPose> {
@@ -220,20 +185,8 @@ impl ExtendedPoseMaps for Q<ExtendedPose> {
     }
 
     #[track_caller]
-    fn log_shorter(self) -> Q<Vector<9>> {
-        LOG_SHORTER.call(&[self.untyped()]).narrow()
-    }
-
-    #[track_caller]
     fn interpolate(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose> {
         INTERPOLATE
-            .call(&[self.untyped(), other.untyped(), t.untyped()])
-            .narrow()
-    }
-
-    #[track_caller]
-    fn interpolate_shorter(self, other: Q<ExtendedPose>, t: Q<Real>) -> Q<ExtendedPose> {
-        INTERPOLATE_SHORTER
             .call(&[self.untyped(), other.untyped(), t.untyped()])
             .narrow()
     }

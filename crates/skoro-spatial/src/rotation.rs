@@ -3,6 +3,26 @@
 //!
 //! Each map of more than a few nodes is a composite named `skoro.spatial.<map>`, defined once; the
 //! operators and methods call it, so that a wrong input is refused at the caller's line.
+//!
+//! A rotation is stored as a unit quaternion of either sign, and every map here is a map of the
+//! rotations, not of the quaternions that store them:
+//!
+//! - a map out of the type, to a vector, a matrix or an angle, gives the same value whichever sign
+//!   its inputs are stored in: the actions and the matrix read the rotation through `π(q)`, which
+//!   is even in `q`; `log` and `axis_angle` are those of the shorter turn, of length and angle in
+//!   [0, π]; `angle_to` is the length of the shorter turn between two rotations; and the Euler
+//!   angles' half-angles change by π with the sign, while the angles, returned to (-π, π], do not;
+//! - a map into the type, a composition, an inverse, an interpolation or a construction, gives the
+//!   same rotation whichever sign its inputs are stored in, stored in a sign of its own: the
+//!   product of the stored quaternions, projected, or the sign a construction's formula gives;
+//! - `aligned_with` is the identity on the rotations: it chooses which of the two quaternions
+//!   stores a rotation, and nothing else, as a quaternion to report is chosen with `w ≥ 0`.
+//!
+//! The maps that read the stored sign itself, the logarithm of length up to 2π, the axis and
+//! angle read off it, and the interpolation along the arc that avoids `-q`, are not offered: a
+//! term built on one would make a density depend on a sign that carries no information. Each
+//! has its counterpart above, of the shorter turn, and is a discretization where the two turns
+//! are equally short, at the half-turns.
 
 use std::sync::{Arc, LazyLock};
 
@@ -108,13 +128,18 @@ pub(crate) fn exp_stored(omega: QDyn) -> QDyn {
     quaternion(a, b * omega)
 }
 
-/// `Log(q) = L(n², w) u`, of the storage of a quaternion.
+/// `Log(q) = L(n², w) u`, of the storage of a quaternion: the logarithm of the unit quaternions,
+/// of length up to 2π, which reads the stored sign. Every map of the rotations calls it at
+/// `shorter(q)`, where it is the rotation vector of the shorter turn; it is not offered alone.
 pub(crate) fn log_stored(q: QDyn) -> QDyn {
     let (w, u) = parts(q);
     log_ratio(dot(u, u), w) * u
 }
 
-/// `s(q) q`, the storage on the side `w ≥ 0`.
+/// `s(q) q`, the storage on the side `w ≥ 0`: the same rotation, stored in the sign whose
+/// logarithm is the shorter turn. A selection on the sign of `w`, a discretization at the
+/// half-turns, where `w = 0` and the two turns are equally short; elsewhere the passes are those
+/// of the side selected, `q` or `-q`.
 pub(crate) fn shorter(q: QDyn) -> QDyn {
     let (w, _) = parts(q);
     choose(w.is_nonnegative(), -q, q)
@@ -126,14 +151,9 @@ static EXP: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     })
 });
 
+/// `rv(q) = Log(s(q) q)`: the rotation vector of the shorter turn, the same at `±q`.
 static LOG: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     composite("skoro.spatial.log", &[rotation_space()], |q| {
-        log_stored(stored(q[0]))
-    })
-});
-
-static LOG_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
-    composite("skoro.spatial.log_shorter", &[rotation_space()], |q| {
         log_stored(shorter(stored(q[0])))
     })
 });
@@ -149,11 +169,11 @@ static ABOUT: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     )
 });
 
-/// `(a, θ)` of `Log`, as a `Vector(4)`: `θ = 2 atan2(n, w)` and `a = u / n`, with the axis
-/// `(1, 0, 0)` and the angle `2 atan2(0, w)` selected where `n² = 0`.
+/// `(a, θ)` of the shorter turn, as a `Vector(4)`: `θ = 2 atan2(n, w)` and `a = u / n` of
+/// `s(q) q`, with the axis `(1, 0, 0)` and the angle `2 atan2(0, w)` selected where `n² = 0`.
 static AXIS_ANGLE: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     composite("skoro.spatial.axis_angle", &[rotation_space()], |q| {
-        let (w, u) = parts(stored(q[0]));
+        let (w, u) = parts(shorter(stored(q[0])));
         let n2 = dot(u, u);
         let identity = (n2 * -1.0).is_nonnegative();
         let n = sqrt(choose(identity, n2, algebra::one()));
@@ -217,10 +237,9 @@ static FROM_MATRIX: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     })
 });
 
-/// `q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂))` in storage, or with the rotation vector of the shorter turn.
-pub(crate) fn slerp_stored(a: QDyn, b: QDyn, t: QDyn, shorter_turn: bool) -> QDyn {
-    let r = algebra::mul(algebra::conjugate(a), b);
-    let r = if shorter_turn { shorter(r) } else { r };
+/// `q₁ ⊗ Exp(t rv(q̄₁ ⊗ q₂))` in storage: along the shorter turn, on the side of `q₁`.
+pub(crate) fn slerp_stored(a: QDyn, b: QDyn, t: QDyn) -> QDyn {
+    let r = shorter(algebra::mul(algebra::conjugate(a), b));
     algebra::mul(a, exp_stored(t * log_stored(r)))
 }
 
@@ -228,15 +247,7 @@ static SLERP: LazyLock<Arc<Composite>> = LazyLock::new(|| {
     composite(
         "skoro.spatial.slerp",
         &[rotation_space(), rotation_space(), Space::Real],
-        |q| onto(slerp_stored(stored(q[0]), stored(q[1]), q[2], false)),
-    )
-});
-
-static SLERP_SHORTER: LazyLock<Arc<Composite>> = LazyLock::new(|| {
-    composite(
-        "skoro.spatial.slerp_shorter",
-        &[rotation_space(), rotation_space(), Space::Real],
-        |q| onto(slerp_stored(stored(q[0]), stored(q[1]), q[2], true)),
+        |q| onto(slerp_stored(stored(q[0]), stored(q[1]), q[2])),
     )
 });
 
@@ -303,18 +314,19 @@ pub trait RotationMaps: Sized {
     /// The adjoint, `π(q)`, carrying a perturbation in the frame of `self` to the outer frame:
     /// `q ⊕ t = (1 ⊕ π(q) t) q`.
     fn adjoint(self) -> Q<Matrix<3, 3>>;
-    /// `Log(q) = 2 atan2(n, w) u / n`: the inverse of `exp`, of length in [0, 2π). `Log(-q) ≠
-    /// Log(q)`. Undefined at `-1`: non-finite exactly there, and near it of length near 2π with
-    /// its direction ill-conditioned, set by rounding within rounding of `-1`.
+    /// The rotation vector of the shorter turn, `rv(q) = Log(s(q) q)` with `s(q)` the sign of `w`
+    /// and `Log(q) = 2 atan2(n, w) u / n`: the inverse of `exp` on the ball of radius π, of
+    /// length in [0, π], the same whichever sign the rotation is stored in, and a discretization
+    /// at the half-turns, where the two turns are equally short and either is selected.
     fn log(self) -> Q<Vector<3>>;
-    /// The rotation vector of the shorter turn, `Log(s(q) q)` with `s(q)` the sign of `w`: the
-    /// same at `±q`, of length in [0, π], and a discretization at half-turns.
-    fn log_shorter(self) -> Q<Vector<3>>;
-    /// The axis and the angle of `log`, the angle in [0, 2π); the axis `(1, 0, 0)` at the
-    /// identity, where it is a discretization.
+    /// The axis and the angle of `log`, the angle in [0, π], the same whichever sign the rotation
+    /// is stored in. The axis is `(1, 0, 0)` at the identity, where it is a discretization, and at
+    /// a half-turn, where `a` and `-a` name one rotation, the axis of the side `log` selects.
     fn axis_angle(self) -> (Q<Vector<3>>, Q<Real>);
-    /// `sign⟨q, r⟩ q`: the point over this rotation on the side of `reference`, a discretization
-    /// where the two are orthogonal.
+    /// `sign⟨q, r⟩ q`: the same rotation, stored on the side of `reference`, a discretization
+    /// where the two are orthogonal. As a map of the rotations it is the identity: it chooses
+    /// which of the two quaternions stores the rotation, and nothing else, as a quaternion
+    /// reported with `w ≥ 0` is `aligned_with(rotation::identity())`.
     fn aligned_with(self, reference: Q<Rotation>) -> Q<Rotation>;
     /// The angles of `convention`, in the order of its axes: `α` and `γ` in (-π, π], `β` in
     /// [0, π] for a proper sequence and in [-π/2, π/2] for a Tait–Bryan one. `α` and `γ` are cut
@@ -329,12 +341,11 @@ pub trait RotationMaps: Sized {
     /// non-finite, and where it is π, a discretization whose passes are those of the side
     /// selected.
     fn angle_to(self, other: Q<Rotation>) -> Q<Real>;
-    /// `q₁ ⊗ Exp(t Log(q̄₁ ⊗ q₂))`: the geodesic of the unit quaternions from `self` at `t = 0` to
-    /// `other` at `t = 1`, by the arc that avoids `-self`.
+    /// `q₁ ⊗ Exp(t rv(q̄₁ ⊗ q₂))`: the geodesic of the rotations from `self` at `t = 0` to `other`
+    /// at `t = 1`, at a constant rate along the shorter of the two turns from one to the other,
+    /// the same rotations whichever sign either is stored in; a discretization where they are a
+    /// half-turn apart and the two turns are equally short.
     fn slerp(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
-    /// The same along the shorter of the two turns from one rotation to the other: a
-    /// discretization where they are equally short.
-    fn slerp_shorter(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation>;
 }
 
 impl RotationMaps for Q<Rotation> {
@@ -369,11 +380,6 @@ impl RotationMaps for Q<Rotation> {
     }
 
     #[track_caller]
-    fn log_shorter(self) -> Q<Vector<3>> {
-        LOG_SHORTER.call(&[self.untyped()]).narrow()
-    }
-
-    #[track_caller]
     fn axis_angle(self) -> (Q<Vector<3>>, Q<Real>) {
         let both: Q<Vector<4>> = AXIS_ANGLE.call(&[self.untyped()]).narrow();
         (
@@ -400,13 +406,6 @@ impl RotationMaps for Q<Rotation> {
     #[track_caller]
     fn slerp(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation> {
         SLERP
-            .call(&[self.untyped(), other.untyped(), t.untyped()])
-            .narrow()
-    }
-
-    #[track_caller]
-    fn slerp_shorter(self, other: Q<Rotation>, t: Q<Real>) -> Q<Rotation> {
-        SLERP_SHORTER
             .call(&[self.untyped(), other.untyped(), t.untyped()])
             .narrow()
     }

@@ -38,7 +38,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
       `chart_is_cayley` (in place of `chart_is_stereographic`), `volume_has_the_stated_mass`,
       `types_pass_the_core_checks`, `normal_density_on_rotations`, `normal_draws_on_rotations`,
       `the_term_is_the_same_at_either_sign`.
-- [ ] The maps of the groups: `log`, `axis_angle` and `slerp` of the rotations, the poses' `log`,
+- [x] The maps of the groups: `log`, `axis_angle` and `slerp` of the rotations, the poses' `log`,
       `interpolate` and `interpolate_parts`, and the extended poses' `log` and `interpolate`, all of
       the shorter turn; every `*_shorter` method and composite removed, and the `shorter_turn` flags
       of `log_stored`, `shorter` and `slerp_stored` with them; `aligned_with` documented as the

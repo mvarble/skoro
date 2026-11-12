@@ -62,7 +62,7 @@ fn every_map() {
     );
     let _ = (a.unrotate(x), a.matrix(), a.adjoint(), rotation::identity());
     let _ = so3::vee(so3::hat(x));
-    let _ = (rotation::exp(x), a.log(), a.log_shorter());
+    let _ = (rotation::exp(x), a.log());
     let _ = (so3::jl(x), so3::jr(x), so3::jl_inv(x), so3::jr_inv(x));
     let _ = (
         rotation::about(x, angle),
@@ -74,7 +74,7 @@ fn every_map() {
         rotation::from_two_vectors(x, x),
     );
     let _ = rotation::from_matrix(a.matrix());
-    let _ = (a.angle_to(b), a.slerp(b, angle), a.slerp_shorter(b, angle));
+    let _ = (a.angle_to(b), a.slerp(b, angle));
     for sequence in Sequence::ALL {
         for frame in [Frame::Intrinsic, Frame::Extrinsic] {
             let convention = Euler { sequence, frame };
@@ -97,12 +97,8 @@ fn every_map() {
         pose::from_parts(s.rotation(), s.position()),
     );
     let xi6 = quantity("xi6", Vector::<6>);
-    let _ = (pose::exp(xi6), s.log(), s.log_shorter());
-    let _ = (s.interpolate(t, angle), s.interpolate_shorter(t, angle));
-    let _ = (
-        s.interpolate_parts(t, angle),
-        s.interpolate_parts_shorter(t, angle),
-    );
+    let _ = (pose::exp(xi6), s.log());
+    let _ = (s.interpolate(t, angle), s.interpolate_parts(t, angle));
     let _ = (
         pose::jl(xi6),
         pose::jr(xi6),
@@ -122,10 +118,10 @@ fn every_map() {
     let _ = extended_pose::from_parts(u.rotation(), u.velocity(), u.position());
     let _ = extended_pose::identity();
     let xi9 = quantity("xi9", Vector::<9>);
-    let _ = (extended_pose::exp(xi9), u.log(), u.log_shorter());
+    let _ = (extended_pose::exp(xi9), u.log());
     let _ = (extended_pose::jl(xi9), extended_pose::jr(xi9));
     let _ = (extended_pose::jl_inv(xi9), extended_pose::jr_inv(xi9));
-    let _ = (u.interpolate(v, angle), u.interpolate_shorter(v, angle));
+    let _ = u.interpolate(v, angle);
 }
 
 /// The points of a type with `k` translations: the fixed rows and random ones.

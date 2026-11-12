@@ -13,6 +13,12 @@ pub fn align(z: [f64; 4], reference: [f64; 4]) -> [f64; 4] {
     z.map(|v| v * scale)
 }
 
+/// The quaternion of a rotation with `w ≥ 0`, `align(q, (1, 0, 0, 0))`: the one to report, or to
+/// hand to a program that wants one sign. Where `w = 0`, the half-turns, `q` itself.
+pub fn canonical(q: [f64; 4]) -> [f64; 4] {
+    align(q, [1.0, 0.0, 0.0, 0.0])
+}
+
 /// `a ⊗ b`.
 pub fn compose(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
     [
@@ -135,9 +141,10 @@ pub fn exp(omega: [f64; 3]) -> [f64; 4] {
     ]
 }
 
-/// `Log(q) = 2 atan2(n, w) u / n`, of length in [0, 2π); undefined at `-1`: non-finite exactly
-/// there, and near it of length near 2π with a direction set by rounding.
+/// `rv(q) = Log(s(q) q)`, `Log(q) = 2 atan2(n, w) u / n`: the rotation vector of the shorter
+/// turn, of length in [0, π], the same at `±q`, as `RotationMaps::log` computes it.
 pub fn log(q: [f64; 4]) -> [f64; 3] {
+    let q = canonical(q);
     let u = [q[1], q[2], q[3]];
     let n = u.iter().map(|v| v * v).sum::<f64>().sqrt();
     let ratio = if n == 0.0 && q[0] > 0.0 {

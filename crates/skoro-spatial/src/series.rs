@@ -501,17 +501,14 @@ mod tests {
                 ("jl", wrap(&[Space::Vector(3)], |q| crate::so3::jl(q[0].narrow()).untyped()), vec![vector3.clone(), real(n)]),
                 ("jl_inv", wrap(&[Space::Vector(3)], |q| crate::so3::jl_inv(q[0].narrow()).untyped()), vec![vector3.clone(), real(n)]),
                 ("log", wrap(std::slice::from_ref(&rotation), |q| q[0].narrow::<Rotation>().log().untyped()), vec![rows(rotation.clone(), stored.clone()), real(m)]),
-                ("log_shorter", wrap(std::slice::from_ref(&rotation), |q| q[0].narrow::<Rotation>().log_shorter().untyped()), vec![rows(rotation.clone(), stored.clone()), real(m)]),
                 ("pose.exp", wrap(&[Space::Vector(6)], |q| crate::pose::exp(q[0].narrow()).untyped()), vec![rows(Space::Vector(6), with(1, &omega, 3)), real(n)]),
                 ("pose.jl", wrap(&[Space::Vector(6)], |q| crate::pose::jl(q[0].narrow()).untyped()), vec![rows(Space::Vector(6), with(1, &omega, 3)), real(n)]),
                 ("pose.jl_inv", wrap(&[Space::Vector(6)], |q| crate::pose::jl_inv(q[0].narrow()).untyped()), vec![rows(Space::Vector(6), with(1, &omega, 3)), real(n)]),
                 ("pose.log", wrap(&[Pose.space()], |q| q[0].narrow::<Pose>().log().untyped()), vec![rows(Pose.space(), with(1, &stored, 4)), real(m)]),
-                ("pose.log_shorter", wrap(&[Pose.space()], |q| q[0].narrow::<Pose>().log_shorter().untyped()), vec![rows(Pose.space(), with(1, &stored, 4)), real(m)]),
                 ("extended_pose.exp", wrap(&[Space::Vector(9)], |q| crate::extended::exp(q[0].narrow()).untyped()), vec![rows(Space::Vector(9), with(2, &omega, 3)), real(n)]),
                 ("extended_pose.jl", wrap(&[Space::Vector(9)], |q| crate::extended::jl(q[0].narrow()).untyped()), vec![rows(Space::Vector(9), with(2, &omega, 3)), real(n)]),
                 ("extended_pose.jl_inv", wrap(&[Space::Vector(9)], |q| crate::extended::jl_inv(q[0].narrow()).untyped()), vec![rows(Space::Vector(9), with(2, &omega, 3)), real(n)]),
                 ("extended_pose.log", wrap(&[ExtendedPose.space()], |q| q[0].narrow::<ExtendedPose>().log().untyped()), vec![rows(ExtendedPose.space(), with(2, &stored, 4)), real(m)]),
-                ("extended_pose.log_shorter", wrap(&[ExtendedPose.space()], |q| q[0].narrow::<ExtendedPose>().log_shorter().untyped()), vec![rows(ExtendedPose.space(), with(2, &stored, 4)), real(m)]),
             ];
             for (name, composite, inputs) in checks {
                 if let Err(error) = check_operation(&*composite.operation(), &inputs, &target) {

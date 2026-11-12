@@ -1,18 +1,18 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // a test crate
-//! The host maps of the rigid motions, against the graph's.
+//! The host maps, against the graph's.
 
 mod common;
 
 use common::{Rows, close, on_host, quaternions, vectors, with_translations};
 use skoro_core::{Declares, Q, QDyn, Vector};
-use skoro_spatial::{Pose, host};
+use skoro_spatial::{Pose, Rotation, RotationMaps, host, rotation};
 
 fn p(q: QDyn) -> Q<Pose> {
     q.narrow()
 }
 
 #[test]
-fn host_pose_maps_agree_with_the_graph() {
+fn host_maps_agree_with_the_graph() {
     // Twenty random poses, with the quaternions of either sign: the fixed ones come with their
     // negatives among them, and the random ones are drawn from the whole sphere.
     let a = with_translations(&quaternions(20, 301), 1, 302);
@@ -40,4 +40,29 @@ fn host_pose_maps_agree_with_the_graph() {
     }
     close(&composed, &want_c, 1e-14);
     close(&moved, &want_m, 1e-14);
+
+    // The rotations' logarithm, and the quaternion to report, against the graph's `log` and
+    // `aligned_with(identity)`, at rows away from the half-turns where either is a discretization.
+    let qs: Vec<[f64; 4]> = quaternions(20, 306)
+        .into_iter()
+        .filter(|q| q[0].abs() > 0.1)
+        .collect();
+    let input = [Rows::new(Rotation.space(), qs.concat())];
+    let r = |q: QDyn| q.narrow::<Rotation>();
+    let logs = on_host(|q| r(q[0]).log().untyped(), &input);
+    let canonical = on_host(
+        |q| r(q[0]).aligned_with(rotation::identity()).untyped(),
+        &input,
+    );
+    let want_l: Vec<f64> = qs.iter().flat_map(|q| host::log(*q)).collect();
+    let want_c: Vec<f64> = qs.iter().flat_map(|q| host::canonical(*q)).collect();
+    close(&logs, &want_l, 1e-13);
+    close(&canonical, &want_c, 1e-14);
+    for q in &qs {
+        let c = host::canonical(*q);
+        assert!(c[0] >= 0.0);
+        let same = c.iter().zip(q).all(|(c, q)| (c - q).abs() < 1e-15)
+            || c.iter().zip(q).all(|(c, q)| (c + q).abs() < 1e-15);
+        assert!(same, "{c:?} is not ±{q:?}");
+    }
 }
