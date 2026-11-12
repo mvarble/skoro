@@ -133,7 +133,9 @@ $$
 $$
 ```
 
-Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. The site-wide macros are in
+Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. In a `.md` file write a star in
+inline math as `\ast` (`$q^\ast$`): Prettier does not read math, pairs two asterisks of a paragraph
+as emphasis, and rewrites them. The site-wide macros are in
 `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
 one document goes in its `katex_macros`.
 
