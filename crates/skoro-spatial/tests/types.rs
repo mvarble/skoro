@@ -152,9 +152,10 @@ skoro_core::precision_tests! {
 }
 
 #[test]
-fn chart_is_stereographic() {
+fn chart_is_cayley() {
     let target = skoro_tensor::Target::host();
     let x = unit([0.4, -0.3, 0.8, 0.2]);
+    let minus = |q: [f64; 4]| q.map(|v| -v);
     let retract = |x: [f64; 4], t: [f64; 3]| {
         run(
             ROTATION.retraction(),
@@ -162,26 +163,34 @@ fn chart_is_stereographic() {
             &target,
         )
     };
+    let local = |x: [f64; 4], y: [f64; 4]| {
+        run(
+            ROTATION.inverse(),
+            &[Rows::vectors(&[x]), Rows::vectors(&[y])],
+            &target,
+        )
+    };
+    let quaternion = |y: Vec<f64>| [y[0], y[1], y[2], y[3]];
     let direction = unit([0.6, 0.2, -0.7]);
 
-    // Q(x, R(x, t)) = t, out to lengths of a thousand.
-    for length in [1e-3, 0.1, 1.0, 10.0, 100.0, 1000.0] {
+    // Q(x, R(x, t)) = t, out to a length of 10; the chart reaches every rotation by less than a
+    // half-turn, and Q reads neither sign.
+    for length in [1e-3, 0.1, 1.0, 3.0, 10.0] {
         let t = direction.map(|v| v * length);
-        let y = retract(x, t);
-        let back = run(
-            ROTATION.inverse(),
-            &[Rows::vectors(&[x]), Rows::new(Space::Vector(4), y)],
-            &target,
-        );
-        close(&back, &t, 1e-9);
+        let y = quaternion(retract(x, t));
+        close(&local(x, y), &t, 1e-9);
+        close(&local(minus(x), y), &t, 1e-9);
+        close(&local(x, minus(y)), &t, 1e-9);
+        // (-x) ⊕ t = -(x ⊕ t).
+        close(&retract(minus(x), t), &minus(y), 1e-14);
     }
 
-    // The angle of δ(t) is 4 arctan(|t| / 4).
+    // The angle of γ(t) is 2 arctan(|t| / 2).
     for length in [0.0, 0.5, 4.0, 40.0] {
         let d = retract([1.0, 0.0, 0.0, 0.0], direction.map(|v| v * length));
         let n = (d[1] * d[1] + d[2] * d[2] + d[3] * d[3]).sqrt();
         let angle = 2.0 * n.atan2(d[0]);
-        close(&[angle], &[4.0 * (length / 4.0).atan()], 1e-12);
+        close(&[angle], &[2.0 * (length / 2.0).atan()], 1e-12);
     }
 
     // π(x ⊕ t) = π(x) (I + [t]×) + O(|t|²): the coordinates are the rotation vector in the frame of
@@ -207,19 +216,44 @@ fn chart_is_stereographic() {
     // The base point is normalized.
     let t = [0.3, -1.2, 0.5];
     close(&retract(x.map(|v| 1.01 * v), t), &retract(x, t), 1e-14);
+
+    // The cut: Q is non-finite exactly at a half-turn, at either precision, and of length
+    // 2 tan(φ/2) short of it.
+    for precision in [
+        skoro_tensor::Precision::Single,
+        skoro_tensor::Precision::Double,
+    ] {
+        let target = skoro_core::testing::flex(precision).unwrap();
+        let at_cut = run(
+            ROTATION.inverse(),
+            &[
+                Rows::vectors(&[[1.0, 0.0, 0.0, 0.0]]),
+                Rows::vectors(&[[0.0, 1.0, 0.0, 0.0]]),
+            ],
+            &target,
+        );
+        assert!(at_cut.iter().any(|v| !v.is_finite()), "{at_cut:?}");
+    }
+    let phi: f64 = 3.0;
+    let near = local(
+        [1.0, 0.0, 0.0, 0.0],
+        [(phi / 2.0).cos(), (phi / 2.0).sin(), 0.0, 0.0],
+    );
+    close(&near, &[2.0 * (phi / 2.0).tan(), 0.0, 0.0], 1e-12);
 }
 
 #[test]
 fn volume_has_the_stated_mass() {
-    // ∫ e^{λ(t)} dt over ℝ³ in polar coordinates, with r = 4 tan θ for θ in (0, π/2): the area of
-    // the unit sphere, 4π, times ∫ r² e^{λ(r)} dr/dθ dθ.
+    // ∫ e^{λ(t)} dt over ℝ³ in polar coordinates, with r = 2 tan θ for θ in (0, π/2): the area of
+    // the unit sphere, 4π, times ∫ r² e^{λ(r)} dr/dθ dθ. The mass of the Haar measure of SO(3)
+    // normalized at the chart's centre is 8π², half that of the sphere S³ it is stored on.
     let target = skoro_tensor::Target::host();
     let steps = 4000;
     let direction = unit([0.2, 0.9, -0.4]);
     let thetas: Vec<f64> = (0..steps)
         .map(|i| (i as f64 + 0.5) * (PI / 2.0) / steps as f64)
         .collect();
-    let radii: Vec<f64> = thetas.iter().map(|theta| 4.0 * theta.tan()).collect();
+    let radii: Vec<f64> = thetas.iter().map(|theta| 2.0 * theta.tan()).collect();
     let tangents: Vec<[f64; 3]> = radii.iter().map(|r| direction.map(|v| v * r)).collect();
     let points = vec![unit([0.5, 0.1, -0.3, 0.7]); steps];
     let lambda = run(
@@ -232,9 +266,9 @@ fn volume_has_the_stated_mass() {
         .iter()
         .zip(&radii)
         .zip(&lambda)
-        .map(|((theta, r), lambda)| r * r * lambda.exp() * 4.0 / theta.cos().powi(2) * h)
+        .map(|((theta, r), lambda)| r * r * lambda.exp() * 2.0 / theta.cos().powi(2) * h)
         .sum();
-    close(&[4.0 * PI * radial], &[16.0 * PI * PI], 1e-10);
+    close(&[4.0 * PI * radial], &[8.0 * PI * PI], 1e-10);
 }
 
 #[test]

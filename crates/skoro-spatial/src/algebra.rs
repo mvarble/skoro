@@ -153,16 +153,19 @@ pub(crate) fn both(a: QDyn, b: QDyn) -> QDyn {
     (a.to_real() * b.to_real() - 0.5).is_nonnegative()
 }
 
-/// `δ(t) = ((1 - s), t/2) / (1 + s)`, `s = |t|²/16`: the chart at the identity.
-pub(crate) fn delta(t: QDyn) -> QDyn {
-    let s = (t * t).sum() * (1.0 / 16.0);
-    reciprocal(s + 1.0) * quaternion(-s + 1.0, t * 0.5)
+/// `γ(φ) = (1, φ/2) / √(1 + |φ|²/4)`: the Cayley chart at the identity, its reciprocal
+/// `e^{-½ log(1 + |φ|²/4)}` of a number at least 1.
+pub(crate) fn cayley(phi: QDyn) -> QDyn {
+    let s = (((phi * phi).sum() * 0.25 + 1.0).log() * -0.5).exp();
+    quaternion(s, phi * (s * 0.5))
 }
 
-/// The chart's inverse at the identity, `4 vec(d) / (1 + w(d))`.
-pub(crate) fn delta_inverse(d: QDyn) -> QDyn {
-    let (w, u) = parts(d);
-    (reciprocal(w + 1.0) * 4.0) * u
+/// The chart's inverse at the identity, `2 w vec(r) / w²` with `1/w² = e^{-log w²}`: the same at
+/// `±r`, whose reciprocal is of a positive number wherever it is defined; non-finite where
+/// `w = 0`, the half-turns, and large near them.
+pub(crate) fn cayley_inverse(r: QDyn) -> QDyn {
+    let (w, u) = parts(r);
+    u * (w * reciprocal(w * w) * 2.0)
 }
 
 #[cfg(test)]
@@ -324,17 +327,14 @@ pub(crate) mod tests {
     #[test]
     fn chart_at_the_identity_inverts() {
         let t = [0.7, -2.1, 1.4];
-        let d = eval(|h| delta(h[0]), &[&t]);
-        let s = t.iter().map(|x| x * x).sum::<f64>() / 16.0;
+        let d = eval(|h| cayley(h[0]), &[&t]);
+        let s = (1.0 + t.iter().map(|x| x * x).sum::<f64>() / 4.0).sqrt();
         close(
             &d,
-            &[
-                (1.0 - s) / (1.0 + s),
-                t[0] / 2.0 / (1.0 + s),
-                t[1] / 2.0 / (1.0 + s),
-                t[2] / 2.0 / (1.0 + s),
-            ],
+            &[1.0 / s, t[0] / 2.0 / s, t[1] / 2.0 / s, t[2] / 2.0 / s],
         );
-        close(&eval(|h| delta_inverse(delta(h[0])), &[&t]), &t);
+        close(&eval(|h| cayley_inverse(cayley(h[0])), &[&t]), &t);
+        // The same at the antipode.
+        close(&eval(|h| cayley_inverse(-cayley(h[0])), &[&t]), &t);
     }
 }

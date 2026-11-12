@@ -31,7 +31,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
 
 ## The groups (`skoro-spatial`)
 
-- [ ] The Cayley chart: `cayley` and `cayley_inverse` in `algebra.rs` in place of `delta` and
+- [x] The Cayley chart: `cayley` and `cayley_inverse` in `algebra.rs` in place of `delta` and
       `delta_inverse`; the declarations' retraction, inverse and log-volume, stored up to the
       quaternion's sign; the documentation of the module, the markers and the inverse's cut at the
       half-turns. The examples `pose_graph` and `sliding_window` still pass their checks. Tests:
