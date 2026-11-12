@@ -260,6 +260,7 @@ references, and are not gated:
   `llms.txt` follow, since both read `cms.math.list()`.
 - `MATH.blurb` says what the section now is: the mathematics skoro rests on, told from the
   beginning, each note one idea resting only on the notes before it.
+- `bin/wf` learns `amends`, described below, before the first note is rewritten.
 
 **Later entries keep the story whole.** `authoring.md` gains the rule that a feature's general
 mathematics is written as a note, or as a section of one, at its place in the order, and its
@@ -301,27 +302,41 @@ entry. This decision therefore makes an exception, and a narrow one. A later ent
 done entry's document to keep true a reference into the notes, and for nothing else. The argument
 of the document, what it claimed and how it weighed things, is as frozen as before.
 
-> [!TODO] How a done entry's document is changed
-> The exception needs a mechanism, since the tooling refuses the edit today, and the freeze is
-> the archive's one promise to its reader. Two ways to build it:
->
-> - **The amending entry declares it, and its approval records it.** At its publish stage an
->   entry may edit a done entry's document, and lists the documents it changed under `amends` in
->   its `index.md`, as it lists `pages` and `crates`. `wf approve` refuses the publish if a done
->   entry's document changed and is not listed. On approval it records the new hash and an
->   `amend` event, naming the amending entry, in the amended entry's history, and the site shows
->   on the amended document which entry changed its references. Nothing mechanical limits the
->   edit to references: the person approving the publish reads the diff.
-> - **The tool makes the change.** `bin/wf relink <from> <to>` replaces one reference by another
->   wherever the archive has it, and records the hashes and the event itself, so that no hand
->   touches a frozen document and the change cannot reach its argument. It covers a move and a
->   statement embedded by moving its file. It cannot write an equation or a passage into a
->   document, so the third case would still need the first mechanism.
->
-> This draft proposes the first alone: the third case needs it whatever is done for the second,
-> one mechanism is less to build and to explain than two, and the amendments are in front of the
-> person at the approval that records them. Is that right, or is the mechanical limit of `relink`
-> worth having for the moves?
+The entry that makes such a change declares it, and its approval records it. At its publish stage
+an entry may edit a done entry's documents and statements, and it lists what it changed under
+`amends` in its `index.md`, beside the `pages` and `crates` it already lists there:
+
+```yaml
+---
+title: 'The Mathematics section, read start to finish'
+pages:
+    - concepts/spaces
+    - concepts/rotations-and-motions
+crates: []
+amends:
+    - archive/rotations/math
+    - archive/normal/math
+---
+```
+
+The tooling holds the exception to that shape.
+
+- `bin/wf guard` allows the edit only while the active entry is at `publish`, and only in an
+  entry that is done.
+- `wf approve` refuses the publish if a done entry's document or statement changed on the branch
+  and is not listed under `amends`, as it refuses a changed page that is not listed under `pages`.
+- On approval, `wf approve` records each amended document's new hash in the amended entry's
+  record, with an `amend` event in its history that names the amending entry, the date and the
+  commit. The approved text before the amendment is at the commit of the document's own approval,
+  which the record keeps.
+- `bin/wf check` accepts a branch that touches a done entry when the active entry lists the
+  document under `amends`, and afterwards holds the amended document to its new hash.
+- The site shows on an amended document which entries amended it, as it shows on a revised entry
+  which entry revised it.
+
+Nothing mechanical limits an amendment to references. The limit is the rule above, and the person
+who approves the publish reads the amendments' diff with the list of them in hand. That is the
+weight the approval of a publish already carries for the pages.
 
 **What it costs.**
 
@@ -377,6 +392,13 @@ been shaped by what was once cited from where, and not by what reads best, with 
 growing as entries accumulate. An alias on the site, as a moved page has `formerly`, would have
 let a statement move without the archive changing, and would have had no answer for something
 that leaves the notes altogether.
+
+**Letting the tool rewrite the references.** A command, `bin/wf relink` with the old reference and
+the new, could have replaced a reference wherever the archive has it and recorded the change
+itself, so that no hand touched a frozen document and no change could reach its argument. It
+serves a move. It cannot write an equation or a passage into a document, so something that leaves
+the notes would have needed the declared amendment anyway, and two mechanisms are more to build
+and to explain than one.
 
 **Keeping the order in one file.** A single list of slugs, with the parts as its headings, would
 make an insertion a one-line change and show the whole table of contents in one place. It would
