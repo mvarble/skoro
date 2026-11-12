@@ -300,6 +300,123 @@ test('a branch works on one entry', () => {
     assert.match(result.stderr, /belongs to entry 'other', but this branch works on 'normal'/);
 });
 
+// Takes 'normal' through to done and merges it into main, then opens a decision on a new branch
+// and brings it to its publish stage.
+function amender(r: ReturnType<typeof repo>) {
+    toPlan(r);
+    write(r.root, `${entry}/plan.md`, '- [x] Done.\n');
+    write(r.root, `${entry}/statements/density.md`, 'The density.\n');
+    r.commit();
+    r.wf('approve');
+    r.commit();
+    r.wf('approve');
+    write(r.root, 'site/content/guide/first-model/index.md', '---\ntitle: First\norder: 1\n---\n\nNew.\n');
+    write(r.root, `${entry}/index.md`, '---\ntitle: The Normal\npages: [guide/first-model]\n---\n\nA Gaussian.\n');
+    r.commit();
+    const done = r.wf('approve', '--base', 'main');
+    assert.equal(done.code, 0, done.stderr);
+    r.commit();
+    r.sh('checkout', '-q', 'main');
+    r.sh('merge', '-q', 'work');
+    r.sh('checkout', '-qb', 'order');
+    r.wf('start', 'design', '--kind', 'decision', '--title', 'A design');
+    write(r.root, `${design}/index.md`, '---\ntitle: A design\npages: []\n---\n\nA position.\n');
+    write(r.root, `${design}/writeup.md`, 'Argued.\n');
+    r.commit();
+    return r;
+}
+
+const design = 'site/content/archive/design';
+const guardOf = (r: ReturnType<typeof repo>) => (file: string) =>
+    run(['guard'], { cwd: r.root, stdin: JSON.stringify({ cwd: r.root, tool_input: { file_path: file } }) });
+
+test('an entry amends a done entry only at its publish stage', () => {
+    const r = amender(repo());
+    const guard = guardOf(r);
+    const early = guard(`${entry}/math.md`);
+    assert.equal(early.code, 2);
+    assert.match(early.stderr, /may amend it only at its publish stage/);
+    assert.equal(r.wf('approve').code, 0);
+    r.commit();
+    assert.equal(guard(`${entry}/math.md`).code, 0);
+    assert.equal(guard(`${entry}/statements/density.md`).code, 0);
+    assert.equal(guard(`${entry}/statements/moved.md`).code, 0, 'a statement embedded in the entry');
+    assert.equal(guard(`${entry}/index.md`).code, 2, 'only its documents and statements');
+    assert.equal(guard(`${entry}/workflow.json`).code, 2);
+});
+
+test('an amendment is listed under amends, and recorded when the publish is approved', () => {
+    const r = amender(repo());
+    r.wf('approve');
+    const approved = workflow(r.root).approvals.math;
+    write(r.root, `${entry}/math.md`, '# Math\n\n$x$, as [the note](../../math/normal/) says.\n');
+    write(r.root, 'site/content/guide/first-model/index.md', '---\ntitle: First\norder: 1\n---\n\nNewer.\n');
+    write(r.root, `${design}/index.md`, '---\ntitle: A design\npages: [guide/first-model]\n---\n\nA position.\n');
+    r.commit();
+
+    const unlisted = r.wf('check', '--base', 'main');
+    assert.equal(unlisted.code, 1);
+    assert.match(unlisted.stderr, /math\.md changed after it was approved/);
+    assert.match(unlisted.stderr, /list it as 'archive\/normal\/math' under `amends`/);
+    assert.match(r.wf('approve', '--base', 'main').stderr, /list it as 'archive\/normal\/math' under `amends`/);
+
+    const listing = (amends: string) =>
+        write(r.root, `${design}/index.md`, `---\ntitle: A design\npages: [guide/first-model]\namends: [${amends}]\n---\n\nA position.\n`);
+    listing('archive/normal/math, archive/normal/plan, archive/normal/index, archive/design/writeup');
+    r.commit();
+    const wrong = r.wf('approve', '--base', 'main').stderr;
+    assert.match(wrong, /amends 'archive\/normal\/plan', which this branch did not change/);
+    assert.match(wrong, /'archive\/normal\/index' under `amends`, which names no document or statement/);
+    assert.match(wrong, /'archive\/design\/writeup' under `amends`, which names no document or statement/);
+
+    write(r.root, `${entry}/statements/density.md`, 'The density, [as the note has it](../../../math/normal/).\n');
+    listing('archive/normal/math, archive/normal/statements/density');
+    r.commit();
+    const check = r.wf('check', '--base', 'main');
+    assert.equal(check.code, 0, check.stderr);
+    const done = r.wf('approve', '--base', 'main');
+    assert.equal(done.code, 0, done.stderr);
+    assert.match(done.stdout, /Recorded its amendments of 'normal'/);
+
+    const record = workflow(r.root);
+    assert.notEqual(record.approvals.math.hash, approved.hash);
+    assert.equal(record.approvals.math.commit, approved.commit, 'where the text before the amendment is');
+    const events = record.events.filter((event: { action: string }) => event.action == 'amend');
+    assert.deepEqual(
+        events.map((event: Record<string, string>) => [event.document, event.stage, event.by]),
+        [
+            ['archive/normal/math', 'math', 'design'],
+            ['archive/normal/statements/density', undefined, 'design'],
+        ],
+    );
+    r.commit();
+    const merge = r.wf('check', '--base', 'main', '--merge');
+    assert.equal(merge.code, 0, merge.stderr);
+
+    write(r.root, `${entry}/math.md`, '# Math\n\n$z$\n');
+    assert.match(r.wf('check', '--base', 'main').stderr, /math\.md changed after it was approved/);
+});
+
+test('an entry that is not done is not amended', () => {
+    const r = repo();
+    toPlan(r);
+    r.commit();
+    r.sh('checkout', '-q', 'main');
+    r.sh('merge', '-q', 'work');
+    r.sh('checkout', '-qb', 'order');
+    fs.rmSync(path.join(r.root, '.workflow/active'));
+    r.wf('start', 'design', '--kind', 'decision');
+    write(r.root, `${design}/index.md`, '---\ntitle: A design\npages: []\namends: [archive/normal/math]\n---\n\nA position.\n');
+    write(r.root, `${design}/writeup.md`, 'Argued.\n');
+    r.commit();
+    r.wf('approve');
+    assert.equal(guardOf(r)(`${entry}/math.md`).code, 2);
+    write(r.root, `${entry}/math.md`, '# Math\n\n$y$\n');
+    r.commit();
+    assert.match(r.wf('approve', '--base', 'main').stderr, /'normal' is not a done entry/);
+    assert.match(r.wf('check', '--base', 'main').stderr, /belongs to entry 'normal', but this branch works on 'design'/);
+});
+
 test('abandon sets an entry aside, and resume takes it up where it stopped', () => {
     const r = repo();
     toPlan(r);
