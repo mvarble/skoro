@@ -11,11 +11,11 @@ The archive is the branch `archive`, tagged `archive-2026-10-09`; read it with `
 The goal is an initial release that shows what skoro does: a model built once, then estimated, filtered and sampled without being told its structure again.
 The items are in the order they should be taken.
 
-- **A broad normal on a rotation is not a weak prior.** The mean of a normal on `Rotation` stops being a mode once its standard deviation passes about 1.6 rad, and the mass then goes to the far side of the quaternion sphere, which as a rotation is the mean again.
-  The median angle between a drawn rotation and the mean was 1.47 rad at σ = 1, 2.48 rad at σ = 3, 1.01 rad at σ = 10, 0.10 rad at σ = 100 and 0.010 rad at σ = 1000.
-  So a very large standard deviation, the common way to write "unknown", gives a tight prior, and during optimization such a term pushes the estimate away from its mean.
+- **A broad normal on a rotation is not a weak prior.** Under the Cayley chart a tangent of length `r` is a turn by `2·arctan(r/2)`, and the density of a normal on `Rotation` against Haar measure is the Gaussian times `(1 + r²/4)²`, so its mean stops being a mode once its standard deviation passes 1 rad, and the mass then goes to the half-turns from the mean.
+  Computed from the chart (not drawn), the median angle between a drawn rotation and the mean is 1.31 rad at σ = 1, 2.32 rad at σ = 3, 2.88 rad at σ = 10, 3.12 rad at σ = 100 and 3.14 rad at σ = 1000.
+  So a very large standard deviation, the common way to write "unknown", gives a prior concentrated on the half-turns, where the chart is cut and a term is non-finite, and during optimization such a term pushes the estimate away from its mean.
   The entry brings the uniform distribution on the compact types, which is how "unknown" is said, and decides whether a constant scale above about one radian on a curved type is refused or documented.
-  Its pages also correct the page on the normal, which still gives the Cayley chart as its example for the rotations, whose chart is stereographic.
+  The measurements in `EVALUATION.md` were taken under the stereographic chart that `quaternion-signs` replaced, and the entry draws them again.
   ```
   /wf-start uniform feature The uniform distribution on compact types, and broad scales of a normal on a curved type, revises normal
   ```
@@ -45,8 +45,8 @@ The items are in the order they should be taken.
 - **Hamiltonian Monte Carlo on curved quantities.** Leapfrog through a retraction fails to be reversible only when the chart moves with the state.
   A global chart at one fixed anchor `a` covers the whole type but a set of measure zero, so `t ↦ a ⊕ t` makes the problem ordinary HMC on `ℝ^d`, with the chart's log-volume added to the log-density, and the first entry's sampler applies unchanged.
   It needs nothing new from the core: the gradient in the fixed chart is the gradient a pass gives in the point's own chart, carried through the Jacobian of the change of chart, one tangent pass over the type's retraction and inverse.
-  The stereographic chart is conformal and shrinks lengths by at most a factor of two within a half-turn of the anchor; the anchor is the mode, and the Laplace covariance in that chart is the mass matrix.
-  A posterior on the unit quaternions has two mirrored modes, so its diagnostics are computed on functions that ignore the sign.
+  The Cayley chart of the rotations covers each rotation once, so a posterior has no mirrored mode to visit, though a draw is stored in either sign and the diagnostics are computed on functions of the rotation rather than on raw quaternion components; the anchor is the mode, and the Laplace covariance in that chart is the mass matrix.
+  The chart is not conformal: at a turn of θ from the anchor it shrinks lengths by `cos²(θ/2)` along the radius and by `cos(θ/2)` across it, both of which go to zero at the half-turns, so the chain is well conditioned only on a posterior that stays well inside a half-turn of its mode.
   The entry also weighs the alternative, an integrator along geodesics, which would have a type declare a geodesic step as it declares its volume, and which limits the mass matrix on a rotation to a multiple of the identity.
   This is analysis in `EVALUATION.md`, not yet run.
   ```
