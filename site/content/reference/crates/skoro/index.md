@@ -16,12 +16,19 @@ undetermined, and read on the sphere; and the hierarchical normal the [guide](..
 with `sample` and without it, generated, and queried with its range observed. One of its tests
 checks that none of the others names `skoro-core` or `skoro-tensor` directly.
 
-Its two examples run in CI and fail when a check of their mathematics fails.
+Its tests also read pose graphs in g2o's format, with the examples' reader, and check that an
+estimate is the same whichever sign each measured or starting quaternion is given in, and that a
+loop whose closure starts on the far side of its prediction closes.
+
+Its three examples run in CI and fail when a check of their mathematics or their convergence
+fails.
 [`pose_graph`](../../../guide/pose-graph/) estimates a hundred datasets of a pose graph on
 $SE(3)$ together, by Levenberg–Marquardt, and checks that the Laplace marginals at the mode are
 calibrated against the truth; [`sliding_window`](../../../guide/sliding-window/) filters an open path
 with a window of five poses, retiring the oldest at every tick into a linearized factor, checks
 that the number of nodes it holds stops growing, and reports its calibration and its gap to the
-batch. They share a module of scenarios, the model tick by tick,
-the marginals' statistics and the report, and with `SKORO_FIGURES` set they write the data that
-`bin/figures` draws.
+batch; [`g2o`](../../../guide/rotations-and-poses/#poses-measured-outside-the-model) reads a 3D pose
+graph in g2o's format, or writes a loop that turns once, and estimates it from its vertices' poses
+in whatever signs they come. They share a module of scenarios, the model tick by tick, the
+marginals' statistics, the report and the reader of g2o's format, and with `SKORO_FIGURES` set the
+first two write the data that `bin/figures` draws.

@@ -129,6 +129,16 @@ the query's gradient less what the rows account for: that difference would be ro
 solve would amplify. The constant makes the linearization agree with the query's negative
 log-density at the point.
 
+The rows are read onto the host once, and a point at which any of them is not finite is refused
+there, naming the first such factor's term and the row of the batch, rather than carried into the
+elimination and a step that could only be rejected. Such a point is outside a term's chart: a
+rotation given a half-turn from its mean, where the [rotations' chart](../rotations-and-motions/#where-a-map-is-undefined)
+is cut, or a value that is already non-finite.
+
+```rust
+{../../../../crates/skoro-linearize/src/assemble.rs:104..124}
+```
+
 ### Folding a log-volume
 
 On a curved type, the normal's log-volume is a function of its tangent alone, and its gradient lies
@@ -147,7 +157,7 @@ computed on the host, from the space's own log-volume and the whitening read off
 root:
 
 ```rust
-{../../../../crates/skoro-linearize/src/assemble.rs:229..296}
+{../../../../crates/skoro-linearize/src/assemble.rs:252..319}
 ```
 
 ### The Fisher rows of a free scale
@@ -158,7 +168,7 @@ gives $J^\mu = W\, \D s$ above the root's scale rows composed with the scale's J
 scale residual $u$ on the right, so that the scale's score is carried by the rows too:
 
 ```rust
-{../../../../crates/skoro-linearize/src/assemble.rs:401..450}
+{../../../../crates/skoro-linearize/src/assemble.rs:424..473}
 ```
 
 With every scale fixed the two assemblies are the same, row for row, and one schedule serves both.

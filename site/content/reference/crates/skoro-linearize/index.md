@@ -6,7 +6,8 @@ linearization of a free scale. It refuses by structure, naming the term or the q
 cannot be linearized; reads the factor structure off the terms' variables; and compiles one program
 of every node the factors bind, whose tangent pass is seeded by a colouring of the factor structure,
 so that its frames are as wide as the colours and not as the model. At each batch of points it
-gives a `Linearized`, one problem per row, with the curved types' log-volumes folded into the
+refuses a point at which a factor is not finite, naming the term and the row, and otherwise gives a
+`Linearized`, one problem per row, with the curved types' log-volumes folded into the
 right-hand sides and every other log-volume in the linear term, never the query's gradient less
 what the rows account for.
 
