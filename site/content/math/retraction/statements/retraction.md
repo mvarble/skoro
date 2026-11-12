@@ -9,4 +9,4 @@ $R : \T\manifold \to \manifold$, written $(\point, \tangent) \mapsto R_\point(\t
 $\point \in \manifold$, with $\T_\point\manifold$ identified with $\R^\dimension$,
 
 1. $R_\point(0) = \point$, and
-2. the derivative of $R_\point$ at $0$ is the identity: $\D R_\point(0) = I_\dimension$.
+2. the derivative $\D R_\point(0)$ of $R_\point$ at $0$ is the identity on $\T_\point\manifold$, $\D R_\point(0) = I_\dimension$.
