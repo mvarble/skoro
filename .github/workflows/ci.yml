@@ -104,6 +104,8 @@ jobs:
               run: cargo run --release -p skoro --example pose_graph
             - if: steps.workspace.outputs.exists == 'true'
               run: cargo run --release -p skoro --example sliding_window
+            - if: steps.workspace.outputs.exists == 'true'
+              run: cargo run --release -p skoro --example g2o
 
     pages:
         name: Publish the site

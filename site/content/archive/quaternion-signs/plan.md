@@ -55,7 +55,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
       pose graph read from it. Tests: `g2o_information_is_converted`.
 - [x] The estimates on outside signs, in `tests/signs.rs`. Tests: `a_one_turn_loop_closes`,
       `the_estimate_ignores_every_sign`, `a_half_turn_is_non_finite`.
-- [ ] The example `examples/g2o.rs`: a file's path as its argument, or `one_turn_loop(100, 0.01,
+- [x] The example `examples/g2o.rs`: a file's path as its argument, or `one_turn_loop(100, 0.01,
       SEED)` without one, estimated by Levenberg–Marquardt with its convergence checked; and
       `cargo run --release -p skoro --example g2o` added to the checks of `AGENTS.md` and
       `.github/workflows/ci.yml`. Tests: the example runs.

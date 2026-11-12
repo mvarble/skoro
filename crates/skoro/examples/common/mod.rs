@@ -1,5 +1,5 @@
-//! What the two examples share: the scenarios, the model tick by tick, the Laplace marginals and
-//! their calibration, and the report.
+//! What the examples share: the scenarios, the model tick by tick, the Laplace marginals and
+//! their calibration, the report, and the reader of g2o's format.
 #![allow(dead_code)] // each example uses part of it
 
 pub mod batch;

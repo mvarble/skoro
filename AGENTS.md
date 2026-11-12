@@ -80,6 +80,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run --release -p skoro --example pose_graph
 cargo run --release -p skoro --example sliding_window
+cargo run --release -p skoro --example g2o
 node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools
 cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind
