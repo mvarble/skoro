@@ -12,7 +12,7 @@ reach, so that `pnpm build` passes until the publish stage rewrites the quotes.
 
 ## The core (`skoro-core`)
 
-- [ ] `Linear`, the signed permutations of a type's storage, with `new`, `signs`, `storage`,
+- [x] `Linear`, the signed permutations of a type's storage, with `new`, `signs`, `storage`,
       `apply` and `then`; `Embedded::stored_up_to`, `identification` and `group`, with the
       declaration's new field, and its refusals; both re-exported from `skoro_core`. Tests:
       `stored_up_to_refuses_what_it_cannot_accept`, `group_closes_the_generators`.

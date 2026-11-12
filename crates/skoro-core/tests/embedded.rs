@@ -7,8 +7,9 @@ use skoro_core::primitive::{Include, Neg, Project, Retract};
 use skoro_core::scope::{apply, constant, project, quantity};
 use skoro_core::testing::{check_embedded, lower};
 use skoro_core::{
-    Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Lowered,
-    Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume, Writer,
+    Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Linear,
+    Lowered, Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume,
+    Writer,
 };
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
@@ -690,4 +691,92 @@ fn product_domain_is_the_conjunction_of_its_factors() {
     };
     let inside: Vec<f64> = inside.to_host().into_iter().map(|i| i as f64).collect();
     assert_eq!(inside, expected);
+}
+
+/// A declaration of storage `n` and dimension 1 whose composites have the right signatures and
+/// nothing more: enough for what `stored_up_to` reads of it.
+fn of_storage(n: usize) -> Arc<Embedded> {
+    let (storage, line) = (Space::Vector(n), Space::Vector(1));
+    let r = Composite::define(
+        "test.storage.retraction",
+        vec![Param::Integer(n as i64)],
+        &[storage.clone(), line.clone()],
+        |q| q[0],
+    )
+    .unwrap();
+    let q = Composite::define(
+        "test.storage.inverse",
+        vec![Param::Integer(n as i64)],
+        &[storage.clone(), storage],
+        |q| (q[0] * q[1]).sum().reshape(Space::Vector(1)),
+    )
+    .unwrap();
+    Embedded::declare(
+        "test.storage",
+        vec![Param::Integer(n as i64)],
+        n,
+        1,
+        r,
+        q,
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn stored_up_to_refuses_what_it_cannot_accept() {
+    let sign = |n: usize| Linear::signs(&vec![-1; n]).unwrap();
+    // A generator of another storage.
+    assert!(is_invalid(circle().stored_up_to(vec![sign(3)])));
+    // No generator.
+    assert!(is_invalid(circle().stored_up_to(Vec::new())));
+    // The signed permutations of seven entries that a cycle and one sign generate: 2⁷ · 7.
+    let cycle = Linear::new((1..7).chain([0]).collect(), vec![1; 7]).unwrap();
+    let one = Linear::signs(&[-1, 1, 1, 1, 1, 1, 1]).unwrap();
+    assert!(is_invalid(of_storage(7).stored_up_to(vec![cycle, one])));
+    // A flat declaration.
+    let flat = Embedded::declare_flat("test.flat", Vec::new(), 2).unwrap();
+    assert!(is_invalid(flat.stored_up_to(vec![sign(2)])));
+    // A second call.
+    let once = circle().stored_up_to(vec![sign(2)]).unwrap();
+    assert!(is_invalid(once.stored_up_to(vec![sign(2)])));
+    // A source that is not a permutation, and a sign other than ±1.
+    assert!(Linear::new(vec![0, 0], vec![1, 1]).is_none());
+    assert!(Linear::new(vec![0, 2], vec![1, 1]).is_none());
+    assert!(Linear::new(vec![1, 0], vec![1, 2]).is_none());
+    assert!(Linear::signs(&[1, 0]).is_none());
+}
+
+#[test]
+fn group_closes_the_generators() {
+    // Stored as itself: the identity alone.
+    assert_eq!(circle().group(), vec![Linear::identity(2)]);
+    assert!(circle().identification().is_empty());
+
+    // One sign: two elements, the identity first.
+    let minus = Linear::signs(&[-1, -1]).unwrap();
+    let signed = circle().stored_up_to(vec![minus.clone()]).unwrap();
+    assert_eq!(signed.identification(), std::slice::from_ref(&minus));
+    assert_eq!(signed.group(), vec![Linear::identity(2), minus.clone()]);
+    assert_eq!(minus.apply(&[0.6, 0.8]), vec![-0.6, -0.8]);
+
+    // Two commuting signs: four.
+    let first = Linear::signs(&[-1, 1, 1]).unwrap();
+    let second = Linear::signs(&[1, -1, 1]).unwrap();
+    let group = of_storage(3)
+        .stored_up_to(vec![first, second])
+        .unwrap()
+        .group();
+    assert_eq!(group.len(), 4);
+    assert_eq!(group[0], Linear::identity(3));
+
+    // `then` applies its receiver first.
+    let swap = Linear::new(vec![1, 0], vec![1, 1]).unwrap();
+    let negate_first = Linear::signs(&[-1, 1]).unwrap();
+    let x = [1.0, 2.0];
+    assert_eq!(
+        swap.then(&negate_first).apply(&x),
+        negate_first.apply(&swap.apply(&x))
+    );
+    assert_eq!(swap.then(&negate_first).apply(&x), vec![-2.0, 1.0]);
 }
