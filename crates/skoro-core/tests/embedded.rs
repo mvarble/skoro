@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 
 use skoro_core::primitive::{Include, Neg, Project, Retract};
 use skoro_core::scope::{apply, constant, project, quantity};
-use skoro_core::testing::{check_embedded, lower};
+use skoro_core::testing::{check_embedded, check_volume, close_up_to, lower};
 use skoro_core::{
     Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Linear,
     Lowered, Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume,
@@ -779,4 +779,125 @@ fn group_closes_the_generators() {
         negate_first.apply(&swap.apply(&x))
     );
     assert_eq!(swap.then(&negate_first).apply(&x), vec![-2.0, 1.0]);
+}
+
+/// `J x · y` and `x · y` of two stored points of the circle.
+fn along_and_dot(x: QDyn, y: QDyn) -> (QDyn, QDyn) {
+    let (x1, x2, y1, y2) = (x.slice(0..1), x.slice(1..2), y.slice(0..1), y.slice(1..2));
+    (
+        (x1 * y2 - x2 * y1).reshape(Space::Real),
+        (x1 * y1 + x2 * y2).reshape(Space::Real),
+    )
+}
+
+/// The lines through the origin of ℝ²: the circle stored up to `x ↦ -x`, with
+/// `R(x, t) = P(x + t J x)`, `Q(x, y) = (J x · y) / (x · y)`, the tangent of the angle from the
+/// line of `x` to that of `y`, computed as `(J x · y)(x · y) / (x · y)²` so that its reciprocal is
+/// of a positive number, `P` the normalization, and `Λ(x, t) = -log(1 + t²)`; or, with `broken`,
+/// the same inverse with the reciprocal `e^{-log(x · y)}`, which inverts `R` on the side of `x`
+/// and is undefined on the other: it reads the representative.
+fn lines(generator: Linear, broken: bool) -> Arc<Embedded> {
+    let name = if broken {
+        "test.lines.broken"
+    } else {
+        "test.lines"
+    };
+    let r = Composite::define(
+        "test.lines.retraction",
+        Vec::new(),
+        &[Space::Vector(2), Space::Vector(1)],
+        |q| {
+            let (x, t) = (q[0], q[1].reshape(Space::Real));
+            let (x1, x2) = (x.slice(0..1), x.slice(1..2));
+            let w = x + skoro_core::scope::concatenate(&[-(t * x2), t * x1], Space::Vector(2));
+            (-((w * w).sum().log() * 0.5)).exp() * w
+        },
+    )
+    .unwrap();
+    let q = if broken {
+        Composite::define(
+            "test.lines.broken.inverse",
+            Vec::new(),
+            &[Space::Vector(2), Space::Vector(2)],
+            |q| {
+                let (along, dot) = along_and_dot(q[0], q[1]);
+                (along * (-dot.log()).exp()).reshape(Space::Vector(1))
+            },
+        )
+    } else {
+        Composite::define(
+            "test.lines.inverse",
+            Vec::new(),
+            &[Space::Vector(2), Space::Vector(2)],
+            |q| {
+                let (along, dot) = along_and_dot(q[0], q[1]);
+                (along * dot * (-(dot * dot).log()).exp()).reshape(Space::Vector(1))
+            },
+        )
+    }
+    .unwrap();
+    let log_volume = Composite::define(
+        "test.lines.log_volume",
+        Vec::new(),
+        &[Space::Vector(2), Space::Vector(1)],
+        |q| -((q[1] * q[1]).sum() + 1.0).log(),
+    )
+    .unwrap();
+    Embedded::declare(name, Vec::new(), 2, 1, r, q, Some(normalize()))
+        .unwrap()
+        .stored_up_to(vec![generator])
+        .unwrap()
+        .with_volume(Volume::global(log_volume))
+        .unwrap()
+}
+
+fn minus() -> Linear {
+    Linear::signs(&[-1, -1]).unwrap()
+}
+
+skoro_core::precision_tests! {
+    fn the_checks_hold_on_the_lines(target) {
+        let declaration = lines(minus(), false);
+        if let Err(error) = check_embedded(&declaration, &points(3), &target) {
+            panic!("{error}");
+        }
+        if let Err(error) = check_volume(&declaration, &points(3), &target) {
+            panic!("{error}");
+        }
+    }
+}
+
+#[test]
+fn the_checks_name_a_broken_condition() {
+    let target = Target::host();
+    let error = check_embedded(&lines(minus(), true), &points(3), &target).unwrap_err();
+    assert!(
+        error.contains("generator 0") && error.contains("invariance of Q"),
+        "{error}"
+    );
+    let error =
+        check_embedded(&lines(Linear::identity(2), false), &points(3), &target).unwrap_err();
+    assert!(
+        error.contains("generator 0") && error.contains("freedom"),
+        "{error}"
+    );
+}
+
+#[test]
+fn close_up_to_compares_orbits() {
+    let declaration = lines(minus(), false);
+    let (a, b) = ([0.6, 0.8, 1.0, 0.0], [-0.6, -0.8, 1.0, 0.0]);
+    assert!(close_up_to(&declaration, &a, &b, 1e-12).is_ok());
+    let as_stored = Embedded::declare(
+        "test.lines.as_stored",
+        Vec::new(),
+        2,
+        1,
+        rotation("test.lines.as_stored.rotation"),
+        angle(1.0),
+        None,
+    )
+    .unwrap();
+    assert!(close_up_to(&as_stored, &a, &b, 1e-12).is_err());
+    assert!(close_up_to(&declaration, &a, &[0.8, 0.6, 1.0, 0.0], 1e-12).is_err());
 }
