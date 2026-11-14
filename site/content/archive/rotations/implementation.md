@@ -350,11 +350,11 @@ of a type hand them its inclusion, which is unit up to rounding.
 
 | type | name | storage, dimension | $R(x, t)$ | $Q(x, y)$ | $P(x)$ | $\Lambda(x, t)$ |
 | --- | --- | --- | --- | --- | --- | --- |
-| $S^3$ | `skoro.spatial.rotation` | 4, 3 | $\hat x \otimes \delta(t)$ | $\delta^{-1}(\bar x \otimes y)$ | $\hat x$ | $-3 \log(1 + \tfrac1{16} \lvert t \rvert^2)$ |
+| $S^3$ | `skoro.spatial.rotation` | 4, 3 | $\hat x \otimes \delta(t)$ | $\delta^{-1}(\bar x \otimes y)$ | $\hat x$ | $-3 \log(1 + \tfrac1{16} \lVert t \rVert^2)$ |
 | $S^3 \ltimes \R^3$ | `skoro.spatial.pose` | 7, 6 | $(\hat q \otimes \delta(\phi),\ p + \pi(\hat q) \rho)$ | $(\delta^{-1}(\bar q \otimes q'),\ \pi(q)\transpose (p' - p))$ | $(\hat q, p)$ | the same, of $\phi$ |
 | $S^3 \ltimes (\R^3)^2$ | `skoro.spatial.extended_pose` | 10, 9 | $(\hat q \otimes \delta(\phi),\ v + \pi(\hat q) \eta,\ p + \pi(\hat q) \rho)$ | likewise | $(\hat q, v, p)$ | the same, of $\phi$ |
 
-with $\hat x = x / \lvert x \rvert$. These are [%full](statement:archive/rotations/math/chart),
+with $\hat x = x / \lVert x \rVert$. These are [%full](statement:archive/rotations/math/chart),
 [%full](statement:archive/rotations/math/volume) and [%full](statement:archive/rotations/math/motions),
 with one addition: the retraction normalizes its base point. On the type that changes nothing, and
 its derivatives at the type are the same; off it, it keeps a point that a long run of retractions has
@@ -366,7 +366,7 @@ retraction does not normalize: its inputs are points of the type.
 
 Each composite is written on storage with `algebra.rs`, so the motions' declarations do not depend
 on the rotation's statics. The denominators are positive on the domain: $1 + s \ge 1$,
-$\lvert x \rvert > 0$, and $1 + w(\bar x \otimes y) > 0$ for $y \ne -x$, where the inverse is
+$\lVert x \rVert > 0$, and $1 + w(\bar x \otimes y) > 0$ for $y \ne -x$, where the inverse is
 undefined, as the chart's cut: non-finite at a row exactly on it, and growing without bound near it,
 as [Errors and domains](#errors-and-domains) says of every singular row.
 
@@ -495,7 +495,7 @@ cutoff are the check on the code.
 
 The single-precision errors are absolute, as `Tolerance::AGREEMENT` holds them, and each
 coefficient reaches a map's value multiplied by powers of $\theta$ ($E$ by $\Phi \Psi \Phi^2$, of
-order $\theta^3 \lvert \rho \rvert$), so the largest, $E$'s second derivative, contributes about
+order $\theta^3 \lVert \rho \rVert$), so the largest, $E$'s second derivative, contributes about
 $10^{-5}$. A cutoff of $\theta^2 = 0.01$ would cost $D$ and $E$ errors of $10^{-1}$ and more in their
 second derivatives in single precision; one of $0.1$ for $L$ would need its series through $x^{14}$.
 The series are evaluated by Horner's rule, a product and a sum per term. The archive's cutoffs per
@@ -566,8 +566,8 @@ pub mod rotation {
 
 The exponential is $P(a\,,\ b\, \omega)$ with $a$ and $b$ from `series.rs` of $\theta^2 = \omega \cdot
 \omega$; the logarithm is `log_ratio(n², w) u`, and `log_shorter` the same of the storage chosen
-between $q$ and $-q$ by $w \ge 0$. The angle is $2 \operatorname{atan2}(\lvert \operatorname{vec}
-r \rvert, \lvert w(r) \rvert)$, the absolute value a selection; its norm is undefined at $r = \pm 1$,
+between $q$ and $-q$ by $w \ge 0$. The angle is $2 \operatorname{atan2}(\lVert \operatorname{vec}
+r \rVert, \lvert w(r) \rvert)$, the absolute value a selection; its norm is undefined at $r = \pm 1$,
 where the angle has no derivative and its rows are non-finite in the passes, as a norm's are. The
 axis–angle guards the axis with a selection at $n^2 = 0$. Alignment selects between the storage of
 $q$ and its negation by $\langle q, r \rangle \ge 0$ and projects.
@@ -901,8 +901,8 @@ the step; `aligned_with` away from $\langle q, r \rangle = 0$.
   [%full](statement:archive/rotations/math/chart), [%full](statement:archive/rotations/math/volume)
   and [%full](statement:archive/rotations/math/motions) as built, with the area formula.
 - `chart_is_stereographic`: on the host, `Q(x, R(x, t)) = t` at lengths up to $10^3$; the angle of
-  $\delta(t)$ is $4 \arctan(\lvert t \rvert / 4)$; $\pi(x \oplus t) = \pi(x)(I + [t]_\times) +
-  O(\lvert t \rvert^2)$ at $\lvert t \rvert = 10^{-3}$; and $R$ of a base point scaled by $1.01$ equals
+  $\delta(t)$ is $4 \arctan(\lVert t \rVert / 4)$; $\pi(x \oplus t) = \pi(x)(I + [t]_\times) +
+  O(\lVert t \rVert^2)$ at $\lVert t \rVert = 10^{-3}$; and $R$ of a base point scaled by $1.01$ equals
   $R$ of the unit one. Shows the chart is the statement's, and the normalization of the base point.
 - `volume_has_the_stated_mass`: $\int_{\R^3} e^{\lambda(t)} \dd t = 16 \pi^2$ by quadrature in polar
   coordinates. Shows the normalization of $\nu$ independently of the area formula.

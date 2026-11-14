@@ -11,7 +11,7 @@ of rows, a vector $b \in \R^r$, a vector $\eta \in \R^D$ and a constant $c$, the
 factor* is the likelihood factor
 
 $$
-	\logterm(\point_B) = -\tfrac12 \bigl\lvert A\, \delta(\point_B) - b \bigr\rvert^2 - \eta\transpose \delta(\point_B) + c .
+	\logterm(\point_B) = -\tfrac12 \bigl\lVert A\, \delta(\point_B) - b \bigr\rVert^2 - \eta\transpose \delta(\point_B) + c .
 $$
 
 Its *whitened residual* is $A \delta - b$, of $r$ components, and its *linear part* is

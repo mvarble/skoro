@@ -62,7 +62,7 @@ whose chart derivatives the core computes.
 the *sightings* $V \subseteq \{0, \dots, K\} \times \{1, \dots, J\}$, the pairs $(k, j)$ for which
 the robot measures landmark $j$ from pose $k$. The sightings are chosen from the nominal trajectory,
 as the pairs within a sensor's range $h$ of each other,
-$\lvert \bar \point_k^{-1} \cdot \bar m_j \rvert \le h$, and never from the drawn truth. They
+$\lVert \bar \point_k^{-1} \cdot \bar m_j \rVert \le h$, and never from the drawn truth. They
 are the structure of the model, and the structure is fixed before anything random is drawn: random
 structure lives one level up
 ([position 2](../charter/writeup.md#2-models-are-built-forward-change-by-appending-and-retiring-and-random-structure-lives-one-level-up)).
@@ -102,7 +102,7 @@ the odometry and the sightings, at the values $y_k$ and $z_{kj}$, and leaves the
 landmarks free, [](eq:archive/normal/math/term) gives
 
 $$
-	f(\point, m) = \tfrac12 \lvert r_0 \rvert^2 + \sum_k \bigl( \tfrac12 \lvert r^u_k \rvert^2 + \tfrac12 \lvert r^y_k \rvert^2 \bigr) + \sum_j \tfrac12 \lvert r^m_j \rvert^2 + \sum_{(k,j) \in V} \tfrac12 \lvert r^z_{kj} \rvert^2 + \sum_t \lambda_t + \text{const} , @tag(objective)
+	f(\point, m) = \tfrac12 \lVert r_0 \rVert^2 + \sum_k \bigl( \tfrac12 \lVert r^u_k \rVert^2 + \tfrac12 \lVert r^y_k \rVert^2 \bigr) + \sum_j \tfrac12 \lVert r^m_j \rVert^2 + \sum_{(k,j) \in V} \tfrac12 \lVert r^z_{kj} \rVert^2 + \sum_t \lambda_t + \text{const} , @tag(objective)
 $$
 
 with the whitened residuals of [](eq:archive/normal/math/term), each the whitening of its term
@@ -153,7 +153,7 @@ $\tfrac12 \lambda\, \tangent\transpose D \tangent$, the rows of
 the columns of the stacked rows $J$,
 
 $$
-	D_{ii} = \max\bigl( \lvert J_{:, i} \rvert^2,\ \delta \bigr) , @tag(marquardt)
+	D_{ii} = \max\bigl( \lVert J_{:, i} \rVert^2,\ \delta \bigr) , @tag(marquardt)
 $$
 
 so that the damping does not depend on the units of the coordinates: a pose's rotation in radians
@@ -164,7 +164,7 @@ recomputed at every linearization.
 
 **The gain ratio.** The step $\tangent$ promises the decrease
 [](eq:archive/linearization/math/promised) of the undamped linearization,
-$\Delta(\tangent) = \tfrac12 \lvert J \tangent \rvert^2 + \lambda\, \tangent\transpose D \tangent$,
+$\Delta(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent$,
 and obtains $f(\hat \point) - f(\hat \point \oplus \tangent)$. Their ratio
 
 $$
@@ -221,7 +221,7 @@ promise alone forms no gain from rounding, and a row is never failed for having 
 The damped promise is at least $\tfrac12 g\transpose (J\transpose J + \lambda D)^{-1} g$, which bounds
 the Gauss–Newton decrement when $\lambda$ is small and not when it is large, as it may be at a stop
 that followed rejections. So convergence is checked apart from the rule: at the final point, with $\lambda = 0$, one elimination gives the Gauss–Newton step
-$\tangent_0$ and its decrement $\tfrac12 \lvert J \tangent_0 \rvert^2$, which must be at most a
+$\tangent_0$ and its decrement $\tfrac12 \lVert J \tangent_0 \rVert^2$, which must be at most a
 small multiple of $\epsilon$. That is the statement that the point is stationary for $f$, since the
 rows have full rank and $\tangent_0 = 0$ exactly where $g = 0$
 ([](eq:archive/linearization/math/step)).
@@ -242,7 +242,7 @@ The truth lies in the approximation's credible ellipsoid of level $\alpha$ for $
 *normalized error*
 
 $$
-	\varepsilon_q = \bigl\lvert W_q \bigl( q^\star \ominus \hat q \bigr) \bigr\rvert^2 @tag(nees)
+	\varepsilon_q = \bigl\lVert W_q \bigl( q^\star \ominus \hat q \bigr) \bigr\rVert^2 @tag(nees)
 $$
 
 is at most $\chi^2_{d_q}(\alpha)$, the $\alpha$-quantile of the chi-squared law with as many
@@ -418,7 +418,7 @@ measurement: the batch's mode $\hat \point_K$ on the same path and data, and the
 $\tilde \point_K$, compared in the batch marginal's whitening,
 
 $$
-	\gamma = \bigl\lvert W_K (\tilde \point_K \ominus \hat \point_K) \bigr\rvert , @tag(gap)
+	\gamma = \bigl\lVert W_K (\tilde \point_K \ominus \hat \point_K) \bigr\rVert , @tag(gap)
 $$
 
 reported row by row and as its mean over the rows. It is zero for linear-Gaussian terms, and

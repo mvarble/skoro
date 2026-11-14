@@ -1,7 +1,5 @@
 ---
 title: Retractions
-part: geometry
-order: 2
 summary: Maps from a tangent space back onto the manifold.
 depends_on: [tangent-space]
 ---

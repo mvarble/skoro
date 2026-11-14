@@ -1,7 +1,5 @@
 ---
 title: Retractions and tangent charts
-part: geometry
-order: 1
 summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations $\oplus$ and $\ominus$.
 ---
 
@@ -33,15 +31,11 @@ exponential map of a Riemannian manifold. The exponential map is a retraction, b
 so is any map that agrees with it to first order, which is usually cheaper. Nothing here needs a
 metric.
 
-Two examples.
-
-1. The space is $\R^\dimension$, its tangent space at $\point$ is $\R^\dimension$, and the retraction is
-   $R_\point(\tangent) = \point + \tangent$. This is the addition that retractions replace on curved manifolds.
-2. The space is the positive reals $\positive = (0, \infty)$, its tangent space $\T_\point\positive$ is identified
-   with $\R$ by measuring relative change, and the retraction is $R_\point(\tangent) = \point\,e^{\tangent}$. It is
-   defined for every $\tangent$ and never leaves the positive reals. It satisfies
-   $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity in the chosen
-   identification, since a tangent at $\point$ of coordinate $1$ is the velocity $\point$.
+Two examples. On $\R^\dimension$, $R_\point(\tangent) = \point + \tangent$. On the positive reals, with
+$\T_\point\positive$, with $\positive = (0, \infty)$, identified with $\R$ by measuring relative change,
+$R_\point(\tangent) = \point\,e^{\tangent}$: it is defined for every $\tangent$, never leaves the positive reals,
+and satisfies $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity
+in the chosen identification (a tangent at $\point$ of coordinate $1$ is the velocity $\point$).
 
 ## Tangent charts
 
@@ -78,9 +72,9 @@ side is measured in the chart at the *moved* point $\point \oplus \tangent$, not
 Write $\otherPoint = \point \oplus \tangent$ and $\varphi(\tangent, c) = R_\point^{-1}(R_{\point \oplus \tangent}(c))$, the chart
 at $\otherPoint$ read in the chart at $\point$. It is smooth near $(0, 0)$, with $\varphi(\tangent, 0) = \tangent$
 and, since $R_{\point \oplus 0} = R_\point$, $\varphi(0, c) = c$. Hence
-$\varphi(\tangent, c) = \tangent + c + O(\lvert\tangent\rvert\,\lvert c\rvert)$. The coordinate
+$\varphi(\tangent, c) = \tangent + c + O(\lVert\tangent\rVert\,\lVert c\rVert)$. The coordinate
 $c = \point \ominus \otherPoint$ is the one with $\varphi(\tangent, c) = R_\point^{-1}(\point) = 0$, so
-$c = -\tangent + O(\lvert\tangent\rvert\,\lvert c\rvert)$, and $\lvert c \rvert = O(\lvert\tangent\rvert)$
+$c = -\tangent + O(\lVert\tangent\rVert\,\lVert c\rVert)$, and $\lVert c \rVert = O(\lVert\tangent\rVert)$
 gives the claim.
 
 </Proof>

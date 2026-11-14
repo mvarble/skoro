@@ -14,7 +14,7 @@ Then, for every $\tangent_B \in \R^D$,
 
 $$
 	\log \int_{\R^{d_E}} e^{-m_T(\tangent_E, \tangent_B)} \, \dd \tangent_E
-	= -\tfrac12 \lvert A \tangent_B - b \rvert^2 - \eta\transpose \tangent_B + c ,
+	= -\tfrac12 \lVert A \tangent_B - b \rVert^2 - \eta\transpose \tangent_B + c ,
 $$
 
 where $A$ has $\min(m', D)$ rows, with $m'$ the number of components of the retired residuals

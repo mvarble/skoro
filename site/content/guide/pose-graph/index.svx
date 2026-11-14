@@ -103,7 +103,7 @@ point. Linearized there, in the chart at $\hat \point$, it is a least-squares pr
 tangent step $\tangent$:
 
 $$
-	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + \tfrac12 \lvert J \tangent + r \rvert^2 - \tfrac12 \lvert r \rvert^2 ,
+	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + \tfrac12 \lVert J \tangent + r \rVert^2 - \tfrac12 \lVert r \rVert^2 ,
 $$
 
 with $r$ the stacked whitened residuals of every term and $J$ their Jacobian, the matrix drawn
@@ -111,11 +111,11 @@ above; the log-volumes of the terms on $SE(3)$ are folded into $r$, so that $m$ 
 first order. Its gradient at $\tangent = 0$ is the gradient of $f$ in the chart,
 $g = J\transpose r$. A Levenberg–Marquardt step minimizes $m$ with a penalty on its length,
 $\tfrac12 \lambda\, \tangent\transpose D \tangent$, with $D$ Marquardt's diagonal
-[](eq:math/levenberg-marquardt/marquardt), so that
+[](eq:archive/examples/math/marquardt), so that
 $(J\transpose J + \lambda D)\, \tangent = -g$, and the decrease of $m$ it promises is
 
 $$
-	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lvert J \tangent \rvert^2 + \lambda\, \tangent\transpose D \tangent ,
+	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \lVert J \tangent \rVert^2 + \lambda\, \tangent\transpose D \tangent ,
 $$
 
 which is `Problem::promised`. It is measured in nats, like $f$, and it does not depend on how the
@@ -124,8 +124,8 @@ chart's coordinates are scaled, where the norm of $g$ or of $\tangent$ would.
 ### When a row stops
 
 The step is taken if $f$ actually decreased, if the gain
-[](eq:math/levenberg-marquardt/gain), the decrease obtained over $\Delta(\tangent)$, is positive, and
-$\lambda$ is updated from the gain by Nielsen's schedule [](eq:math/levenberg-marquardt/schedule). The
+[](eq:archive/examples/math/gain), the decrease obtained over $\Delta(\tangent)$, is positive, and
+$\lambda$ is updated from the gain by Nielsen's schedule [](eq:archive/examples/math/schedule). The
 row stops, `Status::Converged`, at the first step that promises $\Delta(\tangent) \le \epsilon$,
 with $\epsilon = 10^{-9}$ nats, whether that step was taken or not. Near the mode a step promises
 little more than the rounding of $f$, $u \lvert f \rvert \approx 4 \times 10^{-13}$ nats with
@@ -145,7 +145,7 @@ damping. With $\lambda = 0$ the step is Gauss–Newton's, $\tangent_0 = -(J\tran
 and its promise, the **decrement**, is
 
 $$
-	\delta = \tfrac12 \lvert J \tangent_0 \rvert^2 = \tfrac12\, g\transpose (J\transpose J)^{-1} g \ \ge\ \frac{\lvert g \rvert^2}{2\, h_{\max}} ,
+	\delta = \tfrac12 \lVert J \tangent_0 \rVert^2 = \tfrac12\, g\transpose (J\transpose J)^{-1} g \ \ge\ \frac{\lVert g \rVert^2}{2\, h_{\max}} ,
 $$
 
 with $h_{\max}$ the largest eigenvalue of $J\transpose J$. Every pose has a prior or a motion term
@@ -162,7 +162,7 @@ gives every pose and landmark a normal marginal in its own chart. The truth's ta
 estimate, from `Layout::local`, whitened by the marginal, is the normalized error; if the marginals
 are calibrated it follows the chi-squared law with as many degrees of freedom as the quantity has
 dimensions, and the 90% ellipsoid holds the truth nine times in ten, over datasets drawn from the
-model. [The note on calibration](../../math/calibration/) says why, and how large a
+model. [The mathematics](../../archive/examples/math.svx#calibration) says why, and how large a
 difference the approximation itself should make.
 
 <ExampleFigure

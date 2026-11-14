@@ -104,7 +104,7 @@ the tangent chart at $\mu$, pushed onto the space. Its term is
 
 $$
 	\logterm_{\mathcal N}(\point;\, \mu, W)
-	= -\tfrac12 \bigl\lvert W (\point \ominus \mu) \bigr\rvert^2
+	= -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
 	+ \sum_{i=1}^{\dimension} \log W_{ii}
 	- \tfrac{\dimension}{2} \log 2\pi
 	- \lambda_\mu(\point \ominus \mu) , @tag(term)
@@ -119,8 +119,8 @@ $\randomPoint$ is drawn from the normal.
 
 The vector $\varepsilon = W^{-1} \zeta = L \zeta$ is normal with mean zero and covariance
 $L L\transpose = \Sigma$, so its density at $\tangent$ is $(2\pi)^{-\dimension/2} \det W
-\exp(-\tfrac12 \lvert W \tangent \rvert^2)$, since $(\det \Sigma)^{-1/2} = \det W$ and
-$\tangent\transpose \Sigma^{-1} \tangent = \lvert W \tangent \rvert^2$; its logarithm at $\tangent =
+\exp(-\tfrac12 \lVert W \tangent \rVert^2)$, since $(\det \Sigma)^{-1/2} = \det W$ and
+$\tangent\transpose \Sigma^{-1} \tangent = \lVert W \tangent \rVert^2$; its logarithm at $\tangent =
 \point \ominus \mu$ is the first three terms of [](eq:term). The chart is global, so $\varepsilon \in
 U_\mu$ always, and [%full](statement:math/chart-volume/pushforward) gives the density, which is
 [](eq:archive/measures/math/chart-density) with that Gaussian as $f$.
@@ -137,7 +137,7 @@ that gives a positive quantity a normal has said how its noise acts, multiplicat
 space's chart, and a second name would describe the same law twice. On a product the factors are
 correlated through $\Sigma$ in their tangent coordinates, which is what a state with a position and
 a positive scale, or a rotation and a position, needs. On a curved type the log-volume is the
-type's declared one: $-2 \log(1 + \lvert \tangent \rvert^2 / 4)$ for the Cayley chart of the
+type's declared one: $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$ for the Cayley chart of the
 rotations and the stereographic chart of the sphere [](eq:archive/measures/math/sphere-volume),
 one scalar function of the residual that the Gaussian part already computes.
 
@@ -157,7 +157,7 @@ $$
 
 that is, $z \sim \mathcal N(h(\point), \Sigma)$, scored by [](eq:term) at $\mu = h(\point)$. The
 direction $u \in S^2$ to a landmark $\ell \in \R^3$ seen from a pose $(R, p)$, for one, has
-$h(R, p) = R\transpose (\ell - p) / \lvert \ell - p \rvert$, a map into the sphere written in
+$h(R, p) = R\transpose (\ell - p) / \lVert \ell - p \rVert$, a map into the sphere written in
 storage and projected as [](eq:archive/core/math/map-into) allows.
 
 ### Why global charts
@@ -298,8 +298,8 @@ identifies the tangent plane with $\R^2$. No basis is smooth on all of $S^2$, so
 turns as $\mu$ moves in a way that the field, not the geometry, decides, and it spins near the
 point where it fails, the south pole of the core's acceptance test. A scale that is not isotropic is
 read along the basis's axes, and so means something different at every $\mu$. An isotropic scale is
-free of the basis: with an orthonormal basis, the stereographic chart's $\lvert \point \ominus \mu
-\rvert = 2 \tan(\alpha/2)$ depends only on the angle $\alpha$ between $\point$ and $\mu$.
+free of the basis: with an orthonormal basis, the stereographic chart's $\lVert \point \ominus \mu
+\rVert = 2 \tan(\alpha/2)$ depends only on the angle $\alpha$ between $\point$ and $\mu$.
 
 **What the mean is.** The point $\mu$ is the centre of the chart in which the noise is normal. It is
 not the expectation, which on an embedded type lies off the space; on the positive orthant it is
@@ -312,8 +312,8 @@ half-turns or the antipode, where the chart compresses most.
 
 **The estimate a measurement gives.** When $z$ is observed and the state $\point$ is free, the term
 [](eq:term) at $\mu = h(\point)$ depends on $\point$ through the whitened residual and through
-$\lambda_{h(\point)}(z \ominus h(\point))$. Near a zero residual, $-\lambda$ is $\lvert \tangent
-\rvert^2 / 2$ to second order for the Cayley and stereographic charts, so the measurement weighs on
+$\lambda_{h(\point)}(z \ominus h(\point))$. Near a zero residual, $-\lambda$ is $\lVert \tangent
+\rVert^2 / 2$ to second order for the Cayley and stereographic charts, so the measurement weighs on
 the state as a Gaussian of the residual would with the precision $\Lambda$ replaced by
 $\Lambda - I$ on the rotation's or the direction's block. For a noise of $0.1$ rad that changes the
 measurement's weight by $1\,\%$. Small, but it is the difference between the law [](eq:measurement)
@@ -501,7 +501,7 @@ A type that declares no volume has no densities, and the core refuses a term tha
 quantities ([Types without a volume](../measures/math.svx#types-without-a-volume)); a type whose
 chart is not global has densities, but no normal. Either can still carry a measurement, as a
 likelihood factor over data: with $z$ a constant, the measured value, the Gaussian part
-$-\tfrac12 \lvert W (z \ominus h(\point)) \rvert^2$ is a function of $\point$ that scores nothing.
+$-\tfrac12 \lVert W (z \ominus h(\point)) \rVert^2$ is a function of $\point$ that scores nothing.
 It is not the log-likelihood of the law [](eq:measurement), from which it lacks $\lambda$, a
 function of $\point$. It is, exactly, the log-likelihood of another law.
 
@@ -511,13 +511,13 @@ function of $\point$. It is, exactly, the log-likelihood of another law.
 
 Substitute $z = \mu g$. The measure $\nu$ is invariant under left translation, $V_\mu = \mu V_e$,
 and $z \ominus \mu = \varphi^{-1}(\mu^{-1} z) = g \ominus e$, so $Z(\mu) = Z(e)$. The second form
-is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lvert W \tangent
-\rvert^2)$.
+is [](eq:math/chart-volume/image) at $e$, with $g(\tangent) = \exp(-\tfrac12 \lVert W \tangent
+\rVert^2)$.
 
 </Proof>
 
 So on a group whose chart translates one of the identity, the exponential chart of the rotations
-among them, $\exp(-\tfrac12 \lvert W (z \ominus \mu) \rvert^2) / Z$ is a density of $z$ with respect
+among them, $\exp(-\tfrac12 \lVert W (z \ominus \mu) \rVert^2) / Z$ is a density of $z$ with respect
 to Haar measure for every $\mu$, its log-likelihood in $\mu$ is the Gaussian part up to a constant,
 and least squares of the whitened residual is exact maximum likelihood for it. This is the model
 that factor-graph libraries estimate. Its $z$ is not $\mu \oplus \varepsilon$ for a normal
@@ -548,9 +548,9 @@ whichever the model gave, and its form, from which a reader computes $W$ or $L$ 
 [The scale](#the-scale) says; in the covariance factor's form the residual is the solution $z$ of
 [](eq:forward-substitution), which is $W (\point \ominus \mu)$ without $W$ ever being formed.
 
-**What a reader of the residual estimates.** The term is $-\tfrac12 \lvert r \rvert^2$ plus a
+**What a reader of the residual estimates.** The term is $-\tfrac12 \lVert r \rVert^2$ plus a
 normalizer in the scale, less the log-volume. A least-squares reader that minimizes
-$\tfrac12 \lvert r \rvert^2$ over the free quantities, with the scale fixed, therefore maximizes the
+$\tfrac12 \lVert r \rVert^2$ over the free quantities, with the scale fixed, therefore maximizes the
 term itself only where the log-volume is constant in them. On a Euclidean space it is zero. On a
 positive factor it is $J(\point)$, constant when $\point$ is observed, and not when $\point$ is
 free, where ignoring it finds the mode in the logarithmic chart rather than with respect to Lebesgue
@@ -564,12 +564,12 @@ law of [%full](statement:invariant), the model of factor-graph libraries, and sh
 taken together as a point of the product of their types, has the negative log-density
 
 $$
-	f(q) = \tfrac12 \sum_i \lvert r_i(q) \rvert^2 + s(q), \qquad s(q) = \sum_i \lambda_{\mu_i}(t_i), \quad t_i = \point_i \ominus \mu_i , @tag(gn-objective)
+	f(q) = \tfrac12 \sum_i \lVert r_i(q) \rVert^2 + s(q), \qquad s(q) = \sum_i \lambda_{\mu_i}(t_i), \quad t_i = \point_i \ominus \mu_i , @tag(gn-objective)
 $$
 
 up to a constant, the sums over the terms, each with its residual $r_i = W_i t_i$. The log-volumes
-are not squares, and cannot be made into squares: near $t = 0$ they are concave, $-\lvert t
-\rvert^2 / 2$ for the Cayley and stereographic charts, since the chart compresses volume away from
+are not squares, and cannot be made into squares: near $t = 0$ they are concave, $-\lVert t
+\rVert^2 / 2$ for the Cayley and stereographic charts, since the chart compresses volume away from
 its centre. A reader that accepts only residuals has nothing to do with them. A Gauss–Newton reader
 that takes the log-volume's role as well loses nothing by it.
 
@@ -602,7 +602,7 @@ Three consequences follow for a reader of the roles.
   while $J\transpose J = \sum_i A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq
   \nabla^2 \lambda_i \preceq \kappa \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq
   \D^2 s \preceq \kappa J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with
-  $\kappa = \max_i \lvert \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rvert$. Near
+  $\kappa = \max_i \lVert \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rVert$. Near
   $t = 0$ that is $\sigma^2$ for the Cayley and stereographic charts, $\sigma^2$ the largest
   variance of a rotation's or a direction's noise: $0.01$ per iteration at $\sigma = 0.1$ rad. The
   rest of $E$ is $\sum_i \sum_k (r_i)_k \nabla^2 (r_i)_k$, which every Gauss–Newton method omits,

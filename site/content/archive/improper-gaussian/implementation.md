@@ -352,7 +352,7 @@ number changes what it builds.
   form by the numbers; a conversion would read them, and only the tests need it.
 
 **Against the archive.** The archive's `JointNormal` (`crates/skoro-normal/src/joint.rs` on
-`archive`) was the replacement of its sliding windows, $-\tfrac12 \lvert W \delta - d \rvert^2 + n$
+`archive`) was the replacement of its sliding windows, $-\tfrac12 \lVert W \delta - d \rVert^2 + n$
 over a stacked tangent at frozen anchors. Three things are kept. The anchors are frozen as
 constants, so that the factor does not follow the quantities it summarizes. The right-hand side is
 explicit, rather than folded into a moved anchor, which the archive noted is exact only on a flat
@@ -535,7 +535,7 @@ compared, with the tolerances of `tests/common`:
 - `value_is_the_definition`: over a `Vector(2)` quantity and a `Positive(1)` quantity at constant
   anchors, $D = 3$, with two rows (rank two, below $D$), a non-symmetric $A$ given column by column,
   a right-hand side, a linear term and a constant, the log-density at several points equals
-  $-\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta + c$ computed on the host, with
+  $-\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + c$ computed on the host, with
   $\delta = (x - p, \log y - \log q)$; the residual equals $A \delta - b$. A square non-symmetric
   $A$ on a `Vector(2)` alone checks the order of the entries: given transposed, it fails. Shows
   [%full](statement:archive/improper-gaussian/math/factor) is built as written.

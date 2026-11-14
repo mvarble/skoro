@@ -29,18 +29,16 @@ The three kinds of writing differ in what they promise the reader.
   it. Pages are rewritten whenever the library changes, quote the code that exists, and only ever
   describe the current library. They change at an entry's `publish` stage.
 - **Math notes say what is true**, independently of skoro: one idea to a note (a retraction, the
-  Fisher information, a junction tree). Together they hold all the general mathematics the site
-  relies on, in an order: read from the first to the last they are one story, each note resting
-  only on the notes before it. A note the site already has is linked, never rewritten in another
-  document. [The math notes](#the-math-notes) says how they are written and kept.
+  Fisher information, a junction tree), at enough length to be worth reading alone. A note the
+  site already has is linked, never rewritten in another document.
 - **Archive documents discuss what may be.** They argue, weigh alternatives and leave room for
   doubt, as they stood when approved. Once approved they are frozen: they may drift from the code,
   and that is what they are for.
 
 Before writing about an idea, search for it: `grep -rni 'retraction' site/content/`. If the site
-explains it, link there. If a document needs a piece of general mathematics the site does not
-have, that mathematics is written as a math note, or as a section of one, at its place in the
-order, and the document links to it and keeps what is skoro's own.
+explains it, link there. If a writeup needs an idea the site does not have, explain it in a
+section of the writeup; promote it to a math note only when it stands alone and takes several
+sections, or when a second document needs it.
 
 ## Frontmatter
 
@@ -61,48 +59,11 @@ katex_macros:
 - `depends_on` lists what a reader must understand first: a bare slug is a math note, anything
   else a key (`concepts/graph`, `archive/normal/math`). These are the solid arrows of the map on
   the Mathematics page, so list real prerequisites, not everything mentioned.
-- A page also needs `order`, its place in its track. A page's `depends_on` names no page of its
-  own track at its place or after it.
-- A math note needs `part` and `order`: the part of the mathematics it belongs to (`geometry`,
-  `probability`, `estimation`; `MATH_PARTS` in `site/src/lib/site.ts`) and its place within it.
-  Its `depends_on` names math notes alone, and none at its own place or after it. The build
-  refuses a note that breaks either rule.
+- A page also needs `order`, its place in its track.
 - A page that moves lists the keys it had under `formerly` (`formerly: [start/old-slug]`), so
   that the entries that name it, frozen once done, still resolve to it.
-- An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`), the
-  entries it `revises` (given to `wf start`), and what it `amends` in entries that are done
-  (`workflow.md`, under "Amending a done entry").
-
-## The math notes
-
-**What belongs in a note.** A piece of mathematics is *general* when it can be stated and proved
-without naming anything skoro defines: no quantity, term, query, role, binding or key, and neither
-of the library's graphs. It is *skoro's own* when its subject is something skoro defines, or when
-it is a choice among true things (which chart the rotations use, that a volume is declared). The
-first kind is written in a note. The second stays in the archive, which argued for it, and in the
-concept pages, which say what it now is. Where a statement about skoro is an instance of a general
-one, the general one gets the note and the instance stays behind. A note never speaks of skoro,
-links to a page or to the archive, or lists either in its `depends_on`.
-
-**A note is a chapter.** It may assume the notes before it, use their notation and results without
-restating them, and refer back to them by equation and statement. It never rests on a note after
-it. It is still one idea, and its `depends_on` is still the least a reader needs, not everything
-before it.
-
-**A feature's general mathematics is a note.** At an entry's `math` stage, whatever in its
-mathematics is general goes into a note, new or existing, at its place in the order; the entry's
-`math` document links to it and keeps the problem, the choices and the reading in skoro's terms.
-A chore never opens the notes. When a note is inserted, read the notes after it and rewrite the
-ones that explained what it now explains.
-
-**A rewrite keeps the archive's references true.** The archive's documents refer to the notes'
-equations (`eq:math/<slug>/<tag>`), statements (`statement:math/<slug>/<name>`) and headings
-(`math/<slug>/#<anchor>`): `grep -rn 'math/<slug>' site/content/archive` before rewriting a note.
-In order of preference: what is cited keeps its name and its note wherever the story has a place
-for it there; where it reads better in another note it moves, and the archive's reference is
-changed to follow it; where it belongs in no note any longer, it is written into the archive
-document that cited it. The last two are amendments of a done entry, made at `publish` and listed
-under `amends`.
+- An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`) and
+  the entries it `revises` (given to `wf start`).
 
 ## Links
 
@@ -133,9 +94,7 @@ $$
 $$
 ```
 
-Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. In a `.md` file write a star in
-inline math as `\ast` (`$q^\ast$`): Prettier does not read math, pairs two asterisks of a paragraph
-as emphasis, and rewrites them. The site-wide macros are in
+Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. The site-wide macros are in
 `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
 one document goes in its `katex_macros`.
 
@@ -143,7 +102,7 @@ Lay equations out so that they read the way the argument runs:
 
 - **Chains are displayed.** A chain of equations, `a = b = c`, never goes inline, least of all one
   with stacked vectors. An equation between stacked vectors is displayed even when it is a single
-  equality. A lone short equation, such as $w\transpose x = \lvert x \rvert^2 - \alpha x_1$, may
+  equality. A lone short equation, such as $w\transpose x = \lVert x \rVert^2 - \alpha x_1$, may
   stay in the sentence.
 - **A short chain takes one line.** If the reader can take it in at once, it goes on one line. Several
   such chains in a row go in one `gathered` block, a chain to a row. Give a chain one relation per

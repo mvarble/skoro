@@ -469,7 +469,7 @@ $2$ and dimension $1$, with $J$ the quarter-turn,
 
 $$
 	R(x, t) = P(x + t J x), \qquad Q(x, y) = \frac{(J x) \cdot y}{x \cdot y}, \qquad
-	P(w) = \frac{w}{\lvert w \rvert}, \qquad \Lambda(x, t) = -\log(1 + t^2) ,
+	P(w) = \frac{w}{\lVert w \rVert}, \qquad \Lambda(x, t) = -\log(1 + t^2) ,
 $$
 
 the tangent of the angle from $x$ to $y$, which is equivariant and invariant as the statement asks,
@@ -490,9 +490,9 @@ the core's primitives, the reciprocal of $x \cdot y$ as that of its square, as t
 - `close_up_to_compares_orbits`: $x$ and $-x$ are close up to the group, and not as stored values.
 
 **The chart**, in `crates/skoro-spatial/tests/types.rs`, `chart_is_stereographic` becomes
-`chart_is_cayley`: the angle of $\gamma(t)$ is $2 \arctan(\lvert t \rvert / 2)$; $Q(x, R(x, t)) = t$
+`chart_is_cayley`: the angle of $\gamma(t)$ is $2 \arctan(\lVert t \rVert / 2)$; $Q(x, R(x, t)) = t$
 at lengths up to $10$; $Q(-x, y) = Q(x, y) = Q(x, -y)$ exactly; $(-x) \oplus t = -(x \oplus t)$;
-$\pi(x \oplus t) = \pi(x)(I + [t]_\times) + O(\lvert t \rvert^2)$ against
+$\pi(x \oplus t) = \pi(x)(I + [t]_\times) + O(\lVert t \rVert^2)$ against
 [](eq:archive/rotations/math/rotation); $Q(x, y)$ non-finite at $x = (1, 0, 0, 0)$ and $y = (0, 1, 0, 0)$, exactly a half-turn at either
 precision, and of length $2 \tan(\varphi/2)$ at $\varphi = 3$ rad. `volume_has_the_stated_mass` integrates
 $e^{\lambda}$ [](eq:archive/quaternion-signs/math/cayley-volume) over $\R^3$ to $8\pi^2$, the mass of
@@ -550,7 +550,7 @@ by path, as the examples' common modules are shared):
 - `g2o_information_is_converted`: an edge with a diagonal $\Omega$ and one with a coupling block
   give the precision [](eq:archive/quaternion-signs/math/g2o-precision); and the normal's quadratic
   form $\tangent\transpose \Lambda \tangent$ and g2o's $e\transpose \Omega e$, computed on the host from
-  [](eq:archive/quaternion-signs/math/g2o-error), differ by $O(\lvert \tangent \rvert^3)$: at a
+  [](eq:archive/quaternion-signs/math/g2o-error), differ by $O(\lVert \tangent \rVert^3)$: at a
   residual of length $0.1$ and again at half of it, the difference falls by a factor between $6$
   and $10$.
 - `a_half_turn_is_non_finite`: a rotation observed at $(0, 1, 0, 0)$ with the mean $(1, 0, 0, 0)$,

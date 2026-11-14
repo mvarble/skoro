@@ -2,7 +2,7 @@
 title: Spaces and quantities
 summary: Every value in a model lives in a space, which fixes how it is stored, how it moves, and the typed handle code holds it by.
 order: 1
-depends_on: [retraction, product-manifold, quotient-manifold, chart-volume]
+depends_on: [retraction, product-manifold, chart-volume]
 ---
 
 Everything a model holds (its uncertain quantities, its constants, and the values computed from
@@ -200,9 +200,8 @@ coordinate is a property of the points; the projection must carry it as the retr
 declared log-volume must not see it either. Then every function the core computes from a quantity
 of the type, its densities, its gradients and Hessians in the charts, its steps, is the same at
 every representative, and none of the core's derivatives changes, since they are taken at the
-stored value as before (the note on [quotients by a finite group](../../math/quotient-manifold/)
-proves it, and the note on [densities in tangent charts](../../math/chart-volume/#quotients) carries
-the measure and the volume to the points). A declared chart is global and full when it is so on the points: the Cayley chart of the
+stored value as before ([the mathematics](../../archive/quaternion-signs/math.svx#a-type-stored-up-to-a-group)
+proves it). A declared chart is global and full when it is so on the points: the Cayley chart of the
 rotations reaches only the quaternions on the side of its base point, but every rotation but the
 half-turns.
 

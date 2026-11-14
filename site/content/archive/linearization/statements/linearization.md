@@ -9,7 +9,7 @@ the stacked tangent $\R^\dimension$, and let every term $t$ whose log-density is
 free quantity bind a whitened residual $r_t$, of any number of components, none included, with
 
 $$
-	\logterm_t = -\tfrac12 \lvert r_t \rvert^2 + n_t - \lambda_t ,
+	\logterm_t = -\tfrac12 \lVert r_t \rVert^2 + n_t - \lambda_t ,
 $$
 
 $n_t$ constant in the query and $\lambda_t$ the node the term binds under the log-volume role, or
@@ -20,7 +20,7 @@ residual; otherwise set $\hat c_t = 0$. With $f = -\log \density$ the query's ne
 its *linearization* at a point $\hat \point$ is the function of $\tangent \in \R^\dimension$
 
 $$
-	m(\tangent) = c_0 + \sum_t \tfrac12 \bigl\lvert J_t \tangent + r_t + \hat c_t \bigr\rvert^2 + \eta\transpose \tangent ,
+	m(\tangent) = c_0 + \sum_t \tfrac12 \bigl\lVert J_t \tangent + r_t + \hat c_t \bigr\rVert^2 + \eta\transpose \tangent ,
 $$
 
 where
@@ -28,7 +28,7 @@ where
 $$
 	\eta = \sum_{t \text{ not folded}} \nabla \lambda_t(\hat \point)
 	\qquad \text{and} \qquad
-	c_0 = f(\hat \point) - \tfrac12 \sum_t \lvert r_t + \hat c_t \rvert^2 ,
+	c_0 = f(\hat \point) - \tfrac12 \sum_t \lVert r_t + \hat c_t \rVert^2 ,
 $$
 
 where $r_t$ is the residual at $\hat \point$ and $J_t = \D r_t(\hat \point)$ and $\nabla

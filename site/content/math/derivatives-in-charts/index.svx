@@ -1,12 +1,7 @@
 ---
 title: Derivatives in tangent charts
-part: geometry
-order: 3
 summary: The derivative of a map between manifolds, its gradient and its Hessian product, all read in the tangent charts a retraction provides, and why automatic differentiation computes them unchanged.
 depends_on: [retraction, automatic-differentiation]
-katex_macros:
-    '\dimx': 'd_x'
-    '\dimy': 'd_y'
 ---
 
 <script>
@@ -24,21 +19,21 @@ what an optimizer or a sampler needs at a point, and none needs a metric.
 
 ## The derivative
 
-Let $\map : \manifold \to \otherManifold$ be smooth, between manifolds of dimensions $\dimx$
-and $\dimy$, each with a retraction, and let $\otherPoint = \map(\point)$. The derivative of $\map$ at
-$\point$ is the $\dimy \times \dimx$ matrix of $\map$ read in the chart at $\point$ and the chart at
+Let $\map : \manifold \to \otherManifold$ be smooth, between manifolds of dimensions $\dimension$
+and $e$, each with a retraction, and let $\otherPoint = \map(\point)$. The derivative of $\map$ at
+$\point$ is the $e \times \dimension$ matrix of $\map$ read in the chart at $\point$ and the chart at
 $\otherPoint$:
 
 $$
 	\D \map(\point)\, \tangent \defeq \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point \oplus t \tangent) \ominus \otherPoint\bigr),
-	\qquad \tangent \in \R^\dimx . @tag(derivative)
+	\qquad \tangent \in \R^\dimension . @tag(derivative)
 $$
 
 Equivalently, $\D \map(\point)$ is the ordinary Jacobian at $0$ of the *local representative*
 $\hat \map_\point = R_\otherPoint^{-1} \circ \map \circ R_\point$, a map from a neighbourhood of $0$
-in $\R^\dimx$ to $\R^\dimy$. Because each $\D R_\point(0)$ is the identity, it is also the
+in $\R^\dimension$ to $\R^e$. Because each $\D R_\point(0)$ is the identity, it is also the
 intrinsic differential of $\map$, written in the bases that identify the tangent spaces with
-$\R^\dimx$ and $\R^\dimy$.
+$\R^\dimension$ and $\R^e$.
 
 <Statement {...chainRule} />
 
@@ -63,7 +58,7 @@ hand:
 4. the Jacobian–vector product is $\otherTangent'(0)$, and the vector–Jacobian product is its
    transpose.
 
-The transpose is taken in coordinates: a cotangent at $\otherPoint$ is a row of $\dimy$ numbers acting
+The transpose is taken in coordinates: a cotangent at $\otherPoint$ is a row of $e$ numbers acting
 on tangent coordinates, and $\D \map(\point)\transpose$ maps it to a cotangent at $\point$. No inner
 product on the tangent spaces is involved.
 
@@ -72,11 +67,11 @@ product on the tangent spaces is involved.
 For a scalar function $f : \manifold \to \R$, its gradient in the chart at $\point$ is
 
 $$
-	g(\point) \defeq \nabla (f \circ R_\point)(0) = \D f(\point)\transpose 1 \in \R^\dimx, @tag(gradient)
+	g(\point) \defeq \nabla (f \circ R_\point)(0) = \D f(\point)\transpose 1 \in \R^\dimension, @tag(gradient)
 $$
 
 the cotangent that a reverse pass seeded with $1$ delivers. It says how $f$ changes along a step:
-$f(\point \oplus \tangent) = f(\point) + g(\point)\transpose \tangent + O(\lvert\tangent\rvert^2)$.
+$f(\point \oplus \tangent) = f(\point) + g(\point)\transpose \tangent + O(\lVert\tangent\rVert^2)$.
 With no metric in play, it is the differential of $f$ written in chart coordinates, not a
 Riemannian gradient.
 
@@ -115,7 +110,7 @@ gives the claim.
 On the rotations, with the retraction $R_\point(u) = \point \operatorname{Exp}(u)$, the
 Baker–Campbell–Hausdorff formula gives
 $\varphi_t(u) = t \tangent + u + \tfrac{t}{2}\, \tangent \times u$, up to terms of order
-$t^2 \lvert u\rvert$ and $t \lvert u\rvert^2$, so the correction is
+$t^2 \lVert u\rVert$ and $t \lVert u\rVert^2$, so the correction is
 $\tfrac12 [g(\point)]_\times \tangent$: the chart Hessian is the Hessian of the pull-back plus the
 skew-symmetric matrix $\tfrac12 [g(\point)]_\times$, and it is not symmetric away from a stationary
 point. On the positive reals, with $R_\point(u) = \point\, e^{u}$, the charts commute instead:

@@ -2,7 +2,7 @@
 title: The normal distribution
 summary: skoro's normal is the law of a point moved by normal noise through its space's chart, on every space whose chart is global, with an exact density and sampler, a scale in four forms, roles that estimators read, its tangent among them, and the Gaussian and improper Gaussian replacements of a retirement.
 order: 6
-depends_on: [concepts/terms, concepts/spaces, chart-volume, normal, improper-gaussian]
+depends_on: [concepts/terms, concepts/spaces, chart-volume]
 ---
 
 The normal is the first distribution of skoro, and lives in a crate of its own, `skoro-normal`,
@@ -21,16 +21,14 @@ $\Sigma$. Its log-density is the Gaussian log-density of $\point \ominus \mu$, l
 makes it a density against the space's reference measure:
 
 $$
-	\ell(\point;\, \mu, W) = -\tfrac12 \bigl\lvert W (\point \ominus \mu) \bigr\rvert^2
+	\ell(\point;\, \mu, W) = -\tfrac12 \bigl\lVert W (\point \ominus \mu) \bigr\rVert^2
 	+ \sum_{i} \log W_{ii} - \tfrac{\dimension}{2} \log 2\pi - \lambda_\mu(\point \ominus \mu) ,
 $$
 
 where $W$, the _whitening_, is the lower-triangular factor with $W\transpose W = \Sigma^{-1}$, and
 $W (\point \ominus \mu)$ is the _whitened residual_. The note on
-[the normal distribution in a chart](../../math/normal/) proves that this is the density of
-$\mu \oplus \varepsilon$, by way of [densities in tangent charts](../../math/chart-volume/), and
-works out what the mean and the scale mean once the space is curved. A normal is made from its
-space, its mean and its scale:
+[densities in tangent charts](../../math/chart-volume/) proves that this is the density of
+$\mu \oplus \varepsilon$. A normal is made from its space, its mean and its scale:
 
 ```rust
 {../../../../crates/skoro-normal/src/normal.rs:26..32}
@@ -130,7 +128,7 @@ serves every space:
 ```
 
 Since the chart is global, the draw has exactly the term's density, and the sampler is exact: it
-leaves the [importance weight](../../math/importance-weights/) to the likelihoods.
+leaves the importance weight to the likelihoods.
 
 ## The roles
 
@@ -151,8 +149,7 @@ The scale is bound under the role of its form, so a reader learns the form from 
 tangent says how the residual and the log-volume are made of it, which is what lets the
 [linearization](../linearization/#folding-a-log-volume) fold a curved type's log-volume into its
 rows, and what the Fisher rows of a free scale read their Jacobian from. The
-root $C$ of [the expected information](../../math/normal/#the-expected-information) has
-$C\transpose C$ equal to the expected negative Hessian of
+root $C$ of the expected information has $C\transpose C$ equal to the expected negative Hessian of
 the term over $(\point, \mu, \theta)$, exact on the core's spaces. On a curved type it is exact in
 the scale's block and holds to second order in the dispersion elsewhere. The log-volume's role lets
 a least-squares reader add its gradient, and so reach the model's own mode rather than that of the
@@ -209,7 +206,7 @@ factor_ in the same stacked tangent $\delta$: a sum of squared affine rows of an
 part and a constant,
 
 $$
-	\logterm(\point_B) = -\tfrac12 \lvert A \delta - b \rvert^2 - \eta\transpose \delta + c ,
+	\logterm(\point_B) = -\tfrac12 \lVert A \delta - b \rVert^2 - \eta\transpose \delta + c ,
 $$
 
 which no normalization need make a density of $\delta$, and a likelihood factor never needed one.
@@ -238,4 +235,4 @@ as their sum: once the bearings of two poses have been retired, along different 
 landmark is determined, at the point where the two lines cross. The
 [linearization](../linearization/#a-retirement-s-replacement) computes such a replacement from the
 retired terms themselves. The mathematics, its forms and its
-examples are in the note on [the improper Gaussian factor](../../math/improper-gaussian/).
+examples are in [the entry](../../archive/improper-gaussian/math.svx).

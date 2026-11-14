@@ -46,7 +46,7 @@ before it, one row per key:
 ```
 
 `generate` takes the observations, here none, a random key, the number of rows, and a target. It
-gives the values drawn and an [importance weight](../../math/importance-weights/) for each row; with nothing observed and exact
+gives the values drawn and an importance weight for each row; with nothing observed and exact
 samplers, every row weighs the same. The test goes on to check that the draws of $x$ and of
 $\rho - |x|^2$ have the means and variances the model gives them.
 

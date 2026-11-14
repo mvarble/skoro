@@ -62,44 +62,9 @@ export const MATH = {
     title: 'Mathematics',
     short: 'Math',
     blurb:
-        'The mathematics skoro rests on, told from the beginning. Each note takes up one idea and ' +
-        'rests only on the notes before it, so that read in order they are the whole of it.',
+        'The mathematics skoro rests on, one idea to a note, linked by what each builds on. The ' +
+        'archive’s writeups lean on these notes rather than repeating them.',
 };
-
-export interface Part {
-    id: string;
-    title: string;
-    blurb: string;
-}
-
-// The parts of the mathematics, in reading order. A math note belongs to the part its `part`
-// frontmatter names, and is placed within it by its `order`. Read part by part, the notes are one
-// story: each rests only on the notes before it, which the build checks against its `depends_on`.
-export const MATH_PARTS: Part[] = [
-    {
-        id: 'geometry',
-        title: 'Spaces and their charts',
-        blurb:
-            'Manifolds with a retraction, derivatives read in their charts and computed by ' +
-            'automatic differentiation, and the spaces built from them: products, quotients, the ' +
-            'rotations and the rigid motions.',
-    },
-    {
-        id: 'probability',
-        title: 'Probability on those spaces',
-        blurb:
-            'Models built forward from conditional densities, densities carried through charts, ' +
-            'the normal distribution on a manifold, and the weight of a draw.',
-    },
-    {
-        id: 'estimation',
-        title: 'Least squares and Gaussian approximations',
-        blurb:
-            'Elimination by orthogonal factorization, and what is built on it: linearization, ' +
-            'damping, the Laplace approximation, Fisher scoring, and how an approximation is ' +
-            'checked against the model.',
-    },
-];
 
 export const ARCHIVE = {
     id: 'archive',

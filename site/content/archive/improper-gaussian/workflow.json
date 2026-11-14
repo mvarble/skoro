@@ -69,55 +69,18 @@
             "action": "approve",
             "stage": "publish",
             "commit": "86e1f12"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "implementation",
-            "document": "archive/improper-gaussian/implementation",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "math",
-            "document": "archive/improper-gaussian/math",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/improper-gaussian/statements/factor",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/improper-gaussian/statements/forms",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/improper-gaussian/statements/full-rank",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-09",
             "commit": "b91a360",
-            "hash": "2e3f9eebff11c4544c10978ff6b1f7d9e580326c335066d34b62b2764f1a320e"
+            "hash": "fab5a85ec8f39fffc3864502b781f311b6f93dee02dd753283224ad382d4bfaa"
         },
         "implementation": {
             "date": "2026-11-09",
             "commit": "1c97236",
-            "hash": "bccd90ee42d63d9a87d7a4d7a99ea734335dfed8df90ce42b1ca2f12576dd2ce"
+            "hash": "eec9fb2072d66fd01ab1860850733f63763e2d61483f973d64a6189f169527ee"
         },
         "plan": {
             "date": "2026-11-09",

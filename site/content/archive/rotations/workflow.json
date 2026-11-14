@@ -68,76 +68,18 @@
             "action": "approve",
             "stage": "publish",
             "commit": "ef586fc"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "implementation",
-            "document": "archive/rotations/implementation",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "math",
-            "document": "archive/rotations/math",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/chart",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/cover",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/euler",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/first-order",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/motions",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/rotations/statements/volume",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-04",
             "commit": "fd4526a",
-            "hash": "893c1719d86444a9fa8b20ef8ded7337cb9e07b57283e7dc5a6a0b6add83a3d6"
+            "hash": "9bd7e737979bc129143fc2d2112de813fad06d515072d1d227ec3ba7d1522b19"
         },
         "implementation": {
             "date": "2026-11-04",
             "commit": "30bc9e7",
-            "hash": "0f2caeafaf1dddddb2d5286ddb08ef632c29964eb8e97867e2fac0a8235b7d37"
+            "hash": "8a944219cd42debe3a1b0a9207354adfef8711c9a4444c5d902236e2d9c6e3ab"
         },
         "plan": {
             "date": "2026-11-04",

@@ -9,5 +9,5 @@ Let $\nu$ be the Haar measure of $S^3$ normalized so that the chart of
 $S^3 \subset \R^4$. The chart at every $q$ is global and full, and its log-volume is
 
 $$
-	\lambda_q(\tangent) = -3 \log\Bigl(1 + \tfrac{1}{16} \lvert \tangent \rvert^2\Bigr) .
+	\lambda_q(\tangent) = -3 \log\Bigl(1 + \tfrac{1}{16} \lVert \tangent \rVert^2\Bigr) .
 $$

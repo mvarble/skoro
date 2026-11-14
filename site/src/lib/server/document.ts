@@ -7,7 +7,7 @@ import { resolve } from '$app/paths';
 import { hrefOf, linkOf, type DocumentLink, type SkoroDocument } from '$lib/documents';
 import { entryCrates } from '$lib/server/reading';
 import { qualifiedTitle } from '$lib/server/title';
-import { ARCHIVE, MATH, MATH_PARTS, SITE, TRACKS } from '$lib/site';
+import { ARCHIVE, MATH, SITE, TRACKS } from '$lib/site';
 
 export interface Crumb {
     title: string;
@@ -34,17 +34,6 @@ export function documentData(key: string) {
             return record ? [linkOf(record)] : [];
         });
 
-    // What an entry amended, as links: a document by its own key, and a statement by the entry it
-    // belongs to, each once.
-    const amended = (list: string[]) => {
-        const records = [
-            ...new Set(
-                list.map((k) => (k.includes('/statements/') ? k.split('/statements/')[0]! : k)),
-            ),
-        ].flatMap((k) => cms.get(k) ?? []);
-        return qualified(records);
-    };
-
     let crumbs: Crumb[];
     let prev: DocumentLink | undefined;
     let next: DocumentLink | undefined;
@@ -55,14 +44,7 @@ export function documentData(key: string) {
         prev = neighbours.prev && linkOf(neighbours.prev);
         next = neighbours.next && linkOf(neighbours.next);
     } else if (doc.kind == 'math') {
-        const part = MATH_PARTS.find((p) => p.id == doc.part);
-        crumbs = [
-            { title: MATH.title, href: resolve('/math') },
-            ...(part ? [{ title: part.title, href: `${resolve('/math')}#${part.id}` }] : []),
-        ];
-        const neighbours = cms.math.neighbours(key);
-        prev = neighbours.prev && linkOf(neighbours.prev);
-        next = neighbours.next && linkOf(neighbours.next);
+        crumbs = [{ title: MATH.title, href: resolve('/math') }];
     } else if (doc.kind == 'entry') {
         crumbs = [{ title: ARCHIVE.title, href: resolve('/archive') }];
     } else {
@@ -101,10 +83,6 @@ export function documentData(key: string) {
         crates: doc.kind == 'entry' ? entryCrates(doc.filename) : [],
         revises: doc.kind == 'entry' ? keys(doc.revises) : [],
         revisedBy: doc.kind == 'entry' ? keys(doc.revisedBy) : [],
-        // An entry: the documents of done entries whose references it brought up to date. An
-        // entry or one of its documents: the later entries that did so to it.
-        amends: doc.kind == 'entry' ? amended(doc.amends) : [],
-        amendedBy: doc.kind == 'entry' || doc.kind == 'entry-document' ? keys(doc.amendedBy) : [],
         documents: doc.kind == 'entry' ? links(cms.archive.documents(key)) : [],
         source: `${SITE.repo}/blob/${SITE.branch}/site/${doc.filename}`,
     };

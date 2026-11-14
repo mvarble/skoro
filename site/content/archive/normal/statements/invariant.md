@@ -9,8 +9,8 @@ Let $G$ be a Lie group with a Haar measure $\nu$ and the retraction $R_\mu(\tang
 be fixed. Then
 
 $$
-	Z(\mu) = \int_{V_\mu} \exp\bigl(-\tfrac12 \lvert W (z \ominus \mu) \rvert^2\bigr) \, \dd \nu(z)
-	= \int_U \exp\bigl(-\tfrac12 \lvert W \tangent \rvert^2\bigr)\, v_e(\tangent) \, \dd \tangent
+	Z(\mu) = \int_{V_\mu} \exp\bigl(-\tfrac12 \lVert W (z \ominus \mu) \rVert^2\bigr) \, \dd \nu(z)
+	= \int_U \exp\bigl(-\tfrac12 \lVert W \tangent \rVert^2\bigr)\, v_e(\tangent) \, \dd \tangent
 $$
 
 does not depend on $\mu$.

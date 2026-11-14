@@ -248,9 +248,9 @@ documentation says that a name and its parameters name the declaration whole, it
 **Why the domain is a composite.** It is the one consumer-facing form of $U_\mu$ that a test and a
 sampler can both evaluate on a batch, and the core already has the discretizations it is written
 with. A flag alone would leave a test unable to choose tangent vectors inside a domain that is not
-global. A radius, $\lvert \tangent \rvert < r$, would fit the exponential charts of the sphere but
+global. A radius, $\lVert \tangent \rVert < r$, would fit the exponential charts of the sphere but
 not those of $SE(3)$, whose domain bounds only the rotation's coordinates. A discretization by sign is
-closed, $\Omega = 1[\pi^2 - \lvert \tangent \rvert^2 \ge 0]$ for the exponential chart of the
+closed, $\Omega = 1[\pi^2 - \lVert \tangent \rVert^2 \ge 0]$ for the exponential chart of the
 sphere, where the domain is open; the difference is a boundary of measure zero, which no draw from a
 density reaches.
 
@@ -462,14 +462,14 @@ Each test is named as it will be in the code, with the file it goes in.
   [](eq:archive/measures/math/sphere-volume) declared on the acceptance test's sphere in
   `tests/common/sphere.rs`.
 - `exponential_sphere_passes_check_volume(target)`: the guarded exponential sphere of the existing
-  `removable_singularity_is_reported`, declared with $\Lambda = \log(\sin \lvert \tangent \rvert /
-  \lvert \tangent \rvert)$, guarded as its retraction is, below the same cutoff, by the series
-  $-r^2/6 - r^4/180$ in $r^2 = \lvert \tangent \rvert^2$, and the domain
-  $\Omega = \text{is\_nonnegative}(\pi^2 - \lvert \tangent \rvert^2)$: a chart that is not global,
+  `removable_singularity_is_reported`, declared with $\Lambda = \log(\sin \lVert \tangent \rVert /
+  \lVert \tangent \rVert)$, guarded as its retraction is, below the same cutoff, by the series
+  $-r^2/6 - r^4/180$ in $r^2 = \lVert \tangent \rVert^2$, and the domain
+  $\Omega = \text{is\_nonnegative}(\pi^2 - \lVert \tangent \rVert^2)$: a chart that is not global,
   full, with a removable singularity at $0$.
 - `check_volume_reports_a_wrong_declaration`: each of these fails, with a message naming its check:
-  the sphere's log-volume plus $0.1$ (at $\Lambda(x, 0) = 0$); $-\tfrac32 \log(1 + \lvert \tangent
-  \rvert^2)$, the normalization chart's, on the stereographic sphere (the area formula); the
+  the sphere's log-volume plus $0.1$ (at $\Lambda(x, 0) = 0$); $-\tfrac32 \log(1 + \lVert \tangent
+  \rVert^2)$, the normalization chart's, on the stereographic sphere (the area formula); the
   exponential sphere declared global (the inverse beyond $\pi$); its log-volume unguarded (finiteness
   at $(x, 0)$).
 - `sphere_log_volume_in_storage`: at random pairs of points, $\Lambda(x, y \ominus x) = 2
@@ -477,9 +477,9 @@ Each test is named as it will be in the code, with the file it goes in.
 - `sphere_charts_have_the_mass_of_the_sphere`: $2\pi \int_0^\infty r\, e^{\Lambda(x, r e_1)}\, \dd r$
   by the trapezoidal rule in $u = \arctan(r/2)$, and over $[0, \pi)$ for the exponential sphere,
   is $4\pi$ to $10^{-6}$ at double precision, at several $x$, evaluating the declared composites
-  along a ray (both volumes depend on $\lvert \tangent \rvert$ alone): the total mass
+  along a ray (both volumes depend on $\lVert \tangent \rVert$ alone): the total mass
   [](eq:archive/measures/math/total-mass), and with it the fullness of both charts.
-- `exponential_domain_ends_at_the_antipode`: $\Omega$ is true below $\lvert \tangent \rvert = \pi$
+- `exponential_domain_ends_at_the_antipode`: $\Omega$ is true below $\lVert \tangent \rVert = \pi$
   and false above it.
 - `pushed_density_integrates_to_one_on_the_sphere`: with $\varepsilon$ standard normal on
   $\R^2$, the density [](eq:archive/measures/math/chart-density) at $\mu$, built in a model from

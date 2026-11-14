@@ -5,10 +5,6 @@ import path from 'node:path';
 import {
     ACTIVE,
     activeSlug,
-    amendKey,
-    amendPath,
-    amendTarget,
-    type Amending,
     changedSince,
     checkboxes,
     crateDescription,
@@ -63,10 +59,6 @@ const USAGE = `usage: bin/wf <command>
   resume <slug>                   take up an abandoned entry again
   check [--base <ref>] [--merge]  verify the rules (run by CI); --merge also requires no active entry
   guard                           a Claude Code PreToolUse hook: refuses edits the stage does not allow
-
-At its publish stage an entry may change a done entry's documents and statements, to keep a
-reference into the math notes true; it lists them under "amends" in its index.md, and approve
-records each in the amended entry's history.
 
 approve, reopen, abandon and resume are the human's to ask for.`;
 
@@ -346,7 +338,6 @@ function approve(root: string, args: Args, io: Output): Result {
     }
 
     const commit = headCommit(root);
-    const amended = stage == 'publish' ? recordAmendments(root, slug, commit) : [];
     const doc = hasDocument(stage) ? documentPath(root, slug, stage) : undefined;
     workflow.approvals[stage] = {
         date: today(),
@@ -365,9 +356,6 @@ function approve(root: string, args: Args, io: Output): Result {
     writeWorkflow(root, slug, workflow);
 
     io.say(`Approved the ${stage} stage of '${slug}' at ${commit}.`);
-    for (const other of amended) {
-        io.say(`Recorded its amendments of '${other}'. Commit ${workflowFile(other)}.`);
-    }
     if (next == 'done') {
         io.say(`'${slug}' is done, and no entry is active on this branch.`);
         io.say(`Commit ${workflowFile(slug)} and the removal of ${ACTIVE}.`);
@@ -375,55 +363,6 @@ function approve(root: string, args: Args, io: Output): Result {
         io.say(`Now at ${next}: ${SKILL[next as Stage]}. Commit ${workflowFile(slug)}.`);
     }
     return io.result(0);
-}
-
-// What an entry lists under `amends` in its `index.md`: the documents and statements of done
-// entries it changed, to keep their references into the math notes true.
-function amendsOf(root: string, slug: string): string[] {
-    const index = path.join(root, entryDir(slug), 'index.md');
-    if (!fs.existsSync(index)) return [];
-    return frontmatterList(fs.readFileSync(index, 'utf8'), 'amends') ?? [];
-}
-
-// What the entry `slug` may change in the others, for `refusal`.
-function amendingOf(root: string, slug: string | undefined): Amending {
-    return {
-        isDone: (other) => tryWorkflow(root, other)?.stage == 'done',
-        amends: slug ? amendsOf(root, slug) : [],
-    };
-}
-
-function tryWorkflow(root: string, slug: string): Workflow | undefined {
-    try {
-        return readWorkflow(root, slug);
-    } catch {
-        return undefined;
-    }
-}
-
-// Writes each amendment into the amended entry's record: the document's new hash, which it is
-// held to from now on, and an event that names the amending entry. The commit of the document's
-// own approval stays, and is where its text before the amendment is found. Returns the entries
-// amended.
-function recordAmendments(root: string, slug: string, commit: string): string[] {
-    const amended = new Map<string, Workflow>();
-    for (const key of amendsOf(root, slug)) {
-        const target = amendTarget(key)!;
-        const other = amended.get(target.slug) ?? readWorkflow(root, target.slug);
-        amended.set(target.slug, other);
-        const approval = target.stage && other.approvals[target.stage];
-        if (approval) approval.hash = documentHash(root, amendPath(root, key)!, target.stage!);
-        other.events.push({
-            date: today(),
-            action: 'amend',
-            ...(target.stage ? { stage: target.stage } : {}),
-            document: key,
-            by: slug,
-            commit,
-        });
-    }
-    for (const [other, workflow] of amended) writeWorkflow(root, other, workflow);
-    return [...amended.keys()];
 }
 
 // What keeps a stage from being approved, beyond the locks.
@@ -475,40 +414,9 @@ function readiness(
         for (const name of crates) {
             if (!crateExists(root, name)) problems.push(`${index} lists crate '${name}', which does not exist.`);
         }
-        const amends = amendsOf(root, slug);
-        for (const key of amends) {
-            const target = amendTarget(key);
-            const file = amendPath(root, key);
-            if (!target || !file || target.slug == slug) {
-                problems.push(
-                    `${index} lists '${key}' under \`amends\`, which names no document or statement of another entry.`,
-                );
-            } else if (tryWorkflow(root, target.slug)?.stage != 'done') {
-                problems.push(`${index} amends '${key}', but '${target.slug}' is not a done entry.`);
-            } else if (!fs.existsSync(path.join(root, file))) {
-                problems.push(`${index} amends '${key}', which does not exist.`);
-            } else if (!isCommitted(root, file)) {
-                problems.push(`${file} has uncommitted changes.`);
-            }
-        }
         const ref = base ?? defaultBase(root);
         const changed = ref ? changedSince(root, ref) : undefined;
         if (changed) {
-            // What it changed in other entries: only what it lists, and all of what it lists.
-            const amended = new Set<string>();
-            for (const rel of changed) {
-                const place = placeOf(rel);
-                if (place.area != 'entry' || place.slug == slug) continue;
-                const key = amendKey(rel);
-                if (!key) {
-                    problems.push(`${rel} belongs to entry '${place.slug}', and is not a document or a statement an entry may amend.`);
-                } else if (!amends.includes(key)) {
-                    problems.push(`${rel} changed on this branch; list it as '${key}' under \`amends\` in ${index}.`);
-                } else amended.add(key);
-            }
-            for (const key of amends) {
-                if (!amended.has(key)) problems.push(`${index} amends '${key}', which this branch did not change.`);
-            }
             // The crates it changed, which the archive links to their reading orders.
             const edited = new Set(changed.map(crateOf).filter((name) => name !== undefined));
             for (const name of edited) {
@@ -619,7 +527,7 @@ function resume(root: string, args: Args, io: Output): Result {
 
 // Documents changed after they were approved, documents written before their
 // stage, and drafts changed while the entry was reopened at an earlier stage.
-function lockProblems(root: string, slug: string, workflow: Workflow, amended: string[] = []): string[] {
+function lockProblems(root: string, slug: string, workflow: Workflow): string[] {
     const problems: string[] = [];
     const stages = KINDS[workflow.kind];
     const current = workflow.stage;
@@ -629,10 +537,7 @@ function lockProblems(root: string, slug: string, workflow: Workflow, amended: s
         const approval = workflow.approvals[stage];
         if (stage == current) continue;
         if (approval?.hash) {
-            // A document the entry at publish amends is held to its new hash once that entry's
-            // publish is approved.
-            const amending = current == 'done' && amended.includes(`archive/${slug}/${stage}`);
-            if (!amending && documentHash(root, doc, stage) != approval.hash) {
+            if (documentHash(root, doc, stage) != approval.hash) {
                 problems.push(
                     `${doc} changed after it was approved at ${approval.commit}; reopen ${stage} to change it.`,
                 );
@@ -669,13 +574,11 @@ function check(root: string, args: Args, io: Output): Result {
     const problems: string[] = [];
     const active = activeSlug(root);
     const workflows = new Map<string, Workflow>();
-    const publishing = active && tryWorkflow(root, active)?.stage == 'publish';
-    const amended = publishing ? amendsOf(root, active) : [];
     for (const slug of listEntries(root)) {
         try {
             const workflow = readWorkflow(root, slug);
             workflows.set(slug, workflow);
-            problems.push(...lockProblems(root, slug, workflow, amended));
+            problems.push(...lockProblems(root, slug, workflow));
         } catch (error) {
             problems.push((error as Error).message);
         }
@@ -700,33 +603,17 @@ function check(root: string, args: Args, io: Output): Result {
                     .flatMap((place) => (place.area == 'entry' ? [place.slug] : [])),
             ),
         ];
-        // The entry the branch works on: the active one, or else the one whose `amends` accounts
-        // for what the branch changed in the others.
-        const amendedBy = (other: string, by: string) => {
-            const amends = amendsOf(root, by);
-            return changed
-                .filter((rel) => {
-                    const place = placeOf(rel);
-                    return place.area == 'entry' && place.slug == other;
-                })
-                .every((rel) => amends.includes(amendKey(rel) ?? ''));
-        };
-        const slug =
-            active ??
-            touched.find((by) => touched.every((other) => other == by || amendedBy(other, by))) ??
-            touched[0];
-        const own = touched.filter((other) => other == slug || !slug || !amendedBy(other, slug));
-        if (own.length > 1) {
-            problems.push(`this branch changes ${own.length} entries (${own.join(', ')}); one branch works on one.`);
+        if (touched.length > 1) {
+            problems.push(`this branch changes ${touched.length} entries (${touched.join(', ')}); one branch works on one.`);
         }
+        const slug = active ?? touched[0];
         const workflow = slug ? workflows.get(slug) : undefined;
         const subject = slug && workflow ? { slug, workflow } : undefined;
-        const amending = amendingOf(root, slug);
         // Code, math notes and pages written before a reopening wait, unchanged, for the stage
         // that opens them to come round again, as a draft does.
         const reopened = subject?.workflow.events.findLast((event) => event.action == 'reopen')?.commit;
         for (const rel of changed) {
-            const why = refusal(rel, subject, false, amending);
+            const why = refusal(rel, subject, false);
             if (!why) continue;
             if (reopened && placeOf(rel).area != 'entry' && keptSince(root, reopened, rel)) continue;
             problems.push(why);
@@ -773,7 +660,7 @@ function guard(root: string, stdin: string, io: Output): Result {
             return io.result(0);
         }
     }
-    const why = refusal(rel, subject, true, amendingOf(root, slug));
+    const why = refusal(rel, subject, true);
     if (!why) return io.result(0);
     io.warn(`wf: ${why}`);
     return io.result(2);

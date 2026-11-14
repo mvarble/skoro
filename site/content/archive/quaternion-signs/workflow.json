@@ -37,48 +37,18 @@
             "action": "approve",
             "stage": "publish",
             "commit": "9ec419c"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "implementation",
-            "document": "archive/quaternion-signs/implementation",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "math",
-            "document": "archive/quaternion-signs/math",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/quaternion-signs/statements/antipode",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/quaternion-signs/statements/cayley",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-11",
             "commit": "6b413be",
-            "hash": "843b65a05040775d931300f202c552ced850e2ffff4288944777a90a597893d8"
+            "hash": "6f9d8dfdffeacf16108625dcd5859252acba3611aa9a6ab5bccd2752af8af1ba"
         },
         "implementation": {
             "date": "2026-11-12",
             "commit": "e26405b",
-            "hash": "f12720ce2b92b3e8c9ec0fa10105e4df1ede10977bc70224d7479ca222aec4b2"
+            "hash": "a4897a09552436b019b06063425e5aa5080901bec5dab69b4f0c13bf5ccaf992"
         },
         "plan": {
             "date": "2026-11-12",

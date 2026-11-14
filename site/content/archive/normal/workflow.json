@@ -37,48 +37,18 @@
             "action": "approve",
             "stage": "publish",
             "commit": "f9ec03a"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "implementation",
-            "document": "archive/normal/implementation",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "stage": "math",
-            "document": "archive/normal/math",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/normal/statements/gauss-newton",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
-        },
-        {
-            "date": "2026-11-12",
-            "action": "amend",
-            "document": "archive/normal/statements/invariant",
-            "by": "mathematics-in-order",
-            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-11-02",
             "commit": "504507d",
-            "hash": "06057dfcf5d90d879817a7b38e0a4dd1eda5616c94182ae1c31428dd53f45fb6"
+            "hash": "07e2f69f422e7b6ed3c01fe1a60438e1b609f94b24847146335711185efba0d2"
         },
         "implementation": {
             "date": "2026-11-02",
             "commit": "d97a33f",
-            "hash": "d2813f75f9f99c90ed1ddc7ecee0c51e51c7c4c187216112e4a984c2713c9fbc"
+            "hash": "597785049c1f4693e4f303dce2cb745cd90c6df1982541958a0b7208d5f8a69b"
         },
         "plan": {
             "date": "2026-11-02",
