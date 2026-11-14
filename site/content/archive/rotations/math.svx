@@ -50,12 +50,12 @@ $$
 $$
 
 the conjugate $\bar q = (w, -u)$, and $\operatorname{vec}(q) = u$, $w(q) = w$. The unit quaternions
-$S^3 = \{q : \lVert q \rVert = 1\}$ are a group under $\otimes$, with identity $1 = (1, 0)$ and
+$S^3 = \{q : \lvert q \rvert = 1\}$ are a group under $\otimes$, with identity $1 = (1, 0)$ and
 inverse $\bar q$, and a compact Lie group of dimension $3$, whose Haar measure is invariant under
 translation on either side. Each unit quaternion is a rotation,
 
 $$
-	\pi(q) = (w^2 - \lVert u \rVert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
+	\pi(q) = (w^2 - \lvert u \rvert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
 $$
 
 the rotation by the angle $\theta$ about $a$ when $q = (\cos \tfrac\theta2, \sin \tfrac\theta2\,
@@ -63,7 +63,7 @@ a)$, and $\pi : S^3 \to SO(3)$ is a homomorphism, two to one, with $\pi(q) = \pi
 on a vector is $\pi(q)\, x = x + 2 w\, (u \times x) + 2\, u \times (u \times x)$.
 
 The rotations' tangent coordinates in this document are the rotation vector in the frame of the
-point, $\pi(q \oplus \tangent) = \pi(q) (I + [\tangent]_\times) + O(\lVert \tangent \rVert^2)$:
+point, $\pi(q \oplus \tangent) = \pi(q) (I + [\tangent]_\times) + O(\lvert \tangent \rvert^2)$:
 a perturbation on the right, in the body frame.
 
 ## Matrices or quaternions
@@ -72,7 +72,7 @@ The rotations can be stored as the matrices $SO(3) \subset \R^{3 \times 3}$ or a
 quaternions $S^3 \subset \R^4$, and the core asks two different things of either.
 
 **A chart.** For the normal, the chart at each point must be global and full. On the matrices the
-Cayley chart is, with log-volume $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$
+Cayley chart is, with log-volume $-2 \log(1 + \lvert \tangent \rvert^2 / 4)$
 ([the note's table](../../math/chart-volume/#the-usual-charts)). On the unit quaternions the
 stereographic chart is ([%full](statement:chart), below). Either serves the normal exactly.
 
@@ -83,7 +83,7 @@ $P$, a smooth map onto the type that is the identity on it
 ([%full](statement:archive/core/math/embedded)). A composition of two rotations written as a
 retraction from one of them, $R_1 R_2 = R_1 \oplus (R_2 \ominus I)$, fails wherever $R_2$ is a
 half-turn, which a model meets whenever a sensor is mounted upside down. A composition needs the
-projection. On the unit quaternions it is the normalization $P(w) = w / \lVert w \rVert$, a
+projection. On the unit quaternions it is the normalization $P(w) = w / \lvert w \rvert$, a
 composite smooth away from $0$, and a composition is $P(q_1 \otimes q_2)$. On the matrices it is the
 polar factor $X (X\transpose X)^{-1/2}$, which has no closed form in the core's primitives that is
 smooth at the rotations themselves: the eigenvalues of $X\transpose X$ coincide there, and a
@@ -119,11 +119,11 @@ unit quaternions need none: storage, chart, projection and composition are all c
 The type $S^3$ has storage $4$, dimension $3$, and the retraction, inverse and projection
 
 $$
-	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lVert \tangent \rVert^2;
+	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lvert \tangent \rvert^2;
 	\qquad
 	p \ominus q = \frac{4\, \operatorname{vec}(\bar q \otimes p)}{1 + w(\bar q \otimes p)};
 	\qquad
-	P(x) = \frac{x}{\lVert x \rVert} . @tag(quaternion-chart)
+	P(x) = \frac{x}{\lvert x \rvert} . @tag(quaternion-chart)
 $$
 
 <Statement {...chart} />
@@ -132,17 +132,17 @@ $$
 
 Write $\delta = \delta(\tangent)$. Its norm is $((1 - s)^2 + 4s)^{1/2} / (1 + s) = 1$, so
 $q \otimes \delta$ is a unit quaternion. With $w(\delta) = (1 - s)/(1 + s)$ and
-$\lVert \operatorname{vec}(\delta) \rVert = (\lVert \tangent \rVert / 2)/(1 + s)$, $\delta$ is the
+$\lvert \operatorname{vec}(\delta) \rvert = (\lvert \tangent \rvert / 2)/(1 + s)$, $\delta$ is the
 rotation by $\theta$ about $\tangent$ with $\cos \tfrac\theta2 = (1-s)/(1+s)$ and $\sin
-\tfrac\theta2 = (\lVert \tangent \rVert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
-(1 + \cos \tfrac\theta2) = \lVert \tangent \rVert / 4$. As $\lVert \tangent \rVert$ runs over
+\tfrac\theta2 = (\lvert \tangent \rvert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
+(1 + \cos \tfrac\theta2) = \lvert \tangent \rvert / 4$. As $\lvert \tangent \rvert$ runs over
 $[0, \infty)$, $\theta$ runs over $[0, 2\pi)$, so $\delta$ runs over every unit quaternion but $-1$,
 once each; $\delta$ is the inverse of the stereographic projection of $S^3$ from $-1$ onto the
 hyperplane $w = 0$, at $\tangent / 4$. Left multiplication by $q$ carries $S^3 \setminus \{-1\}$ to
 $S^3 \setminus \{-q\}$. The inverse follows from $\delta = \bar q \otimes p$ and $\operatorname{vec}(
 \delta) / (1 + w(\delta)) = \tangent / 4$, which $s$ cancels from. Last, $\delta(\tangent) = (1,
-\tangent / 2) + O(\lVert \tangent \rVert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
-O(\lVert \tangent \rVert^2)$; $\pi$ is a homomorphism.
+\tangent / 2) + O(\lvert \tangent \rvert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
+O(\lvert \tangent \rvert^2)$; $\pi$ is a homomorphism.
 
 </Proof>
 
@@ -153,7 +153,7 @@ parameters* of attitude estimation, scaled by $4$ so that they agree with the ro
 first order. The chart is the left translation of the chart at the identity,
 $q \oplus \tangent = q \otimes (1 \oplus \tangent)$, and since $q \otimes (w, u) \otimes \bar q =
 (w, \pi(q)\, u)$ for a unit $q$, and $\delta$ depends on $\tangent$ only through its direction and
-$\lVert \tangent \rVert$, which $\pi(q)$ preserves,
+$\lvert \tangent \rvert$, which $\pi(q)$ preserves,
 
 $$
 	q \oplus \tangent = (1 \oplus \pi(q)\, \tangent) \otimes q @tag(conjugation)
@@ -174,7 +174,7 @@ translation, so the volume is that of the chart at $1$
 ([%full](statement:math/chart-volume/group)). In polar coordinates, with $\theta$ the angle of a
 rotation and $a$ its axis, Haar measure on $S^3$ is $4 \sin^2(\theta/2)\, \dd \theta\, \dd a$ for
 $\theta \in [0, 2\pi)$, normalized as the exponential chart, whose volume at $\tangent$ is
-$\operatorname{sinc}^2(\lVert \tangent \rVert / 2)$
+$\operatorname{sinc}^2(\lvert \tangent \rvert / 2)$
 ([](eq:math/chart-volume/so3-exp)) and which on $S^3$ is a diffeomorphism of the ball of radius
 $2\pi$. With $r = 4 \tan(\theta/4)$, $\dd \theta = \dd r / (1 + r^2/16)$ and $\sin(\theta/2) =
 (r/2)/(1 + r^2/16)$, so the measure is $r^2\, \dd r\, \dd a / (1 + r^2/16)^3$, while Lebesgue
@@ -186,7 +186,7 @@ and full since it misses one point.
 
 </Proof>
 
-The log-volume is rational in $\lVert \tangent \rVert^2$, smooth as computed everywhere, and needs
+The log-volume is rational in $\lvert \tangent \rvert^2$, smooth as computed everywhere, and needs
 no guard at $\tangent = 0$. The total mass of $\nu$ is $8 \cdot 2\pi^2 = 16\pi^2$.
 
 ## The double cover
@@ -208,7 +208,7 @@ $\theta$ and $2\pi - \theta$, and $4 \tan(\theta/4) \cdot 4 \tan((2\pi - \theta)
 
 </Proof>
 
-So the normal on $S^3$ puts the mass $\Pr(\lVert \varepsilon \rVert > 4)$ on the far side of its
+So the normal on $S^3$ puts the mass $\Pr(\lvert \varepsilon \rvert > 4)$ on the far side of its
 mean, at most $\Pr(\chi_3 > 4/\sigma)$ for $\sigma^2$ the largest eigenvalue of $\Sigma$: below
 $10^{-13}$ at $\sigma = 0.5$ rad, about $10^{-3}$ at $1$ rad. As a law on the rotations it has the
 density $\density(q) + \density(-q)$, in which the second term is negligible for a concentrated
@@ -241,7 +241,7 @@ them, integrates rates into them, reads angles off them, and builds them from th
 sensors and people give them. Each map below is a composite of the core's primitives and
 [selection](../core/math.svx#selection), and its derivatives in charts are those of its parts. The
 primitives have no square root, absolute value or inverse sine, and divide only through
-logarithms, so the composites write a norm as $\lVert x \rVert = e^{\frac12 \log \sum_i x_i^2}$,
+logarithms, so the composites write a norm as $\lvert x \rvert = e^{\frac12 \log \sum_i x_i^2}$,
 defined for $x \ne 0$, a reciprocal as $1/a = e^{-\log a}$, for $a > 0$, every inverse
 trigonometric function through $\atantwo$, and an absolute value or a sign as a selection. Each
 map is of one of three kinds, and the kind says what a model may ask of its derivatives:
@@ -292,7 +292,7 @@ The exponential takes a rotation vector to the rotation about it by its length:
 
 $$
 	\Exp(\omega) = \Bigl(\cos \tfrac\theta2,\ \frac{\sin(\theta/2)}{\theta}\, \omega\Bigr),
-	\qquad \theta = \lVert \omega \rVert . @tag(exp)
+	\qquad \theta = \lvert \omega \rvert . @tag(exp)
 $$
 
 It is a diffeomorphism of the open ball of radius $2\pi$ onto $S^3 \setminus \{-1\}$, and every
@@ -302,7 +302,7 @@ turning at the constant body rate $\omega$ for a time $\Delta t$ moves from $q_k
 logarithm,
 
 $$
-	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lVert u \rVert, @tag(log)
+	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lvert u \rvert, @tag(log)
 $$
 
 whose rotation vector has the length $2 \atantwo(n, w) \in [0, 2\pi)$, smooth on $S^3 \setminus
@@ -352,19 +352,19 @@ Q_\otherPoint(\map(R_\point(\tangent)))$, with $R_\point$ the chart at $\point$ 
 its inverse at $\otherPoint = \map(\point)$, and by the chain rule it depends on $R_\point$ only
 through its differential at $0$ and on $Q_\otherPoint$ only through its differential at
 $\otherPoint$, which is the inverse of $R_\otherPoint$'s at $0$. On $S^3$, $1 \oplus \tangent =
-\bigl(1 - \tfrac18 \lVert \tangent \rVert^2,\ \tfrac12 \tangent\bigr) + O(\lVert \tangent
-\rVert^3)$ from $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$, and $\Exp(\tangent)$ has the same expansion from
+\bigl(1 - \tfrac18 \lvert \tangent \rvert^2,\ \tfrac12 \tangent\bigr) + O(\lvert \tangent
+\rvert^3)$ from $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$, and $\Exp(\tangent)$ has the same expansion from
 $\cos \tfrac\theta2 = 1 - \tfrac18 \theta^2 + O(\theta^4)$ and $\sin(\theta/2)/\theta = \tfrac12 +
 O(\theta^2)$; both charts are left translations of these, so they agree at every point to second
 order, and so do their inverses. The local representatives of $\map$ in the two charts then agree
 to second order at $0$, and so do their first and second derivatives there. On the rigid motions
 the chart is $(q \oplus \phi,\ p + \pi(q)\, \rho)$ and the exponential coordinates are $(q \Exp
 \phi,\ p + \pi(q)\, J_l(\phi)\, \rho)$, by [](eq:motion-exp) below, and $J_l(\phi)\, \rho = \rho +
-\tfrac12 \phi \times \rho + O(\lVert \phi \rVert^2 \lVert \rho \rVert)$: they agree to first order,
+\tfrac12 \phi \times \rho + O(\lvert \phi \rvert^2 \lvert \rho \rvert)$: they agree to first order,
 and differ at second order by the term $\tfrac12 \phi \times \rho$. Last, $\Exp(\omega + \varepsilon)
 \ominus \Exp(\omega)$ is the chart coordinate at $1$ of $\Exp(\omega)^{-1} \otimes \Exp(\omega +
-\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lVert \varepsilon \rVert^2)$, which is
-$J_r(\omega)\, \varepsilon + O(\lVert \varepsilon \rVert^2)$; and $\Log$ is the inverse of $\Exp$.
+\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lvert \varepsilon \rvert^2)$, which is
+$J_r(\omega)\, \varepsilon + O(\lvert \varepsilon \rvert^2)$; and $\Log$ is the inverse of $\Exp$.
 
 </Proof>
 
@@ -432,14 +432,14 @@ The angle between two rotations, the length of the shorter turn from one to the 
 distance between them on the rotations, is
 
 $$
-	\angle(q_1, q_2) = \lVert \rv(\bar q_1 \otimes q_2) \rVert = 2 \atantwo\bigl(\lVert
-	\operatorname{vec}(r) \rVert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
+	\angle(q_1, q_2) = \lvert \rv(\bar q_1 \otimes q_2) \rvert = 2 \atantwo\bigl(\lvert
+	\operatorname{vec}(r) \rvert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
 	q_2 . @tag(angle)
 $$
 
 It is the same at $\pm q_1$ and $\pm q_2$, and smooth where $0 < \angle < \pi$: at $0$ it is a norm,
 with no derivative, and at $\pi$ a maximum, where $\lvert w(r) \rvert$ turns. Its square,
-$\lVert \rv(r) \rVert^2$, is smooth at $0$, and is what a cost on an attitude's error is written
+$\lvert \rv(r) \rvert^2$, is smooth at $0$, and is what a cost on an attitude's error is written
 with.
 
 ### Constructions and conversions
@@ -449,7 +449,7 @@ matrices, and leave it in the same forms.
 
 **Elementary rotations and axis–angle.** The rotation by $\theta$ about the coordinate axis $e$ is
 $q_e(\theta) = (\cos \tfrac\theta2,\ \sin \tfrac\theta2\, e)$, and about any axis $a \ne 0$ it is
-$(\cos \tfrac\theta2,\ \sin \tfrac\theta2\, a / \lVert a \rVert)$, smooth in both. The way back is
+$(\cos \tfrac\theta2,\ \sin \tfrac\theta2\, a / \lvert a \rvert)$, smooth in both. The way back is
 the logarithm split into its length and its direction, $\theta = 2 \atantwo(n, w)$ and $a = u / n$;
 the direction is undefined at the identity, where the composite selects a fixed axis, and is a
 discretization there. A model differentiating through an axis and an angle is better served by the
@@ -458,7 +458,7 @@ rotation vector, which has no such point.
 **From two directions.** The rotation of least angle carrying the direction of $a$ to that of $b$ is
 
 $$
-	P\bigl(\lVert a \rVert \lVert b \rVert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
+	P\bigl(\lvert a \rvert \lvert b \rvert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
 $$
 
 since for unit vectors at the angle $\theta$ about the axis $n$ the argument is $(1 + \cos \theta,
@@ -499,7 +499,7 @@ $$
 $$
 
 which are the stated forms by the addition formulas. For $\beta \in (0, \pi)$ both $c_\beta$ and
-$s_\beta$ are positive, so $\lVert (w, u_i) \rVert = \lambda c_\beta$ and $\lVert (u_j, u_l) \rVert
+$s_\beta$ are positive, so $\lvert (w, u_i) \rvert = \lambda c_\beta$ and $\lvert (u_j, u_l) \rvert
 = \lambda s_\beta$ for $q$ scaled by $\lambda > 0$, and the $\atantwo$s return $\beta / 2$, and
 $\sigma$ and $\delta$ modulo $2\pi$; for $-q$ they return $\sigma + \pi$ and $\delta + \pi$ modulo
 $2\pi$, which change $\alpha$ and $\gamma$ by multiples of $2\pi$. For the second claim, let $r =
@@ -569,9 +569,9 @@ continuous along any path that stays within a half-turn of $b$.
 [%full](statement:euler-singular) only $\alpha + \gamma$ or $\alpha - \gamma$ is determined there: no
 convention makes the angles continuous at the lock, and the composite chooses $\gamma = 0$, which
 [](eq:euler) maps back to the rotation exactly. It selects it by a discretization of the smaller
-squared norm against a fraction $c$ of $\lVert q \rVert^2$. On the rows selected, $\beta$ is taken at
-the lock rather than computed, $\alpha = 2\sigma$ when $\lVert (u_j, u_l) \rVert$ vanishes and
-$\alpha = 2\delta$ when $\lVert (w, u_i) \rVert$ does, and the vanishing norm and the $\atantwo$ it
+squared norm against a fraction $c$ of $\lvert q \rvert^2$. On the rows selected, $\beta$ is taken at
+the lock rather than computed, $\alpha = 2\sigma$ when $\lvert (u_j, u_l) \rvert$ vanishes and
+$\alpha = 2\delta$ when $\lvert (w, u_i) \rvert$ does, and the vanishing norm and the $\atantwo$ it
 feeds are given a harmless argument, since a norm has no derivative at $0$. A row is selected when
 $\sin \tfrac\beta2 \le \sqrt c$, or $\cos \tfrac\beta2 \le \sqrt c$, and there the convention's
 rotation differs from $q$ by a conjugate of $q_j(\beta)$, or of $q_j(\pi - \beta)$: by the angle
@@ -697,7 +697,7 @@ one, so that composition is its product and the action on a point is its product
 
 The adjoint is the conjugation of the group's Lie algebra, $T \Exp(\xi)\, T^{-1} = \Exp(\operatorname{Ad}(T)\,
 \xi)$, and carries a perturbation in the frame of the motion to the outer frame, $T \oplus \xi = (1
-\oplus \operatorname{Ad}(T)\, \xi)\, T + O(\lVert \xi \rVert^2)$; in the order $(\phi, \rho)$ it
+\oplus \operatorname{Ad}(T)\, \xi)\, T + O(\lvert \xi \rvert^2)$; in the order $(\phi, \rho)$ it
 is
 
 $$
@@ -794,7 +794,7 @@ model writes with its own gravity, since no frame of the earth is assumed.
 Every chart of this document is global and full with a declared volume, so the normal applies as
 [its mathematics](../normal/math.svx) defines it, its density and its sampler exact. The figures its
 [Properties](../normal/math.svx#properties) state for a chart follow from the log-volume, whose
-negative is $\tfrac{3}{16} \lVert \tangent \rVert^2 + O(\lVert \tangent \rVert^4)$, with the
+negative is $\tfrac{3}{16} \lvert \tangent \rvert^2 + O(\lvert \tangent \rvert^4)$, with the
 Hessian $\tfrac38 I$:
 
 - a measurement of a rotation weighs on the state as a Gaussian of its residual would with the
@@ -813,7 +813,7 @@ the blocks of the point and the mean, as on any curved type.
 - **The types' boundaries**: the core's check of an embedded type on $S^3$, $SE(3)$ and $SE_2(3)$,
   with each declared volume checked against the area formula.
 - **The chart**: [%full](statement:chart)'s inverse on the whole image, the angle $4
-  \arctan(\lVert \tangent \rVert / 4)$, the first-order rotation vector against [](eq:rotation), and
+  \arctan(\lvert \tangent \rvert / 4)$, the first-order rotation vector against [](eq:rotation), and
   [](eq:conjugation).
 - **The groups**: associativity, identities and inverses of the compositions, and the relative
   rotations and motions against them; $\pi$ a homomorphism, the same at $q$ and $-q$; the actions

@@ -12,7 +12,7 @@ import { skoroPreset } from './src/lib/cms/preset.ts';
 import { isFileRef, REPO_ROOT, resolveFileRef } from './plugins/file-ref.ts';
 import { rehypeHeadingAnchors } from './plugins/rehype-heading-anchors.ts';
 import { remarkCallouts } from './plugins/remark-callouts.ts';
-import { ARCHIVE, DOCUMENTS, MATH, TRACKS } from './src/lib/site.ts';
+import { ARCHIVE, DOCUMENTS, MATH, MATH_PARTS, TRACKS } from './src/lib/site.ts';
 
 // Where the site is served from: the root of its domain by default (https://skoro.dev), or a subpath
 // such as `BASE_PATH=/docs`.
@@ -29,6 +29,7 @@ const cms = createCms({
         // kind, instead of the real content.
         contentDir: process.env.SITE_CONTENT ?? 'content',
         tracks: TRACKS.map((track) => track.id),
+        parts: MATH_PARTS.map((part) => part.id),
         documents: Object.fromEntries(DOCUMENTS.map((doc) => [doc.name, doc.title])),
         sectionTitles: Object.fromEntries(
             [...TRACKS, MATH, ARCHIVE].map((section) => [section.id, section.title]),

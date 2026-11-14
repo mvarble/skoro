@@ -73,6 +73,18 @@
             </aside>
         {/if}
 
+        {#if data.amendedBy.length}
+            <aside class="callout callout-note revised">
+                <p class="callout-title">Amended</p>
+                <p>
+                    {doc.kind == 'entry' ? 'This entry is' : 'This document is'} kept as it was approved,
+                    but for its references into the math notes, which have since been brought up to date
+                    by:
+                </p>
+                <LinkList links={data.amendedBy} />
+            </aside>
+        {/if}
+
         <div class="prose" bind:this={body}>
             <data.component />
         </div>
@@ -100,7 +112,7 @@
                 {:else}
                     <p class="muted">Nothing is written yet.</p>
                 {/if}
-                {#if data.pages.length || data.crates.length}
+                {#if data.pages.length || data.crates.length || data.amends.length}
                     <h2>What it changed</h2>
                 {/if}
                 {#if data.pages.length}
@@ -114,6 +126,13 @@
                             <li><a href={link.href}><code>{link.crate}</code></a></li>
                         {/each}
                     </ul>
+                {/if}
+                {#if data.amends.length}
+                    <p>
+                        The documents of finished entries whose references into the math notes it
+                        brought up to date:
+                    </p>
+                    <LinkList links={data.amends} />
                 {/if}
                 {#if data.revises.length}
                     <h2>What it revises</h2>

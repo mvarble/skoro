@@ -10,7 +10,7 @@ $W\transpose W = A\transpose A$, and
 
 $$
 	m = (A\transpose A)^{-1} (A\transpose b - \eta) , \qquad
-	c_{\mathcal N} = c + \tfrac12 \lVert W m \rVert^2 - \tfrac12 \lVert b \rVert^2 - \sum_i \log W_{ii} + \tfrac{D}{2} \log 2\pi .
+	c_{\mathcal N} = c + \tfrac12 \lvert W m \rvert^2 - \tfrac12 \lvert b \rvert^2 - \sum_i \log W_{ii} + \tfrac{D}{2} \log 2\pi .
 $$
 
 Then $\logterm(\point_B) = \logterm_{\mathcal N}\bigl(\delta(\point_B);\, m, W\bigr) + c_{\mathcal N}$:

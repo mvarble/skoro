@@ -2,7 +2,7 @@
 title: Terms and the probabilistic graph
 summary: A model's density is a sum of terms, each a log-density that scores one quantity or none; the terms and quantities together make the probabilistic graph inference reads, and a retirement removes some quantities, replaces their terms, and frees what it leaves needed by nothing.
 order: 4
-depends_on: [concepts/building, generative-models]
+depends_on: [concepts/building, generative-models, importance-weights]
 ---
 
 <script>
@@ -114,10 +114,22 @@ constant. For the first tick of the example:
 </Walkthrough>
 
 The mathematics of all this is in the note on [generative models](../../math/generative-models/).
+skoro is built on that note's view of a model: not a function $\density$ to be evaluated, but a
+probability space built forward, quantity by quantity, which the library lets its users work with
+in every way the measure theory allows. It states a model as the note's sum of logarithms, one
+term for each kernel, likelihood factor and score. And where the note has one
+[dependence graph](../../math/generative-models/#the-dependence-graph), of quantities alone, skoro
+keeps two graphs in its place: the probabilistic graph above, of quantities and terms, and the
+[compilation graph](../building/#the-compilation-graph) of the values each term is computed from,
+over which derivatives are taken. Contracting each term of the probabilistic graph into edges from
+the quantities it is conditioned on to the quantity it scores gives back the dependence graph, and
+the Markov blanket read on either is the same.
 
 A term may also carry a **sampler**, which draws the quantity it scores, and **bindings**, which
 mark its parts by role (a residual, a whitening factor) for the algorithms that read them. A
-parameter may carry a **proposal**, which draws it when the model is generated.
+parameter may carry a **proposal**, which draws it when the model is generated. What a generated
+point weighs, given the samplers and proposals it was drawn from, is the subject of the note on
+[importance weights](../../math/importance-weights/).
 
 > [!DECISION] Conditioning belongs to the query
 > A term scores a quantity whether or not that quantity is later observed; which quantities are

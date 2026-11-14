@@ -2,7 +2,15 @@
 title: Rotations and rigid motions
 summary: The crate skoro-spatial declares the rotations, the rigid motions and the extended poses as embedded types stored as quaternions up to sign, with the Cayley chart, global on each group, and declared volumes, so that they carry the normal in whatever sign their quaternions are given, and writes their maps as composites whose derivatives are the core's.
 order: 7
-depends_on: [concepts/spaces, concepts/the-normal, retraction, chart-volume]
+depends_on:
+    [
+        concepts/spaces,
+        concepts/the-normal,
+        rotations,
+        rigid-motions,
+        removable-singularities,
+        chart-volume,
+    ]
 ---
 
 Attitudes, poses and the states of a navigation filter live on curved spaces: the rotations
@@ -14,7 +22,9 @@ by [the normal](../the-normal/), observed in whatever sign it is given, and simu
 other. Everything a model computes with them, compositions, actions on vectors, exponentials,
 Jacobians, Euler angles, is a composite of the core's operations, and its derivatives are the
 core's. This page shows how the types are made, the maps on them, and where those maps stop being
-smooth.
+smooth. The mathematics is in three notes: [rotations and unit quaternions](../../math/rotations/),
+[rigid motions](../../math/rigid-motions/), and
+[removable singularities in floating point](../../math/removable-singularities/).
 
 ## The three types
 
@@ -30,17 +40,17 @@ here the one that negates the quaternion and keeps the translations, so that $q$
 point. The rotation's chart is the Cayley chart, the first-order quaternion update, normalized,
 
 $$
-	q \oplus \tangent = q \otimes \frac{(1,\ \tangent / 2)}{\sqrt{1 + \lVert \tangent \rVert^2 / 4}},
+	q \oplus \tangent = q \otimes \frac{(1,\ \tangent / 2)}{\sqrt{1 + \lvert \tangent \rvert^2 / 4}},
 	\qquad
 	p \ominus q = \frac{2\, w\, \operatorname{vec}(r)}{w^2}, \quad r = \bar q \otimes p,\ w = w(r),
 $$
 
 rational but for one square root, and the same for $q$ and $-q$: negating either quaternion negates
 $r$, whose vector part and scalar part change sign together. To first order $\tangent$ is the
-rotation vector, and the angle of the turn $1 \oplus \tangent$ is $2 \arctan(\lVert \tangent \rVert
+rotation vector, and the angle of the turn $1 \oplus \tangent$ is $2 \arctan(\lvert \tangent \rvert
 / 2)$, so the chart reaches every rotation by less than a half-turn from its base point, which is
 all of $SO(3)$ but a set of measure zero. Its log-volume, against Haar measure, is $\lambda(\tangent)
-= -2 \log(1 + \lVert \tangent \rVert^2 / 4)$. The inverse is written over $w^2$ so that the only
+= -2 \log(1 + \lvert \tangent \rvert^2 / 4)$. The inverse is written over $w^2$ so that the only
 reciprocal it takes is of a positive number, the one kind the core's primitives take. A motion
 moves its rotation by this chart and its translations in its own frame, $(q, p) \oplus (\phi,
 \rho) = (q \oplus \phi,\ p + R \rho)$ with $R$ the rotation's matrix, which is global too, with the
@@ -140,9 +150,10 @@ Euler angles, and a motion's composition and action, each computing what the gra
 No map writes a derivative. Each is a composite of the core's primitives, so its derivatives of
 both orders are those of its parts, and in the charts they are the Jacobians of the textbooks: the
 tangent pass of `rotation::exp` at $\omega$, read in the chart at its value, is `so3::jr(ω)`, and
-likewise for the motions, as [the mathematics](../../archive/rotations/math.svx#maps-of-the-rotations)
+likewise for the motions, as [the note](../../math/rotations/#agreement-with-the-exponential)
 proves and the crate's tests check. The second derivatives of a map of a rotation agree with those
-taken in exponential coordinates; on a pose they differ by a term the mathematics names, since the
+taken in exponential coordinates; on a pose they differ by
+[a term of second order](../../math/rigid-motions/#the-exponential-and-the-logarithm), since the
 pose's chart is not its exponential.
 
 The exponential, the logarithm and the Jacobians are smooth at the identity, but their closed forms
@@ -150,7 +161,8 @@ divide by the angle there. Each coefficient is computed by a truncated series be
 its closed form above it, selected by the core's selection, with each formula given a harmless
 argument on the rows where the other is chosen, so that every pass is finite at the identity too.
 The cutoff is one for both precisions and for every device, since a composite does not know where
-it will run:
+it will run, and [the note](../../math/removable-singularities/#where-to-put-the-cutoff) gives the
+two conditions that place it:
 
 ```rust
 {../../../../crates/skoro-spatial/src/series.rs:16..19}
@@ -174,8 +186,8 @@ Jacobians' coefficient.
 axes as the previous turns left them (intrinsic) or about the fixed axes (extrinsic).
 `Euler::YAW_PITCH_ROLL` is the aerospace convention, intrinsic about $(z, y, x)$.
 `rotation::from_euler` is smooth everywhere. The way back, `euler`, is not, and no formula could
-make it so: [the mathematics](../../archive/rotations/math.svx#constructions-and-conversions)
-proves that it has two singularities.
+make it so: [the note](../../math/rotations/#angles-and-directions) proves that it has two
+singularities.
 
 **The wrap.** The first and last angles are returned in $(-\pi, \pi]$, and jump by $2\pi$ where
 they cross $\pm\pi$. Any real-valued angle must be cut somewhere; the jump is in the value alone,

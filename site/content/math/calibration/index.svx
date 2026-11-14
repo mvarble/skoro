@@ -1,0 +1,122 @@
+---
+title: Calibration of credible sets
+part: estimation
+order: 7
+summary: Data drawn from a model come with the truth that generated them, and that truth is a draw from the posterior; so a set holding posterior probability α contains the truth with probability α over such data, and an approximate posterior is checked by how often its sets do, against a tolerance that keeps sampling error apart from the approximation's own.
+depends_on: [generative-models, laplace-approximation]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as calibration from './statements/calibration.md';
+</script>
+
+An estimator reports an estimate and how sure it is. The estimate can be compared with the truth
+when the truth is known. Whether it is as sure as it should be is harder to check, since a single
+estimate with a single truth says almost nothing about a covariance. A
+[model built forward](../generative-models/) makes the check possible, because it can be run
+forward: draw everything, hide part of the draw, estimate the hidden part from the rest, and ask
+how often the estimator's own statement of its uncertainty turns out true. This note says why that
+works, and how to build the check so that it tests what it is meant to.
+
+## The truth is a draw from the posterior
+
+Draw the quantities $\randomPoint$ and the measurements $\bfz$ together from the model's joint law,
+and give an estimator the measurements alone. The estimator's target is the posterior, the
+conditional law of $\randomPoint$ given $\bfz$. The hidden $\randomPoint$ is, by the definition of
+that conditional law, a draw from it. So a *credible set*, a set that holds a stated posterior
+probability $\alpha$, contains the truth with probability $\alpha$, over data sets drawn from the
+model.
+
+<Statement {...calibration} />
+
+<Proof>
+
+Conditioning on $\bfz$, $\Pr(\randomPoint \in C(\bfz) \mid \bfz) = \kernel(C(\bfz) \mid \bfz) =
+\alpha$ almost surely, by the definition of the kernel as a regular conditional law and the
+measurability of the set, and taking the expectation gives $\Pr(\randomPoint \in C(\bfz)) =
+\alpha$. Independent pairs give independent indicators, each of mean $\alpha$ by the first part.
+
+</Proof>
+
+Nothing in the statement is about any method. It holds of the exact posterior, and of nothing
+else in general: an approximate posterior whose credible sets contain the truth too seldom is
+over-confident, and too often, under-confident. The frequency is a property that a posterior has
+and an approximation is measured by.
+
+## The credible sets of a Gaussian approximation
+
+A [Laplace approximation](../laplace-approximation/) at a mode $\hat \point$ gives each quantity
+$q$, of dimension $d_q$, a marginal that is a normal in the chart at $\hat q$, with a whitening
+$W_q$ that elimination computes without forming a covariance. Its credible set of level $\alpha$
+is an ellipsoid in that chart, and the truth $q^\star$ lies in it when its *normalized error*
+
+$$
+	\varepsilon_q = \bigl\lvert W_q \bigl( q^\star \ominus \hat q \bigr) \bigr\rvert^2 @tag(normalized-error)
+$$
+
+is at most $\chi^2_{d_q}(\alpha)$, the $\alpha$-quantile of the chi-squared law with as many
+degrees of freedom as $q$ has dimensions. Under the approximation, $\varepsilon_q$ has exactly
+that law, so the ellipsoid holds probability $\alpha$.
+
+The ellipsoid holds the exact posterior's probability $\alpha + e(z)$ and not $\alpha$, with
+$e(z)$ the approximation's error on that set. Over data sets it therefore contains the truth with
+probability $\alpha + \E[e(\bfz)]$, by [%full](statement:calibration) applied to the exact
+posterior. A check estimates that probability and compares it with $\alpha$.
+
+## The error to expect
+
+Where the approximation is not exact, $\E[e(\bfz)]$ is not zero, and a check against $\alpha$
+alone would pass or fail according to how many data sets it is given: with enough of them, any
+error at all is resolved. So the check needs to know how large an error is no fault. Its order is
+known. On a curved quantity the approximation's precision
+[omits curvature](../laplace-approximation/#what-the-covariance-leaves-out) of a relative size of
+the order of the noise's variance in the curved coordinates. Write $\bar\kappa = \sigma_\phi^2$ for
+that order, with $\sigma_\phi$ the largest standard deviation of a curved coordinate among the
+posterior's marginals. If the exact posterior's covariance is the approximation's times $1 +
+\kappa$, then $\varepsilon_q$ is $1 + \kappa$ times a chi-squared variable, and the ellipsoid holds
+
+$$
+	\Pr\bigl( \chi^2_{d} \le \chi^2_{d}(\alpha) / (1 + \kappa) \bigr)
+	= \alpha - \kappa\, \chi^2_{d}(\alpha)\, f_{d}\bigl(\chi^2_{d}(\alpha)\bigr) + O(\kappa^2) , @tag(coverage-error)
+$$
+
+with $f_d$ the chi-squared density. At $\alpha = 0.9$ the slope $\chi^2_d(\alpha)
+f_d(\chi^2_d(\alpha))$ is $0.37$ for $d = 6$ and $0.27$ for $d = 3$, so the expected error is
+within $\delta_6 = 0.37\, \bar\kappa$ for a quantity of six dimensions and $\delta_3 = 0.27\,
+\bar\kappa$ for one of three. An error that is not a multiple of the covariance lies between the
+extremes of its eigenvalues, and is bounded the same way.
+
+The same formula says what a mistake looks like. A covariance off by a tenth moves the coverage of
+a six-dimensional ellipsoid by about $0.04$, which is far more than a correct approximation's
+error at small $\bar\kappa$.
+
+## The check
+
+Take $\alpha = 0.9$, and $N$ independent data sets, each with $n$ quantities of dimension $d$ to
+estimate. In data set $r$, let $c_r$ be the fraction of its quantities whose normalized error is
+at most $\chi^2_d(\alpha)$. By [%full](statement:calibration) and linearity of expectation,
+$\E[c_r] = \alpha + \bar e$, with $\bar e$ the mean error over the quantities, whether or not the
+quantities' errors are dependent within a data set, which they are. The data sets are independent,
+so the mean $\bar c$ of the $c_r$ has a standard error estimated by $s_* / \sqrt N$, with $s_* =
+\max(s, 1 / n)$ and $s$ the sample standard deviation of the $c_r$. The floor $1/n$ is the
+resolution of one $c_r$, and keeps the tolerance from collapsing when every data set happens to
+give the same fraction. The check passes when
+
+$$
+	\lvert \bar c - \alpha \rvert \le 4\, s_* / \sqrt N + \delta_d . @tag(check)
+$$
+
+The two parts of the tolerance answer different things. The first is sampling: with $N \ge 100$,
+enough for the normal approximation to the mean of independent data sets, an approximation that
+erred by exactly $\delta_d$ would fail with probability about $6 \times 10^{-5}$. The second is
+the approximation's own expected error, which is known only to its order. So that the verdict does
+not hinge on that order's constant, the scales of the scenario are chosen to make the second part
+small against the first: $\sigma_\phi \le 0.05$ rad gives $\bar\kappa \le 2.5 \times 10^{-3}$ and
+$\delta_6 \le 10^{-3}$, a tenth or less of the sampling part when the fractions spread by a few
+hundredths, as fractions over a hundred correlated quantities do.
+
+The check then tests the method and not the approximation. It cannot resolve a calibration error
+below its tolerance, and says nothing about one. It does resolve the errors a mistake would make.
+The tolerance is fixed by these figures before the data are drawn, and never tuned to the result.

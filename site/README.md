@@ -22,12 +22,12 @@ taken to be the parent of the working directory.
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `content/landing.md`                     | The prose on the home page.                                                                                                                                                                                                              |
 | `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. A page that moves lists the keys it had under `formerly`, so that entries naming it still resolve. |
-| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note.                                                                                                                                                                                               |
+| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note. `part` names the part of the mathematics it belongs to and `order` places it within the part; read in order, each note rests only on the notes before it.                                     |
 | `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                                                                                                                    |
 | `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                                                                                                                               |
 | `content/archive/<slug>/workflow.json`   | Its stage record, written by `bin/wf` alone and shown as the entry's history.                                                                                                                                                            |
 | `content/**/*.bib`                       | Bibliography entries, for `[](cite:key)`.                                                                                                                                                                                                |
-| `src/lib/site.ts`                        | Site name, repo URL, the tracks, and the names of an entry's documents. The navigation comes from here.                                                                                                                                  |
+| `src/lib/site.ts`                        | Site name, repo URL, the tracks, the parts of the mathematics, and the names of an entry's documents. The navigation comes from here.                                                                                                    |
 | `src/lib/crates.ts`                      | The crate map's data. Keep it in step with `cargo metadata`.                                                                                                                                                                             |
 | `src/styles/`                            | CSS, split as `tokens/{colors,dimensions,typography}.css` + element and utility sheets. Colors exist only as tokens.                                                                                                                     |
 | `plugins/`                               | skoro's own Markdown plugins: callouts, quoted source, heading anchors.                                                                                                                                                                  |
@@ -50,15 +50,22 @@ and the map on the Mathematics page is `@mvarble/mesearch-ui`'s, in skoro's colo
 ---
 title: Fisher scoring # the first heading, or the folder name, otherwise
 summary: One sentence. # the first paragraph otherwise: sidebar, lists, <meta>, llms.txt
-order: 11 # pages only: position within the track
+order: 11 # a page's position within its track, a math note's within its part
+part: geometry # math notes only: one of the parts in src/lib/site.ts
 depends_on: [retraction, concepts/graph] # a bare slug is a math note
 katex_macros: # this document only; wins over katex.config.ts
     \fisher: \mathcal{I}
 ---
 ```
 
+The math notes are read in order, part by part. The build refuses a note without a `part` and an
+`order`, two notes at one place, and a note whose `depends_on` names anything but a note before
+it; a page's `depends_on` may likewise name no page of its own track at its place or after it.
+
 An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`),
-the `crates` it changed (`[skoro-core]`), and the earlier entries it `revises`. Each page then shows
+the `crates` it changed (`[skoro-core]`), the earlier entries it `revises`, and the documents of
+finished entries it `amends` (`[archive/normal/math]`), whose pages then say which entry brought
+their references up to date. Each page then shows
 the entries that changed it, newest first, under "How this came to be"; an entry links each of its
 crates to that crate's page in the reference; and an entry that a later one revises says so at its top.
 

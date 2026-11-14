@@ -1,0 +1,135 @@
+---
+title: Quotients by a finite group
+part: geometry
+order: 5
+summary: A manifold divided by a finite group that acts freely is a manifold again, and a retraction that commutes with the group descends to it, so that a point of the quotient is computed with through any of the points over it.
+depends_on: [retraction, derivatives-in-charts, product-manifold]
+katex_macros:
+    '\wrap': '\operatorname{wrap}'
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as descent from './statements/descent.md';
+</script>
+
+Some spaces are easiest to compute with through a larger space that covers them several times. A
+line through the origin of the plane is named by either of its two unit vectors, and a rotation of
+space by either of two unit quaternions. The larger space is the simpler one to store and to
+multiply in, but it is not the space meant: two of its points are one point of the smaller. This
+note says when the [retraction](../retraction/) of the larger space serves the smaller, and what
+may then be asked of a map that is written on the larger.
+
+## The quotient
+
+Let $G$ be a finite group acting on a manifold $\manifold$ by diffeomorphisms, $\point \mapsto g
+\point$, and *freely*: $g \point = \point$ only for the identity of $G$. The *orbit* of a point is
+$[\point] = \{ g \point : g \in G \}$, the *quotient* $N = \manifold / G$ is the set of orbits, and
+$\varpi : \manifold \to N$, $\varpi(\point) = [\point]$, is the quotient map. Every orbit has as
+many points as $G$ has elements, the *representatives* of the point of $N$ they name.
+
+The quotient is a manifold of the same dimension, and $\varpi$ is a covering
+[Chapter 21](cite:lee2013): every $\point$ has a neighbourhood $V$ that no $g$ but the identity
+maps into itself, and $\varpi$ restricted to $V$ is a diffeomorphism onto an open set of $N$. So $N$
+looks, near each of its points, exactly as $\manifold$ does near any representative, and a
+tangent vector of $N$ at $[\point]$ is a tangent vector of $\manifold$ at $\point$ carried by
+$\D \varpi$.
+
+The running example is the circle of angles, $\manifold = \R / 2\pi\mathbb Z$, with the group of
+two elements that adds a half-turn, $\theta \mapsto \theta + \pi$. Its quotient is the angles
+modulo $\pi$: the directions of the lines through the origin of the plane, each named by the two
+angles of its two unit vectors.
+
+## A retraction that descends
+
+A retraction on $\manifold$ moves a representative. It moves the point of $N$ when it moves every
+representative alike.
+
+<Statement {...descent} />
+
+<Proof>
+
+Differentiating the condition on $R$ at $\tangent = 0$ gives $\D R_{g\point}(0) = \D g(\point)\,
+\D R_\point(0)$, and both derivatives of $R$ are the identity, so $\D g(\point)$ is the identity in
+the coordinates of the two tangent spaces: the action carries the basis at $\point$ to the basis at
+$g \point$. Since $\varpi \circ g = \varpi$, the basis that $\D \varpi$ carries to $[\point]$ is
+then the same from every representative, and it identifies the tangent space of $N$ there with
+$\R^\dimension$.
+
+For the first claim, $\varpi(R_{g\point}(\tangent)) = \varpi(g\, R_\point(\tangent)) =
+\varpi(R_\point(\tangent))$. The map is smooth, as $\varpi \circ R$ read through a local inverse of
+$\varpi$. At $\tangent = 0$ it is $\varpi(\point) = [\point]$, and its derivative there is
+$\D \varpi(\point)\, \D R_\point(0) = \D \varpi(\point)$, the identity in the coordinates just
+chosen.
+
+For the second, the two invariances of $Q$ make $Q_\point(\otherPoint)$ a function of $[\point]$
+and $[\otherPoint]$. If $[\point] \oplus \tangent = [\point] \oplus \tangent'$ with $\tangent,
+\tangent' \in U$, then $R_\point(\tangent') = g\, R_\point(\tangent)$ for some $g$, and
+
+$$
+	\tangent' = Q_\point\bigl(R_\point(\tangent')\bigr) = Q_\point\bigl(g\, R_\point(\tangent)\bigr) = Q_\point\bigl(R_\point(\tangent)\bigr) = \tangent .
+$$
+
+For the third, as functions of $\tangent$,
+
+$$
+	f\bigl(R_{g\point}(\tangent)\bigr) = f\bigl(g\, R_\point(\tangent)\bigr) = f\bigl(R_\point(\tangent)\bigr) = \bar f\bigl([\point] \oplus \tangent\bigr) ,
+$$
+
+so $f$ read in the chart of $\manifold$ at any representative is $\bar f$ read in the chart of $N$
+at $[\point]$. Their [derivatives in charts](../derivatives-in-charts/) agree, and so do the
+gradients at every point, and with them the chart Hessian
+[](eq:math/derivatives-in-charts/chart-hessian), which differentiates the gradient along
+$\point \oplus t \tangent$, a curve over $[\point] \oplus t \tangent$.
+
+</Proof>
+
+On the circle, $R_\theta(\tangent) = \theta + \tangent$ commutes with the half-turn, so it descends:
+a direction of a line is moved by turning either of its angles. The circle's own inverse does not
+descend. It is $\varphi \ominus \theta = \wrap_{2\pi}(\varphi - \theta)$, the difference brought
+into $(-\pi, \pi]$, and it changes by $\pi$ when $\varphi$ is replaced by $\varphi + \pi$: read
+through it, a line given by its other unit vector is a line turned by nearly a half-turn. The
+inverse that descends is
+
+$$
+	Q_\theta(\varphi) = \wrap_{\pi}(\varphi - \theta) \in \bigl(-\tfrac\pi2, \tfrac\pi2\bigr] ,
+$$
+
+which is unchanged by a half-turn of either angle, and inverts the retraction on $U = (-\tfrac\pi2,
+\tfrac\pi2)$. The chart of the circle at $\theta$ was injective on an interval of length $2\pi$,
+and the chart of the lines is injective on one of length $\pi$: a chart of the quotient reaches each
+point of $N$ once, and so at most one representative of each.
+
+That is the general pattern. A chart of $\manifold$ tells the representatives of a point apart,
+since they are different points of $\manifold$, and its inverse cannot be invariant. A chart of $N$
+must not tell them apart. The second claim asks for an inverse that cannot, and the price is a
+smaller domain.
+
+## Maps written on representatives
+
+A computation holds a point of $N$ as one of its representatives, and everything it computes is a
+function of the representative. Whether it is a function of the point is a property of the formula.
+
+- **A map out of $N$** is a map $f$ of $\manifold$ that is *invariant*, $f(g\point) = f(\point)$.
+  By the third claim its derivatives are then those of the map on $N$, with nothing to correct. On
+  the circle, $\cos 2\theta$ is a function of the line, and $\cos \theta$ is not.
+- **A map into $N$** is any map into $\manifold$, followed by $\varpi$. A map of several points of
+  $N$ into $N$, written on representatives as $\map(\point_1, \dots, \point_m)$, is a map of $N$
+  when it is *equivariant*: $\map(g_1 \point_1, \dots, g_m \point_m)$ lies in the orbit of
+  $\map(\point_1, \dots, \point_m)$ for every $g_1, \dots, g_m$.
+- **Which representative a value carries** is decided by how it was made, and matters to nothing
+  that reads it as a point of $N$. The retraction $[\point] \oplus \tangent$ computed as
+  $R_\point(\tangent)$ is the representative on the side of the $\point$ it was computed from.
+
+Invariance and equivariance are properties of a formula on all of its inputs, and are checked by
+evaluating it at more than one representative.
+
+## Products
+
+If $G_1$ acts on $\manifold_1$ and $G_2$ on $\manifold_2$, each as above, then $G_1 \times G_2$ acts
+on the [product](../product-manifold/) $\manifold_1 \times \manifold_2$ factor by factor, freely,
+with the quotient $N_1 \times N_2$. The product retraction commutes with the action when each
+factor's does, and its inverse is invariant when each factor's is, so the product of the quotients
+is computed with through the product of the representatives, and
+[%full](statement:descent) holds of it as it stands.

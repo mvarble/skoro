@@ -1,0 +1,491 @@
+---
+title: Rotations and unit quaternions
+part: geometry
+order: 6
+summary: The rotations of space are the unit quaternions taken up to sign, a cover with no continuous section; the exponential and its Jacobians turn rates into rotations; and of the two global charts, the stereographic chart tells the two quaternions of a rotation apart, while the Cayley chart cannot and so is a chart of the rotations themselves.
+depends_on: [retraction, derivatives-in-charts, quotient-manifold]
+katex_macros:
+    '\Exp': '\operatorname{Exp}'
+    '\Log': '\operatorname{Log}'
+    '\rv': '\operatorname{rv}'
+    '\atantwo': '\operatorname{atan2}'
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as noSection from './statements/no-section.md';
+	import * as stereographic from './statements/stereographic.md';
+	import * as antipode from './statements/antipode.md';
+	import * as cayley from './statements/cayley.md';
+	import * as agreement from './statements/agreement.md';
+	import * as euler from './statements/euler.md';
+	import * as eulerSingular from './statements/euler-singular.md';
+</script>
+
+The rotations of space, $SO(3)$, are a curved manifold of dimension three, and every way of
+writing one down has a defect: a matrix has nine numbers and six constraints, three angles lose a
+degree of freedom at some attitude, and a unit quaternion names each rotation twice. This note
+takes the unit quaternions, which multiply and renormalize cheaply, and works out what the two
+names cost. It gives the rotations their [retractions](../retraction/), the maps a computation
+needs of them, and the ways in and out through angles, directions and matrices.
+
+## Quaternions and rotations
+
+A quaternion is $q = (w, u)$ with $w \in \R$ and $u \in \R^3$, a vector of $\R^4$. Here and below a
+tuple of vectors is the column vector with its entries stacked. The product is
+
+$$
+	(w_1, u_1) \otimes (w_2, u_2) = \bigl(w_1 w_2 - u_1 \cdot u_2,\ w_1 u_2 + w_2 u_1 + u_1 \times u_2\bigr), @tag(product)
+$$
+
+the conjugate is $\bar q = (w, -u)$, and we write $\operatorname{vec}(q) = u$ and $w(q) = w$. The
+unit quaternions $S^3 = \{q : \lvert q \rvert = 1\}$ are a group under $\otimes$, with identity
+$1 = (1, 0)$ and inverse $\bar q$. Each is a rotation,
+
+$$
+	\pi(q) = (w^2 - \lvert u \rvert^2)\, I + 2\, u u\transpose + 2 w\, [u]_\times , @tag(rotation)
+$$
+
+where $[u]_\times$ is the skew matrix with $[u]_\times x = u \times x$. It is the rotation by the
+angle $\theta$ about the unit axis $a$ when $q = (\cos \tfrac\theta2, \sin \tfrac\theta2\, a)$, and
+it acts on a vector as $\pi(q)\, x = x + 2 w\, (u \times x) + 2\, u \times (u \times x)$. The map
+$\pi : S^3 \to SO(3)$ is a homomorphism, onto, and two to one: $\pi(q) = \pi(-q)$, and no other
+quaternion gives the same rotation.
+
+So the rotations are the unit quaternions up to sign. The group of two elements $\{\pm 1\}$ acts on
+$S^3$ by $q \mapsto -q$, freely, and $SO(3) = S^3 / \{\pm 1\}$ is its
+[quotient](../quotient-manifold/), with $\pi$ the quotient map. Everything in that note applies: a
+map written on quaternions is a map of rotations when it is unchanged by the sign of each
+quaternion it reads, and a map into the rotations when the sign of its result is all that the signs
+of its arguments change. The composition $q_1 \otimes q_2$, the inverse $\bar q$, the relative
+rotation $\bar q_1 \otimes q_2$ that carries the frame of $q_1$ to that of $q_2$, and the action on
+a vector are all of these kinds, since $(\pm q_1) \otimes (\pm q_2) = \pm (q_1 \otimes q_2)$.
+
+Tangent coordinates of a rotation are, throughout, a rotation vector in the frame of the point: a
+retraction of this note satisfies
+
+$$
+	\pi(q \oplus \tangent) = \pi(q) \bigl(I + [\tangent]_\times\bigr) + O(\lvert \tangent \rvert^2) , @tag(frame)
+$$
+
+a perturbation on the right, in the body's own axes. Since $q \otimes (w, u) \otimes \bar q = (w,
+\pi(q)\, u)$ for a unit $q$, the same perturbation written on the left, in the outer frame, is
+$\pi(q)\, \tangent$.
+
+## No continuous choice of quaternion
+
+One might hope to pick one quaternion for each rotation, once and for all, and so be rid of the
+sign. It cannot be done continuously.
+
+<Statement {...noSection} />
+
+<Proof>
+
+Suppose $s$ is one. Its image $s(SO(3))$ is compact, and so is $-s(SO(3))$, since $q \mapsto -q$ is
+continuous. They are disjoint, since $s(R) = -s(R')$ gives $R = \pi(s(R)) = \pi(-s(R')) = R'$ and
+then $s(R) = -s(R)$, which no unit quaternion is. And they cover $S^3$, since a $q$ with
+$\pi(q) = R$ is $s(R)$ or $-s(R)$. So $S^3$ is the union of two disjoint nonempty closed sets, which
+contradicts its connectedness.
+
+</Proof>
+
+Every formula that reads a quaternion off a rotation is therefore discontinuous somewhere. The
+usual reading of a quaternion off a rotation matrix $X$ is a choice between four,
+
+$$
+	\begin{aligned}
+	c_0(X) &= (1 + X_{11} + X_{22} + X_{33},\ X_{32} - X_{23},\ X_{13} - X_{31},\ X_{21} - X_{12}), \\
+	c_1(X) &= (X_{32} - X_{23},\ 1 + X_{11} - X_{22} - X_{33},\ X_{12} + X_{21},\ X_{13} + X_{31}), \\
+	c_2(X) &= (X_{13} - X_{31},\ X_{12} + X_{21},\ 1 - X_{11} + X_{22} - X_{33},\ X_{23} + X_{32}), \\
+	c_3(X) &= (X_{21} - X_{12},\ X_{13} + X_{31},\ X_{23} + X_{32},\ 1 - X_{11} - X_{22} + X_{33}),
+	\end{aligned}
+	\qquad
+	q = \frac{c_m(X)}{\lvert c_m(X) \rvert}, @tag(from-matrix)
+$$
+
+with $m$ the index of the largest of the four entries $c_m(X)_m$. At $X = \pi(q)$, with $q = (q_0,
+q_1, q_2, q_3)$, [](eq:rotation) gives $c_m(X) = 4 q_m\, q$, so the result is $\operatorname{sign}(q_m)\,
+q$: the quaternion over $X$ whose $m$-th coordinate is positive. Since $c_m(X)_m = 4 q_m^2$ and the
+largest of the $q_m^2$ is at least $\tfrac14$, the chosen vector has norm at least $2$ and the
+division is safe. Within each choice of $m$ the map is smooth, and where the choice changes the
+result may change sign, as [%full](statement:no-section) says it must somewhere.
+
+## The exponential and the logarithm
+
+The exponential takes a rotation vector to the rotation about it by its length:
+
+$$
+	\Exp(\omega) = \Bigl(\cos \tfrac\theta2,\ \frac{\sin(\theta/2)}{\theta}\, \omega\Bigr),
+	\qquad \theta = \lvert \omega \rvert . @tag(exp)
+$$
+
+It is a diffeomorphism of the open ball of radius $2\pi$ onto $S^3 \setminus \{-1\}$. It is how a
+rate becomes a rotation: an attitude turning at the constant body rate $\omega$ for a time $\Delta
+t$ moves from $q_k$ to $q_{k+1} = q_k \otimes \Exp(\omega\, \Delta t)$, exactly. Its inverse on
+$S^3 \setminus \{-1\}$ is the logarithm,
+
+$$
+	\Log(q) = \frac{2 \atantwo(n, w)}{n}\, u, \qquad n = \lvert u \rvert, @tag(log)
+$$
+
+a rotation vector of length $2 \atantwo(n, w) \in [0, 2\pi)$. The logarithm is a map of the unit
+quaternions and not of the rotations: for a rotation by $\theta$ about $a$ it gives $\theta a$ at
+$q$ and $(2\pi - \theta)(-a)$ at $-q$, two names of one rotation. The rotation's own logarithm is
+the rotation vector of the shorter turn,
+
+$$
+	\rv(q) = \Log\bigl(s(q)\, q\bigr), \qquad s(q) = \begin{cases} 1 & w \ge 0, \\ -1 & w < 0, \end{cases} @tag(rotation-vector)
+$$
+
+with $\rv(-q) = \rv(q)$ and length in $[0, \pi]$. It is discontinuous at the half-turns, $w = 0$,
+where it jumps from $\pi a$ to $-\pi a$: two rotation vectors of one rotation, equally short.
+
+The left and right Jacobians of the exponential are the matrices with $\Exp(\omega + \varepsilon) =
+\Exp(J_l(\omega)\, \varepsilon) \otimes \Exp(\omega) = \Exp(\omega) \otimes \Exp(J_r(\omega)\,
+\varepsilon)$ to first order in $\varepsilon$. They are
+
+$$
+	J_l(\omega) = I + A\, [\omega]_\times + B\, [\omega]_\times^2, \quad
+	J_r(\omega) = J_l(-\omega) = I - A\, [\omega]_\times + B\, [\omega]_\times^2, \quad
+	A = \frac{1 - \cos \theta}{\theta^2}, \quad B = \frac{\theta - \sin \theta}{\theta^3}, @tag(jacobians)
+$$
+
+and their inverses, for $\theta < 2\pi$,
+
+$$
+	J_l(\omega)^{-1} = I - \tfrac12 [\omega]_\times + C\, [\omega]_\times^2, \quad
+	J_r(\omega)^{-1} = I + \tfrac12 [\omega]_\times + C\, [\omega]_\times^2, \quad
+	C = \frac{1}{\theta^2}\Bigl(1 - \frac\theta2 \cot \frac\theta2\Bigr). @tag(jacobian-inverses)
+$$
+
+Each is a polynomial in $[\omega]_\times$, so the inverses are checked by multiplying out with
+$[\omega]_\times^3 = -\theta^2 [\omega]_\times$, and $J_r(\omega) = J_l(\omega)\transpose$, since
+$[\omega]_\times$ is skew. The coefficients $A$, $B$ and $C$, like $\sin(\theta/2)/\theta$ in
+[](eq:exp) and $2\atantwo(n, w)/n$ in [](eq:log), are smooth functions whose closed forms divide by
+a quantity that vanishes at the identity. How such a coefficient is computed is the subject of
+[a later note](../removable-singularities/).
+
+The exponential gives a retraction, $q \oplus \tangent = q \otimes \Exp(\tangent)$, the
+*exponential chart*. It is the chart most often written down, and it is not global: it is
+invertible only on the ball of radius $2\pi$, and as a chart of the rotations only on the ball of
+radius $\pi$, with the half-turns on its boundary. A random tangent vector with unbounded support
+pushed through it lands outside the chart with positive probability. The next two sections give
+the two charts that are defined, and invertible, on all of $\R^3$.
+
+## The stereographic chart
+
+The first is the stereographic projection of the sphere $S^3$ from the point opposite the centre:
+
+$$
+	q \oplus \tangent = q \otimes \frac{\bigl(1 - s,\ \tangent / 2\bigr)}{1 + s}, \quad s = \tfrac1{16} \lvert \tangent \rvert^2;
+	\qquad
+	p \ominus q = \frac{4\, \operatorname{vec}(\bar q \otimes p)}{1 + w(\bar q \otimes p)} . @tag(stereographic)
+$$
+
+<Statement {...stereographic} />
+
+<Proof>
+
+Write $\delta = \delta(\tangent)$. Its norm is $((1 - s)^2 + 4s)^{1/2} / (1 + s) = 1$, so
+$q \otimes \delta$ is a unit quaternion. With $w(\delta) = (1 - s)/(1 + s)$ and
+$\lvert \operatorname{vec}(\delta) \rvert = (\lvert \tangent \rvert / 2)/(1 + s)$, $\delta$ is the
+rotation by $\theta$ about $\tangent$ with $\cos \tfrac\theta2 = (1-s)/(1+s)$ and $\sin
+\tfrac\theta2 = (\lvert \tangent \rvert / 2)/(1+s)$, so $\tan \tfrac\theta4 = \sin \tfrac\theta2 /
+(1 + \cos \tfrac\theta2) = \lvert \tangent \rvert / 4$. As $\lvert \tangent \rvert$ runs over
+$[0, \infty)$, $\theta$ runs over $[0, 2\pi)$, so $\delta$ runs over every unit quaternion but $-1$,
+once each; $\delta$ is the inverse of the stereographic projection of $S^3$ from $-1$ onto the
+hyperplane $w = 0$, at $\tangent / 4$. Left multiplication by $q$ carries $S^3 \setminus \{-1\}$ to
+$S^3 \setminus \{-q\}$. The inverse follows from $\delta = \bar q \otimes p$ and $\operatorname{vec}(
+\delta) / (1 + w(\delta)) = \tangent / 4$, which $s$ cancels from. Last, $\delta(\tangent) = (1,
+\tangent / 2) + O(\lvert \tangent \rvert^2)$, and [](eq:rotation) at it is $I + [\tangent]_\times +
+O(\lvert \tangent \rvert^2)$; $\pi$ is a homomorphism.
+
+</Proof>
+
+The chart's coordinate of a rotation by $\theta$ has the length $4 \tan(\theta / 4) = \theta +
+\theta^3 / 48 + O(\theta^5)$. These are the *modified Rodrigues parameters* of attitude estimation,
+scaled by $4$ so that they agree with the rotation vector to first order. The chart is the left
+translation of the chart at the identity, $q \oplus \tangent = q \otimes (1 \oplus \tangent)$, and
+since $\delta$ depends on $\tangent$ only through its direction and its length, which $\pi(q)$
+preserves,
+
+$$
+	q \oplus \tangent = (1 \oplus \pi(q)\, \tangent) \otimes q @tag(conjugation)
+$$
+
+exactly, not only to first order: the chart written with its perturbation on the left is the same
+chart, its coordinates rotated by $\pi(q)$.
+
+It is a chart of $S^3$, and so it must tell $q$ from $-q$, which are different points of $S^3$.
+Where it puts the two is the whole of what the sign costs.
+
+<Statement {...antipode} />
+
+<Proof>
+
+Write $\bar\mu \otimes q = (w, u)$, so that $\tangent = 4u / (1 + w)$ and, since $\lvert u
+\rvert^2 = 1 - w^2$,
+
+$$
+	\lvert \tangent \rvert^2 = \frac{16 \lvert u \rvert^2}{(1 + w)^2} = \frac{16 (1 - w)}{1 + w} ,
+$$
+
+which is below $16$ exactly when $w = \langle q, \mu \rangle > 0$. Both $\bar\mu \otimes (-q)$ and
+$\overline{(-\mu)} \otimes q$ are $(-w, -u)$, whose coordinate is $-4u / (1 - w)$, and
+
+$$
+	-\frac{16}{\lvert \tangent \rvert^2}\, \tangent = -\frac{(1 + w)}{(1 - w)} \cdot \frac{4u}{1 + w} = -\frac{4u}{1 - w} .
+$$
+
+For the lengths, the point on the side of $\mu$ is at the angle $\theta \in [0, \pi]$ from $\mu$ by
+[%full](statement:stereographic), which is the angle between the rotations, and the other at $2\pi -
+\theta$, whose coordinate has the length $4 \tan(\pi/2 - \theta/4) = 4 \cot(\theta/4)$.
+
+</Proof>
+
+So the map from one sign to the other is the inversion in the sphere of radius $4$, followed by
+negation. The ball of radius $4$ is the chart of the near sides, one point for each rotation within
+less than a half-turn of $\pi(\mu)$, and its complement holds the far sides. A rotation close to
+$\pi(\mu)$, given by the quaternion on the far side, has a coordinate of length $4 \cot(\theta/4)$,
+which grows without bound as the rotations approach each other: read in this chart, a rotation
+given with the other sign is as far from $\mu$ as a point can be, exactly when it is nearest.
+
+The sign is not only a matter of single points. A turn of $2\pi$ about an axis is the identity
+rotation and the quaternion $-1$: rotations about one axis by $\alpha_1, \dots, \alpha_n$ with
+$\sum_k \alpha_k = 2\pi$ compose to the identity, while their quaternions, each taken with $w > 0$,
+multiply to $-1$. Angles add modulo $4\pi$ on $S^3$ and modulo $2\pi$ on the rotations. A chain of
+relative rotations that closes on itself as rotations may therefore fail to close as quaternions,
+and quaternions fitted to it link by link must take up the missing turn somewhere along the chain.
+
+## The Cayley chart
+
+A chart of the rotations must not tell $q$ from $-q$. The second global chart is the familiar
+first-order update of a quaternion, normalized.
+
+<Statement {...cayley} />
+
+<Proof>
+
+The norm of $(1, \tangent / 2)$ is $\sqrt{1 + \lvert \tangent \rvert^2 / 4}$, so $\gamma(\tangent)
+\in S^3$, with $w(\gamma) > 0$ and $\lvert \operatorname{vec}(\gamma) \rvert / w(\gamma) =
+\lvert \tangent \rvert / 2$; it is the rotation by $\theta$ about $\tangent$ with $\tan(\theta / 2) =
+\lvert \tangent \rvert / 2$, so $\theta \in [0, \pi)$, every such rotation once. Negating $q$
+negates $q \otimes \gamma$. Negating $p$ or $q$ negates $\bar q \otimes p$, whose $\operatorname{vec}$
+and $w$ change sign together, so their ratio does not. For $p = q \otimes \gamma(\tangent)$, $\bar q
+\otimes p = \gamma(\tangent)$ and $2 \operatorname{vec}(\gamma) / w(\gamma) = \tangent$; and every
+rotation by less than $\pi$ from $\pi(q)$ is $\pi(q \otimes \delta)$ for a $\delta$ with
+$w(\delta) > 0$, which is $\gamma$ of $2 \operatorname{vec}(\delta) / w(\delta)$. The first-order
+form and the last identity follow as for the stereographic chart: $\gamma(\tangent) = (1, \tangent /
+2) + O(\lvert \tangent \rvert^2)$, and $\gamma$ depends on $\tangent$ only through its direction
+and its length.
+
+</Proof>
+
+The retraction commutes with the sign and its inverse is unchanged by the sign of either argument,
+which are the conditions of [%full](statement:math/quotient-manifold/descent). So this is a
+retraction on $SO(3)$ itself, with its inverse, computed through whichever quaternions the two
+rotations happen to be given by. On matrices it is the Cayley transform, $\pi(q \oplus \tangent) =
+\pi(q)\, (I - \tfrac12 [\tangent]_\times)^{-1} (I + \tfrac12 [\tangent]_\times)$. Its coordinate of a
+rotation by $\theta$ has the length
+
+$$
+	2 \tan(\theta / 2) = \theta + \theta^3 / 12 + O(\theta^5) ,
+$$
+
+a little farther from the angle than the stereographic chart's. A rotation has one coordinate at
+$\mu$, of length $2\tan(\theta/2)$ for $\theta \in [0, \pi)$ its angle from $\pi(\mu)$, whatever
+the signs. Nothing in the chart reads which quaternion a rotation was given by, so the missing turn
+of the last section cannot arise: a chain of relative rotations that closes as rotations is fitted
+with nothing left over.
+
+What the chart misses, at each $\mu$, is the rotations a half-turn from $\pi(\mu)$: not one point,
+as the stereographic chart misses $-\mu$, but a surface, the rotations by $\pi$ about every axis,
+composed with $\mu$. There $w(\bar\mu \otimes p) = 0$ and the inverse is undefined, and near it the
+coordinate is large. The two charts thus put their cuts in different places. The stereographic
+chart is finite at every half-turn, with a coordinate of length $4$, and is cut at the antipode,
+the point a mistaken sign lands on. The Cayley chart is cut at the half-turns, which a pair of
+rotations reaches only by differing as much as two rotations can.
+
+## Agreement with the exponential
+
+Three retractions are now in hand, and a derivative read in tangent charts does not depend on
+which is used.
+
+<Statement {...agreement} />
+
+<Proof>
+
+From $(1 - s)/(1 + s) = 1 - 2s + O(s^2)$ with $s = \lvert \tangent \rvert^2 / 16$, the
+stereographic chart has $1 \oplus \tangent = \bigl(1 - \tfrac18 \lvert \tangent \rvert^2,\ \tfrac12
+\tangent\bigr) + O(\lvert \tangent \rvert^3)$. From $(1 + \lvert \tangent \rvert^2 / 4)^{-1/2} = 1 -
+\tfrac18 \lvert \tangent \rvert^2 + O(\lvert \tangent \rvert^4)$, the Cayley chart has the same
+expansion, and so has $\Exp(\tangent)$, from $\cos \tfrac\theta2 = 1 - \tfrac18 \theta^2 +
+O(\theta^4)$ and $\sin(\theta/2)/\theta = \tfrac12 + O(\theta^2)$. All three charts are left
+translations of their charts at the identity, so they agree at every point to second order, and so
+do their inverses. The [derivative in charts](../derivatives-in-charts/) of a map $\map$ at
+$\point$ is the Jacobian at $0$ of $\tangent \mapsto R_\otherPoint^{-1}(\map(R_\point(\tangent)))$,
+and the local representatives of $\map$ in two charts that agree to second order agree to second
+order at $0$, with their first and second derivatives there. Last, $\Exp(\omega + \varepsilon)
+\ominus \Exp(\omega)$ is the chart coordinate at $1$ of $\Exp(\omega)^{-1} \otimes \Exp(\omega +
+\varepsilon) = \Exp(J_r(\omega)\, \varepsilon) + O(\lvert \varepsilon \rvert^2)$, which is
+$J_r(\omega)\, \varepsilon + O(\lvert \varepsilon \rvert^2)$; and $\Log$ is the inverse of $\Exp$.
+
+</Proof>
+
+So the Jacobians of the textbooks, derived in exponential coordinates, are the derivatives in
+either global chart, and a formula that carries an uncertainty through a rate by hand writes $J_r$
+into it. The charts differ at third order, in how far a finite step goes, and in where they are
+cut.
+
+## Interpolation and distance
+
+The geodesic from $q_1$ to $q_2$, at the parameter $t \in \R$, is
+
+$$
+	q_1 \otimes \Exp\bigl(t \Log(\bar q_1 \otimes q_2)\bigr), @tag(slerp)
+$$
+
+which runs at a constant rate along the great circle of $S^3$ through $q_1$ and $q_2$, reaching
+$q_2$ at $t = 1$ by the arc that avoids $-q_1$. With $\rv$ in place of $\Log$ it is the rotations'
+interpolation, along the shorter of the two turns from one attitude to the other, and
+discontinuous where the relative rotation is a half-turn and the two turns are equally short. The
+two agree whenever $\langle q_1, q_2 \rangle \ge 0$.
+
+The angle between two rotations, the length of the shorter turn from one to the other, is
+
+$$
+	\angle(q_1, q_2) = \lvert \rv(\bar q_1 \otimes q_2) \rvert = 2 \atantwo\bigl(\lvert
+	\operatorname{vec}(r) \rvert,\ \lvert w(r) \rvert\bigr) \in [0, \pi], \qquad r = \bar q_1 \otimes
+	q_2 . @tag(angle)
+$$
+
+It is the same at $\pm q_1$ and $\pm q_2$, and smooth where $0 < \angle < \pi$: at $0$ it is a norm,
+with no derivative, and at $\pi$ a maximum, where $\lvert w(r) \rvert$ turns. Its square is smooth
+at $0$, and is what a cost on an attitude's error is written with.
+
+## Angles and directions
+
+Rotations are given and reported as an axis and an angle, as a pair of directions, and as Euler
+angles. Each is a way in and out, and none is a chart.
+
+**Axis and angle.** The rotation by $\theta$ about an axis $a \ne 0$ is $(\cos \tfrac\theta2,\ \sin
+\tfrac\theta2\, a / \lvert a \rvert)$, smooth in both. The way back is the rotation vector split
+into its length and its direction, and the direction is undefined at the identity. A computation
+that differentiates through an axis and an angle is better served by the rotation vector, which
+has no such point.
+
+**From two directions.** The rotation of least angle carrying the direction of $a$ to that of $b$ is
+the normalization of
+
+$$
+	\bigl(\lvert a \rvert \lvert b \rvert + a \cdot b,\ a \times b\bigr), @tag(two-vectors)
+$$
+
+since for unit vectors at the angle $\theta$ about the axis $n$ this is $(1 + \cos \theta,
+\sin \theta\, n) = 2 \cos \tfrac\theta2 \bigl(\cos \tfrac\theta2, \sin \tfrac\theta2\, n\bigr)$.
+It is smooth for $a, b \ne 0$ except where $b$ is opposite to $a$: there the vector vanishes, every
+half-turn about an axis perpendicular to $a$ is a rotation of least angle, and the map is undefined.
+
+**Euler angles.** A sequence of axes $(i, j, k)$ with $i \ne j \ne k$ is *proper* when $k = i$ and
+of *Tait–Bryan* type when the three are distinct, six sequences of each. With $q_e(\theta) = (\cos
+\tfrac\theta2, \sin \tfrac\theta2\, e)$ the rotation by $\theta$ about the coordinate axis $e$, the
+rotation by the angles $(\alpha, \beta, \gamma)$ about the three axes, each about the axis as the
+previous rotations left it (*intrinsic*), is
+
+$$
+	q = q_i(\alpha) \otimes q_j(\beta) \otimes q_k(\gamma), @tag(euler)
+$$
+
+smooth in the angles, and the rotation about the fixed axes in the same order (*extrinsic*) is
+$q_k(\gamma) \otimes q_j(\beta) \otimes q_i(\alpha)$, the intrinsic rotation of the reversed
+sequence. Roll, pitch and yaw $(\phi, \vartheta, \psi)$ in the usual aerospace convention are the
+intrinsic $(z, y, x)$ angles $(\psi, \vartheta, \phi)$. The way back has one form for every
+sequence.
+
+<Statement {...euler} />
+
+<Proof>
+
+With $c_\theta = \cos \tfrac\theta2$ and $s_\theta = \sin \tfrac\theta2$, and $e_j \times e_i =
+-\epsilon\, e_l$, $e_l \times e_i = \epsilon\, e_j$, the product [](eq:product) gives $q_i(\alpha)
+\otimes q_j(\beta) = (c_\alpha c_\beta,\ s_\alpha c_\beta\, e_i + c_\alpha s_\beta\, e_j + \epsilon
+s_\alpha s_\beta\, e_l)$, and its product with $q_i(\gamma)$ has
+
+$$
+	w = c_\beta (c_\alpha c_\gamma - s_\alpha s_\gamma), \quad
+	u_i = c_\beta (c_\alpha s_\gamma + s_\alpha c_\gamma), \quad
+	u_j = s_\beta (c_\alpha c_\gamma + s_\alpha s_\gamma), \quad
+	u_l = \epsilon\, s_\beta (s_\alpha c_\gamma - c_\alpha s_\gamma),
+$$
+
+which are the stated forms by the addition formulas. For $\beta \in (0, \pi)$ both $c_\beta$ and
+$s_\beta$ are positive, so $\lvert (w, u_i) \rvert = \lambda c_\beta$ and $\lvert (u_j, u_l) \rvert
+= \lambda s_\beta$ for $q$ scaled by $\lambda > 0$, and the $\atantwo$s return $\beta / 2$, and
+$\sigma$ and $\delta$ modulo $2\pi$; for $-q$ they return $\sigma + \pi$ and $\delta + \pi$ modulo
+$2\pi$, which change $\alpha$ and $\gamma$ by multiples of $2\pi$. For the second claim, let $r =
+q_j(\tfrac\pi2)$. Since $\pi(r)$ turns $e_i$ about $e_j$ to $e_j \times e_i = -\epsilon e_k$,
+$q_k(\gamma) = r \otimes q_i(-\epsilon \gamma) \otimes \bar r$, and so $q \otimes r = q_i(\alpha)
+\otimes q_j(\beta + \tfrac\pi2) \otimes q_i(-\epsilon\gamma)$, with $\beta + \tfrac\pi2 \in [0, \pi]$.
+Last, $q \otimes (1, e_j) = (w - u_j,\ u + w\, e_j + u \times e_j)$ is $\sqrt 2\, q \otimes r$, and
+$u \times e_j = \epsilon u_i\, e_k - \epsilon u_k\, e_i$.
+
+</Proof>
+
+So the Euler angles of a unit quaternion are, for a proper sequence, those of
+[%full](statement:euler) read off $q$, and for a Tait–Bryan sequence those read off the linear
+rearrangement of $q$ it gives, with $\beta$ lowered by $\tfrac\pi2$ and $\gamma$ multiplied by
+$-\epsilon$; for an extrinsic sequence, those of the reversed sequence, in reverse order. They are
+the same at $q$ and at $-q$, and so are angles of the rotation. The rotation is smooth in its
+angles everywhere. The angles are not smooth in the rotation everywhere, and no choice of formula
+makes them so.
+
+<Statement {...eulerSingular} />
+
+<Proof>
+
+For the first claim, let $\tilde\alpha$ be continuous and real-valued, equal to $\alpha$ modulo
+$2\pi$ on the loop. Off the lock the angles are unique modulo $2\pi$ by [%full](statement:euler),
+so the loop's rotation at $t$ has $\alpha = t$ modulo $2\pi$, and $\tilde\alpha(t) - t$ is
+continuous with values in $2\pi\mathbb Z$, hence constant. So $\tilde\alpha$ is larger by $2\pi$ at
+$t = 2\pi$ than at $t = 0$, but the loop closes there, since $q_i(2\pi) = -1$ and $\pi(-q) =
+\pi(q)$. The same holds of $\gamma$ on its loop. For the second, take a proper sequence. As $\beta
+\to 0$, $q_i(\alpha) \otimes q_j(\beta) \otimes q_i(\theta - \alpha)$ tends to $q_i(\theta)$ for
+every $\alpha$, and for $\beta \in (0, \pi)$ its angles are $\alpha$ and $\theta - \alpha$ modulo
+$2\pi$; so the rotations near $\pi(q_i(\theta))$ take every $\alpha$ and every $\gamma$, while
+$\alpha + \gamma = \theta$ on all of them. At $\beta = \pi$ the same holds of $q_i(\alpha) \otimes
+q_j(\beta) \otimes q_i(\alpha - \theta)$, which tends to $q_i(\theta) \otimes q_j(\pi)$ for every
+$\alpha$, since $q_j(\pi) \otimes q_i(\varphi) = q_i(-\varphi) \otimes q_j(\pi)$, a half-turn about
+$e_j$ reversing $e_i$; there $\alpha - \gamma = \theta$. A Tait–Bryan sequence's angles are, by
+[%full](statement:euler), the proper angles $(\alpha, \beta + \tfrac\pi2, -\epsilon\gamma)$ of $q
+\otimes q_j(\tfrac\pi2)$, a diffeomorphism of the rotations, and its lock is theirs.
+
+</Proof>
+
+The way back therefore has two kinds of singularity.
+
+*The wrap.* Away from the lock, $\alpha$ and $\gamma$ are smooth as points of the circle, and a
+formula returns them as real numbers in $(-\pi, \pi]$. By [%full](statement:euler-singular) a
+real-valued angle must be cut somewhere, and this convention cuts it where it is $\pi$: crossing
+there, it jumps by $2\pi$. The jump is in the value alone. $\atantwo(a, b)$ jumps across its
+half-line $a = 0$, $b < 0$, but its derivatives, $(b, -a) / (a^2 + b^2)$, and all of their own, are
+continuous across it, so the angles' derivatives of every order are the same on either side of the
+wrap. What a jump in value breaks is a difference of values. A difference between an angle $a$ and
+an angle $b$ it is compared with is taken on the circle,
+
+$$
+	a \ominus b = \atantwo\bigl(\sin(a - b),\ \cos(a - b)\bigr), @tag(angle-residual)
+$$
+
+which moves the cut to a difference of $\pm\pi$, as far as an angle can be from the one it is
+compared with, and has the derivatives of $a - b$ everywhere else.
+
+*The lock.* At gimbal lock one of the two norms of [%full](statement:euler) vanishes, and only
+$\alpha + \gamma$ or $\alpha - \gamma$ is determined: no convention makes the angles continuous
+there. Off the lock the angles are smooth, but not uniformly. $\delta$ is the angle of the vector
+$(u_j, \epsilon u_l)$ of length $\sin \tfrac\beta2$, and $\sigma$ that of $(w, u_i)$ of length $\cos
+\tfrac\beta2$, so the first derivatives of $\alpha$ and $\gamma$ grow like $1 / \sin \tfrac\beta2$
+as $\beta \to 0$ and $1 / \cos \tfrac\beta2$ as $\beta \to \pi$, and their second derivatives like
+the squares. The same factor amplifies a rounding of $q$'s coordinates into $\alpha$ and $\gamma$
+near the lock, while $\alpha \pm \gamma$, read off the larger norm, stays accurate. Euler angles
+are a way into and out of a computation; the uncertainty of a rotation is put in a chart.

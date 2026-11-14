@@ -1,5 +1,7 @@
 ---
 title: Elimination in square-root form
+part: estimation
+order: 1
 summary: A sum of squared linear residuals and linear terms is minimized, integrated or marginalized one block of variables at a time by orthogonal factorizations of its rows, without ever forming its normal equations; each elimination leaves a conditional and a smaller problem of the same form.
 depends_on: []
 ---
@@ -22,7 +24,7 @@ the same piece of linear algebra: a function of a vector $\tangent \in \R^\dimen
 a sum of squared affine residuals, plus a linear term,
 
 $$
-	\phi(\tangent) = \tfrac12 \lVert A \tangent - b \rVert^2 + \eta\transpose \tangent , @tag(problem)
+	\phi(\tangent) = \tfrac12 \lvert A \tangent - b \rvert^2 + \eta\transpose \tangent , @tag(problem)
 $$
 
 which is to be minimized, integrated as $e^{-\phi}$, or reduced to a function of some of its
@@ -68,8 +70,8 @@ recover it. The factorization below returns $(1, 1)$ to full precision.
 ## Householder reflections
 
 A square matrix $Q$ is orthogonal if $Q\transpose Q = I$. It preserves lengths, so it can be applied
-to the residual without changing the problem, $\lVert A \tangent - b \rVert = \lVert Q\transpose(A
-\tangent - b) \rVert$, and its condition number is one, so applying it amplifies no error. The
+to the residual without changing the problem, $\lvert A \tangent - b \rvert = \lvert Q\transpose(A
+\tangent - b) \rvert$, and its condition number is one, so applying it amplifies no error. The
 orthogonal matrices used here are reflections: $H_w$ below fixes every vector orthogonal to $w$ and
 sends $w$ to $-w$, so it mirrors space in the hyperplane orthogonal to $w$. A tuple of vectors,
 such as $(v, u)$, stands for the column vector that stacks them, $v$ above $u$.
@@ -83,29 +85,29 @@ $H_w$ is symmetric because $w w\transpose$ is, and
 $$
 	\begin{aligned}
 		H_w\transpose H_w &= H_w^2 \\
-		&= I - 4 \frac{w w\transpose}{\lVert w \rVert^2} + 4 \frac{w\, (w\transpose w)\, w\transpose}{\lVert w \rVert^4} \\
+		&= I - 4 \frac{w w\transpose}{\lvert w \rvert^2} + 4 \frac{w\, (w\transpose w)\, w\transpose}{\lvert w \rvert^4} \\
 		&= I .
 	\end{aligned}
 $$
 
 For the second part, $w$ differs from $x$ only in its first entry, by $-\alpha$, and
-$\alpha^2 = \lVert x \rVert^2$, so $w\transpose x = \lVert x \rVert^2 - \alpha x_1$ and
+$\alpha^2 = \lvert x \rvert^2$, so $w\transpose x = \lvert x \rvert^2 - \alpha x_1$ and
 
 $$
 	\begin{aligned}
-		\lVert w \rVert^2
-		&= \lVert x \rVert^2 - 2 \alpha x_1 + \alpha^2 \\
-		&= 2 \bigl( \lVert x \rVert^2 - \alpha x_1 \bigr) \\
+		\lvert w \rvert^2
+		&= \lvert x \rvert^2 - 2 \alpha x_1 + \alpha^2 \\
+		&= 2 \bigl( \lvert x \rvert^2 - \alpha x_1 \bigr) \\
 		&= 2\, w\transpose x .
 	\end{aligned}
 $$
 
-The product $-\alpha x_1$ is $\lvert x_1 \rvert \lVert x \rVert$, which is not negative, so
-$\lVert w \rVert^2 \ge 2 \lVert x \rVert^2$, which is positive. Then
+The product $-\alpha x_1$ is $\lvert x_1 \rvert \lvert x \rvert$, which is not negative, so
+$\lvert w \rvert^2 \ge 2 \lvert x \rvert^2$, which is positive. Then
 
 $$
 	\begin{aligned}
-		H_w x &= x - 2 \frac{w\transpose x}{\lVert w \rVert^2}\, w \\
+		H_w x &= x - 2 \frac{w\transpose x}{\lvert w \rvert^2}\, w \\
 		&= x - w \\
 		&= \begin{bmatrix} \alpha \\ 0 \end{bmatrix} .
 	\end{aligned}
@@ -114,7 +116,7 @@ $$
 </Proof>
 
 Either sign of $\alpha$ would do, as long as $w \neq 0$; the one chosen makes
-$w_1 = x_1 + \operatorname{sgn}(x_1) \lVert x \rVert$ a sum of two numbers of the same sign. The
+$w_1 = x_1 + \operatorname{sgn}(x_1) \lvert x \rvert$ a sum of two numbers of the same sign. The
 other sign subtracts them, and when $x$ is already close to a multiple of the first coordinate
 vector they nearly cancel, and $w$ is computed with a large relative error.
 
@@ -125,7 +127,7 @@ of what it is applied to.
 
 <Proof>
 
-The norms agree, $\lVert w \rVert = \lVert w' \rVert$, and the leading zeros of $w$ meet $v$, so
+The norms agree, $\lvert w \rvert = \lvert w' \rvert$, and the leading zeros of $w$ meet $v$, so
 
 $$
 	w\transpose \begin{bmatrix} v \\ u \end{bmatrix} = w'^\top u .
@@ -136,7 +138,7 @@ Therefore
 $$
 	\begin{aligned}
 		H_w \begin{bmatrix} v \\ u \end{bmatrix}
-		&= \begin{bmatrix} v \\ u \end{bmatrix} - 2 \frac{w'^\top u}{\lVert w' \rVert^2} \begin{bmatrix} 0 \\ w' \end{bmatrix} \\
+		&= \begin{bmatrix} v \\ u \end{bmatrix} - 2 \frac{w'^\top u}{\lvert w' \rvert^2} \begin{bmatrix} 0 \\ w' \end{bmatrix} \\
 		&= \begin{bmatrix} v \\ H_{w'} u \end{bmatrix} .
 	\end{aligned}
 $$
@@ -173,10 +175,10 @@ $Q\transpose = H_n \cdots H_1$. Then
 
 $$
 	\begin{aligned}
-		\lVert A \tangent - b \rVert^2
-		&= \bigl\lVert Q\transpose (A \tangent - b) \bigr\rVert^2 \\
-		&= \left\lVert \begin{bmatrix} R \tangent - d \\ -e \end{bmatrix} \right\rVert^2 \\
-		&= \lVert R \tangent - d \rVert^2 + \lVert e \rVert^2 ,
+		\lvert A \tangent - b \rvert^2
+		&= \bigl\lvert Q\transpose (A \tangent - b) \bigr\rvert^2 \\
+		&= \left\lvert \begin{bmatrix} R \tangent - d \\ -e \end{bmatrix} \right\rvert^2 \\
+		&= \lvert R \tangent - d \rvert^2 + \lvert e \rvert^2 ,
 	\end{aligned}
 $$
 
@@ -192,8 +194,8 @@ $$
 
 </Proof>
 
-The minimizer of $\lVert A \tangent - b \rVert^2$ therefore solves the triangular system
-$R \tangent = d$, and the minimum is $\lVert e \rVert^2$. $R$ is a square root of the normal
+The minimizer of $\lvert A \tangent - b \rvert^2$ therefore solves the triangular system
+$R \tangent = d$, and the minimum is $\lvert e \rvert^2$. $R$ is a square root of the normal
 equations' matrix, $R\transpose R = A\transpose A$, computed without forming that matrix, and
 $\kappa(R) = \kappa(A)$. A triangular system is solved by *back substitution*, from the last
 unknown up: for $i = n, n - 1, \dots, 1$,
@@ -216,8 +218,8 @@ $$
 	b = \begin{bmatrix} -7 \\ 16 \\ -3 \end{bmatrix} .
 $$
 
-The first column is $x = (-2, 1, 2)$, with $\lVert x \rVert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
-and $w = (-5, 1, 2)$, with $\lVert w \rVert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
+The first column is $x = (-2, 1, 2)$, with $\lvert x \rvert = 3$ and $x_1 < 0$, so $\alpha_1 = 3$
+and $w = (-5, 1, 2)$, with $\lvert w \rvert^2 = 30$. $H_1$ maps each column $y$ of $[A \;\, b]$ to
 $y - (w\transpose y / 15)\, w$, so the first column goes to $(3, 0, 0)$, as
 [%full](statement:reflection) says, and the others follow with $w\transpose y = 15$ and
 $w\transpose b = 45$:
@@ -238,8 +240,8 @@ $$
 $$
 
 The first row and the first column are now final. The second step works on what is left, rows 2
-and 3 of the last two columns. There $x = (4, 3)$, with $\lVert x \rVert = 5$ and $x_1 > 0$, so
-$\alpha_2 = -5$ and $w' = (9, 3)$, with $\lVert w' \rVert^2 = 90$, and $H_2 = H_w$ for
+and 3 of the last two columns. There $x = (4, 3)$, with $\lvert x \rvert = 5$ and $x_1 > 0$, so
+$\alpha_2 = -5$ and $w' = (9, 3)$, with $\lvert w' \rvert^2 = 90$, and $H_2 = H_w$ for
 $w = (0, 9, 3)$. By [%full](statement:reflection-block), $H_2$ leaves the first row, $[3 \;\, 5 \;\, 8]$,
 alone, and the first column, $(3, 0, 0)$, which is of the form $(v, 0)$. On the rest it acts as
 $H_{w'}$, which maps $y$ to $y - (w'^\top y / 45)\, w'$:
@@ -268,7 +270,7 @@ $$
 	\end{gathered}
 $$
 
-and the minimum of $\lVert A \tangent - b \rVert^2$ is $e^2 = 225$. Indeed, and with the root as
+and the minimum of $\lvert A \tangent - b \rvert^2$ is $e^2 = 225$. Indeed, and with the root as
 the theorem says,
 
 $$
@@ -284,7 +286,7 @@ multiplying $Q$ by a diagonal matrix of signs, changes nothing in the theorem, s
 diagonal can be had when it is wanted.
 
 Neither $Q$ nor any $H_j$ is formed. A reflection is applied to a vector $y$ of $p$ entries as
-$y - \beta\, (w\transpose y)\, w$, with $\beta = 2 / \lVert w \rVert^2$, in about $4p$ operations,
+$y - \beta\, (w\transpose y)\, w$, with $\beta = 2 / \lvert w \rvert^2$, in about $4p$ operations,
 and only the vectors $w$ are kept, if $Q$ is needed again at all. Step $j$ applies one to the last
 $n - j$ columns of $A$, in rows $j$ to $m$, so the reduction takes about
 $\sum_j 4 (m - j)(n - j) \approx 2 m n^2 - \tfrac23 n^3$ operations. Forming $A\transpose A$ and
@@ -300,18 +302,18 @@ the solution of the forward substitution $R\transpose y = \eta$, so that
 $\eta\transpose \tangent = y\transpose R \tangent$, completing the square gives
 
 $$
-	\phi(\tangent) = \tfrac12 \bigl\lVert R \tangent - (d - y) \bigr\rVert^2
-	+ \tfrac12 \lVert e \rVert^2 + y\transpose d - \tfrac12 \lVert y \rVert^2 . @tag(complete-square)
+	\phi(\tangent) = \tfrac12 \bigl\lvert R \tangent - (d - y) \bigr\rvert^2
+	+ \tfrac12 \lvert e \rvert^2 + y\transpose d - \tfrac12 \lvert y \rvert^2 . @tag(complete-square)
 $$
 
 So $\phi$ is minimized at $\tangent^* = R^{-1}(d - y)$, which solves
 $A\transpose A\, \tangent^* = A\transpose b - \eta$, and the decrease from $\tangent = 0$ is
 
 $$
-	\phi(0) - \phi(\tangent^*) = \tfrac12 \lVert d - y \rVert^2 = \tfrac12 \lVert R \tangent^* \rVert^2 , @tag(decrease)
+	\phi(0) - \phi(\tangent^*) = \tfrac12 \lvert d - y \rvert^2 = \tfrac12 \lvert R \tangent^* \rvert^2 , @tag(decrease)
 $$
 
-since $\phi(0) = \tfrac12 \lVert d \rVert^2 + \tfrac12 \lVert e \rVert^2$. Two things change with
+since $\phi(0) = \tfrac12 \lvert d \rvert^2 + \tfrac12 \lvert e \rvert^2$. Two things change with
 the linear term.
 
 - **It needs every direction determined.** When $A$ has rank $n$, $\phi$ is bounded below whatever
@@ -355,7 +357,7 @@ block, so it never ties two blocks together. It is kept as a vector $\eta_k$ for
 the problem [](eq:problem) is
 
 $$
-	\phi(\tangent) = \sum_f \tfrac12 \bigl\lVert A_f\, \tangent_{K_f} - b_f \bigr\rVert^2 + \sum_k \eta_k\transpose \tangent_k . @tag(factored)
+	\phi(\tangent) = \sum_f \tfrac12 \bigl\lvert A_f\, \tangent_{K_f} - b_f \bigr\rvert^2 + \sum_k \eta_k\transpose \tangent_k . @tag(factored)
 $$
 
 The factors say where the matrix $A\transpose A$ is zero. Its block $(j, k)$ is the sum, over the
@@ -378,9 +380,9 @@ Since $Q$ preserves lengths, the squares are
 
 $$
 	\begin{aligned}
-		\tfrac12 \lVert A_k \tangent_k + A_S \tangent_S - b \rVert^2
-		&= \tfrac12 \left\lVert \begin{bmatrix} R \tangent_k + T \tangent_S - d \\ A' \tangent_S - b' \end{bmatrix} \right\rVert^2 \\
-		&= \tfrac12 \lVert R \tangent_k + T \tangent_S - d \rVert^2 + \tfrac12 \lVert A' \tangent_S - b' \rVert^2 .
+		\tfrac12 \lvert A_k \tangent_k + A_S \tangent_S - b \rvert^2
+		&= \tfrac12 \left\lvert \begin{bmatrix} R \tangent_k + T \tangent_S - d \\ A' \tangent_S - b' \end{bmatrix} \right\rvert^2 \\
+		&= \tfrac12 \lvert R \tangent_k + T \tangent_S - d \rvert^2 + \tfrac12 \lvert A' \tangent_S - b' \rvert^2 .
 	\end{aligned}
 $$
 
@@ -393,7 +395,7 @@ $$
 and completing the square in $w$,
 
 $$
-	\tfrac12 \lVert w \rVert^2 + y\transpose w = \tfrac12 \lVert w + y \rVert^2 - \tfrac12 \lVert y \rVert^2 ,
+	\tfrac12 \lvert w \rvert^2 + y\transpose w = \tfrac12 \lvert w + y \rvert^2 - \tfrac12 \lvert y \rvert^2 ,
 $$
 
 which together give the decomposition. Only its first term depends on $\tangent_k$; it is zero
@@ -429,7 +431,7 @@ which is the gradient of $\phi'$ at zero, since $R^{-\top} \eta_k = y$.
 The first term of the decomposition is a *conditional*: it says what $\tangent_k$ is once
 $\tangent_S$ is known. The second, $\phi'$, is a *new factor* on the separator, with the linear
 term $-T\transpose y$ pushed onto the separator's blocks, and it replaces every factor that
-involved $k$. The constant $\gamma$, and $\tfrac12 \lVert e \rVert^2$ when $A'$ is reduced
+involved $k$. The constant $\gamma$, and $\tfrac12 \lvert e \rvert^2$ when $A'$ is reduced
 further, depend on nothing. The problem now has one block fewer and the same form. Minimizing over
 $\tangent_k$ and integrating over it leave the same new factor, and differ only in a constant,
 $\tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert$. Part 3 says that the new factor is what
@@ -584,7 +586,7 @@ sides $d - y$; every computation with $R$ becomes a traversal of the elimination
 | $\sum_i \log \lvert R_{ii} \rvert$ | none | $\tfrac12 \log \det A\transpose A$ |
 
 The minimum is the sum of the constants, and the decrease from $\tangent = 0$ is
-$\tfrac12 \lVert R \tangent^* \rVert^2$ by [](eq:decrease). Eliminating by integration instead, by
+$\tfrac12 \lvert R \tangent^* \rvert^2$ by [](eq:decrease). Eliminating by integration instead, by
 part 2, gives
 
 $$
@@ -646,7 +648,7 @@ $D$, so that the minimizer solves $(A\transpose A + \lambda D)\, \tangent = A\tr
 The penalty is a sum of squares of its own,
 
 $$
-	\tfrac12 \lambda\, \tangent\transpose D \tangent = \sum_k \tfrac12 \bigl\lVert \sqrt\lambda\, D_k^{1/2} \tangent_k - 0 \bigr\rVert^2 , @tag(damping)
+	\tfrac12 \lambda\, \tangent\transpose D \tangent = \sum_k \tfrac12 \bigl\lvert \sqrt\lambda\, D_k^{1/2} \tangent_k - 0 \bigr\rvert^2 , @tag(damping)
 $$
 
 one factor on each block $k$ with $D_k$ its part of $D$, so damping appends rows and nothing else:

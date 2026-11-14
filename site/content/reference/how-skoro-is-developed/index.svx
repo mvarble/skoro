@@ -48,7 +48,10 @@ time which entry the branch works on, the stage it is at, and the command that c
 ## The stages
 
 1. **Mathematics** (`/wf-math`). A writeup of the mathematics at play, revised until it is right.
-   Ideas that stand on their own become [math notes](../../math/), which later writeups build on.
+   Whatever in it is general, true without naming anything skoro defines, is written as a
+   [math note](../../math/), at its place in the order the notes are read in. The writeup links
+   to the note, and keeps what is skoro's own: the problem, the choices, and how the mathematics
+   meets the library.
 2. **Implementation** (`/wf-implementation`). A companion that turns the mathematics into a
    design: the types and traits, sketched in code, where the neighbouring interfaces constrain
    them, and the tests that will show the design works. It is meant to be complete enough that
@@ -85,10 +88,19 @@ allowed to change its story; it is not allowed to forget it.
 An entry can be set aside with `/wf-abandon <reason>`. Its documents stay, approved or not, and
 `/wf-resume <slug>` takes it up again at the stage where it stopped.
 
-Once its publishing is approved, an entry is done, and a done entry is never edited again: it can
-no longer be reopened. When skoro later changes what an entry built, a new entry says so, opened
-with the earlier entry named as the one it revises. The archive then marks the earlier entry as
-revised, and the pages it changed show both.
+Once its publishing is approved, an entry is done, and what a done entry argued is never edited
+again: it can no longer be reopened. When skoro later changes what an entry built, a new entry says
+so, opened with the earlier entry named as the one it revises. The archive then marks the earlier
+entry as revised, and the pages it changed show both.
+
+A done entry admits one change. The math notes are rewritten as the mathematics grows, and an
+entry's documents refer to their equations, statements and sections. When a later entry rewrites a
+note, what the archive refers to stays where the notes have a place for it; where it moves, the
+reference is changed to follow it; and where it leaves the notes, it is written into the document
+that referred to it. The later entry makes such a change only while it is being published, lists
+the documents it changed, and its approval records the change in the earlier entry's history,
+which then says that it was amended and by which entry. Nothing a document argued changes this
+way. [The decision that ordered the mathematics](../../archive/mathematics-in-order/) says why.
 
 ## What you can see along the way
 
@@ -112,7 +124,8 @@ allow and checks the rules on every pull request:
 
 - A branch works on one entry at a time, and merges only once that entry is done or set aside.
 - An approved document is frozen until its stage is reopened, which is recorded, with its reason,
-  in the entry's history.
+  in the entry's history. Once its entry is done, it changes only by an amendment of its
+  references into the math notes, which is recorded there too.
 - A document is never written before its stage, the code changes only once a plan is approved, and
   the pages that say what skoro is change only at the end, when there is code to quote.
 - A stage is approved only when its work is committed and complete: no open questions left in a

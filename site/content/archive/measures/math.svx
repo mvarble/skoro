@@ -209,12 +209,12 @@ defined for every $\tangent$, $Q$ inverts it on all of $\R^2$ by the computation
 [the note's table](../../math/chart-volume/#the-usual-charts),
 
 $$
-	\Lambda_{S^2}(\mu, \tangent) = -2 \log\bigl(1 + \tfrac14 \lVert \tangent \rVert^2\bigr), @tag(sphere-volume)
+	\Lambda_{S^2}(\mu, \tangent) = -2 \log\bigl(1 + \tfrac14 \lvert \tangent \rvert^2\bigr), @tag(sphere-volume)
 $$
 
 independent of $\mu$, smooth everywhere as written, and a composite of the core's primitives. Read
 at the coordinate of a point, it has a form in storage too: with $c = \mu\transpose \point$,
-$\lVert B(\mu)\transpose \point \rVert^2 = 1 - c^2$, so $\lVert \point \ominus \mu \rVert^2 / 4 =
+$\lvert B(\mu)\transpose \point \rvert^2 = 1 - c^2$, so $\lvert \point \ominus \mu \rvert^2 / 4 =
 (1 - c)/(1 + c)$ and $\Lambda_{S^2}(\mu, \point \ominus \mu) = 2 \log\bigl((1 + \mu\transpose
 \point) / 2\bigr)$. The sphere is the natural type to test a declaration on: it is curved, already
 written against the core's public interface alone, and its volume is known in closed form.
@@ -252,7 +252,7 @@ value in the compilation graph. And every evaluation would cost $\dimension$ tan
 over $R$, a Gram matrix and its log-determinant, where the declared formulas of the
 [note's table](../../math/chart-volume/#the-usual-charts) are one scalar function of the tangent
 vector: $2$, $4$ and $6 \log \operatorname{sinc}(\theta / 2)$ for the exponential charts of $SO(3)$,
-$SE(3)$ and $SE_2(3)$, and $-2 \log(1 + \lVert \tangent \rVert^2 / 4)$ for the Cayley chart of the
+$SE(3)$ and $SE_2(3)$, and $-2 \log(1 + \lvert \tangent \rvert^2 / 4)$ for the Cayley chart of the
 rotations and the stereographic chart of the sphere.
 
 A type therefore declares its log-volume, and [%full](statement:area) is what a test checks the
@@ -389,7 +389,7 @@ may leave it free, as optimization does: its log-density is then a function of t
 maximum is a likelihood estimate, but not a density of it, so an algorithm that integrates over the
 query's free quantities, a sampler or an evidence, must refuse it. A distribution on a type without
 a volume can therefore only be a *likelihood factor over data*: with the measured value a constant
-$z$, a function such as $-\tfrac12 \lVert W(z \ominus h(\point)) \rVert^2$ of the state scores
+$z$, a function such as $-\tfrac12 \lvert W(z \ominus h(\point)) \rvert^2$ of the state scores
 nothing and needs no measure. That is how factor-graph libraries hold every measurement, and it
 remains available on every type; a volume is what makes the measurement a quantity of its own,
 with a law that can be sampled and integrated.

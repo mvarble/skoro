@@ -41,6 +41,10 @@ export interface SkoroPage extends Common {
 export interface SkoroMath extends Common {
     kind: 'math';
     slug: string;
+    // The part of the mathematics it belongs to, and its position within the part. Read part by
+    // part and in order, the notes are one story, each resting only on the notes before it.
+    part: string;
+    order: number;
 }
 
 // Where an entry stands, read from its `workflow.json`.
@@ -63,6 +67,9 @@ export interface WorkflowEvent {
     stage?: string;
     reason?: string;
     commit?: string;
+    // An amendment: what was changed, and the entry that changed it.
+    document?: string;
+    by?: string;
     [key: string]: unknown;
 }
 
@@ -79,6 +86,11 @@ export interface SkoroEntry extends Common {
     // change this one's, by key.
     revises: string[];
     revisedBy: string[];
+    // What it changed in entries that were done, to keep their references into the math notes
+    // true: documents by key, statements as `archive/<slug>/statements/<name>`. And the later
+    // entries that amended this one, by key.
+    amends: string[];
+    amendedBy: string[];
 }
 
 export interface SkoroEntryDocument extends Common {
@@ -86,6 +98,8 @@ export interface SkoroEntryDocument extends Common {
     // The entry it belongs to, by key, and its name there (`math`, `plan`).
     entry: string;
     name: string;
+    // The later entries that amended it, by key.
+    amendedBy: string[];
 }
 
 export type SkoroDocument = SkoroPage | SkoroMath | SkoroEntry | SkoroEntryDocument;
@@ -111,6 +125,8 @@ export interface SkoroSnapshot {
     // The home page's prose, by filename.
     landing?: string;
     tracks: string[];
+    // The parts of the mathematics, in reading order.
+    parts: string[];
     documents: SkoroDocument[];
     graph: Graph;
     // Each document's headings, by filename.

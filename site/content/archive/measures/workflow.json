@@ -37,23 +37,47 @@
             "action": "approve",
             "stage": "publish",
             "commit": "0930b93"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "implementation",
+            "document": "archive/measures/implementation",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "math",
+            "document": "archive/measures/math",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
+        },
+        {
+            "date": "2026-11-12",
+            "action": "amend",
+            "stage": "plan",
+            "document": "archive/measures/plan",
+            "by": "mathematics-in-order",
+            "commit": "a7dd3d2"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-10-31",
             "commit": "bdab701",
-            "hash": "01216b3b0e4074f74a6caf4fa6cfb1203c9245b85307f2fe71026c28c2079f42"
+            "hash": "0d9063b6bcf57702d8ce4cedd471aa496a25d2dbd36015c756d62effd1e1bbd8"
         },
         "implementation": {
             "date": "2026-11-01",
             "commit": "b011bd7",
-            "hash": "e7ad35d7a61adfe78f2f38719903399a691c8e0a0e11440be2cb9bcf42b5b870"
+            "hash": "6378973e6c8d5d604e46be82dde6ce6e43394d19d96d591cf3f229feb106f1cd"
         },
         "plan": {
             "date": "2026-11-01",
             "commit": "0ad3621",
-            "hash": "df02967ea5af9440c87ddfa6ef92fc63fcbbd78cac571269301ecc2e8d6bcf91"
+            "hash": "06e9a819c5998b27b65a9a70a1ceb6d14b7bc7f902078ca364638974cfa2e0d0"
         },
         "build": {
             "date": "2026-11-01",

@@ -7,7 +7,7 @@ title: Eliminating one block
 Let
 
 $$
-	\phi(\tangent_k, \tangent_S) = \tfrac12 \lVert A_k \tangent_k + A_S \tangent_S - b \rVert^2
+	\phi(\tangent_k, \tangent_S) = \tfrac12 \lvert A_k \tangent_k + A_S \tangent_S - b \rvert^2
 	+ \eta_k\transpose \tangent_k + \eta_S\transpose \tangent_S ,
 $$
 
@@ -23,17 +23,17 @@ $y = R^{-\top} \eta_k$,
 
 $$
 	\phi(\tangent_k, \tangent_S)
-	= \tfrac12 \bigl\lVert R \tangent_k + T \tangent_S - (d - y) \bigr\rVert^2
+	= \tfrac12 \bigl\lvert R \tangent_k + T \tangent_S - (d - y) \bigr\rvert^2
 	+ \phi'(\tangent_S) + \gamma ,
 $$
 
 where
 
 $$
-	\phi'(\tangent_S) = \tfrac12 \lVert A' \tangent_S - b' \rVert^2 + (\eta_S - T\transpose y)\transpose \tangent_S
+	\phi'(\tangent_S) = \tfrac12 \lvert A' \tangent_S - b' \rvert^2 + (\eta_S - T\transpose y)\transpose \tangent_S
 $$
 
-and $\gamma = y\transpose d - \tfrac12 \lVert y \rVert^2$. Consequently:
+and $\gamma = y\transpose d - \tfrac12 \lvert y \rvert^2$. Consequently:
 
 1. for every $\tangent_S$, $\min_{\tangent_k} \phi = \phi'(\tangent_S) + \gamma$, attained only at
    $\tangent_k = R^{-1}(d - y - T \tangent_S)$;

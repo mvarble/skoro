@@ -1,0 +1,123 @@
+---
+title: Importance weights
+part: probability
+order: 4
+summary: Drawing the free quantities of a model in an ancestral order, each from a proposal, and weighing the draw by the ratio of the model's density to the proposals', gives an unbiased estimate of every integral against the unnormalized conditional law, provided each ratio is of densities against one reference measure.
+depends_on: [generative-models]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as importance from './statements/importance.md';
+</script>
+
+A [model built forward](../generative-models/) can be sampled by drawing its quantities in the
+order they were built. Once some of its quantities are observed, or it carries likelihood factors,
+or a quantity is drawn from something other than its own kernel, the draw is no longer from the law
+that is wanted. It is from a law that differs from it by a known factor, the *importance weight*.
+This note defines the weight, proves what it estimates, and states the two conditions that are
+easy to break.
+
+## Proposals and ancestral draws
+
+Let a model have quantities with conditional densities $\density_i(\point_i \mid \point_{<i})$
+against reference measures $\nu_i$, likelihood factors $L_j$, and parameters with scores $S$, and
+let its quantities be split into the *observed* ones, $\point_O$, held at given values, and the
+*free* ones, $\point_F$. Write
+
+$$
+	\density(\point_F, \point_O) = \prod_i \density_i(\point_i \mid \point_{<i}) \prod_j L_j(\point)\; S(\theta)
+$$
+
+for the product of everything the model states. By
+[%full](statement:math/generative-models/conditioning) and
+[%full](statement:math/generative-models/likelihood-factor), the law of the free quantities given
+the observations has, when the model has no parameters, a density proportional to
+$\density(\cdot, \point_O)$ against the product $\dd \point_F$ of the free quantities' reference
+measures, and with parameters $\density(\cdot, \point_O)$ is the unnormalized measure of
+[](eq:math/generative-models/parameter).
+
+A *proposal* for a free quantity is a conditional density $\proposal_i(\point_i \mid \point_{<i})$
+against the quantity's own reference measure $\nu_i$, from which the quantity can be drawn. A
+quantity's own kernel is a proposal for it, with $\proposal_i = \density_i$, and is called *exact*.
+A parameter has no kernel, so its proposal is always something else. Drawing the free quantities
+in an [ancestral order](../generative-models/#the-dependence-graph), each from its proposal given
+the quantities drawn or fixed before it, is an *ancestral draw*. Its weight is
+
+$$
+	\log \weight(\point_F) = \log \density(\point_F, \point_O) - \sum_{i \in F} \log \proposal_i(\point_i \mid \point_{<i}) . @tag(weight)
+$$
+
+Each free quantity drawn from its own kernel cancels, $\log \density_i - \log \proposal_i = 0$, so
+with exact proposals throughout the weight is what remains: the densities of the observed
+quantities at their values, the likelihood factors, and the scores,
+
+$$
+	\log \weight(\point_F) = \sum_{i \in O} \log \density_i(\point_i \mid \point_{<i}) + \sum_j \log L_j(\point) + \log S(\theta) - \sum_{\theta \text{ free}} \log \proposal_\theta ,
+$$
+
+the likelihood of everything that was not generated, at the point that was.
+
+<Statement {...importance} />
+
+<Proof>
+
+An ancestral draw has the density $\proposal(\point_F) = \prod_{i \in F} \proposal_i(\point_i \mid
+\point_{<i})$ with respect to $\dd \point_F$, since each free quantity is drawn given quantities
+drawn or fixed before it. Then $\weight = \density(\point_F, \point_O) / \proposal(\point_F)$
+wherever $\proposal > 0$, which covers the set where $\density(\cdot, \point_O) > 0$, and
+
+$$
+	\E_\proposal[\weight h] = \int h\, \frac{\density(\point_F, \point_O)}{\proposal(\point_F)}\, \proposal(\point_F)\, \dd \point_F = \int h\, \density(\point_F, \point_O)\, \dd \point_F .
+$$
+
+Without parameters or likelihood factors, $\density(\point_F, \point_O)$ is the joint density, which
+is the conditional density of [%full](statement:math/generative-models/conditioning) times the
+marginal density of the observations. When $Z$ is finite and positive, $\pi$ is a probability
+measure, and the integral is $Z\, \E_\pi[h]$.
+
+</Proof>
+
+## What a weighted draw is for
+
+The statement gives $Z\, \E_\pi[h]$ and not $\E_\pi[h]$: the weight turns the proposal's law into
+the target only up to the constant $Z$. That is all an algorithm needs, and often what it wants.
+
+- With $h = 1$, the mean weight of independent draws is an unbiased estimate of $Z$ itself, which
+  without parameters or likelihood factors is the marginal density of the observations, the
+  model's *evidence*.
+- A *self-normalized* estimate $\sum_n \weight_n h_n / \sum_n \weight_n$ over draws estimates
+  $\E_\pi[h]$, with $Z$ cancelling between its numerator and its denominator. It is consistent and
+  not unbiased.
+- A Metropolis–Hastings ratio, a gradient of $\log \weight$, and a resampling step in a particle
+  filter are each unchanged when every weight is multiplied by the same number.
+
+A constant that does not depend on the free quantities may therefore be dropped from the weight,
+and with it from every density it is made of, when all that is wanted is the law. It may not be
+dropped when the evidence is.
+
+## The two conditions
+
+**Positivity.** The proposals must be positive wherever the target is: a region the proposals
+never reach contributes nothing to any estimate, however much of the target lies there. It is a
+property of the proposals that no computation on draws can check.
+
+**One reference measure for each ratio.** The weight is a ratio of densities, and the ratio means
+something only when numerator and denominator are densities against the same measure. A density
+of a continuous quantity against Lebesgue measure and a mass function of a discrete one against
+counting measure mix freely in a product, since each quantity's ratio is formed on its own. What
+breaks the condition is a density written in a chart. If $g$ is the density of $\log \randomPoint$
+with respect to Lebesgue measure on $\R^n$, the density $f$ of $\randomPoint$ with respect to
+Lebesgue measure on $\positive^n$ carries the Jacobian of the chart,
+
+$$
+	\log f(\point) = \log g(\log \point) - \sum_i \log \point_i , @tag(log-chart-density)
+$$
+
+and a proposal written as $g$ against a target written as $f$ gives weights wrong by $\prod_i
+\point_i$ at every draw. The general form of this correction is the
+[volume of a chart](../chart-volume/): a density of a point drawn through a chart is the density
+of its tangent coordinate less the chart's log-volume
+([%full](statement:math/chart-volume/pushforward)), and a weight on a curved space is right when
+the target's densities and the proposals' both keep to it.

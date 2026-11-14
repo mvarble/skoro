@@ -7,13 +7,18 @@ import { test } from 'vitest';
 import { buildStore, createCms, type ResolvedRef } from '@mvarble/mesearch-cms';
 
 import { skoroPreset } from './preset.ts';
-import { bind, readingOrder } from './runtime.ts';
-import type { GraphEdge, SkoroDocument, SkoroMath, SkoroSnapshot } from './types.ts';
+import { bind } from './runtime.ts';
+import type { GraphEdge, SkoroDocument, SkoroSnapshot } from './types.ts';
 
 // A document of every kind, and a few that are wrong on purpose.
 const root = fileURLToPath(new URL('../../../test/cms', import.meta.url));
 const dates = () => undefined;
-const preset = skoroPreset({ tracks: ['guide', 'concepts'], base: '/skoro', dates });
+const preset = skoroPreset({
+    tracks: ['guide', 'concepts'],
+    parts: ['geometry', 'probability'],
+    base: '/skoro',
+    dates,
+});
 const store = buildStore({ root, preset });
 const cms = bind(preset.snapshot(store) as SkoroSnapshot);
 const messages = store.diagnostics.map((d) => d.message);
@@ -48,29 +53,71 @@ test('pages are found by track and ordered within it', () => {
     assert.equal(cms.landing(), 'content/landing.md');
 });
 
-test('math notes are listed in reading order, not by title', () => {
-    // "Retractions" comes first by title, but builds on "Tangent spaces".
+test('math notes are read part by part, in the order each gives', () => {
+    // "Measures" comes first by title, but stands in the second part; a note with no part of
+    // the mathematics comes last.
     assert.deepEqual(
         cms.math.list().map((note) => note.key),
-        ['math/tangent-space', 'math/retraction'],
+        [
+            'math/misplaced',
+            'math/tangent-space',
+            'math/retraction',
+            'math/measure',
+            'math/partless',
+        ],
+    );
+    assert.deepEqual(cms.math.parts(), ['geometry', 'probability']);
+    assert.deepEqual(
+        cms.math.list('probability').map((note) => note.key),
+        ['math/measure'],
+    );
+    assert.equal(cms.math.position('math/measure'), 4);
+    // The order runs across the parts.
+    const { prev, next } = cms.math.neighbours('math/retraction');
+    assert.equal(prev?.key, 'math/tangent-space');
+    assert.equal(next?.key, 'math/measure');
+    assert.deepEqual(cms.math.neighbours('math/nowhere'), {});
+});
+
+test('a note rests only on the notes before it', () => {
+    const has = (text: string) => messages.some((m) => m.includes(text));
+    const misplaced = 'content/math/misplaced/index.md: ';
+    assert.ok(
+        has(
+            misplaced +
+                "`depends_on` names 'math/measure', which stands at probability 1, not before geometry 1",
+        ),
+    );
+    assert.ok(has(misplaced + "`depends_on` names 'archive/normal/math', which is no math note"));
+    assert.ok(has("'math/misplaced' is at geometry 1 too; two notes cannot stand at one place"));
+    assert.ok(has('content/math/partless/index.md'), 'a part that is not one, and no order');
+    // A note of a later part may rest on one of an earlier part.
+    assert.ok(!has('content/math/measure/index.md'));
+    assert.ok(!has('content/math/retraction/index.md'));
+});
+
+test('a page rests only on the pages before it in its track', () => {
+    const has = (text: string) => messages.some((m) => m.includes(text));
+    assert.ok(
+        has(
+            "content/guide/first-model/index.md: `depends_on` names 'guide/estimation', which does not come before it in its track",
+        ),
     );
 });
 
-test('reading order takes the first ready note by title, and leaves a cycle to the end', () => {
-    const note = (key: string, title: string, dependsOn: string[] = []) =>
-        ({ key, title, dependsOn }) as SkoroMath;
-    const order = readingOrder([
-        note('math/d', 'D', ['math/b']),
-        note('math/c', 'C', ['math/e']),
-        note('math/b', 'B'),
-        note('math/a', 'A', ['math/b', 'archive/x/math']),
-        note('math/e', 'E', ['math/c']),
+test('an entry lists what it amends, and what it amended says so', () => {
+    const has = (text: string) => messages.some((m) => m.includes(text));
+    assert.deepEqual(doc('archive/normal-v2', 'entry').amends, [
+        'archive/normal/math',
+        'archive/normal/statements/whitening',
     ]);
-    // `archive/x/math` is not a math note, so it holds nothing back; `c` and `e` depend on each
-    // other.
-    assert.deepEqual(
-        order.map((n) => n.title),
-        ['B', 'A', 'D', 'C', 'E'],
+    assert.deepEqual(doc('archive/normal', 'entry').amendedBy, ['archive/normal-v2']);
+    assert.deepEqual(doc('archive/normal/math', 'entry-document').amendedBy, ['archive/normal-v2']);
+    assert.deepEqual(doc('archive/normal/plan', 'entry-document').amendedBy, []);
+    assert.ok(
+        has(
+            "`amends` entry 'archive/normal/notes' names no document or statement of another entry",
+        ),
     );
 });
 
@@ -90,6 +137,8 @@ test('math notes resolve bare slugs in depends_on', () => {
         cms.dependents('math/tangent-space').map((record) => record.key),
         ['math/retraction', 'archive/normal/math'],
     );
+    // A dependency a note may not have is reported, and kept for the map all the same.
+    assert.deepEqual(doc('math/misplaced').dependsOn, ['math/measure', 'archive/normal/math']);
 });
 
 test('an entry carries its workflow record, its documents in order, and its pages', () => {
@@ -197,6 +246,9 @@ test('the graph joins math notes and entry documents', () => {
         'archive/normal/implementation',
         'archive/normal/math',
         'archive/normal/plan',
+        'math/measure',
+        'math/misplaced',
+        'math/partless',
         'math/retraction',
         'math/tangent-space',
     ]);
