@@ -14,20 +14,24 @@ The items are in the order they should be taken.
 - **Estimation reads only Gaussian-shaped terms.** `Linearizer` refuses a model with any term that binds no residual (`NoResidual`), and the roles it reads are the normal's.
   The log-volume role was already redefined as "the varying part of a remainder" to carry the improper factor's linear part.
   One term that is not a normal, such as the half-Cauchy prior on the scale that eight schools usually carries, makes the whole model unlinearizable, and robust losses, which real pose-graph data needs, have no route either.
-  The entry gives a term without a residual a place in a linearization, such as its gradient and Hessian products through the core's second-order passes.
+  The entry gives a term without a residual a place in a linearization, and weighs two routes (`EVALUATION.md`, the survey of inference algorithms).
+  One is the term's gradient and Hessian products through the core's second-order passes, which is general and brings with it the Newton step and the observed information, a Laplace approximation that keeps the residual-weighted curvature Gauss–Newton drops.
+  The other is a distribution that declares its expected information in its parents' coordinates, as the normal declares its information root, lifted by the parents' Jacobians: positive semidefinite, of the linearization's shape, and for a robust loss such as the Student-t's a constant multiple of the normal's rows. A likelihood factor has no expected information, so it takes the first route.
+  The entry also damps Fisher scoring: `LevenbergMarquardt` refuses the Fisher assembly (`NotAnIntegral`), yet its gain ratio needs only the objective and a model with the objective's gradient, which the Fisher rows have; without it a free scale, such as eight schools' τ, has no damped route to a mode.
   It comes before Hamiltonian Monte Carlo, whose example needs a mode and a Laplace approximation to start from.
   ```
-  /wf-start terms-without-residuals feature A place in a linearization for a term that binds no residual, revises linearization
+  /wf-start terms-without-residuals feature A place in a linearization for a term that binds no residual, and damped Fisher scoring, revises linearization
   ```
 
 - **Hamiltonian Monte Carlo.** The first estimator not based on a mode, probably a crate of its own.
   Most of what it needs exists: `Program::gradient` is batched, so the batch is a set of parallel chains; `Space::Positive` carries its log-volume, so the change of variables is already in the density; seeded sampling gives the momenta.
   The log-density gradient flattened by layout, which it needs, still lives in the tests (`gradient` in `crates/skoro-linearize/tests/common/mod.rs`) and moves into the library with it.
   Leapfrog through a retraction on SO(3) is not obviously volume-preserving or reversible, so the first entry refuses curved and discrete quantities by structure; curved quantities are the next item, and a metric that varies is in the eventual future.
-  The scope is static HMC with dual-averaging step-size adaptation first, and NUTS as a follow-up.
+  The scope is static HMC with dual-averaging step-size adaptation first, and NUTS as a follow-up; the Metropolis-adjusted Langevin algorithm, which is HMC with one leapfrog step, comes with it as the simplest sampler.
   The Laplace approximation serves as mass matrix and starting point: a mode, then Laplace, then HMC, all read off one model.
   Its diagnostics are R-hat and effective sample size, enough for the example to show its chains converged.
   Its example is eight schools (a funnel, and a positive scale τ), the standard comparison with Stan.
+  It is written non-centred, `θ_j = μ + τ η_j`: the centred form has no mode, since with every `θ_j = μ` its density in the logarithmic chart of τ grows like `τ^(-(J-1))` as `τ → 0`, so the mode and the Laplace approximation exist only for the non-centred form (`EVALUATION.md`, the survey of inference algorithms).
   The archive's climate model (`08-example-climate-mcmc`) waited on seeded sampling, HMC and the positive reals, and can follow once its ODE is unrolled in the graph.
   ```
   /wf-start hmc feature Static Hamiltonian Monte Carlo on flat quantities, with eight schools as its example
@@ -68,6 +72,7 @@ These are in no order; each returns when something needs it.
   The cost is mostly a fixed overhead of running each program's many small steps on the tensor backend, which a batch of rows shares and a single row pays in full; that reading is an inference from the timings, and the entry starts by profiling it.
   This suits many datasets or hypotheses at once, and does not yet suit one estimator running in real time, which the docs name as an audience.
   Fused kernels are the lever: `skoro-spatial` brought SO(3) and SE(3) back as embedded types whose maps are composites, and the archive's fused exponential and logarithm kernels for cubecl (`crates/skoro-so3/src/ops/exp/cube.rs`, `ops/log/cube.rs`) are the prior art.
+  Incremental elimination, below, is the algorithmic lever beside this arithmetic one, and the two are measured on the same loop.
   ```
   /wf-start fused-kernels feature The cost of a single row, and fused kernels for the maps that dominate it
   ```
@@ -96,9 +101,35 @@ These are in no order; each returns when something needs it.
 - **Draws are made on the host.** Every sampler runs on the host in double precision, with one chain of keyed hashes per row and quantity, and enters a generation program as a step with no derivative.
   This is deliberate, and gives reproducible draws at any precision.
   Its costs come later: particle methods on a GPU pay a round trip per drawn quantity, and no gradient passes through a draw, so a variational method that differentiates through its samples needs the noise as an explicit input.
+  Sequential Monte Carlo, below, is the first client of the round trip; automatic-differentiation variational inference and its natural-gradient variants are the clients of the gradient, and wait on this entry.
   ```
   /wf-start device-sampling feature Draws on the target's device, and derivatives through a draw
   ```
+
+- **Incremental elimination.** A sliding window's snapshots differ from one tick to the next by a few terms and a retirement, and each tick eliminates the whole window again.
+  The `Schedule`'s junction tree is the static half of iSAM2's Bayes tree (Kaess et al., 2012); the other half re-eliminates only the cliques on the paths from the blocks a change touches to the root, keeps the rest of the factorization, and relinearizes only the blocks whose step passed a threshold.
+  The diff between snapshots is read off the ids of their terms and quantities, so the model is not told what changed.
+  It matters most for one estimator running indefinitely, which is where the single row is slow.
+  ```
+  /wf-start incremental-elimination feature Re-eliminating only the cliques a change of the model touches, revises linearization
+  ```
+
+- **Sequential Monte Carlo.** A bootstrap particle filter needs only draws of the transition and the observation's log-density, both of which the core gives; resampling permutes the rows of a batch.
+  A sampler that tempers from the prior to the posterior with HMC moves (Del Moral, Doucet and Jasra, 2006) gives an unbiased estimate of the evidence for a posterior far from Gaussian, which nothing else in the plan does, and annealed importance sampling is its special case.
+  A Rao–Blackwellized filter samples part of the state and carries the rest through the linearizer per particle.
+  Each draw is a round trip from the device until draws on the device land, so the entry measures that cost first.
+  ```
+  /wf-start smc feature Particle filters and tempered samplers, with an estimate of the evidence
+  ```
+
+- **Sigma-point filtering.** The unscented transform propagates a Gaussian through a map by evaluating it at `2d + 1` points, with no derivative.
+  It is the one Gaussian filter for a model with an operation that has no derivative rules, and it reads the same model as the linearizer.
+  ```
+  /wf-start sigma-points feature The unscented transform, for Gaussian filtering without derivatives
+  ```
+
+- **Not planned.** The survey of inference algorithms (`EVALUATION.md`) also covers the ensemble Kalman filter, Stein variational gradient descent, normalizing flows and controlled diffusions, and expectation propagation.
+  None is planned: the first is for dimensions of a million, the second couples the rows of a batch that skoro keeps independent, the third needs trained networks, and the fourth asks each term for tilted moments, a declaration different in kind from any a distribution makes today.
 
 - **The operation bridging burn's automatic differentiation.** From the charter: an operation that runs burn's `Autodiff` inside its kernel, translating between skoro's tensors and burn's at its boundary, for code that is easier to differentiate that way than to write as primitives.
   ```
