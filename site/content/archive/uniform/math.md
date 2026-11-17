@@ -1,5 +1,5 @@
 ---
-summary: The uniform distribution on a type of finite mass, its constant term and its sampler; and what a normal with a large scale is on a curved type, with the ways of refusing it, bounding its scale, replacing its law and documenting it weighed against each other.
+summary: The uniform distribution on a type of finite mass, curved or finite and discrete, its constant term and its sampler; and what a normal with a large scale is on a curved type, with the ways of refusing it, bounding its scale, replacing its law and documenting it weighed against each other.
 depends_on: [uniform, chart-volume, normal, archive/normal/math, archive/measures/math, archive/quaternion-signs/math]
 ---
 
@@ -35,10 +35,12 @@ are those of finite mass $\nu(\manifold)$:
   chart, global and full, and Haar measure of mass $8\pi^2$;
 - the core's two test spheres, $S^2$ with surface measure of mass $4\pi$, one with the
   stereographic chart, global and full, and one with the exponential chart, full and not global;
-- products of these, with the product of their masses.
+- products of these, with the product of their masses;
+- the finite discrete types $\mathrm{Categorical}(n) = \{0, \dots, n - 1\}$ of
+  [the core](../core/math.svx), $\mathrm{Boolean}$ among them, with counting measure of mass $n$.
 
 The rigid motions `Pose` and the extended poses `ExtendedPose` have translations and so infinite
-mass, as have the Euclidean and positive types. The masses are those of
+mass, as have the Euclidean and positive types, and the integers under counting measure. The masses are those of
 [the note's table](../../math/uniform/#the-definition).
 
 The normal $\mathcal N(\mu, \Sigma)$ is that of [its note](../../math/normal/), with the
@@ -55,8 +57,8 @@ $$
 	\logterm_{\mathcal U}(\point) = -\log \nu(\manifold) , @tag(term)
 $$
 
-which is $-\log 8\pi^2$ on the rotations and $-\log 4\pi$ on a sphere, and on a product the sum of
-its factors'. It has no parameters, and it is defined by the measure alone: unlike the normal it
+which is $-\log 8\pi^2$ on the rotations, $-\log 4\pi$ on a sphere, $-\log n$ on
+$\mathrm{Categorical}(n)$, and on a product the sum of its factors'. It has no parameters, and it is defined by the measure alone: unlike the normal it
 asks nothing of the chart, so the exponential test sphere, on which the normal is refused, has a
 uniform distribution like any other type of finite mass.
 
@@ -66,7 +68,8 @@ The mass is a number, the integral of that volume over the chart's domain,
 [](eq:archive/measures/math/total-mass), and that identity is already among the checks of a
 declared volume, where the test supplies the mass. The type now declares it, $\log \nu(\manifold)$,
 and the same check compares the declaration with the integral. A type that declares no mass has no
-uniform distribution, and a product has one when every factor has.
+uniform distribution, and a product has one when every factor has. A categorical type declares
+nothing: its mass is its number of values, which is the type itself.
 
 **What the term is.** The term [](eq:term) is a constant, so its gradient and its Hessian product
 vanish in every chart, and it changes neither a mode nor a step towards one. It is not nothing: it
@@ -74,6 +77,15 @@ is the term that makes the model's density a density, and it enters the evidence
 importance weight, where a model with a uniform prior and one with a normal prior are compared at
 their true normalizations. As a proposal, the uniform distribution has the same constant density,
 and its weight is the model's density times the mass.
+
+**On a discrete type.** The uniform distribution on $\mathrm{Categorical}(n)$ is the probability
+mass $1/n$ at every value, and it is skoro's first distribution on a discrete type. Nothing in it
+is new to the core, which already states every density of a discrete quantity against counting
+measure and never differentiates with respect to one
+([discrete quantities](../core/math.svx#quantities)). What it brings is a prior for the index of
+a selection [](eq:archive/core/math/select): a quantity that is one of $n$ values with equal
+probability, a mixture of equal weights once the index is summed or sampled over. A distribution
+of unequal weights is another law, with a parameter, and is not part of this entry.
 
 **The uniform among the normals.** By [%full](statement:math/uniform/tangent), a uniform rotation
 is $\mu \oplus \varepsilon$ at any $\mu$, with $\varepsilon$ a Cauchy vector of scale $2$ in the
@@ -108,8 +120,19 @@ a unit quaternion of a uniform rotation, in whichever order storage keeps its pa
 uniform distribution on $S^3$ is invariant under a permutation of coordinates. Its sign is
 immaterial to a type stored up to it.
 
+A discrete type has no dimension, and its draw spends one variate,
+
+$$
+	\discretePoint = \lfloor n u \rfloor \in \{0, \dots, n - 1\} . @tag(categorical-draw)
+$$
+
+The variates of a key are the $2^{52}$ midpoints $(m + \tfrac12)\, 2^{-52}$ of a grid on $(0, 1)$,
+so each value is drawn with a probability within $2^{-52}$ of $1/n$, and exactly $1/n$ when $n$ is
+a power of two. The product $n u$ is taken so that its rounding cannot return $n$.
+
 > [!DECISION] A type of finite mass declares its uniform draw
-> The direct map is the sampler. It spends exactly $\dimension$ variates, as the normal's does; it
+> The direct map is the sampler. It spends exactly $\dimension$ variates, as the normal's does (a
+> categorical type's spends one, by [](eq:categorical-draw), and declares nothing); it
 > is a closed form of square roots, sines and cosines; it needs no base point; and nothing in it
 > comes near a chart's cut. It is declared by the type, beside the mass, because no formula gives
 > it from the retraction alone. A product draws factor by factor from consecutive variates. The
@@ -211,7 +234,7 @@ A random scale needs no rule. A prior on a scale that reaches past one radian wi
 probability gives those draws the law [%full](statement:math/uniform/broad) describes, with small
 probability, and the model remains exactly what was written. A model that means "the noise is
 either small or the measurement says nothing" is a mixture of a normal and the uniform
-distribution, which this entry makes it possible to write.
+distribution, and this entry supplies its second component.
 
 ## In skoro's terms
 
@@ -222,8 +245,10 @@ distribution, which this entry makes it possible to write.
   their draws side by side. The mass is checked against the integral of the declared volume,
   [](eq:archive/measures/math/total-mass), and the draw against the law of its coordinates in a
   chart.
+- **A categorical type needs no declaration.** Its mass is $n$ and its draw is
+  [](eq:categorical-draw), from one variate of the quantity's key.
 - **The uniform distribution is a term with no parameters.** It scores one random quantity of a
-  type of finite mass with the constant [](eq:term). Nothing is differentiated: its gradient and
+  type of finite mass, continuous or categorical, with the constant [](eq:term). Nothing is differentiated: its gradient and
   Hessian products with respect to the quantity are zero, in every chart, and it has no scale and
   no mean to differentiate with respect to.
 - **The quantity it scores is random**, drawn in a generation by the type's uniform draw on the
@@ -235,25 +260,17 @@ distribution, which this entry makes it possible to write.
   approximated. It adds nothing to the rows a step is solved from, and its constant enters the
   evidence of a Laplace approximation. A quantity that no other term bears on has then no rows at
   all, and the problem is singular in its block, as it should be, since its posterior is uniform
-  and has no mode.
+  and has no mode. On a discrete quantity the term is a constant of the data when the quantity is
+  observed, and a free discrete quantity is refused by a linearization as it always was.
 - **The normal is unchanged.** It accepts every scale on every type it accepted, its term, its
   sampler and its roles are as [its entry](../normal/math.svx) left them, and what this entry
   revises is what its pages say of a large scale on a curved type.
 - **The tests** draw from the normal on `Rotation` at the scales of the table and compare the
   median angle with $2 \arctan(\sigma\, m / 2)$, $m = 1.538$ the median length of a standard normal
   vector of $\R^3$, and draw from the uniform distribution and compare the angle from a fixed
-  rotation with its distribution function $(\theta - \sin \theta) / \pi$.
+  rotation with its distribution function $(\theta - \sin \theta) / \pi$; and count the draws of a
+  categorical type against $1/n$.
 
 ## Open questions
 
-> [!TODO] The finite discrete types
-> A categorical type with counting measure has finite mass, the number of its values, and the
-> uniform distribution on it is the term $-\log n$ with a draw from one variate. It fits the
-> definition and costs little, but skoro has no distribution on a discrete type yet, and the first
-> one may deserve its own entry. Is it part of this one?
-
-> [!TODO] The Gaussian against the reference measure
-> Whether [](eq:math/uniform/against-measure), with an isotropic scale, should return as a
-> distribution of its own is left to a later entry here. If it is wanted now, as the prior that
-> goes smoothly from concentrated to unknown, this entry would have to settle its normalizer and a
-> sampler that spends a random number of variates.
+None remain.

@@ -144,7 +144,9 @@ The first is Archimedes' theorem, that the height of a uniform point of the sphe
 the second is Shoemake's method for uniform rotations. On a sphere of any dimension a standard
 normal vector of $\R^{n+1}$ scaled to length one is uniform, which is Muller's method, by the
 invariance used above, at the cost of one variate more than the sphere has dimensions. A uniform point of a
-product is drawn factor by factor.
+product is drawn factor by factor. On the finite set $\{0, \dots, n - 1\}$, the integer part $\lfloor n
+u \rfloor$ of $n$ times one uniform variate $u$ is uniform, each value being the image of an interval
+of length $1/n$.
 
 ## A normal with a large scale
 
