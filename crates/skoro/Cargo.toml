@@ -17,6 +17,7 @@ skoro-core.workspace = true
 
 [dev-dependencies]
 skoro-normal.workspace = true
+skoro-uniform.workspace = true
 skoro-spatial.workspace = true
 skoro-linearize.workspace = true
 skoro-elimination.workspace = true

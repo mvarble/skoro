@@ -42,7 +42,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 - [x] `category` and the categorical branch of `UniformSample::draw`. Tests:
       `category_never_returns_n`, `categorical_draws_are_floor_n_u`,
       `categorical_counts_are_uniform`, `generation_weighs_the_likelihood_alone`.
-- [ ] `skoro-uniform` a dev-dependency of `skoro`, and the uniform on a chart that is not
+- [x] `skoro-uniform` a dev-dependency of `skoro`, and the uniform on a chart that is not
       global. Tests: `uniform_on_the_exponential_sphere`.
 
 ## In a linearization (`skoro-linearize`)

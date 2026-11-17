@@ -582,6 +582,85 @@ fn sphere_masses_check() {
     assert!(check_mass(&bare, &at, 1.0).unwrap_err().contains("no mass"));
 }
 
+/// The exponential chart is not global, so the sphere under it has no normal; it has a mass and
+/// a draw, and so a uniform distribution.
+#[test]
+fn uniform_on_the_exponential_sphere() {
+    use common::sphere::Exponential;
+    use skoro::scope::{constant, sample};
+    use skoro::{Key, NodeId, Observations};
+    use skoro_normal::{Normal, Scale};
+    use skoro_uniform::Uniform;
+
+    let failure = Writer::new()
+        .build(|| {
+            let mean = constant(Exponential, points(3)[1]);
+            sample(
+                "x",
+                Exponential,
+                Normal::on(Exponential, mean, Scale::sd(0.3)),
+            );
+        })
+        .unwrap_err();
+    assert!(matches!(failure.error, skoro::Error::SpaceMismatch { .. }));
+
+    let mut writer = Writer::new();
+    let x = writer
+        .build(|| sample("x", Exponential, Uniform::on(Exponential)))
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let target = Target::host();
+
+    // The term, at a point: -log 4π.
+    let term = snapshot.scored_by(x).unwrap().log_density;
+    let query = Query::log_density_of([term]).given(Observations::new().observe(x, points(3)[0]));
+    let program = snapshot.compile(&query, &target).unwrap();
+    let Some(Value::Continuous(density)) = program
+        .forward(&Values::new())
+        .unwrap()
+        .get(NodeId::DENSITY)
+        .cloned()
+    else {
+        panic!("a density is continuous");
+    };
+    let expected = -(4.0 * std::f64::consts::PI).ln();
+    assert!((density.to_host()[0] - expected).abs() < 1e-14);
+
+    // The draws: on the sphere, their height uniform on (-1, 1), by Archimedes.
+    let draws = 65_536;
+    let generated = snapshot
+        .generate(&Observations::new(), &Key::from_seed(53), draws, &target)
+        .unwrap();
+    let Some(Value::Continuous(drawn)) = generated.values.get(x) else {
+        panic!("a point of the sphere is continuous");
+    };
+    let drawn = drawn.to_host();
+    let mut heights = Vec::with_capacity(draws);
+    for point in drawn.chunks(3) {
+        let norm = point.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-14, "{point:?}");
+        heights.push(point[2]);
+    }
+    heights.sort_by(f64::total_cmp);
+    let count = draws as f64;
+    let distance = heights
+        .iter()
+        .enumerate()
+        .map(|(i, height)| {
+            let law = (height + 1.0) / 2.0;
+            (law - i as f64 / count)
+                .abs()
+                .max((law - (i + 1) as f64 / count).abs())
+        })
+        .fold(0.0, f64::max);
+    // Kolmogorov's bound at the 1 % level.
+    assert!(
+        distance <= 1.63 / count.sqrt(),
+        "the heights are {distance} from uniform"
+    );
+    assert_eq!(generated.log_weight.to_host(), vec![0.0; draws]);
+}
+
 #[test]
 fn exponential_domain_ends_at_the_antipode() {
     let target = Target::host();
