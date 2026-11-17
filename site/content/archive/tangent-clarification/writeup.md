@@ -122,7 +122,7 @@ $$
 $$
 
 a basis of the tangent space at $\point$. Its columns $\basis_\point e_1, \dots, \basis_\point e_\dimension$
-are the basis vectors. No regularity in $\point$ is asked of the convention. The coordinate basis of
+are the basis vectors. The coordinate basis of
 a chart around $\point$ is one choice, and every choice is the coordinate basis of some chart. In these
 bases, the derivative of a smooth map is a matrix:
 
@@ -136,24 +136,23 @@ $\D(G \circ \map)(\point) = \D G(\map(\point))\, \D\map(\point)$, because the ba
 $\map(\point)$ cancel. This is [%full](statement:math/derivatives-in-charts/chain-rule), which the third note proves today,
 moved and proved in one line.
 
-The convention is *smooth on* an open set $W$ when $(\point, \tangent) \mapsto \basis_\point \tangent$
-is smooth from $W \times \R^\dimension$ to $\T\manifold$, that is, when its columns form a smooth local
-frame on $W$ ([Chapter 8](cite:lee2013)). On the sphere no convention is smooth everywhere, which
-is the hairy ball theorem. The basis $B(\point)$ above is smooth off the south pole, and on the
-rotations a group's left translations give one that is smooth everywhere.
+No regularity in $\point$ is asked of the convention, and it need not be defined everywhere. It may
+be given on an open subset $\manifold_\circ \subseteq \manifold$ only, and everything below is then
+said of points of $\manifold_\circ$, with every computation kept inside it. The sphere is the example.
+No convention on $S^2$ is smooth everywhere, by the hairy ball theorem, and the basis $B(\point)$ above
+is defined everywhere except the south pole and smooth where it is defined. On the rotations, a group's left
+translations give a convention that is defined and smooth everywhere.
 
-> [!TODO] Where the convention must be smooth
-> I would state the convention with no regularity, as above. Everything at one point holds for any
-> convention: the derivative, the chain rule, the tangent chart. What compares bases at different
-> points does not: the mirror identity, the chart Hessian and the second-order half of the passes,
-> and densities read in the chart at a moving point. For example,
-> $\point \ominus (\point \oplus \tangent)$ is measured in the basis at $\point \oplus \tangent$, and if
-> that basis jumps, the mirror identity fails at first order. Those results would assume that
-> "$\oplus$ is smooth near $\point$". Because $\retr$ is smooth, this is the same as the convention
-> being smooth there (the retractions section shows why), so later notes can state the assumption
-> without naming the basis. A related question: may the convention be defined only on an open
-> subset of $\manifold$, as $B(\point)$ is, with the computation kept inside it? I would allow it,
-> since that is what the sphere does.
+A convention without regularity is enough for everything at one point: the derivative, the chain
+rule and the tangent chart at $\point$. It is not enough for what compares the bases at nearby
+points: the mirror identity, the chart Hessian and the second-order half of the passes, and
+densities read in the chart at a moving point. For example, $\point \ominus (\point \oplus \tangent)$
+is measured in the basis at $\point \oplus \tangent$, and if that basis jumps, the mirror identity
+fails at first order. Those results assume that the convention is *smooth near* $\point$: that
+$(\otherPoint, \tangent) \mapsto \basis_\otherPoint \tangent$ is smooth from $W \times \R^\dimension$ to
+$\T\manifold$ on an open $W \ni \point$, which says that its columns form a smooth local frame on
+$W$ ([Chapter 8](cite:lee2013)). The retractions section shows that this is the same as $\oplus$
+being smooth near $\point$, which is how later notes state it.
 
 ### Retractions
 
@@ -240,45 +239,44 @@ basis.
 
 ### From here on
 
-The note ends by saying what later notes write, and what each piece of notation means:
+The note ends with an index of every place where later notes abuse notation, each standing for an
+object of this note read through the convention. A later note never writes $\retr$, $\dd\map_\point$
+or $\basis_\point$. It treats a tangent vector as a column of $\dimension$ numbers attached to a
+point, as skoro does, and keeps writing $\T_\point\manifold$ for the space of those columns, so that
+it is visible which point a vector belongs to. Inside this note $\T_\point\manifold$ is the space of
+derivations. After it, $\T_\point\manifold$ is its coordinate space, and the index says so first.
 
-| object                | what it is                                                                 | written later as                                                       |
-| --------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| tangent space         | $\T_\point\manifold$, the derivations at $\point$                          | its coordinates, $\R^\dimension$, through $\basis_\point$              |
-| tangent vector        | $\basis_\point \tangent \in \T_\point\manifold$                            | $\tangent \in \R^\dimension$, a vector at $\point$                     |
-| differential          | $\dd\map_\point : \T_\point\manifold \to \T_{\map(\point)}\otherManifold$  | the matrix $\D\map(\point)$ of [](eq:derivative)                       |
-| retraction            | $\retr : \T\manifold \to \manifold$                                        | $\point \oplus \tangent$ and $\otherPoint \ominus \point$, or $R_\point$, $R_\point^{-1}$ |
-| tangent bundle        | the manifold $\T\manifold$                                                 | pairs $(\point, \tangent)$, smooth where the convention is            |
+| written later as | stands for | first used in |
+| --- | --- | --- |
+| $\T_\point\manifold = \R^\dimension$, the tangent space at $\point$ | $\T_\point\manifold$, through $\basis_\point$ | every later note |
+| $\tangent \in \T_\point\manifold$, a column of $\dimension$ numbers | the tangent vector $\basis_\point \tangent$ | every later note |
+| a frame, a $\dimension \times n$ matrix of tangent vectors at $\point$ | $n$ tangent vectors, each through $\basis_\point$ | automatic differentiation; gradients and Hessians |
+| a cotangent $\alpha \in \R^\dimension$, a column acting by $\alpha\transpose \tangent$ | the covector $\alpha\transpose \basis_\point^{-1}$ on $\T_\point\manifold$ | gradients and Hessians |
+| $\D\map(\point) \in \R^{\dimy \times \dimx}$ | the differential $\dd\map_\point$, by [](eq:derivative) | this note, and every later one |
+| $\D\map(\point)\transpose$, applied to a cotangent | the pull-back of a covector by $\dd\map_\point$ | gradients and Hessians |
+| the gradient $g(\point) = \D f(\point)\transpose 1$ | the differential $\dd f_\point$, not a Riemannian gradient | gradients and Hessians |
+| $\point \oplus \tangent$, $\otherPoint \ominus \point$, $R_\point$, $R_\point^{-1}$ | $\retr(\basis_\point \tangent)$ and its local inverse | this note, and every later one |
+| pairs $(\point, \tangent)$ with $\tangent \in \R^\dimension$ | the tangent bundle $\T\manifold$ over the convention's domain | this note |
+| "$\oplus$ is smooth near $\point$" | the convention is a smooth local frame near $\point$ | this note; gradients and Hessians; chart volume |
+| $\T_\point\manifold = \T_{\point_1}\manifold_1 \oplus \cdots \oplus \T_{\point_k}\manifold_k$, stacked columns | the direct sum, with the convention that is each factor's on its block | product manifolds |
+| the Lebesgue measure on $\T_\point\manifold$, and densities with respect to it | Lebesgue measure on $\R^\dimension$, carried to $\T_\point\manifold$ by $\basis_\point$, which depends on the convention | chart volume; the normal |
 
-A later note never writes $\retr$, $\dd\map_\point$ or $\basis_\point$, and treats a tangent vector
-as a column of $\dimension$ numbers attached to a point, as skoro does.
+The last row is the one where the convention matters most. A density on a tangent space changes by
+$\lvert\det\rvert$ of a change of basis, so a density "on $\T_\point\manifold$" is always one in the
+coordinates the convention gives.
 
-> [!TODO] The name of the coordinate space
-> Later notes need to say where a tangent vector lives. Either they keep writing
-> $\T_\point\manifold$, declared to mean the coordinate space $\R^\dimension$ at $\point$, or they
-> write $\R^\dimension$ and say "at $\point$" in words. I would keep $\T_\point\manifold$: it records
-> which point a vector belongs to, so that adding vectors at two points is visibly a type error, and
-> the product note's $\T_\point\manifold = \T_{\point_1}\manifold_1 \oplus \cdots$ already reads that
-> way. The cost is that $\T_\point\manifold$ means the derivations inside this note and their
-> coordinates after it, which the table must say.
+### Gradients and Hessians in tangent charts
 
-### What becomes of *Derivatives in tangent charts*
-
-The derivative, its definition by the retraction and the chain rule move into the first note, as
-above. The gradient, the chart Hessian and the statement that the passes of automatic
-differentiation compute them remain. They cannot move into the first note: the passes rest on
+The derivative, its formula through the retraction and the chain rule move into the first note, as
+above. The third note keeps the rest under its slug, `derivatives-in-charts`, retitled *Gradients
+and Hessians in tangent charts*: the gradient [](eq:math/derivatives-in-charts/gradient), the chart
+Hessian [](eq:math/derivatives-in-charts/chart-hessian), and the statement that the passes of
+automatic differentiation compute them. These cannot move into the first note: the passes rest on
 [automatic differentiation](../../math/automatic-differentiation/) (geometry, 2), and the build
-refuses a note that depends on a later one.
-
-> [!TODO] Keep a slimmed note, or reorder
-> I would keep a slimmed note at geometry 3, under the same slug and retitled *Gradients and
-> Hessians in tangent charts*, holding [](eq:math/derivatives-in-charts/gradient),
-> [](eq:math/derivatives-in-charts/chart-hessian) and the statement on the passes. The archive's
-> references to them then stay valid, and only the references to `derivative` and to the chain
-> rule follow those into the first note. The alternative that removes the note entirely moves the
-> gradient and the chart Hessian into the first note and the passes into a last section of the note
-> on automatic differentiation, *Programs over manifolds*. That note then depends on the first, which
-> the order allows, but it makes a note about programs on $\R^n$ end in geometry.
+refuses a note that depends on a later one. Keeping the slug keeps the archive's references to the
+gradient, the chart Hessian and the passes valid. Only the references to `derivative` and to the
+chain rule follow those results into the first note. The chart Hessian and the second-order half of
+the passes now state their hypothesis, that $\oplus$ is smooth near $\point$.
 
 ## Consequences
 
@@ -309,6 +307,10 @@ retraction's conditions, the tangent charts, and the derivative through the retr
   `eq:math/retraction/derivative`, and those references are amended and listed under `amends`.
 - `statement:math/derivatives-in-charts/chain-rule` moves to the first note, and the proof of the
   passes cites it there.
+- `derivatives-in-charts` keeps its slug and its place, geometry 3, retitled *Gradients and
+  Hessians in tangent charts*. Each note that lists it in `depends_on` is reread. One that
+  used it for the derivative alone depends on `retraction` instead. `quotient-manifold`, which
+  cites the chart Hessian, keeps it.
 - The notes after the first that rely on the old wording are reread: `product-manifold` (its
   stacking of tangent spaces), `quotient-manifold` and `chart-volume` (the action on bases,
   restated as $\D(g\,\cdot)(\point) = I$, and the smoothness of $\oplus$ that their densities need),
