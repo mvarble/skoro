@@ -31,7 +31,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 
 ## The distribution (`skoro-uniform`)
 
-- [ ] The crate, a member of the workspace and among its dependencies, with its description and
+- [x] The crate, a member of the workspace and among its dependencies, with its description and
       crate documentation; `Uniform` with `on`, `in_space`, `space`, `log_mass` and `score`, the
       term a call of the composite `skoro.uniform.log_density`, its refusals, and the empty
       residual bound; `Distribution for Uniform`. The sampler is a `UniformSample` whose draw
