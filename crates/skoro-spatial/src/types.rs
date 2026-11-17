@@ -22,13 +22,19 @@
 //! near it, as `2 tan(θ/2)` of the relative angle `θ`, so that within rounding of the cut it is
 //! large rather than wrong. The cut is left non-finite: a value a half-turn from its mean is an
 //! error a linearization refuses, naming its term.
+//!
+//! The rotations have finite mass, `8π²` of the Haar measure the chart normalizes at its centre,
+//! and declare it with Shoemake's draw of a uniform rotation, so that they have a uniform
+//! distribution. The poses and the extended poses, whose translations fill `ℝ³`, have infinite
+//! mass and declare none.
 
+use std::f64::consts::TAU;
 use std::sync::{Arc, LazyLock};
 
 use skoro_core::scope::concatenate;
 use skoro_core::{
-    Composite, Declares, Embedded, Error, IntoHostValue, Linear, Param, QDyn, Registry, Space,
-    Typed, Volume,
+    Composite, Declares, Embedded, Error, IntoHostValue, Linear, Mass, Param, QDyn, Registry,
+    Space, Typed, Volume,
 };
 use skoro_tensor::{HostData, HostValue};
 
@@ -93,6 +99,19 @@ fn assemble(rotation: QDyn, translations: Vec<QDyn>, space: Space) -> QDyn {
     concatenate(&parts, space)
 }
 
+/// A unit quaternion `(w, x, y, z)` of a uniform rotation, from three variates: Shoemake's map.
+fn uniform_rotation(u: &[f64], q: &mut [f64]) {
+    let (a, b) = ((1.0 - u[0]).sqrt(), u[0].sqrt());
+    let (phi, psi) = (TAU * u[1], TAU * u[2]);
+    q[0] = a * phi.cos();
+    q[1] = a * phi.sin();
+    q[2] = b * psi.cos();
+    q[3] = b * psi.sin();
+}
+
+/// `log 8π²`: the mass of Haar measure on `SO(3)`, normalized at the chart's centre.
+const LOG_MASS: f64 = 4.368901313378636;
+
 fn declare(kind: Kind) -> Result<Arc<Embedded>, Error> {
     let k = kind.translations();
     let (n, d) = (4 + 3 * k, 3 + 3 * k);
@@ -132,9 +151,14 @@ fn declare(kind: Kind) -> Result<Arc<Embedded>, Error> {
         name: name.to_string(),
         reason: "its sign is not a signed permutation".to_string(),
     })?;
-    Embedded::declare(name, Vec::new(), n, d, r, q, Some(p))?
+    let declaration = Embedded::declare(name, Vec::new(), n, d, r, q, Some(p))?
         .stored_up_to(vec![sign])?
-        .with_volume(Volume::global(lambda))
+        .with_volume(Volume::global(lambda))?;
+    match kind {
+        Kind::Rotation => declaration.with_mass(Mass::new(LOG_MASS, uniform_rotation)),
+        // The translations fill ℝ³: a pose's measure has infinite mass.
+        Kind::Pose | Kind::ExtendedPose => Ok(declaration),
+    }
 }
 
 /// The declaration of `kind`, which `types_are_declared` shows is made without error.

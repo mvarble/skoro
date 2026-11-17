@@ -24,7 +24,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 
 ## The rotations (`skoro-spatial`)
 
-- [ ] `uniform_rotation` and `LOG_MASS`, and `Rotation`'s declaration ending in `with_mass`;
+- [x] `uniform_rotation` and `LOG_MASS`, and `Rotation`'s declaration ending in `with_mass`;
       `Pose` and `ExtendedPose` unchanged. Tests: `volume_has_the_stated_mass` (amended),
       `rotation_mass_checks`, `uniform_rotation_is_shoemakes_map`,
       `uniform_rotations_have_the_haar_angle`, `poses_have_no_mass`.
