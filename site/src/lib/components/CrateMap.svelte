@@ -14,6 +14,12 @@
                 <a class="crate" href={href(crate.name)} title={crate.purpose}>
                     <code>{crate.name}</code>
                     <span>{crate.purpose}</span>
+                    {#if crate.deps.length}
+                        <span class="crate-deps"
+                            >on {#each crate.deps as dep, i (dep)}{i ? ', ' : ''}<code>{dep}</code
+                                >{/each}</span
+                        >
+                    {/if}
                 </a>
             {/each}
         </li>

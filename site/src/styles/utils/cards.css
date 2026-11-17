@@ -92,4 +92,9 @@
         font: var(--font-small);
         color: var(--fg-3);
     }
+
+    .crate-deps code {
+        font-weight: 400;
+        color: var(--fg-3);
+    }
 }

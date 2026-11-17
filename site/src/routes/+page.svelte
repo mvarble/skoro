@@ -96,8 +96,8 @@
     <section class="landing-crates">
         <h2>The workspace</h2>
         <p>
-            Each crate depends only on the crates above it, and leads to the order in which to read
-            its modules.
+            The crates in layers, foundations first: each is built on the crates it names, which lie
+            in the layers above it, and leads to the order in which to read its modules.
         </p>
         <CrateMap />
     </section>

@@ -8,7 +8,8 @@ order: 2
 	import CrateMap from '$lib/components/CrateMap.svelte';
 </script>
 
-skoro is a workspace of eight crates. Each depends only on the crates above it here, and a user
+skoro is a workspace of eight crates, drawn here in layers, foundations first: each is built on
+the crates it names, which lie in the layers above it, and through them on theirs. A user
 depends on `skoro`, which re-exports the core and the tensor layer, and on each feature crate a
 model or an algorithm uses, such as `skoro-normal`, `skoro-uniform`, `skoro-spatial` and
 `skoro-linearize`. Each
