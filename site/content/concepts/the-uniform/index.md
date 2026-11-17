@@ -15,7 +15,8 @@ crate of its own, `skoro-uniform`, built on the core's public interface and on o
 
 The spaces it takes are those of finite mass: `Categorical(n)`, `Boolean` among them, with counting
 measure of mass $n$; an embedded type that declares its mass, such as the
-[rotations](../rotations-and-motions/), of mass $8\pi^2$; and products of these. The note on
+[rotations](../rotations-and-motions/), of mass $8\pi^2$; and products of
+embedded types that declare their masses, a product's factors being continuous. The note on
 [the uniform distribution](../../math/uniform/) has the mathematics.
 
 ## The term

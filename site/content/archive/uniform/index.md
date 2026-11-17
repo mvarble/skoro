@@ -2,7 +2,6 @@
 title: "The uniform distribution on compact types, and broad scales of a normal on a curved type"
 pages:
     [
-        landing,
         concepts/spaces,
         concepts/the-normal,
         concepts/rotations-and-motions,

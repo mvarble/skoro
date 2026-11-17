@@ -1,6 +1,6 @@
 ---
 title: Rotations and poses
-summary: Score an attitude or a pose with the normal, give an unknown one the uniform distribution, draw it, observe one given from outside in whatever sign, and read Euler angles off it, with the crate skoro-spatial, from its own tests and examples.
+summary: Score an attitude or a pose with the normal, give an unknown one the uniform distribution, draw it, observe one given from outside in whatever sign, and read Euler angles off it, with the crates skoro-spatial and skoro-uniform, from their own tests and examples.
 order: 2
 ---
 
@@ -8,8 +8,8 @@ The crate `skoro-spatial` gives a model its rotations, rigid motions and extende
 shows what a user writes with them: a quantity of one of these types, scored by
 [the normal](../../concepts/the-normal/) and drawn, a pose with its noise in its own frame,
 measured poses read from a file and observed as they come, and Euler angles read off a rotation and
-compared. Each step quotes the crate's tests, so every line
-shown compiles and runs. The [concepts page](../../concepts/rotations-and-motions/) explains how
+compared, and a rotation of which nothing is known, given the uniform distribution of
+`skoro-uniform`. Each step quotes the crates' tests, so every line shown compiles and runs. The [concepts page](../../concepts/rotations-and-motions/) explains how
 the types are made and what each map computes.
 
 ## A rotation in a model

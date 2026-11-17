@@ -151,7 +151,7 @@ standard normal vector of $\R^3$:
 
 At $\sigma = 100$ a draw is within $0.1$ rad of a half-turn with probability $0.98$, where the
 uniform distribution puts $0.064$. The law is exact at every scale, in its term and in its draws,
-and a test draws the medians above from the normal's own sampler. A quantity of which nothing is
+and a test draws the medians above up to $\sigma = 100$ from the normal's own sampler. A quantity of which nothing is
 known is given [the uniform distribution](../the-uniform/), which no normal is near, as the doc
 comment of `Normal` says.
 

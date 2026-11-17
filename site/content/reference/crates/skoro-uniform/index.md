@@ -2,7 +2,7 @@
 $\nu / \nu(\mathbb X)$ of a space whose reference measure has finite mass, built on the core's
 public interface and on the residual role of [`skoro-normal`](../skoro-normal/). It takes the
 categorical spaces, an embedded type that declares its mass, such as the rotations of
-[`skoro-spatial`](../skoro-spatial/), and products of these, and refuses every other space with
+[`skoro-spatial`](../skoro-spatial/), and products of such embedded types, and refuses every other space with
 the core's `NoMass`. It is how a model says that nothing is known of a quantity, which on a curved
 type a normal of a large scale does not.
 
