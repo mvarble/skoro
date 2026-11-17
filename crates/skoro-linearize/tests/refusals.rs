@@ -370,3 +370,46 @@ fn a_non_finite_residual_is_refused() {
     let error = linearizer.at(&point(x.id(), &[0.0, f64::NAN])).unwrap_err();
     assert_eq!(error, Error::NotFinite { term, row: 1 });
 }
+
+/// A quantity scored by a uniform and read by nothing else has a uniform posterior, which has no
+/// mode: the linearizer is made, its factor has no rows, and an undamped solve names the block.
+#[test]
+fn a_quantity_under_a_uniform_alone_is_undetermined() {
+    use skoro_spatial::Rotation;
+    let target = Target::host();
+    let mut writer = Writer::new();
+    let heading = writer
+        .build(|| {
+            let heading = quantity("heading", Rotation);
+            skoro_uniform::Uniform::on(Rotation).score(heading);
+            heading
+        })
+        .unwrap();
+    let query = Query::log_density();
+    let linearizer =
+        Linearizer::new(&writer.snapshot(), &query, &target, Assembly::Residual).unwrap();
+    assert_eq!(linearizer.terms().len(), 1);
+    let point = skoro_core::Values::new().with(
+        heading,
+        skoro_tensor::Value::Continuous(skoro_tensor::Points::from_host(
+            &[1.0, 0.0, 0.0, 0.0],
+            1,
+            4,
+            &target,
+        )),
+    );
+    let linearized = linearizer.at(&point).unwrap();
+    assert!(linearized.problems()[0].factors()[0].b.is_empty());
+    // The objective is the constant alone.
+    let objective = linearizer.objective(&point).unwrap();
+    let log_mass = (8.0 * std::f64::consts::PI.powi(2)).ln();
+    assert!((objective[0] - log_mass).abs() < 1e-14, "{objective:?}");
+    let schedule = linearizer.schedule().unwrap();
+    let error = linearized.eliminate(&schedule, None).unwrap_err();
+    assert_eq!(
+        error,
+        Error::Undetermined {
+            quantity: heading.id()
+        }
+    );
+}

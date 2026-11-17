@@ -728,3 +728,79 @@ fn marginals_name_their_curved_quantities() {
     assert_eq!(marginals[0].quantities, keep);
     assert_eq!(marginals[0].curved, [r.id()]);
 }
+
+/// A uniform prior is a factor with no rows: the linearizer takes it as it is, and the problem is
+/// the likelihood's alone.
+#[test]
+fn a_uniform_prior_adds_no_rows() {
+    use common::{dense_rows, heading_and_compass, unit};
+    let target = Target::host();
+    let (writer, query, heading) = heading_and_compass();
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    // Two factors, the uniform's first, each over the heading's one block.
+    let uniform = snapshot.scored_by(heading).unwrap().log_density;
+    let terms = linearizer.terms();
+    assert_eq!(terms.len(), 2);
+    assert_eq!(terms[0], uniform);
+    assert_eq!(linearizer.layout().dimension(), 3);
+
+    let start = [unit([0.8, 0.2, -0.3, 0.4]), unit([0.6, 0.4, -0.5, 0.45])].concat();
+    let point = Values::new().with(heading, points(&start, 2, 4, &target));
+    let linearized = linearizer.at(&point).unwrap();
+    for problem in linearized.problems() {
+        assert!(factor_rows(problem, 0).is_empty());
+        assert_eq!(factor_rows(problem, 1).len(), 3);
+        let (rows, right) = dense_rows(problem);
+        assert_eq!((rows.len(), right.len()), (3, 3));
+    }
+
+    // The objective is the query's negative log-density, the uniform's log 8π² in it.
+    let objective = linearizer.objective(&point).unwrap();
+    let program = snapshot.compile(&query, &target).unwrap();
+    let density: Vec<f64> = host(
+        &program.forward(&point).unwrap(),
+        skoro_core::NodeId::DENSITY,
+    )
+    .into_iter()
+    .map(|l| -l)
+    .collect();
+    close(&objective, &density, 1e-14, "the query's own program");
+    let likelihood = snapshot
+        .compile(
+            &Query::log_density_of([terms[1]]).given(query.observations().clone()),
+            &target,
+        )
+        .unwrap();
+    let without: Vec<f64> = host(
+        &likelihood.forward(&point).unwrap(),
+        skoro_core::NodeId::DENSITY,
+    )
+    .into_iter()
+    .map(|l| (8.0 * std::f64::consts::PI.powi(2)).ln() - l)
+    .collect();
+    close(
+        &objective,
+        &without,
+        1e-13,
+        "the likelihood and the constant",
+    );
+    let zero = vec![0.0; 3];
+    let at_zero: Vec<f64> = linearized
+        .problems()
+        .iter()
+        .map(|p| p.value(&zero))
+        .collect();
+    close(&objective, &at_zero, 1e-12, "the linearization at zero");
+
+    // The step is the likelihood's Gauss–Newton step.
+    let schedule = linearizer.schedule().unwrap();
+    let solved = linearized.eliminate(&schedule, None).unwrap();
+    let g = gradient(&snapshot, &query, linearizer.layout(), &point, &target);
+    for (r, problem) in linearized.problems().iter().enumerate() {
+        let minus: Vec<f64> = g[r].iter().map(|g| -g).collect();
+        let expected = solve(&gram(problem), &minus);
+        let step = solved.eliminations()[r].minimizer().unwrap();
+        close(&step, &expected, 1e-9, "(JᵀJ) τ = -g");
+    }
+}

@@ -47,7 +47,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 
 ## In a linearization (`skoro-linearize`)
 
-- [ ] `skoro-uniform` a dev-dependency, and no change to the linearizer. Tests:
+- [x] `skoro-uniform` a dev-dependency, and no change to the linearizer. Tests:
       `a_uniform_prior_adds_no_rows`, `a_uniform_prior_leaves_the_estimate_to_the_data`,
       `a_quantity_under_a_uniform_alone_is_undetermined`.
 

@@ -5556,6 +5556,7 @@ dependencies = [
  "skoro-normal",
  "skoro-spatial",
  "skoro-tensor",
+ "skoro-uniform",
 ]
 
 [[package]]
