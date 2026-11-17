@@ -53,7 +53,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 
 ## The normal (`skoro-normal`, `skoro-spatial`)
 
-- [ ] The paragraph on a large scale on a curved type in the crate documentation of
+- [x] The paragraph on a large scale on a curved type in the crate documentation of
       `skoro-normal` and the doc comment of `Normal`, naming `skoro_uniform::Uniform` as how
       "unknown" is said; no code of the normal changes. Tests:
       `broad_normals_turn_towards_the_half_turns`.

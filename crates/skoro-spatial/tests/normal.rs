@@ -373,3 +373,59 @@ fn check_signs<T: Declares + skoro_core::Typed + Copy>(marker: T, target: &Targe
         }
     }
 }
+
+/// What a large scale does on the rotations, drawn from the normal's own sampler: the median
+/// angle from the mean is that of the chart, `2 atan(σ m / 2)` with `m` the median length of a
+/// standard normal vector of ℝ³, and it grows towards the half-turns, where the uniform
+/// distribution's is 2.31 rad.
+#[test]
+fn broad_normals_turn_towards_the_half_turns() {
+    let mean = common::unit([-0.2, 0.7, 0.1, -0.6]);
+    let rows = 16_384;
+    let target = Target::host();
+    // The angles of the draws from the mean, by the quaternions' inner product.
+    let angles = |sd: f64| -> Vec<f64> {
+        let mut writer = Writer::new();
+        let q = writer
+            .build(|| {
+                let q = quantity("q", Rotation);
+                Normal::on(Rotation, constant(Rotation, mean), Scale::sd(sd)).score(q);
+                q
+            })
+            .unwrap();
+        let generated = writer
+            .snapshot()
+            .generate(&Observations::new(), &Key::from_seed(719), rows, &target)
+            .unwrap();
+        continuous(generated.values.get(q).unwrap())
+            .chunks(4)
+            .map(|q| {
+                let inner: f64 = q.iter().zip(mean).map(|(q, m)| q * m).sum();
+                2.0 * inner.abs().min(1.0).acos()
+            })
+            .collect()
+    };
+    let fraction = |angles: &[f64], within: &dyn Fn(f64) -> bool| {
+        angles.iter().filter(|&&angle| within(angle)).count() as f64 / rows as f64
+    };
+    // The median of the chi distribution of three degrees of freedom.
+    let m: f64 = 1.5382;
+    let medians: [f64; 5] = [0.73, 1.31, 2.32, 2.88, 3.12];
+    for (sd, tabled) in [0.5f64, 1.0, 3.0, 10.0, 100.0].into_iter().zip(medians) {
+        let median = 2.0 * (sd * m / 2.0).atan();
+        assert!((median - tabled).abs() < 0.005, "σ = {sd}: {median}");
+        let angles = angles(sd);
+        let below = fraction(&angles, &|angle| angle < median);
+        assert!(
+            (below - 0.5).abs() <= 1.5 / (rows as f64).sqrt(),
+            "σ = {sd}: {below} of the draws are within {median} rad of the mean"
+        );
+        if sd == 100.0 {
+            let turned = fraction(&angles, &|angle| angle > PI - 0.1);
+            assert!(
+                (turned - 0.984).abs() <= 0.01,
+                "{turned} of the draws are within 0.1 rad of a half-turn"
+            );
+        }
+    }
+}
