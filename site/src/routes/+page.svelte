@@ -80,15 +80,15 @@
 {/if}
 
 <section class="landing-tracks">
-    <h2>Two ways to read</h2>
+    <h2>Three ways to read</h2>
     <div class="card-grid">
         <TrackCard id="guide" eyebrow="Top-down" blurb={blurb('guide')} />
         <TrackCard id="concepts" eyebrow="Bottom-up" blurb={blurb('concepts')} />
+        <TrackCard id="math" eyebrow="The mathematics" blurb={MATH.blurb} />
     </div>
     <div class="card-grid secondary">
-        <TrackCard id="math" eyebrow="What it rests on" blurb={MATH.blurb} />
-        <TrackCard id="archive" eyebrow="How it came to be" blurb={ARCHIVE.blurb} />
         <TrackCard id="reference" eyebrow="Look it up" blurb={blurb('reference')} />
+        <TrackCard id="archive" eyebrow="How it came to be" blurb={ARCHIVE.blurb} />
     </div>
 </section>
 

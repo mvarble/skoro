@@ -28,5 +28,9 @@ tangent spaces.
 > [a pose graph](guide/pose-graph/) and [a sliding window](guide/sliding-window/). Nothing is
 > published on crates.io.
 
-Start with [what skoro is](start/what-is-skoro/), and who it is for, with
-[a first model](guide/first-model/), or with the [pose graph](guide/pose-graph/) above.
+Start with [what skoro is](start/what-is-skoro/), and who it is for, or with the
+[pose graph](guide/pose-graph/) above. The rest is read along three tracks, each of which can be
+followed alone: the [guide](guide/), top-down, from the code a user writes; the
+[concepts](concepts/), bottom-up, from the library's spaces and operations; and the
+[mathematics](math/), the notes skoro rests on, in the order in which they build on each other.
+[Reading these docs](start/reading-these-docs/) says how they fit together.

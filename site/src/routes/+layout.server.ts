@@ -17,16 +17,26 @@ export interface NavSection {
     items: NavItem[];
 }
 
-// The navigation: each track's pages, with each crate's page under the reference's page of the
-// crates, the math notes, and the archive's entries.
+// The navigation: the three tracks a reader reads (the guide, the concepts and the math notes),
+// then the reference, with each crate's page under its page of the crates, and the archive's
+// entries. The tracks of pages keep their order in `TRACKS`; the math notes go after the last
+// track that is read, before the reference, which is looked up.
 export const load: LayoutServerLoad = () => {
+    const tracks: NavSection[] = TRACKS.map((track) => ({
+        ...track,
+        href: resolve('/[track=track]', { track: track.id }),
+        items: withCrates(cms.pages.list(track.id).map(linkOf)),
+    }));
+    const math: NavSection = {
+        ...MATH,
+        href: resolve('/math'),
+        items: cms.math.list().map(linkOf),
+    };
+    const reference = tracks.findIndex((track) => track.id == 'reference');
+    if (reference < 0) tracks.push(math);
+    else tracks.splice(reference, 0, math);
     const nav: NavSection[] = [
-        ...TRACKS.map((track) => ({
-            ...track,
-            href: resolve('/[track=track]', { track: track.id }),
-            items: withCrates(cms.pages.list(track.id).map(linkOf)),
-        })),
-        { ...MATH, href: resolve('/math'), items: cms.math.list().map(linkOf) },
+        ...tracks,
         { ...ARCHIVE, href: resolve('/archive'), items: cms.archive.list().map(linkOf) },
     ];
     // Where the site is hosted, when the build knows it (`SITE_URL=https://example.org`): a link

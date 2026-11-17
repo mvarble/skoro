@@ -9,6 +9,7 @@ pages:
         concepts/linearization,
         guide/rotations-and-poses,
         reference/crates,
+        start/reading-these-docs,
     ]
 crates: [skoro, skoro-core, skoro-linearize, skoro-normal, skoro-spatial, skoro-uniform]
 revises: [normal]
