@@ -39,7 +39,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
       included, which need no draw), `derivatives_are_zero`,
       `a_space_of_infinite_mass_is_refused`, `a_quantity_of_another_space_is_refused`,
       `binds_an_empty_residual_and_nothing_else`, `draws_are_functions_of_key_and_address`.
-- [ ] `category` and the categorical branch of `UniformSample::draw`. Tests:
+- [x] `category` and the categorical branch of `UniformSample::draw`. Tests:
       `category_never_returns_n`, `categorical_draws_are_floor_n_u`,
       `categorical_counts_are_uniform`, `generation_weighs_the_likelihood_alone`.
 - [ ] `skoro-uniform` a dev-dependency of `skoro`, and the uniform on a chart that is not
