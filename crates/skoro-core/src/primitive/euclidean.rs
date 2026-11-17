@@ -82,41 +82,68 @@ macro_rules! plain {
 
 plain!(
     /// `a + b`, of one Euclidean space.
-    Add, "skoro.add", two_euclidean, Linear { sign: 1.0 }
+    Add,
+    "skoro.add",
+    two_euclidean,
+    Linear { sign: 1.0 }
 );
 plain!(
     /// `a - b`, of one Euclidean space.
-    Sub, "skoro.sub", two_euclidean, Linear { sign: -1.0 }
+    Sub,
+    "skoro.sub",
+    two_euclidean,
+    Linear { sign: -1.0 }
 );
 plain!(
     /// `-a`, elementwise.
-    Neg, "skoro.neg", one_euclidean, Negation
+    Neg,
+    "skoro.neg",
+    one_euclidean,
+    Negation
 );
 plain!(
     /// `a ⊙ b`, elementwise, of one Euclidean space.
-    Mul, "skoro.mul", two_euclidean, Product
+    Mul,
+    "skoro.mul",
+    two_euclidean,
+    Product
 );
 plain!(
     /// `exp a`, elementwise.
-    Exp, "skoro.exp", one_euclidean, Exponential
+    Exp,
+    "skoro.exp",
+    one_euclidean,
+    Exponential
 );
 plain!(
     /// `log a`, elementwise.
-    Log, "skoro.log", one_euclidean, Logarithm
+    Log,
+    "skoro.log",
+    one_euclidean,
+    Logarithm
 );
 
 plain!(
     /// `sin a`, elementwise.
-    Sin, "skoro.sin", one_euclidean, Sine
+    Sin,
+    "skoro.sin",
+    one_euclidean,
+    Sine
 );
 plain!(
     /// `cos a`, elementwise.
-    Cos, "skoro.cos", one_euclidean, Cosine
+    Cos,
+    "skoro.cos",
+    one_euclidean,
+    Cosine
 );
 plain!(
     /// `atan2(a, b)`, elementwise: the angle in `(-π, π]` of the point `(b, a)`, defined where
     /// `a² + b²` is positive and smooth off the half-line `a = 0, b < 0`.
-    Atan2, "skoro.atan2", two_euclidean, Angle
+    Atan2,
+    "skoro.atan2",
+    two_euclidean,
+    Angle
 );
 
 /// `s a`, a `Real` times a Euclidean value.

@@ -5528,6 +5528,7 @@ dependencies = [
  "skoro-normal",
  "skoro-spatial",
  "skoro-tensor",
+ "skoro-uniform",
 ]
 
 [[package]]
@@ -5555,6 +5556,7 @@ dependencies = [
  "skoro-normal",
  "skoro-spatial",
  "skoro-tensor",
+ "skoro-uniform",
 ]
 
 [[package]]
@@ -5580,6 +5582,16 @@ version = "0.1.0"
 dependencies = [
  "burn",
  "burn-dispatch",
+]
+
+[[package]]
+name = "skoro-uniform"
+version = "0.1.0"
+dependencies = [
+ "skoro-core",
+ "skoro-normal",
+ "skoro-spatial",
+ "skoro-tensor",
 ]
 
 [[package]]

@@ -12,7 +12,7 @@ use common::sphere::{
 };
 use skoro::scope::{project, quantity};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
-use skoro::testing::{check_agreement, check_embedded, check_operation, check_volume};
+use skoro::testing::{check_agreement, check_embedded, check_mass, check_operation, check_volume};
 use skoro::{
     Composite, Embedded, Frames, Q, QDyn, Query, Space, Target, Values, Vector, VectorDyn, Volume,
     Writer,
@@ -471,7 +471,11 @@ fn trapezoid(f: impl Fn(&[f64]) -> Vec<f64>, a: f64, b: f64, n: usize) -> f64 {
 
 #[test]
 fn sphere_charts_have_the_mass_of_the_sphere() {
-    let four_pi = 4.0 * std::f64::consts::PI;
+    // The masses the two declare, which are those of one sphere.
+    let declared = |sphere: &Embedded| sphere.mass().unwrap().log_mass().exp();
+    let (of_stereographic, of_exponential) = (declared(&SPHERE), declared(&EXPONENTIAL));
+    assert!((of_stereographic - 4.0 * std::f64::consts::PI).abs() < 1e-12);
+    assert_eq!(of_stereographic, of_exponential);
     for x in points(3) {
         // The stereographic chart over all of ℝ², in u = atan(r / 2): r = 2 tan u, dr = 2 sec²u du.
         let stereographic = trapezoid(
@@ -493,7 +497,7 @@ fn sphere_charts_have_the_mass_of_the_sphere() {
             20_000,
         );
         assert!(
-            (stereographic - four_pi).abs() < 1e-6,
+            (stereographic - of_stereographic).abs() < 1e-6,
             "the stereographic chart's mass is {stereographic}"
         );
         // The exponential chart over the ball of radius π.
@@ -511,10 +515,150 @@ fn sphere_charts_have_the_mass_of_the_sphere() {
             20_000,
         );
         assert!(
-            (exponential - four_pi).abs() < 1e-6,
+            (exponential - of_exponential).abs() < 1e-6,
             "the exponential chart's mass is {exponential}"
         );
     }
+}
+
+/// The draw, the volume and the mass of each sphere are one law: on the stereographic chart,
+/// which is global, and on the exponential one, whose domain is the disc of radius π, of which
+/// the standard normal of the plane has the mass `1 - e^{-π²/2}`.
+#[test]
+fn sphere_masses_check() {
+    let data: Vec<f64> = points(3).into_iter().flatten().collect();
+    let at = HostValue::new(Some(3), 3, HostData::Continuous(data)).unwrap();
+    check_mass(&SPHERE, &at, 1.0).unwrap();
+    let pi = std::f64::consts::PI;
+    let of_the_disc = 1.0 - (-pi * pi / 2.0).exp();
+    check_mass(&EXPONENTIAL, &at, of_the_disc).unwrap();
+    // The check tells the disc from the plane, a mass from one a twentieth larger, and a draw
+    // that is not uniform from one that is.
+    assert!(check_mass(&EXPONENTIAL, &at, 1.0).is_err());
+    let heavier = |log_mass: f64| {
+        let name = "sphere.mass.heavier";
+        let volume = Volume::global(common::sphere::log_volume());
+        Embedded::declare(
+            name,
+            Vec::new(),
+            3,
+            2,
+            common::sphere::retraction(),
+            common::sphere::inverse(),
+            None,
+        )
+        .and_then(|sphere| sphere.with_volume(volume))
+        .and_then(|sphere| {
+            sphere.with_mass(skoro::Mass::new(log_mass, common::sphere::uniform_point))
+        })
+        .unwrap()
+    };
+    let error = check_mass(&heavier((4.2 * pi).ln()), &at, 1.0).unwrap_err();
+    assert!(error.contains("are not of one law"), "{error}");
+    let lopsided = Embedded::declare(
+        "sphere.mass.lopsided",
+        Vec::new(),
+        3,
+        2,
+        common::sphere::retraction(),
+        common::sphere::inverse(),
+        None,
+    )
+    .and_then(|sphere| sphere.with_volume(Volume::global(common::sphere::log_volume())))
+    .and_then(|sphere| {
+        // The northern hemisphere alone, at twice the density.
+        let draw = |u: &[f64], x: &mut [f64]| {
+            let (c, phi) = (u[0], std::f64::consts::TAU * u[1]);
+            let s = (1.0 - c * c).sqrt();
+            (x[0], x[1], x[2]) = (s * phi.cos(), s * phi.sin(), c);
+        };
+        sphere.with_mass(skoro::Mass::new((4.0 * pi).ln(), draw))
+    })
+    .unwrap();
+    let error = check_mass(&lopsided, &at, 1.0).unwrap_err();
+    assert!(error.contains("are not of one law"), "{error}");
+    // A declaration without a mass is named.
+    let bare = exponential_sphere(Near::Guarded);
+    assert!(check_mass(&bare, &at, 1.0).unwrap_err().contains("no mass"));
+}
+
+/// The exponential chart is not global, so the sphere under it has no normal; it has a mass and
+/// a draw, and so a uniform distribution.
+#[test]
+fn uniform_on_the_exponential_sphere() {
+    use common::sphere::Exponential;
+    use skoro::scope::{constant, sample};
+    use skoro::{Key, NodeId, Observations};
+    use skoro_normal::{Normal, Scale};
+    use skoro_uniform::Uniform;
+
+    let failure = Writer::new()
+        .build(|| {
+            let mean = constant(Exponential, points(3)[1]);
+            sample(
+                "x",
+                Exponential,
+                Normal::on(Exponential, mean, Scale::sd(0.3)),
+            );
+        })
+        .unwrap_err();
+    assert!(matches!(failure.error, skoro::Error::SpaceMismatch { .. }));
+
+    let mut writer = Writer::new();
+    let x = writer
+        .build(|| sample("x", Exponential, Uniform::on(Exponential)))
+        .unwrap();
+    let snapshot = writer.snapshot();
+    let target = Target::host();
+
+    // The term, at a point: -log 4π.
+    let term = snapshot.scored_by(x).unwrap().log_density;
+    let query = Query::log_density_of([term]).given(Observations::new().observe(x, points(3)[0]));
+    let program = snapshot.compile(&query, &target).unwrap();
+    let Some(Value::Continuous(density)) = program
+        .forward(&Values::new())
+        .unwrap()
+        .get(NodeId::DENSITY)
+        .cloned()
+    else {
+        panic!("a density is continuous");
+    };
+    let expected = -(4.0 * std::f64::consts::PI).ln();
+    assert!((density.to_host()[0] - expected).abs() < 1e-14);
+
+    // The draws: on the sphere, their height uniform on (-1, 1), by Archimedes.
+    let draws = 65_536;
+    let generated = snapshot
+        .generate(&Observations::new(), &Key::from_seed(53), draws, &target)
+        .unwrap();
+    let Some(Value::Continuous(drawn)) = generated.values.get(x) else {
+        panic!("a point of the sphere is continuous");
+    };
+    let drawn = drawn.to_host();
+    let mut heights = Vec::with_capacity(draws);
+    for point in drawn.chunks(3) {
+        let norm = point.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-14, "{point:?}");
+        heights.push(point[2]);
+    }
+    heights.sort_by(f64::total_cmp);
+    let count = draws as f64;
+    let distance = heights
+        .iter()
+        .enumerate()
+        .map(|(i, height)| {
+            let law = (height + 1.0) / 2.0;
+            (law - i as f64 / count)
+                .abs()
+                .max((law - (i + 1) as f64 / count).abs())
+        })
+        .fold(0.0, f64::max);
+    // Kolmogorov's bound at the 1 % level.
+    assert!(
+        distance <= 1.63 / count.sqrt(),
+        "the heights are {distance} from uniform"
+    );
+    assert_eq!(generated.log_weight.to_host(), vec![0.0; draws]);
 }
 
 #[test]

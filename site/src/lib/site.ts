@@ -56,7 +56,8 @@ export const TRACKS: Track[] = [
     },
 ];
 
-// The two collections beside the tracks.
+// The two collections beside the tracks of pages: the mathematics, which is read as a third
+// track after the guide and the concepts, and the archive.
 export const MATH = {
     id: 'math',
     title: 'Mathematics',

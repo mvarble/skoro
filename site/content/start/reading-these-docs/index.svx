@@ -1,6 +1,6 @@
 ---
 title: Reading these docs
-summary: Two tracks that say what skoro is, the mathematics under them read in order, and an archive of how it came to be.
+summary: Three tracks to read, the guide top-down, the concepts bottom-up and the mathematics in order, beside a reference to look things up in and an archive of how skoro came to be.
 order: 90
 ---
 
@@ -8,11 +8,14 @@ order: 90
 	import TrackCard from '$lib/components/TrackCard.svelte';
 </script>
 
-These docs are kept in four parts, and each answers a different question.
+These docs are read along three tracks, each of which answers a different question and can be
+followed alone, beside a reference to look things up in and an archive of how the library came to
+be.
 
-## What skoro is
+## Three tracks
 
-Two tracks say what the library is today, and are rewritten whenever it changes.
+Two tracks say what the library is today, and are rewritten whenever it changes. The third says
+what it rests on.
 
 - **The [guide](../../guide/) is top-down.** It starts from what a user writes (a model, a
   distribution, a density to evaluate) and reaches into the machinery only as far as an example
@@ -20,25 +23,32 @@ Two tracks say what the library is today, and are rewritten whenever it changes.
 - **The [concepts](../../concepts/) are bottom-up.** They build the library from its primitive
   objects upward, each idea resting only on the ones before it. Read them to understand why skoro
   works the way it does, or before changing it.
+- **The [mathematics](../../math/) is the ground under both.** It is bottom-up too, and independent
+  of skoro: every piece of mathematics the pages rely on that would be true if the library did not
+  exist, one idea to a note, such as a retraction, the normal distribution on a curved space or the
+  Laplace approximation. Read it to know why what the library computes is right.
 
-The [reference](../../reference/) holds what is looked up rather than read: the crates, the
-glossary, the notation.
+The tracks meet. A guide page links down into the concepts for the curious, and a concepts page
+links the notes it needs, so that a reader may start on any track and cross to another where a
+question takes them.
 
-## What it rests on
+## The mathematics in order
 
-The [mathematics](../../math/) is bottom-up too, and independent of skoro. It holds every piece
-of mathematics the pages rely on that would be true if the library did not exist, one idea to a
-note: a retraction, the normal distribution on a curved space, the Laplace approximation. The notes
-stand in an order, in three parts: spaces and their charts, probability on those spaces, and least
-squares with the Gaussian approximations built on it. Each note rests only on the notes before it,
-so that read from the first to the last they tell the whole of the mathematics once. A page links
-the notes it needs, and a note says which earlier notes it builds on, so a reader who arrives in
-the middle knows how far back to go. The map on that page draws the whole network, together with
-the archive's documents that use it.
+The notes stand in an order, in three parts: spaces and their charts, probability on those spaces,
+and least squares with the Gaussian approximations built on it. Each note rests only on the notes
+before it, so that read from the first to the last they tell the whole of the mathematics once. A
+note says which earlier notes it builds on, so a reader who arrives in the middle knows how far
+back to go. The map on that page draws the whole network, together with the archive's documents
+that use it.
 
 What is skoro's own, a choice among true things or a statement about something the library
 defines, is not in the notes. It is in the concepts, which say what it is, and in the archive,
 which argued for it.
+
+## Looking things up
+
+The [reference](../../reference/) holds what is looked up rather than read: the crates, each with
+what it is for and the order in which to read its modules, and how skoro is developed.
 
 ## How it came to be
 
@@ -74,5 +84,10 @@ page ends by pointing to the next.
 		id="concepts"
 		eyebrow="To understand skoro"
 		blurb="Build the library from its spaces and operations upward, one idea at a time, each resting only on the ones before it."
+	/>
+	<TrackCard
+		id="math"
+		eyebrow="To know why it is right"
+		blurb="Read the mathematics skoro rests on from the beginning, one idea to a note, each resting only on the notes before it."
 	/>
 </div>

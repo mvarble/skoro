@@ -22,10 +22,15 @@ tangent spaces.
 > written record of its mathematics and design in the [archive](archive/). [The core](archive/core/)
 > is back: models can be built, queried and differentiated to second order. Its first
 > distribution, [the normal](concepts/the-normal/), is back too, on flat, positive and curved
-> spaces alike, with [the rotations and rigid motions](concepts/rotations-and-motions/) and
+> spaces alike, and a new one, [the uniform distribution](concepts/the-uniform/), says that nothing
+> is known of a quantity, with [the rotations and rigid motions](concepts/rotations-and-motions/) and
 > [linearization](concepts/linearization/) for estimating them. Two examples run in CI:
 > [a pose graph](guide/pose-graph/) and [a sliding window](guide/sliding-window/). Nothing is
 > published on crates.io.
 
-Start with [what skoro is](start/what-is-skoro/), and who it is for, with
-[a first model](guide/first-model/), or with the [pose graph](guide/pose-graph/) above.
+Start with [what skoro is](start/what-is-skoro/), and who it is for, or with the
+[pose graph](guide/pose-graph/) above. The rest is read along three tracks, each of which can be
+followed alone: the [guide](guide/), top-down, from the code a user writes; the
+[concepts](concepts/), bottom-up, from the library's spaces and operations; and the
+[mathematics](math/), the notes skoro rests on, in the order in which they build on each other.
+[Reading these docs](start/reading-these-docs/) says how they fit together.

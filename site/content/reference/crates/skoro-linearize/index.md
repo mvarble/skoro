@@ -22,5 +22,7 @@ filter where the terms are linear and Gaussian.
 `LevenbergMarquardt` iterates the steps to the mode of every row of a batch, each with its own
 damping by Marquardt's diagonal and Nielsen's schedule, its own acceptance and its own stop on the
 decrease a step promises, sharing only the passes; `decrement`, the undamped promise, checks where
-it stopped, and `Linearizer::objective` evaluates the density at a trial point. The
+it stopped, and `Linearizer::objective` evaluates the density at a trial point. A factor may have
+no rows, as the [uniform distribution](../skoro-uniform/)'s has, and a quantity under such factors
+alone is reported undetermined. The
 [concepts page](../../../concepts/linearization/) shows each piece.

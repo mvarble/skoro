@@ -5,7 +5,8 @@ order: 6
 depends_on: [concepts/terms, concepts/spaces, chart-volume, normal, improper-gaussian]
 ---
 
-The normal is the first distribution of skoro, and lives in a crate of its own, `skoro-normal`,
+The normal is the distribution most of skoro's models are written with, and lives in a crate of
+its own, `skoro-normal`,
 built on the core's public interface alone. It is one distribution on every space it can be exact
 on: the familiar normal on the real line, vectors and matrices, the log-normal on the positive
 orthant, and on a curved type, such as a sphere or the [rotations](../rotations-and-motions/), the
@@ -33,11 +34,11 @@ works out what the mean and the scale mean once the space is curved. A normal is
 space, its mean and its scale:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:26..32}
+{../../../../crates/skoro-normal/src/normal.rs:26..37}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:47..60}
+{../../../../crates/skoro-normal/src/normal.rs:52..65}
 ```
 
 `Normal::on` reads the space from the marker a quantity was made with; `Normal::in_space` takes the
@@ -46,11 +47,11 @@ operations, as any value of a model is: the tangent by the space's inverse retra
 and the normalizer by composites of the scale's form, and the log-volume by the core's:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:151..177}
+{../../../../crates/skoro-normal/src/normal.rs:156..182}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:119..135}
+{../../../../crates/skoro-normal/src/normal.rs:124..140}
 ```
 
 On a Euclidean space the log-volume is identically zero and left out. On the positive orthant it is
@@ -67,7 +68,7 @@ query and drawn in another.
 `score` adds the term, an exact sampler, and the roles:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:74..117}
+{../../../../crates/skoro-normal/src/normal.rs:79..122}
 ```
 
 It refuses what it cannot be exact on, at the caller's line, with the core's own errors: a discrete
@@ -78,7 +79,7 @@ quantity and scores it by a normal in one call, `sample("x", Real, normal)`, bui
 `quantity("x", Real)` and `normal.score(x)` build:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:180..186}
+{../../../../crates/skoro-normal/src/normal.rs:185..191}
 ```
 
 > [!DECISION] The normal requires a global chart
@@ -131,6 +132,34 @@ serves every space:
 
 Since the chart is global, the draw has exactly the term's density, and the sampler is exact: it
 leaves the [importance weight](../../math/importance-weights/) to the likelihoods.
+
+## A large scale on a curved type
+
+On a curved type the scale is in the coordinates of the chart, which on the rotations are radians
+to first order, and a large one does not say that little is known. The density of a normal against
+the type's reference measure is the Gaussian of the chart coordinate times $e^{-\lambda}$, and on
+the Cayley chart of the rotations $e^{-\lambda} = (1 + \lvert \tangent \rvert^2 / 4)^2$ grows
+with the coordinate. The mean is a mode only while every eigenvalue of $\Sigma$ is below one;
+beyond that the density rises away from the mean, and as the scale grows the mass goes towards the
+chart's cut, the half-turns from the mean, where a term is not finite. The median angle between a
+draw and the mean is $2 \arctan(\sigma\, m / 2)$, with $m \approx 1.538$ the median length of a
+standard normal vector of $\R^3$:
+
+| $\sigma$          | $0.5$  | $1$    | $3$    | $10$   | $100$  | $1000$ | uniform |
+| ----------------- | ------ | ------ | ------ | ------ | ------ | ------ | ------- |
+| median angle, rad | $0.73$ | $1.31$ | $2.32$ | $2.88$ | $3.12$ | $3.14$ | $2.31$  |
+
+At $\sigma = 100$ a draw is within $0.1$ rad of a half-turn with probability $0.98$, where the
+uniform distribution puts $0.064$. The law is exact at every scale, in its term and in its draws,
+and a test draws the medians above up to $\sigma = 100$ from the normal's own sampler. A quantity of which nothing is
+known is given [the uniform distribution](../the-uniform/), which no normal is near, as the doc
+comment of `Normal` says.
+
+> [!DECISION] A large scale is documented, not refused or bounded
+> A refusal could reach only a constant scale, not one that is a quantity, and a function that
+> saturated the scale would replace one wrong prior by another and cost the scale its meaning and
+> its information. What was missing was a way to say "unknown", which the uniform distribution
+> is. See [the mathematics of the uniform distribution](../../archive/uniform/math.md#a-normal-with-a-large-scale).
 
 ## The roles
 

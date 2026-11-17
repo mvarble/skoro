@@ -1,0 +1,20 @@
+[package]
+name = "skoro-uniform"
+description = "The uniform distribution of skoro, on every space whose reference measure has finite mass."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+skoro-tensor.workspace = true
+skoro-core.workspace = true
+skoro-normal.workspace = true
+
+[dev-dependencies]
+skoro-spatial.workspace = true
+
+[lints]
+workspace = true

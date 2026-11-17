@@ -372,3 +372,47 @@ fn rows_at_rounding_converge() {
         assert!(last.promised <= method.tolerance, "row {r}: {last:?}");
     }
 }
+
+/// With a uniform prior the mode is where the data put it: the heading the compass reads.
+#[test]
+fn a_uniform_prior_leaves_the_estimate_to_the_data() {
+    use common::{heading_and_compass, reading};
+    let target = Target::host();
+    let (writer, query, heading) = heading_and_compass();
+    let snapshot = writer.snapshot();
+    let linearizer = Linearizer::new(&snapshot, &query, &target, Assembly::Residual).unwrap();
+    let schedule = linearizer.schedule().unwrap();
+    // A start a radian from the reading: the reading turned by one radian about an axis.
+    let [w, x, y, z] = reading();
+    let (c, s) = (0.5f64.cos(), 0.5f64.sin());
+    let axis = [0.6, 0.0, 0.8];
+    let [a, b, d] = axis.map(|v| s * v);
+    let start = [
+        w * c - x * a - y * b - z * d,
+        w * a + x * c + y * d - z * b,
+        w * b - x * d + y * c + z * a,
+        w * d + x * b - y * a + z * c,
+    ];
+    let point = Values::new().with(heading, points(&start, 1, 4, &target));
+    let apart = |q: &[f64]| {
+        let dot: f64 = q.iter().zip(reading()).map(|(q, r)| q * r).sum();
+        2.0 * dot.abs().min(1.0).acos()
+    };
+    assert!((apart(&start) - 1.0).abs() < 1e-12);
+
+    let minimized = LevenbergMarquardt::default()
+        .minimize(&linearizer, &schedule, &point)
+        .unwrap();
+    assert_eq!(minimized.rows[0].status, Status::Converged);
+    let found = host(&minimized.point, heading);
+    // Up to the quaternion's sign: the angle between the two is that of |q · r|.
+    let dot: f64 = found.iter().zip(reading()).map(|(q, r)| q * r).sum();
+    assert!(1.0 - dot.abs() < 1e-10, "{found:?} against {:?}", reading());
+    let up_to_sign: Vec<f64> = found.iter().map(|q| q * dot.signum()).collect();
+    close(
+        &up_to_sign,
+        &reading(),
+        1e-5,
+        "the heading the compass reads",
+    );
+}

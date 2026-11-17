@@ -979,6 +979,136 @@ pub fn check_volume(
     Ok(())
 }
 
+/// The check a crate runs on its declaration's mass, at the points given, one per row, on the
+/// manifold, after `check_volume`:
+///
+/// - a draw from each of 65 536 keys is finite and on the type: `R(x, 0) = x` up to the group
+///   the type is stored up to;
+/// - at each point `μ` given, with `t = Q(μ, x)` over the draws `x` and `φ` the standard normal
+///   density of `ℝ^d`, the mean of `φ(t) e^{-Λ(μ, t)}` times the mass is 1 to within four of its
+///   standard errors, estimated from the same draws. A domain, when one is declared, is where
+///   every `t` must lie, and the mean is then compared with the normal's mass of the domain,
+///   which the caller gives as `normal_mass_of_domain`: 1 on a global chart.
+///
+/// The second is one identity of the draw, the volume and the mass together: the coordinate `t`
+/// of a uniform point has the density `e^Λ / ν(𝕏)` on the domain `U_μ`, so the mean is
+/// `∫_{U_μ} φ / ν(𝕏)`. The keys are fixed, so the check gives the same answer on every run, and
+/// it runs on the host in double precision, as the draws do.
+///
+/// A failure names the check and the point's row.
+pub fn check_mass(
+    declaration: &Arc<Embedded>,
+    points: &HostValue,
+    normal_mass_of_domain: f64,
+) -> Result<(), String> {
+    /// The draws, and the seed of their keys.
+    const DRAWS: usize = 65_536;
+    const SEED: u64 = 920;
+    /// How far a draw may be from the type, relative to its largest entry.
+    const ON_THE_TYPE: f64 = 1e-12;
+
+    let name = declaration.name();
+    let Some(mass) = declaration.mass() else {
+        return Err(format!("{name}: it declares no mass"));
+    };
+    let Some(volume) = declaration.volume() else {
+        return Err(format!("{name}: it declares no volume"));
+    };
+    let (n, d) = (declaration.storage(), declaration.dimension());
+    let HostData::Continuous(centres) = points.data() else {
+        return Err(format!("{name}: the points are not continuous"));
+    };
+    if points.storage() != n {
+        return Err(format!("{name}: the points are not of storage {n}"));
+    }
+    let target = Target::host();
+    let value = |data: Vec<f64>, width: usize| -> Result<Value, String> {
+        HostValue::new(Some(DRAWS), width, HostData::Continuous(data))
+            .ok_or("a value of the draws")?
+            .load(DRAWS, &target)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "the draws do not fit their batch".to_string())
+    };
+    let r = declaration
+        .retraction()
+        .compile(&target)
+        .map_err(describe)?;
+    let q = declaration.inverse().compile(&target).map_err(describe)?;
+    let lambda = volume.log_volume().compile(&target).map_err(describe)?;
+    let omega = match volume.domain() {
+        crate::Domain::Global => None,
+        crate::Domain::Within(domain) => Some(domain.compile(&target).map_err(describe)?),
+    };
+    let output = |program: &Program, a: &Value, b: &Value| -> Result<Value, String> {
+        let free = program.free();
+        let at = Values::new()
+            .with(free[0].node, a.clone())
+            .with(free[1].node, b.clone());
+        let out = program.forward(&at).map_err(describe)?;
+        out.get(program.targets()[0])
+            .cloned()
+            .ok_or_else(|| "a program computes its output".to_string())
+    };
+
+    // The draws, one per key: finite, and on the type.
+    let draw = mass.draw();
+    let mut x = vec![0.0; DRAWS * n];
+    for (key, point) in Key::from_seed(SEED)
+        .split(DRAWS)
+        .iter()
+        .zip(x.chunks_mut(n))
+    {
+        draw(&key.uniforms(d), point);
+    }
+    if let Some(at) = x.iter().position(|entry| !entry.is_finite()) {
+        return Err(format!("{name}: draw {} is not finite", at / n));
+    }
+    let draws = value(x.clone(), n)?;
+    let zero = Value::Continuous(skoro_tensor::Points::zeros(DRAWS, d, &target));
+    let fixed = continuous(&output(&r, &draws, &zero)?)?;
+    close_up_to(declaration, &x, &fixed, ON_THE_TYPE)
+        .map_err(|e| format!("{name}: a draw is not on the type, R(x, 0) is not x: {e}"))?;
+
+    // The identity, at each point.
+    let log_normalizer = -0.5 * d as f64 * std::f64::consts::TAU.ln();
+    let total = mass.log_mass().exp();
+    for (row, centre) in centres.chunks(n).enumerate() {
+        let centre = value(centre.repeat(DRAWS), n)?;
+        let t = output(&q, &centre, &draws)?;
+        if let Some(omega) = &omega {
+            let inside = continuous_or_discrete(&output(omega, &centre, &t)?);
+            if let Some(at) = inside.iter().position(|&b| b != 1.0) {
+                return Err(format!(
+                    "{name}: at row {row}, the coordinate of draw {at} is outside the domain"
+                ));
+            }
+        }
+        let log_volume = continuous(&output(&lambda, &centre, &t)?)?;
+        let summands: Vec<f64> = continuous(&t)?
+            .chunks(d)
+            .zip(&log_volume)
+            .map(|(t, l)| {
+                let square: f64 = t.iter().map(|v| v * v).sum();
+                (log_normalizer - 0.5 * square - l).exp()
+            })
+            .collect();
+        let count = DRAWS as f64;
+        let mean = summands.iter().sum::<f64>() / count;
+        let variance = summands.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / (count - 1.0);
+        let (found, error) = (total * mean, total * (variance / count).sqrt());
+        // Written so that a mean that is not a number fails.
+        let within = (found - normal_mass_of_domain).abs() <= 4.0 * error;
+        if !within {
+            return Err(format!(
+                "{name}: at row {row}, the mass times the mean of φ(t) e^(-Λ) over uniform draws \
+                 is {found}, where {normal_mass_of_domain} was expected to within four standard \
+                 errors of {error:e}: the draw, the volume and the mass are not of one law"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Whether two batches of stored points, one per row, are within `tolerance` of each other as
 /// points of the type: some element of its group carries each row of `b` within it of the row
 /// of `a`, relative to the larger of 1 and the row's largest entry.

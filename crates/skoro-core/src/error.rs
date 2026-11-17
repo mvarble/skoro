@@ -51,6 +51,9 @@ pub enum Error {
         space: Space,
         quantity: Option<NodeId>,
     },
+    /// A space asked for its mass or a uniform point whose reference measure has infinite mass,
+    /// or which declares none.
+    NoMass { space: Space },
     /// A name already registered.
     DuplicateName { name: String },
     /// A name the registry lacks.
@@ -157,6 +160,10 @@ impl fmt::Display for Error {
                 }
                 f.write_str("which has no reference measure: it declares no chart volume")
             }
+            Error::NoMass { space } => write!(
+                f,
+                "{space:?} has no finite mass: it has no uniform distribution"
+            ),
             Error::DuplicateName { name } => write!(f, "{name} is already registered"),
             Error::UnknownOperation { name } => write!(f, "no operation is registered as {name}"),
             Error::NotALogDensity { id } => {

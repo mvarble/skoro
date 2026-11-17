@@ -6,7 +6,10 @@ translations, up to the sign of the quaternion, which the core checks it carries
 Cayley chart in the rotation, global on the group and the same for either sign, moves the
 translations in the point's own frame, and declares its volume against Haar measure, so that a
 quantity of any of them is scored by the normal, observed in whatever sign it is given, and
-simulated like any other.
+simulated like any other. The rotations also declare the mass of Haar measure, $8\pi^2$, with
+Shoemake's draw of a uniform rotation, so that a rotation of which nothing is known is given the
+[uniform distribution](../skoro-uniform/); the poses, whose translations fill space, have infinite
+mass.
 
 Its maps are composites of the core's operations, with no kernel and no derivative of their own,
 and each is a map of the groups, the same whichever sign its inputs are stored in: `*` composes and

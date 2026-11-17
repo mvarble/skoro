@@ -1,6 +1,6 @@
 ---
 title: Rotations and poses
-summary: Score an attitude or a pose with the normal, draw it, observe one given from outside in whatever sign, and read Euler angles off it, with the crate skoro-spatial, from its own tests and examples.
+summary: Score an attitude or a pose with the normal, give an unknown one the uniform distribution, draw it, observe one given from outside in whatever sign, and read Euler angles off it, with the crates skoro-spatial and skoro-uniform, from their own tests and examples.
 order: 2
 ---
 
@@ -8,8 +8,8 @@ The crate `skoro-spatial` gives a model its rotations, rigid motions and extende
 shows what a user writes with them: a quantity of one of these types, scored by
 [the normal](../../concepts/the-normal/) and drawn, a pose with its noise in its own frame,
 measured poses read from a file and observed as they come, and Euler angles read off a rotation and
-compared. Each step quotes the crate's tests, so every line
-shown compiles and runs. The [concepts page](../../concepts/rotations-and-motions/) explains how
+compared, and a rotation of which nothing is known, given the uniform distribution of
+`skoro-uniform`. Each step quotes the crates' tests, so every line shown compiles and runs. The [concepts page](../../concepts/rotations-and-motions/) explains how
 the types are made and what each map computes.
 
 ## A rotation in a model
@@ -28,6 +28,26 @@ and its negation are the same rotation, and the types know it: every density, de
 the same whichever of the two a value is stored as, so a draw may carry either sign, and a
 quaternion observed from outside the model is observed as it comes. To report one sign, take
 `host::canonical`, the quaternion with $w \ge 0$.
+
+## A rotation of which nothing is known
+
+The scale of a normal on a rotation is in radians, and it is meant to be small. A standard
+deviation past one radian does not say that little is known of the rotation: it moves the draws
+towards the half-turns from the mean, and at $\sigma = 100$ nearly all of them lie within a tenth
+of a radian of one ([the normal's page](../../concepts/the-normal/#a-large-scale-on-a-curved-type)
+has the numbers). A rotation of which nothing is known is given the uniform distribution of the
+crate `skoro-uniform`, which takes every space of finite mass, the rotations and the categorical
+spaces among them. Here a heading is unknown, a compass reads it with an error of 0.05 rad, and a
+coin is tossed beside it:
+
+```rust
+{../../../../crates/skoro-uniform/tests/sample.rs:128..144}
+```
+
+Generation draws the heading uniformly and weighs each row by the compass alone. Minimized, the
+heading is where the compass reads it, and with no compass at all a linearization reports the
+heading undetermined, since every rotation is as likely as any other. The
+[concepts page](../../concepts/the-uniform/) explains the term and its sampler.
 
 ## A pose
 

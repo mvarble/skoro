@@ -8,9 +8,11 @@ order: 2
 	import CrateMap from '$lib/components/CrateMap.svelte';
 </script>
 
-skoro is a workspace of seven crates. Each depends only on the crates above it here, and a user
+skoro is a workspace of eight crates, drawn here in layers, foundations first: each is built on
+the crates it names, which lie in the layers above it, and through them on theirs. A user
 depends on `skoro`, which re-exports the core and the tensor layer, and on each feature crate a
-model or an algorithm uses, such as `skoro-normal`, `skoro-spatial` and `skoro-linearize`. Each
+model or an algorithm uses, such as `skoro-normal`, `skoro-uniform`, `skoro-spatial` and
+`skoro-linearize`. Each
 crate has a page of its own, which says what it is for and gives the order in which to read its modules, computed from its sources when
 the site is built: an order that uses as little as possible before it is read.
 
@@ -21,12 +23,13 @@ the site is built: an order that uses as little as possible before it is read.
 | `skoro-tensor` | The layer over burn: the tensor shapes skoro computes with (`Points`, `Frame`, `Integers`, `Value`), each made at an explicit precision on a supported device, the `Target` that names them, host values, and the broadcasts and reshapes that carry values of no entries. |
 | `skoro-core`   | Everything that makes a model a model: [spaces](../../concepts/spaces/) and typed handles, [operations](../../concepts/operations/) and their kernels, the writer and its [scopes](../../concepts/building/), [terms](../../concepts/terms/), [queries](../../concepts/queries/) and the compiler, embedded types, generation and retirement. |
 | `skoro-normal` | The [normal distribution](../../concepts/the-normal/), on every space whose chart is global and whose volume is known: its term, its exact sampler, its scale in four forms, its roles, and the stacked tangent of a retirement's replacement, Gaussian or improper. |
+| `skoro-uniform` | The [uniform distribution](../../concepts/the-uniform/), on every space whose reference measure has finite mass: its constant term, its exact sampler on the host, and its residual of no components, a factor with no rows in a linearization. |
 | `skoro-spatial` | The [rotations and rigid motions](../../concepts/rotations-and-motions/): the unit quaternions, the rigid motions and the extended poses as embedded types with global charts and declared volumes, and their maps, from compositions and actions to exponentials, Jacobians, interpolations and Euler angles, as composites of the core's operations. |
 | `skoro-elimination` | [Elimination in square-root form](../../math/square-root-elimination/): factored least-squares problems over blocks, their schedules of elimination, and their numeric elimination by unpivoted QR on the host, in double precision, through faer, with what it answers. It depends on no other crate of skoro. |
 | `skoro-linearize` | The [linearization](../../concepts/linearization/) of a density query at a batch of points, by its residuals or by its information roots, into the problems `skoro-elimination` eliminates, with steps, marginals, evidence and draws, the Levenberg–Marquardt method to a mode, and a retirement's linearized replacement as the normal's improper factor. |
 | `skoro`        | The crate a user depends on: it re-exports `skoro-core`, and `skoro-tensor` as `skoro::tensor`, with `Device`, `Precision` and `Target` at its root, and the [examples](../../guide/pose-graph/) that run in CI. |
 
-The normal is the first distribution, the rotations and rigid motions the first curved types, and
+The normal and the uniform are the first distributions, the rotations and rigid motions the first curved types, and
 linearization and elimination the first pieces of the estimators built on them. What is left for
 later entries (other distributions, spheres, linear algebra, estimators beyond Levenberg–Marquardt,
 serialization and bindings among them)

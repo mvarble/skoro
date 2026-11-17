@@ -284,3 +284,32 @@ pub fn rotations(target: &Target) -> (Writer, Query, Values) {
         .with(r1, points(&b, 2, 4, target));
     (writer, query, point)
 }
+
+/// `x / |x|`.
+pub fn unit(q: [f64; 4]) -> [f64; 4] {
+    let n = q.iter().map(|x| x * x).sum::<f64>().sqrt();
+    q.map(|x| x / n)
+}
+
+/// The reading of the compass in `heading_and_compass`.
+pub fn reading() -> [f64; 4] {
+    unit([0.7, 0.3, -0.4, 0.5])
+}
+
+/// A heading of which nothing is known and a compass that reads it: `heading` uniform on the
+/// rotations and free, `compass ~ N(heading, 0.05²)` observed at `reading()`. The query, and the
+/// heading's handle.
+pub fn heading_and_compass() -> (Writer, Query, skoro_core::Q<Rotation>) {
+    let mut writer = Writer::new();
+    let (heading, compass) = writer
+        .build(|| {
+            let heading = quantity("heading", Rotation);
+            skoro_uniform::Uniform::on(Rotation).score(heading);
+            let compass = quantity("compass", Rotation);
+            Normal::on(Rotation, heading, Scale::sd(0.05)).score(compass);
+            (heading, compass)
+        })
+        .unwrap();
+    let query = Query::log_density().given(Observations::new().observe(compass, reading()));
+    (writer, query, heading)
+}

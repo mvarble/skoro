@@ -24,6 +24,11 @@ impl Typed for Scored {
 }
 
 /// The normal `𝒩(μ, Σ)` on a space, by its mean and scale: a term to add, or a factor.
+///
+/// On a curved type the scale is in the coordinates of the chart, and the mean is a mode only
+/// while every eigenvalue of `Σ` is below one. Beyond that the mass goes towards the chart's cut,
+/// the half-turns from the mean on `Rotation`, so a large scale does not say that nothing is
+/// known of a quantity: `skoro_uniform::Uniform` does.
 #[derive(Clone, Debug)]
 pub struct Normal {
     space: Space,

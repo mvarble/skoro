@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use common::host::{hat, identity3, mm, rot};
 use common::{Rows, close, quaternions, run, unit, with_translations};
-use skoro_core::testing::{check_embedded, check_volume};
-use skoro_core::{Embedded, Param, Registry, Space};
+use skoro_core::testing::{check_embedded, check_mass, check_volume};
+use skoro_core::{Embedded, Error, Key, Param, Registry, Space};
 use skoro_spatial::{EXTENDED_POSE, POSE, ROTATION, register};
 
 fn declarations() -> [(&'static Arc<Embedded>, &'static str, usize, usize); 3] {
@@ -264,7 +264,109 @@ fn volume_has_the_stated_mass() {
         .zip(&lambda)
         .map(|((theta, r), lambda)| r * r * lambda.exp() * 2.0 / theta.cos().powi(2) * h)
         .sum();
-    close(&[4.0 * PI * radial], &[8.0 * PI * PI], 1e-10);
+    // The total mass of the chart's volume, against the mass the type declares.
+    let declared = ROTATION.mass().unwrap().log_mass().exp();
+    close(&[4.0 * PI * radial], &[declared], 1e-10);
+    assert_eq!(ROTATION.mass().unwrap().log_mass(), (8.0 * PI * PI).ln());
+}
+
+/// The draw, the Cayley volume and the mass are one law, at the points the volume is checked at.
+#[test]
+fn rotation_mass_checks() {
+    if let Err(error) = check_mass(&ROTATION, &points(0).host(), 1.0) {
+        panic!("{error}");
+    }
+}
+
+#[test]
+fn uniform_rotation_is_shoemakes_map() {
+    let draw = ROTATION.mass().unwrap().draw();
+    let mut q = [f64::NAN; 4];
+    draw(&[0.25, 0.5, 0.75], &mut q);
+    // (√(1 - u₁) cos 2πu₂, √(1 - u₁) sin 2πu₂, √u₁ cos 2πu₃, √u₁ sin 2πu₃), as (w, x, y, z).
+    close(&q, &[-0.75f64.sqrt(), 0.0, 0.0, -0.5], 1e-15);
+    let grid = [1e-9, 0.1, 0.25, 0.5, 0.8, 1.0 - 1e-9];
+    for u1 in grid {
+        for u2 in grid {
+            for u3 in grid {
+                draw(&[u1, u2, u3], &mut q);
+                let norm = q.iter().map(|v| v * v).sum::<f64>().sqrt();
+                assert!((norm - 1.0).abs() < 1e-15, "{q:?} at ({u1}, {u2}, {u3})");
+            }
+        }
+    }
+}
+
+/// From a centre that is not the identity, the angle of a uniform rotation has the Haar law,
+/// `(θ - sin θ) / π` on `(0, π)`, and its axis no preferred direction.
+#[test]
+fn uniform_rotations_have_the_haar_angle() {
+    let draws = 65_536;
+    let draw = ROTATION.mass().unwrap().draw();
+    let drawn: Vec<[f64; 4]> = Key::from_seed(31)
+        .split(draws)
+        .iter()
+        .map(|key| {
+            let mut q = [0.0; 4];
+            draw(&key.uniforms(3), &mut q);
+            q
+        })
+        .collect();
+    let centre = vec![unit([0.5, 0.1, -0.3, 0.7]); draws];
+    // x ⊖ μ, by the chart's route: Q(μ, x).
+    let coordinates = run(
+        ROTATION.inverse(),
+        &[Rows::vectors(&centre), Rows::vectors(&drawn)],
+        &skoro_tensor::Target::host(),
+    );
+    let count = draws as f64;
+    let mut angles = Vec::with_capacity(draws);
+    let mut direction = [0.0; 3];
+    for t in coordinates.chunks(3) {
+        let length = t.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!(length.is_finite() && length > 0.0, "{t:?}");
+        angles.push(2.0 * (length / 2.0).atan());
+        for (sum, v) in direction.iter_mut().zip(t) {
+            *sum += v / length / count;
+        }
+    }
+    // Kolmogorov's statistic against the Haar law, at the 1 % level.
+    angles.sort_by(f64::total_cmp);
+    let distance = angles
+        .iter()
+        .enumerate()
+        .map(|(i, theta)| {
+            let law = (theta - theta.sin()) / PI;
+            (law - i as f64 / count)
+                .abs()
+                .max((law - (i + 1) as f64 / count).abs())
+        })
+        .fold(0.0, f64::max);
+    assert!(
+        distance <= 1.63 / count.sqrt(),
+        "the angles are {distance} from the Haar law"
+    );
+    // A component of a uniform direction has variance 1/3.
+    for mean in direction {
+        assert!(mean.abs() <= 4.0 / (3.0 * count).sqrt(), "{direction:?}");
+    }
+}
+
+#[test]
+fn poses_have_no_mass() {
+    for declaration in [&POSE, &EXTENDED_POSE] {
+        assert!(declaration.mass().is_none());
+        let space = Space::Embedded((*declaration).clone());
+        let no_mass = Error::NoMass {
+            space: space.clone(),
+        };
+        assert_eq!(space.log_mass(), Err(no_mass.clone()));
+        let mut point = vec![0.0; space.storage()];
+        let variates = vec![0.5; space.dimension().unwrap()];
+        assert_eq!(space.draw_uniform(&variates, &mut point), Err(no_mass));
+    }
+    let rotation = Space::Embedded(ROTATION.clone());
+    assert_eq!(rotation.log_mass(), Ok((8.0 * PI * PI).ln()));
 }
 
 #[test]
