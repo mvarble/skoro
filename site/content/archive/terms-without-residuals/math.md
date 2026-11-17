@@ -89,8 +89,9 @@ n_t - \lambda_t$, and it covers only terms of that form: not the half-Cauchy pri
 uniform, not a hand-written term. For the terms it does cover it is the cheapest of the three and
 the one that knows the outliers.
 
-> [!DECISION] A term without a residual is given its own Hessian, clipped
-> Of the three, only the Hessian covers every term that can be written, needs nothing new of a
+> [!TODO] Which curvature a term without a residual is given
+> The draft recommends the term's own Hessian, clipped, and writes the rest of this document on
+> that choice. Of the three, only the Hessian covers every term that can be written, needs nothing new of a
 > distribution, and has the exact curvature wherever the term is convex in the chart. It is what
 > lets eight schools be linearized, and its half-Cauchy prior is convex in the logarithmic chart of
 > $\tau$ ([](eq:math/term-curvature/half-cauchy)), so there it costs nothing. The other two are
@@ -107,8 +108,17 @@ $$
 	M_t = V \max(\Lambda, 0)\, V\transpose, \qquad V \Lambda V\transpose = \tfrac12 \bigl( H_t + H_t\transpose \bigr) , @tag(clipped)
 $$
 
-over the block of $K_t$: $d_t$ rows $C_t$, the right-hand side $-u_t$, and the linear term $\eta_t$,
-the part of $g_t$ outside the range of $M_t$. Three things are skoro's to settle about them.
+over the block of $K_t$: $d_t$ rows $C_t$, the right-hand side $-u_t$ capped as in
+[](eq:math/term-curvature/capped), and the linear term $\eta_t$, the part of $g_t$ that the rows do
+not carry. The cap matters here and not only in principle. A robust loss at a measurement near
+the edge of its convex region, $\lvert r \rvert^2$ just below $\nu$, has a small positive curvature
+and a gradient of order one along its residual, and without the cap its rows would hold a share of
+the value large enough that the model's constant, the minimizer's value of $f$ before a step and
+the Laplace approximation's evidence would lose their digits to cancellation. With $B$ the bound
+of [](eq:math/term-curvature/capped), the cancellation costs at most the unit roundoff times
+$\sum_{t \in N} d_t B$, which in double precision on the host stays below the minimizer's tolerance
+of $10^{-9}$ nats for $B$ up to about $10^{5}$ nats over a few terms. Several things are skoro's to
+settle about the rows.
 
 **The number of rows is fixed.** Every row of a batch shares one factor structure and one plan
 ([batch rows share the plan](../linearization/math.svx#eliminating-the-linearization)), so a term
@@ -145,8 +155,9 @@ of $d_t \times d_t$ blocks, on the host in double precision with the elimination
 
 1. **a factor in $N$ whose Hessian pass is not admissible**, an operation of order less than two
    where the pass needs one, naming the step, as the core refuses it;
-2. a free discrete quantity, and in the residual assembly a factor whose scale is reached from a
-   free quantity, as before.
+2. as before, a free discrete quantity; in the residual assembly, a factor whose scale is reached
+   from a free quantity; and in the Fisher assembly, a factor whose scale is free and which binds
+   no information root, such as a likelihood factor of the normal.
 
 The second refusal of the residual assembly is about a normal whose scale is free, read off the
 scale it binds under the normal's roles. A term in $N$ binds no scale and is not refused for one:
@@ -200,9 +211,14 @@ Hessian changes neither the promise nor the meaning of the gain; it changes only
 gain is, by [%full](statement:math/term-curvature/gain).
 
 And there it is the better of the two assemblies. On a free scale the residual rows hold half the
-curvature, $H^\ast = 2M$ in the scale's direction, and their undamped gain tends to zero, so the
-schedule never releases the damping; the residual assembly refuses a free scale in any case. The
-Fisher rows hold all of it for an isotropic scale, $H^\ast = M$, and the gain tends to one. Damped
+curvature in the scale's diagonal block, $H^\ast = 2M$ there, and the undamped gain of a step along
+the scale tends to zero, so the schedule never releases the damping; the residual assembly refuses a
+free scale in any case. The Fisher rows hold all of that block for an isotropic scale, $H^\ast = M$
+there, and the gain of such a step tends to one. They omit the block between the scale and the
+means, which is not zero at a mode where a prior or another term also reads what the mean depends
+on, so the undamped rate is not zero but the $\rho$ of
+[%full](statement:math/term-curvature/curvature-iteration): $0.05$ to $0.22$ in the note's example
+of a line with a prior on its intercept. That is well below one, and the damping is released. Damped
 Fisher scoring is therefore the Levenberg–Marquardt method on the Fisher assembly, with nothing
 changed but the refusal lifted, and the end-of-run check
 ([what is checked at the end](../../math/levenberg-marquardt/#what-is-checked-at-the-end)) becomes

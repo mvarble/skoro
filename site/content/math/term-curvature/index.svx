@@ -70,6 +70,27 @@ $u_t$ as much of $g_t$ as the range of $M_t$ allows, and leaves in $\eta_t$ only
 it. When $M_t$ is positive definite on the block of $K_t$, $\eta_t = 0$. The root
 [](eq:eigen-root) does this, as the folding of a log-volume does for the linearization.
 
+**But not without bound.** The rows' share of the value, $\tfrac12 \lvert u_t \rvert^2 = \tfrac12
+g_t\transpose M_t^{+} g_t$, grows without bound as an eigenvalue of $M_t$ falls toward zero with the
+gradient along it held. Student's $t$ with $\nu = d = 1$, below, has a gradient of about $1$ and a
+curvature of about $\nu - \lvert r \rvert^2$ along the residual near $\lvert r \rvert^2 = \nu$, so
+that $\tfrac12 \lvert u_t \rvert^2$ is about $10^3$ at $\lvert r \rvert^2 = 0.999$ and $10^6$ at
+$0.999999$. The constant $c$ is then the difference of $f(\hat \point)$ and that share, and loses its
+digits to cancellation: an evidence read off the model, or a value of the model compared with a
+value of $f$, is in error by the unit roundoff times $\sum_t \tfrac12 \lvert u_t \rvert^2$. The split
+of the gradient between $u_t$ and $\eta_t$ is free, so the share is capped. Along each eigenvector
+$v_i$ with eigenvalue $\lambda_i > 0$, the component of $u_t$ is
+
+$$
+	(u_t)_i = \operatorname{sign}(v_i\transpose g_t) \min\Bigl( \frac{\lvert v_i\transpose g_t \rvert}{\sqrt{\lambda_i}},\ \sqrt{2B} \Bigr) , @tag(capped)
+$$
+
+for a bound $B$ in the units of $f$, and $\eta_t = g_t - C_t\transpose u_t$ takes the rest. Then
+$\tfrac12 \lvert u_t \rvert^2 \le d_t B$, the curvature is unchanged, and the gradient is still exact.
+The cap binds only along a direction whose own Newton decrement, $\tfrac12 (v_i\transpose g_t)^2 /
+\lambda_i$, exceeds $B$: a direction in which the model promises far more than it can be trusted
+for, and in which the part of the gradient moved to $\eta_t$ is solved at $\kappa^2$.
+
 **A row cannot carry negative curvature.** Every $C_t\transpose C_t$ is positive semidefinite, so
 a term's curvature must be. A term whose Hessian is indefinite, or negative, cannot give the rows
 its own second derivative, and must be given a curvature that differs from it. The three ways of
@@ -87,9 +108,9 @@ So a term's gradient decides where an iteration stops, and its curvature only ho
 there. A curvature that is wrong by a little costs a slower rate, and one that is wrong by much
 costs convergence, without the iteration ever stopping at a point that is not stationary. Two
 cases from the notes before this one bracket what "by much" means. Gauss–Newton on a free scale
-omits as much curvature as it keeps, $H^\ast = 2M$ in the scale's direction, and $\rho = 1$
+omits as much curvature as it keeps, $H^\ast = 2M$ in the scale's diagonal block, and $\rho = 1$
 ([where the linearization fails](../linearization/#where-it-fails)). Fisher scoring on the same
-scale has $H^\ast = M$ there, and $\rho = 0$ in that direction
+scale has $H^\ast = M$ in that block, and a rate of zero in that direction alone
 ([where the expected information is exact](../fisher-scoring/#where-the-expected-information-is-exact)).
 
 ## The curvature and the damping
@@ -148,10 +169,18 @@ Three things follow.
   ends with the undamped iteration and its rate. Otherwise the damping stays bounded away from
   zero, and the method converges, but only as fast as a scaled gradient descent.
 - **The two cases again.** For Gauss–Newton on a free scale, $H^\ast = 2M$ in the scale's
-  direction and the undamped gain tends to zero there: each step decreases $f$ by about nothing
-  of what it promised, and the damping is never released. For Fisher scoring, $H^\ast = M$ and the
-  gain tends to one. Damped Fisher scoring is the Levenberg–Marquardt method on the Fisher
-  linearization, and on a free scale it is the one of the two whose damping is released.
+  diagonal block, and the undamped gain of a step along the scale tends to zero: each such step
+  decreases $f$ by about nothing of what it promised, and the damping is never released. For
+  Fisher scoring, $H^\ast = M$ in that block, and the gain of a step along the scale tends to one.
+  The whole matrix is another matter. The Hessian has a block between the scale and the
+  quantities the mean depends on, $-2 J\transpose r$ in the logarithm of an isotropic scale, which
+  the expected information sets to zero; it vanishes at a stationary point only where nothing
+  else reads those quantities, since otherwise $J\transpose r$ balances their other terms' gradient.
+  For a line $y_i = a + b x_i$ with a free isotropic noise and a prior of scale $s_a$ on $a$, at the
+  mode of one data set of five points, $\rho = 0.05$ for $s_a = 1$ and $0.22$ for $s_a = 0.3$. So
+  damped Fisher scoring, the Levenberg–Marquardt method on the Fisher linearization, releases its
+  damping on a free scale where Gauss–Newton does not, and then converges at a rate that the
+  coupling of the scale with the means sets.
 
 ## Three curvatures
 
@@ -164,7 +193,8 @@ curvature it really has, and where it is positive semidefinite it is the best cu
 the term then contributes nothing to $H^\ast - M$. Where it is not, its negative eigenvalues are
 set to zero, $M_t = V \max(\Lambda, 0)\, V\transpose$, the nearest positive semidefinite matrix in
 the Frobenius norm; the root [](eq:eigen-root) is then built from the clipped eigenvalues, and the
-gradient along the clipped directions goes to $\eta_t$. Computing it needs second derivatives of
+gradient along the clipped directions goes to $\eta_t$, with the cap [](eq:capped) on the others.
+Computing it needs second derivatives of
 the term, $d_t$ columns of Hessian products
 ([forward-over-reverse](../automatic-differentiation/#forward-over-reverse-hessian-products)), and
 nothing of its form.
