@@ -4,9 +4,9 @@ kind: proposition
 title: The measure a retraction normalizes
 ---
 
-Let $\manifold$ be a manifold of dimension $\dimension$ with a retraction $\oplus$ smooth on all of
-$\manifold$. There is exactly one measure $\nu$ on $\manifold$ with a continuous positive density in
-every chart such that every chart has volume $v_\mu(0) = 1$ at its centre: the Riemannian volume
+Let $\manifold$ be a manifold of dimension $\dimension$ with a retraction $\oplus$ smooth on an open
+$W \subseteq \manifold$. There is exactly one measure $\nu$ on $W$ with a continuous positive density in
+every chart such that every chart centred in $W$ has volume $v_\mu(0) = 1$ at its centre: the Riemannian volume
 measure of the metric
 
 $$

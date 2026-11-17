@@ -177,7 +177,11 @@ $v^\sigma_\mu(0) = 2\sqrt 2$; stored as unit quaternions, with the chart below, 
 norm $\tfrac12$, so $v^\sigma_\mu(0) = \tfrac18$. The normalized measure is the same in both, as
 [%full](statement:basis) says it must be: the Haar measure that agrees with Lebesgue measure in the
 tangent coordinates at the identity. For a sphere with an orthonormal basis of each tangent plane,
-it is surface measure itself.
+it is surface measure itself. Such a basis is smooth only off a point, as the
+[first note](../retraction/#tangent-coordinates) allows, so the statements give a measure on the
+sphere without that point. Giving the point measure zero extends it to the sphere, here as surface
+measure. In general the metric of [%full](statement:basis) need not extend across the points where
+$\oplus$ is not smooth, and the measure is then defined only where it is.
 
 ## Charts of Lie groups
 
