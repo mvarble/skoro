@@ -108,7 +108,10 @@ positive!(
         [Space::Vector(n)] => Some(Space::Positive(*n)),
         _ => None,
     },
-    Chart { value: Tensor::exp, sign: 1.0 }
+    Chart {
+        value: Tensor::exp,
+        sign: 1.0
+    }
 );
 positive!(
     /// `log a`, `Positive(n)` to `Vector(n)`: an identity in the charts.
@@ -118,7 +121,10 @@ positive!(
         [Space::Positive(n)] => Some(Space::Vector(*n)),
         _ => None,
     },
-    Chart { value: Tensor::log, sign: 1.0 }
+    Chart {
+        value: Tensor::log,
+        sign: 1.0
+    }
 );
 positive!(
     /// `a ⊙ b`, of one positive space: a sum in the charts.
@@ -138,7 +144,10 @@ positive!(
         [Space::Positive(n)] => Some(Space::Positive(*n)),
         _ => None,
     },
-    Chart { value: Tensor::recip, sign: -1.0 }
+    Chart {
+        value: Tensor::recip,
+        sign: -1.0
+    }
 );
 
 /// The index is input 0, as floats; the values follow it.
