@@ -1,7 +1,7 @@
 ---
 title: Importance weights
 part: probability
-order: 5
+order: 6
 summary: Drawing the free quantities of a model in an ancestral order, each from a proposal, and weighing the draw by the ratio of the model's density to the proposals', gives an unbiased estimate of every integral against the unnormalized conditional law, provided each ratio is of densities against one reference measure.
 depends_on: [generative-models]
 ---

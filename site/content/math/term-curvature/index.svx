@@ -3,7 +3,7 @@ title: A curvature for every term
 part: estimation
 order: 7
 summary: A term that is not a sum of squares still enters a quadratic model as rows, from any positive semidefinite curvature and its exact gradient; the iteration stops where the gradient vanishes whatever the curvature, the curvature sets the rate and the damping's gain, and a term's own Hessian, its expected information and a reweighting of its residual are three curvatures with different costs.
-depends_on: [linearization, levenberg-marquardt, laplace-approximation, fisher-scoring]
+depends_on: [student-t, linearization, levenberg-marquardt, laplace-approximation, fisher-scoring]
 ---
 
 <script>
@@ -72,8 +72,8 @@ it. When $M_t$ is positive definite on the block of $K_t$, $\eta_t = 0$. The roo
 
 **But not without bound.** The rows' share of the value, $\tfrac12 \lvert u_t \rvert^2 = \tfrac12
 g_t\transpose M_t^{+} g_t$, grows without bound as an eigenvalue of $M_t$ falls toward zero with the
-gradient along it held. Student's $t$ with $\nu = d = 1$, below, has a gradient of about $1$ and a
-curvature of about $\nu - \lvert r \rvert^2$ along the residual near $\lvert r \rvert^2 = \nu$, so
+gradient along it held. Student's $t$ with $n = d = 1$, below, has a gradient of about $1$ and a
+curvature of about $n - \lvert r \rvert^2$ along the residual near $\lvert r \rvert^2 = n$, so
 that $\tfrac12 \lvert u_t \rvert^2$ is about $10^3$ at $\lvert r \rvert^2 = 0.999$ and $10^6$ at
 $0.999999$. The constant $c$ is then the difference of $f(\hat \point)$ and that share, and loses its
 digits to cancellation: an evidence read off the model, or a value of the model compared with a
@@ -235,29 +235,29 @@ middle term, which is negative for a concave $\varphi$. They need only first der
 know which measurements are outliers: a residual far out has a small $\varphi'$, and its rows are
 nearly zero.
 
-**One law, three curvatures.** Student's $t$ with $\nu$ degrees of freedom on a whitened residual
-of dimension $d$ has, up to a constant, $\phi = \tfrac{\nu + d}{2} \log\bigl(1 + \lvert r \rvert^2 /
-\nu\bigr)$, which is $\varphi(\tfrac12 \lvert r \rvert^2)$ with $\varphi'(s) = (\nu + d) / (\nu +
+**One law, three curvatures.** [Student's $t$](../student-t/) with $n$ degrees of freedom on a whitened residual
+of dimension $d$ has, up to a constant, $\phi = \tfrac{n + d}{2} \log\bigl(1 + \lvert r \rvert^2 /
+n\bigr)$, which is $\varphi(\tfrac12 \lvert r \rvert^2)$ with $\varphi'(s) = (n + d) / (n +
 2s)$. Along the residual, where $J = I$, the three curvatures are
 
 $$
 	\begin{gathered}
-		\text{Hessian:} \quad \frac{(\nu + d)\,(\nu - \lvert r \rvert^2)}{(\nu + \lvert r \rvert^2)^2}, \qquad
-		\text{expected information:} \quad \frac{\nu + d}{\nu + d + 2}, \qquad
-		\text{reweighting:} \quad \frac{\nu + d}{\nu + \lvert r \rvert^2} .
+		\text{Hessian:} \quad \frac{(n + d)\,(n - \lvert r \rvert^2)}{(n + \lvert r \rvert^2)^2}, \qquad
+		\text{expected information:} \quad \frac{n + d}{n + d + 2}, \qquad
+		\text{reweighting:} \quad \frac{n + d}{n + \lvert r \rvert^2} .
 	\end{gathered} @tag(student)
 $$
 
 In the directions across the residual the Hessian and the reweighting agree, both
-$\varphi' = (\nu + d)/(\nu + \lvert r \rvert^2)$. The Hessian along the residual is negative beyond
-$\lvert r \rvert^2 = \nu$, so for a measurement more than $\sqrt \nu$ whitened units out it is
+$\varphi' = (n + d)/(n + \lvert r \rvert^2)$. The Hessian along the residual is negative beyond
+$\lvert r \rvert^2 = n$, so for a measurement more than $\sqrt n$ whitened units out it is
 clipped to zero. The expected information is a constant multiple of the normal's,
-$(\nu + d)/(\nu + d + 2)$, which is $\tfrac12$ for the Cauchy law, $\nu = d = 1$, whatever the residual. The
+$(n + d)/(n + d + 2)$, which is $\tfrac12$ for the Cauchy law, $n = d = 1$, whatever the residual. The
 reweighting falls off as $1/\lvert r \rvert^2$ and is never negative. At the centre, $r = 0$, the
-Hessian and the reweighting are both $(\nu + d)/\nu$, above the expected information, which is the
+Hessian and the reweighting are both $(n + d)/n$, above the expected information, which is the
 Hessian's average over the law.
 
-**A convex term needs nothing.** The half-Cauchy law of scale $s$ on a positive quantity $\tau$,
+**A convex term needs nothing.** The [half-Cauchy](../student-t/#the-half-cauchy) law of scale $s$ on a positive quantity $\tau$,
 in the logarithmic chart $u = \log \tau$, has $\phi(u) = \log\bigl(1 + e^{2u} / s^2\bigr)$ up to a
 constant, with
 

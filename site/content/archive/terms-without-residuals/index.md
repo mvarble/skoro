@@ -20,5 +20,6 @@ factor-graph libraries take. It also damps Fisher scoring. `LevenbergMarquardt` 
 assembly (`NotAnIntegral`), since its rows are not the objective's curvature, yet its gain ratio
 needs only the objective and a model with the objective's gradient, which the Fisher rows have;
 without it a model with a free scale, the calibration case the residual assembly refuses
-(`ScaleNotFixed`), can be scored only undamped. The work comes before Hamiltonian Monte Carlo, whose
+(`ScaleNotFixed`), can be scored only undamped. It brings Student's t and the half-Cauchy, the first
+distributions whose terms bind no residual. The work comes before Hamiltonian Monte Carlo, whose
 example needs a mode and a Laplace approximation to start from.

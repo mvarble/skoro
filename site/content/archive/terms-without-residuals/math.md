@@ -1,6 +1,6 @@
 ---
-summary: How a term that binds no residual enters a query's linearization, by a curvature of its own and its exact gradient, which of three curvatures skoro gives it, what that does to the Laplace approximation, and why the Levenberg–Marquardt method may damp Fisher scoring.
-depends_on: [term-curvature, fisher-scoring, levenberg-marquardt, archive/linearization/math, archive/core/math]
+summary: How a term that binds no residual enters a query's linearization, by its own Hessian made positive semidefinite and its exact gradient, what that does to the Laplace approximation and what it reports, why the Levenberg–Marquardt method may damp Fisher scoring, and Student's t and the half-Cauchy as the first distributions to need it.
+depends_on: [term-curvature, student-t, fisher-scoring, levenberg-marquardt, archive/linearization/math, archive/core/math, archive/normal/math]
 ---
 
 ## The problem
@@ -19,8 +19,12 @@ approximation at it, then Hamiltonian Monte Carlo started from both. The plan's 
 eight schools written non-centred, $\theta_j = \mu + \tau \eta_j$, whose every term is a normal but
 the half-Cauchy prior on the scale $\tau$. Real pose graphs need robust losses, a Cauchy's or a
 Student's $t$ on the measurements, and none of those binds a residual of the normal's kind either.
-The uniform distribution on a compact type binds none, and a term written by hand from primitives
-binds none.
+Nor does a term written by hand from primitives. (The uniform distribution binds a residual of no
+components, and is linearized already, as a factor with no rows.)
+
+And skoro has neither law. The entry brings both: [Student's $t$](../../math/student-t/) on every
+type the normal is defined on, and the half-Cauchy on the positive reals, as the first
+distributions whose terms bind no residual.
 
 The entry also takes up a second, smaller gap. `LevenbergMarquardt` refuses the Fisher assembly,
 on the ground that its rows are not the curvature of the objective. A model with a free scale, the
@@ -30,7 +34,8 @@ be scored only undamped, from wherever it starts.
 Both have one answer, written as a [math note](../../math/term-curvature/): a term enters a
 quadratic model through any positive semidefinite curvature and its exact gradient. This document
 says which curvature skoro gives a term without a residual, what it costs, what the Laplace
-approximation then is, and why damping Fisher scoring is sound.
+approximation then is and what it reports, why damping Fisher scoring is sound, and what the two new
+distributions are in skoro.
 
 ## Setting
 
@@ -75,7 +80,7 @@ primitives meet. A term from any distribution, or written by hand, is covered.
 **The expected information.** A distribution would declare, as the normal does, a root of its
 expected information in its own parameters, which the linearizer lifts by the parameters'
 Jacobians. That is a new role for each distribution, and a closed form for each: Student's $t$ has
-one, $(\nu + d)/(\nu + d + 2)$ times the normal's root [](eq:math/term-curvature/student); the
+one, $(n + d)/(n + d + 2)$ times the normal's root [](eq:math/term-curvature/student); the
 half-Cauchy as a law of a positive quantity has one too; a hand-written term has none. It needs
 first derivatives only, and stays positive semidefinite by construction. It does not know which
 measurements are outliers, and its Laplace approximation is not one, for the reason the Fisher
@@ -86,12 +91,11 @@ loss $\varphi$, and the linearizer would scale its rows by $\sqrt{\varphi'}$
 [](eq:math/term-curvature/reweighted). That changes the residual role's contract, since
 [](eq:archive/linearization/math/split) would then read $-\varphi(\tfrac12 \lvert r_t \rvert^2) +
 n_t - \lambda_t$, and it covers only terms of that form: not the half-Cauchy prior, not the
-uniform, not a hand-written term. For the terms it does cover it is the cheapest of the three and
+half-Cauchy as a scale, not a hand-written term. For the terms it does cover it is the cheapest of the three and
 the one that knows the outliers.
 
-> [!TODO] Which curvature a term without a residual is given
-> The draft recommends the term's own Hessian, clipped, and writes the rest of this document on
-> that choice. Of the three, only the Hessian covers every term that can be written, needs nothing new of a
+> [!DECISION] A term without a residual is given its own Hessian, clipped
+> Of the three, only the Hessian covers every term that can be written, needs nothing new of a
 > distribution, and has the exact curvature wherever the term is convex in the chart. It is what
 > lets eight schools be linearized, and its half-Cauchy prior is convex in the logarithmic chart of
 > $\tau$ ([](eq:math/term-curvature/half-cauchy)), so there it costs nothing. The other two are
@@ -111,7 +115,7 @@ $$
 over the block of $K_t$: $d_t$ rows $C_t$, the right-hand side $-u_t$ capped as in
 [](eq:math/term-curvature/capped), and the linear term $\eta_t$, the part of $g_t$ that the rows do
 not carry. The cap matters here and not only in principle. A robust loss at a measurement near
-the edge of its convex region, $\lvert r \rvert^2$ just below $\nu$, has a small positive curvature
+the edge of its convex region, $\lvert r \rvert^2$ just below $n$, has a small positive curvature
 and a gradient of order one along its residual, and without the cap its rows would hold a share of
 the value large enough that the model's constant, the minimizer's value of $f$ before a step and
 the Laplace approximation's evidence would lose their digits to cancellation. With $B$ the bound
@@ -181,24 +185,29 @@ $4y/(1 + y)^2$ at $y = \hat \tau^2 / s^2$.
 
 Where an eigenvalue is clipped at the mode, the term has negative curvature there, which the rows
 cannot carry, and the Gaussian is narrower than the second-order one in that direction. This happens
-for a robust loss at a measurement far out, $\lvert r \rvert^2 > \nu$ for Student's $t$, which is
+for a robust loss at a measurement far out, $\lvert r \rvert^2 > n$ for Student's $t$, which is
 exactly the measurement a robust loss exists to discount: the second-order approximation would let
 the outlier widen the posterior, and the clipped one ignores it in that direction.
 
-> [!TODO] A Laplace approximation with clipped curvature
-> When a term's curvature is clipped at the point of a Laplace approximation, should the
-> approximation be refused (a `NotAnIntegral` kind of refusal, naming the term), given and
-> reported with the clipped directions, or given silently? The draft leans toward giving it and
-> reporting which terms were clipped, since the error has a known sign (over-confidence in the
-> clipped directions) and the most common cause is an outlier under a robust loss.
+**What is reported.** A Laplace approximation taken where curvature was clipped is given, and it
+says so. For each term $t \in N$ and each eigenvalue $\lambda_i$ of [](eq:clipped) that was
+clipped at $\hat \point$, it reports the term, the eigenvalue, and its unit eigenvector $v_i$ in
+the tangent coordinates of $K_t$ at $\hat \point$, split by quantity. Together they say exactly
+what the Gaussian leaves out: its precision exceeds the second-order one by
+$\sum_i (-\lambda_i)\, v_i v_i\transpose$ over the clipped directions, besides what the squares
+omit, so its covariance is too small along them, and its evidence's log-determinant too large. An
+eigenvalue counts as clipped when it is negative by more than the rounding of its block, a small
+multiple of the unit roundoff times the block's largest eigenvalue in magnitude; a convex term
+whose Hessian is singular, such as one that is flat along some direction, then reports nothing.
+Every answer of the approximation, its marginals, its draws and its evidence, carries the same
+report, since they share one precision.
 
-> [!TODO] The Newton step and the observed information
-> The same Hessian passes, run on every term rather than on those in $N$, give the observed
-> information and a Newton step, and with them a Laplace approximation that keeps the residual
-> curvature Gauss–Newton drops. The `EVALUATION.md` survey places that variant in this entry.
-> Its matrix may be indefinite even at a mode once taken term by term, so it would need either a
-> clipping of its own or an elimination of a symmetric matrix rather than of rows, which the
-> elimination crate does not have. Is it in scope here, or a later entry?
+> [!DECISION] A clipped Laplace approximation is reported, not refused
+> Refusing would make a robust model, the case clipping comes from, impossible to summarize at
+> all, and the error it would refuse has a known sign and a known direction. Giving it silently
+> would hide an over-confidence that the caller cannot otherwise see. So it is given with the
+> clipped directions, which name the terms and quantities concerned and the size of what was left
+> out, and a caller can decide whether a covariance too small along an outlier's residual matters.
 
 ## Damping Fisher scoring
 
@@ -227,6 +236,57 @@ the Fisher decrement $\tfrac12 g\transpose M^{-1} g$, which is zero exactly wher
 What stays refused of the Fisher assembly is what it never gave: an evidence, draws and a
 replacement, which approximate an integral of the density.
 
+## Two distributions
+
+Both laws are defined in [their note](../../math/student-t/). What is skoro's to settle is which
+types they score, which of their arguments may be computed from quantities, how they draw, and what
+they bind.
+
+**Student's $t$.** It scores one random quantity of any type the normal accepts: one whose chart is
+global and whose volume is declared ([the normal's definition](../normal/math.svx#the-definition)),
+refused by structure on any other, as the normal is. Its mean is any value of that type, and its
+scale is given in any of the normal's four forms, from which its whitening $W$ is read as the
+normal reads it ([the scale](../normal/math.svx#the-scale)). Its term is
+[](eq:math/student-t/log-density). The degrees of freedom $n > 0$ are a constant of the model: a
+value reached from a quantity is refused by structure, since neither the density's derivative in
+$n$ nor the draw's is available ([drawing Student's t](../../math/student-t/#drawing-student-s-t)).
+
+Its sampler is [](eq:math/student-t/draw), on the host in double precision, from
+$\dimension + 1$ variates of the quantity's key, as the normal draws from $\dimension$: the first
+$\dimension$ turned into standard normal variates by the normal's quantile, the last into the
+$\chi^2_n$ variate. $L \zeta$ is found by the normal's substitution, so a draw is the normal's draw
+with its noise divided by $\sqrt{w / n}$. The draw is exact, and contributes nothing to an
+importance weight.
+
+**The half-Cauchy.** It scores one random quantity of a positive type $\positive^m$, each
+coordinate independently, with the term [](eq:math/student-t/half-cauchy) summed over them,
+against Lebesgue measure, the positive type's reference measure. Its scale is a positive value,
+one for each coordinate or one shared by all, and may be computed from quantities: the term is
+smooth in it. Its draw spends one variate per coordinate, $\tau_i = s_i \tan(\pi u_i / 2)$, exact
+and on the host. The variates of a key are midpoints of a grid on $(0, 1)$, so $u_i$ is at most
+$1 - 2^{-53}$ and the draw is finite, at most about $6 \times 10^{15}\, s_i$.
+
+**What they bind.** Neither binds a residual. Student's $t$ has one, $r = W (\point \ominus \mu)$,
+but its term is not $-\tfrac12 \lvert r \rvert^2$ plus a remainder that is constant when the scale
+is fixed, which is the residual role's contract [](eq:archive/linearization/math/split): bound
+there, it would be linearized as a normal. Nor do they bind the normal's mean, scale or log-volume
+roles, which the linearization reads to refuse a free scale and to fold a log-volume, both
+meaningful only beside a residual. Both are in $N$, linearized by their Hessians. A reweighting of
+Student's $t$, or the root of its expected information, would each need a role of its own, and is
+left to an entry that wants one ([the decision above](#three-curvatures-read-against-skoro)).
+
+**What their curvature is.** The half-Cauchy is convex in the logarithmic chart, and never clipped.
+Student's $t$ is clipped along the residual of a measurement beyond $\lvert r \rvert^2 = n$
+[](eq:math/term-curvature/student), and its scale, when free, is curvature of the same Hessian:
+in the logarithm $u$ of an isotropic scale, the term's second derivative is $2 n (n + \dimension)
+\lvert r \rvert^2 / (n + \lvert r \rvert^2)^2$, positive, so a free scale of Student's $t$ alone is
+never clipped, though its coupling with the mean may be.
+
+**As a likelihood factor.** The normal's Gaussian part serves as a likelihood factor over values
+that are not quantities ([as a likelihood factor](../normal/math.svx#as-a-likelihood-factor)).
+Neither new law is given that form here. A robust measurement is a quantity that is observed, and
+scores as Student's $t$ like any other.
+
 ## In skoro's terms
 
 - **What is random and what is differentiated.** Nothing changes in what a query observes or
@@ -241,15 +301,31 @@ replacement, which approximate an integral of the density.
   the minimizer's refusal of the Fisher assembly is lifted. Its rows, its right-hand sides, its
   linear term from the log-volumes and its elimination are unchanged for every term that binds a
   residual. A model in which every factor binds one is linearized exactly as before.
-- **The tests' models.** The uniform on the rotations, whose log-density is constant, contributes
-  $d_t$ rows of zeros and no gradient. A hand-written half-Cauchy on a positive quantity, which the
-  core can build from primitives, has the curvature [](eq:math/term-curvature/half-cauchy), and
-  linearizing it alone can be checked against that closed form. A hand-written Student's $t$ on a
-  scalar residual is clipped beyond $\lvert r \rvert^2 = \nu$, which a test can place on either side.
+- **The distributions.** Student's $t$ scores a random quantity of any type the normal accepts,
+  with a mean and a scale that may be computed from other quantities and constant degrees of
+  freedom; the half-Cauchy scores a random positive quantity, with a scale that may be computed
+  from other quantities. Each may be observed, and its term is then a function of the quantities
+  its arguments are computed from. Each is drawn on the host from its key's variates, exactly.
+- **What the tests check.** The term of Student's $t$ agrees on the line with the closed-form
+  density of the t law, and on the rotations $t_1(\mu, 4I)$ equals the uniform's
+  constant $-\log 8\pi^2$ at every point ([the uniform among them](../../math/student-t/#the-definition));
+  its draws, at $n = 1, 2$ and a non-integer $n$, follow the law of their whitened residual's
+  length; the half-Cauchy's draws have the median $s$ and the distribution function
+  $\tfrac{2}{\pi} \arctan(\tau / s)$. Linearizing a half-Cauchy alone gives one row of curvature
+  $4y/(1 + y)^2$ [](eq:math/term-curvature/half-cauchy) and the gradient $2y/(1+y)$ in the
+  logarithmic chart; a Student's $t$ measurement placed on either side of $\lvert r \rvert^2 = n$
+  is clipped on one side only, and its Laplace approximation reports the clipped direction, along
+  the residual's Jacobian; the gradient of every model is exact against the core's cotangent pass;
+  eight schools, written non-centred, is linearized and minimized, and its Laplace approximation
+  reports nothing clipped; and a model with a free scale is minimized by damped Fisher scoring to
+  the mode an undamped scoring reaches from a good start.
 
 ## Open questions
 
-> [!TODO] Which terms the entry brings
-> The entry needs a term without a residual to linearize, and it can test with terms written by
-> hand. Should it also bring the half-Cauchy and Student's $t$ as distributions, or leave each to an
-> entry of its own (the half-Cauchy to the Hamiltonian Monte Carlo entry, whose example uses it)?
+> [!TODO] The Newton step and the observed information
+> The same Hessian passes, run on every term rather than on those in $N$, give the observed
+> information and a Newton step, and with them a Laplace approximation that keeps the residual
+> curvature Gauss–Newton drops. The `EVALUATION.md` survey places that variant in this entry.
+> Its matrix may be indefinite even at a mode once taken term by term, so it would need either a
+> clipping of its own, reported as above, or an elimination of a symmetric matrix rather than of
+> rows, which the elimination crate does not have. Is it in scope here, or a later entry?

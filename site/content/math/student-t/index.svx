@@ -1,0 +1,141 @@
+---
+title: Student's t and the half-Cauchy
+part: probability
+order: 5
+summary: Student's t on a space with a global chart is the law of its mean moved by Student t noise, a normal of random scale, with a density whose score is bounded in the residual; it is drawn from one variate more than its dimension, it contains the uniform distribution of the rotations, and its fold onto the positive reals with one degree of freedom is the half-Cauchy, a common prior on a scale.
+depends_on: [normal, uniform, chart-volume]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as tDensity from './statements/t-density.md';
+	import * as halfCauchy from './statements/half-cauchy.md';
+</script>
+
+A [normal](../normal/) measurement says that a residual of five standard deviations happens about
+once in two million draws. Real measurements are wrong more often than that: a feature matched to
+the wrong landmark, a loop closed between two places that only look alike. Under a normal one such
+measurement pulls the estimate as hard as its residual is large. *Student's t* is the normal with a
+scale that is itself random, and its tails are heavy enough that a measurement far out pulls
+hardly at all. This note defines it on the same spaces as the normal, as the law of its mean moved
+by noise, gives its density and its sampler, and defines the *half-Cauchy*, a law on the positive
+reals that is the usual weakly informative prior on a scale.
+
+## Student t noise
+
+The [uniform note](../uniform/#in-a-chart) introduced the Student t vector of $\R^\dimension$ with
+$n$ degrees of freedom: with $\zeta_0$ standard normal on $\R^\dimension$ and $w$ independent of it
+with the $\chi^2$ law of $n$ degrees of freedom,
+
+$$
+	\zeta = \frac{\zeta_0}{\sqrt{w / n}} @tag(mixture)
+$$
+
+has the density proportional to $(1 + \lvert \zeta \rvert^2 / n)^{-(n + \dimension)/2}$. Given $w$
+it is normal with the covariance $(n / w)\, I$, so it is a mixture of centred normals over their
+scale. Its covariance is $\tfrac{n}{n - 2} I$ for $n > 2$ and infinite otherwise; with $n = 1$ it is
+the Cauchy law; and as $n \to \infty$, $w / n \to 1$ and it tends to the standard normal.
+
+## The definition
+
+Let $\manifold$ be a space on which [the normal](../normal/#the-definition) is defined: a manifold
+of dimension $\dimension$ with a retraction and a reference measure $\nu$, whose chart at every
+$\mu$ is global, with log-volume $\lambda_\mu$. Let $\mu \in \manifold$ be the *mean*, $\Sigma =
+L L\transpose$ the *scale*, read through its whitening $W = L^{-1}$ as for the normal, and $n > 0$
+the *degrees of freedom*. Student's t $t_n(\mu, \Sigma)$ on $\manifold$ is the law of $\mu \oplus L
+\zeta$, with $\zeta$ a Student t vector of $n$ degrees of freedom.
+
+<Statement {...tDensity} />
+
+<Proof>
+
+The vector $\varepsilon = L \zeta$ has the density $\det W \cdot p(W \tangent)$ at $\tangent$, with
+$p$ the density of $\zeta$, whose logarithm is $k_{n, \dimension} - \tfrac{n + \dimension}{2}
+\log(1 + \lvert \zeta \rvert^2 / n)$, and $\log \det W = \sum_i \log W_{ii}$ for a triangular $W$.
+At $\tangent = \point \ominus \mu$ that is the first three terms of [](eq:log-density). The chart is
+global, so $\varepsilon$ lies in its domain always, and
+[%full](statement:math/chart-volume/pushforward) gives the density, as for
+[%full](statement:math/normal/density).
+
+</Proof>
+
+Its density differs from the normal's [](eq:math/normal/log-density) only in what it does with the
+whitened residual: the normal subtracts $\tfrac12 \lvert r \rvert^2$, and Student's t subtracts
+$\tfrac{n + \dimension}{2} \log(1 + \lvert r \rvert^2 / n)$. The log-volume is the same, since it
+belongs to the chart and not to the noise, and so is $\sum_i \log W_{ii}$.
+
+**A bounded score.** The gradient of the negative log-density in the residual is
+
+$$
+	\frac{n + \dimension}{n + \lvert r \rvert^2}\, r , @tag(score)
+$$
+
+which is $r$ times a weight that falls from $(n + \dimension)/n$ at $r = 0$ toward zero, and whose
+length is at most $(n + \dimension) / 2\sqrt n$, reached at $\lvert r \rvert = \sqrt n$. A normal's
+score is $r$ itself, unbounded. So a measurement whose residual is far out pulls on the mean, and on
+whatever the mean is computed from, by less than one near the centre does, and by less the farther
+out it is. That is what makes the law robust, and also why its negative log-density is not convex
+in the residual beyond $\lvert r \rvert^2 = n$ along it, where its second derivative
+$(n + \dimension)(n - \lvert r \rvert^2)/(n + \lvert r \rvert^2)^2$ is negative.
+
+**The uniform among them.** By [the uniform note's table](../uniform/#in-a-chart), the uniform
+distribution of the rotations is the law of $\mu \oplus \varepsilon$ with $\varepsilon$ a Cauchy
+vector of scale $2$ in the Cayley chart: it is $t_1(\mu, 4 I)$, at every $\mu$. In its density
+[](eq:log-density), $-2 \log(1 + \lvert r \rvert^2)$ with $r = \tangent / 2$ and the log-volume
+$-2 \log(1 + \lvert \tangent \rvert^2 / 4)$ cancel, and what is left, $k_{1, 3} - 3 \log 2 = -\log
+\pi^2 - 3 \log 2 = -\log 8\pi^2$, is the uniform's constant. With fewer degrees of freedom or a
+larger scale it would lean toward the half-turns; with more or a smaller one, toward its mean.
+
+## Drawing Student's t
+
+By [](eq:mixture) a draw is a normal draw divided by an independent scale: $\dimension$ standard
+normal variates and one $\chi^2$ variate of $n$ degrees of freedom. From $\dimension + 1$ uniform
+variates $u_i \in (0, 1)$,
+
+$$
+	\zeta_0 = \bigl(\Phi^{-1}(u_1), \dots, \Phi^{-1}(u_\dimension)\bigr), \qquad w = F_n^{-1}(u_{\dimension + 1}), \qquad \point = \mu \oplus L \frac{\zeta_0}{\sqrt{w / n}} , @tag(draw)
+$$
+
+with $\Phi$ the standard normal distribution function and $F_n$ that of $\chi^2_n$. The draw is
+exact for [](eq:log-density), a smooth function of $\mu$ and the scale, and monotone in each of the
+variates. The quantile $F_n^{-1}$ has a closed form for $n = 1$, $(\Phi^{-1}((1 + u)/2))^2$, and for
+$n = 2$, $-2 \log(1 - u)$. Otherwise $F_n(w) = P(n/2, w/2)$, the regularized lower incomplete gamma
+function, and $w$ is the root of $P(n/2, w/2) = u$, found by Newton's method on a function that is
+smooth and increasing, to the accuracy to which $P$ is computed.
+
+The draw is not differentiable in $n$ in any convenient form, since that would need the derivative
+of the quantile $F_n^{-1}$ in its shape; nor is the density in $n$ without the digamma function.
+
+## The half-Cauchy
+
+A scale must be positive, and a prior on it should put most of its mass near zero without
+forbidding large values. The half-Cauchy does: it is the law of $\lvert \varepsilon \rvert$ for
+$\varepsilon$ a Cauchy variable on the line.
+
+<Statement {...halfCauchy} />
+
+<Proof>
+
+For $\tau > 0$, $\Pr(\lvert \varepsilon \rvert \le \tau) = \tfrac{2}{\pi} \arctan(\tau / s)$, whose
+inverse at $u$ is $s \tan(\pi u / 2)$; differentiating gives the density
+$\tfrac{2}{\pi s} (1 + \tau^2 / s^2)^{-1}$.
+
+</Proof>
+
+Its density is largest at zero and falls as $\tau^{-2}$; its median is $s$, and it has no mean. On
+$\positive^n$, with independent coordinates, the log-density is the sum over coordinates, each with
+its own scale or one shared, and the draw spends one variate per coordinate.
+
+**In the logarithmic chart.** The positive reals' chart is $u = \log \tau$, with log-volume $u$. The
+negative log-density as a function of $u$,
+
+$$
+	-\logterm_{C^+} = \log\bigl(1 + e^{2u} / s^2\bigr) + \log s - \log \tfrac{2}{\pi} , @tag(log-chart)
+$$
+
+is convex in $u$, with second derivative $4y/(1 + y)^2$, $y = \tau^2/s^2$, at most $1$, at
+$\tau = s$. Its gradient in $u$ is $2y/(1 + y)$, between $0$ and $2$. The law of $u$ itself, the
+density above times the volume $e^u$, falls off as $e^{u}$ toward $u \to -\infty$ and as $e^{-u}$
+toward $+\infty$: in the chart, the half-Cauchy is light on both sides, and its tangent coordinate
+has a mode, at $u = \log s$.
