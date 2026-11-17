@@ -254,7 +254,7 @@ determined has no unique answer. After that it is estimated, and nothing was los
 ## Derivatives
 
 The factor is a function of its points through $\delta$, and its
-[derivatives in charts](../derivatives-in-charts/) are those of its two parts. In the chart at
+[derivatives in charts](../retraction/#derivatives-through-the-retraction) are those of its two parts. In the chart at
 $\point_i$, the block of $\delta$ for $\point_i$ has the derivative $\D(\point_i \ominus p_i)$,
 which is the identity at $\point_i = p_i$ and everywhere on a space flat in disguise, and on a
 curved space moves with $\point_i$. So the residual $A \delta - b$ has the Jacobian $A\, \D \delta$,

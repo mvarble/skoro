@@ -3,7 +3,7 @@ title: Rotations and unit quaternions
 part: geometry
 order: 6
 summary: The rotations of space are the unit quaternions taken up to sign, a cover with no continuous section; the exponential and its Jacobians turn rates into rotations; and of the two global charts, the stereographic chart tells the two quaternions of a rotation apart, while the Cayley chart cannot and so is a chart of the rotations themselves.
-depends_on: [retraction, derivatives-in-charts, quotient-manifold]
+depends_on: [retraction, quotient-manifold]
 katex_macros:
     '\Exp': '\operatorname{Exp}'
     '\Log': '\operatorname{Log}'
@@ -323,7 +323,7 @@ stereographic chart has $1 \oplus \tangent = \bigl(1 - \tfrac18 \lvert \tangent 
 expansion, and so has $\Exp(\tangent)$, from $\cos \tfrac\theta2 = 1 - \tfrac18 \theta^2 +
 O(\theta^4)$ and $\sin(\theta/2)/\theta = \tfrac12 + O(\theta^2)$. All three charts are left
 translations of their charts at the identity, so they agree at every point to second order, and so
-do their inverses. The [derivative in charts](../derivatives-in-charts/) of a map $\map$ at
+do their inverses. The [derivative in charts](../retraction/#derivatives-through-the-retraction) of a map $\map$ at
 $\point$ is the Jacobian at $0$ of $\tangent \mapsto R_\otherPoint^{-1}(\map(R_\point(\tangent)))$,
 and the local representatives of $\map$ in two charts that agree to second order agree to second
 order at $0$, with their first and second derivatives there. Last, $\Exp(\omega + \varepsilon)

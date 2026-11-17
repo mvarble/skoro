@@ -147,8 +147,10 @@ log-density, `gradient` and `hessian_products` seed that target with one.
 Every derivative is taken in tangent charts: with respect to a tangent vector at the point, through
 the [retraction](../spaces/#how-a-value-moves) of each free quantity, so a gradient has the
 dimension of the quantity's tangent space and an estimator's step is retracted back onto it. The
-note on [derivatives in charts](../../math/derivatives-in-charts/) gives the mathematics, and says
-where the Hessian in a chart differs from the Hessian of the pulled-back function.
+note on [smooth maps and retractions](../../math/retraction/#derivatives-through-the-retraction)
+says what such a derivative is, and the note on
+[gradients and Hessians in tangent charts](../../math/derivatives-in-charts/) says where the
+Hessian in a chart differs from the Hessian of the pulled-back function.
 
 A program's `layout` lays its free continuous quantities out in one tangent vector, in ancestral
 order, for algorithms that work with the whole of it at once. An estimator's step is such a vector,

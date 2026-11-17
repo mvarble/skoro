@@ -4,8 +4,9 @@ kind: proposition
 title: The normalized measure of an embedded manifold
 ---
 
-Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$ with a retraction whose
-tangent basis $B(\point) = \partial_\tangent R_\point(0)$ is smooth, and $\sigma$ the
+Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$ with a retraction $\oplus$
+smooth on all of $\manifold$, $B(\point) = \partial_\tangent R_\point(0) \in \R^{n \times \dimension}$ its
+tangent coordinates read in storage, and $\sigma$ the
 $\dimension$-dimensional surface measure induced by $\R^n$. The volume of the chart at $\mu$ with
 respect to $\sigma$ is
 

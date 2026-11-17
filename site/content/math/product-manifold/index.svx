@@ -21,7 +21,8 @@ retraction from its factors, and how derivatives in its charts break into blocks
 Let $\manifold_1, \dots, \manifold_k$ be manifolds of dimensions $\dimension_1, \dots, \dimension_k$, each with a
 [retraction](../retraction/). Their product $\manifold = \manifold_1 \times \cdots \times \manifold_k$
 is a manifold of dimension $\dimension = \sum_i \dimension_i$, whose points are tuples $\point = (\point_1, \dots, \point_k)$. Its
-tangent space at $\point$ is the direct sum of the factors', identified with $\R^\dimension$ by stacking:
+tangent space at $\point$ is the direct sum of the factors', and its tangent coordinates are the
+factors' coordinates stacked, each factor's on its own block of rows:
 
 $$
 	\T_\point \manifold = \T_{\point_1}\manifold_1 \oplus \cdots \oplus \T_{\point_k}\manifold_k \;\cong\; \R^\dimension,
@@ -43,7 +44,7 @@ flatness follow factor by factor.
 ## Derivatives in product charts
 
 Let $\map : \manifold \to \otherManifold$ be smooth, with $\otherPoint = \map(\point)$. Because a step in the product chart
-moves each factor in its own chart, the [derivative in charts](../derivatives-in-charts/) of $\map$ is
+moves each factor in its own chart, the [derivative in charts](../retraction/#derivatives-through-the-retraction) of $\map$ is
 a row of blocks,
 
 $$

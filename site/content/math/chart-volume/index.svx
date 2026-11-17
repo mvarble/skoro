@@ -134,21 +134,21 @@ and such a measure exists on every manifold with a retraction.
 
 <Proof>
 
-The metric $g$ is smooth because $b$ is, and positive definite because each $b(\point)$ is
-invertible. In the chart at $\mu$, its volume measure has the density
-$\det G(\tangent)^{1/2}$ with respect to Lebesgue measure, where
-$G_{ij}(\tangent) = g\bigl(\partial_i R_\mu(\tangent), \partial_j R_\mu(\tangent)\bigr)$ is the
-metric read in the chart. At $\tangent = 0$, $\partial_i R_\mu(0) = b(\mu)\, e_i$, so $G(0) = I$
-and $v_\mu(0) = 1$. Any other measure $\nu'$ with a continuous positive density in every chart has
+The metric $g$ is smooth because $\oplus$ is
+([%full](statement:math/retraction/smoothness)), and positive definite. In the chart at $\mu$, its
+volume measure has the density $\det G(\tangent)^{1/2}$ with respect to Lebesgue measure, where
+$G(\tangent) = \D R_\mu(\tangent)\transpose\, \D R_\mu(\tangent)$ is the metric read in the chart,
+with $\D R_\mu(\tangent)$ the derivative of the chart into the tangent coordinates at
+$\mu \oplus \tangent$. At $\tangent = 0$, $\D R_\mu(0) = I$, so $G(0) = I$ and $v_\mu(0) = 1$. Any other measure $\nu'$ with a continuous positive density in every chart has
 one with respect to $\nu$ too, $\dd \nu' = h \, \dd \nu$ with $h$ continuous, and its chart volumes
 are $v'_\mu = (h \circ R_\mu)\, v_\mu$, so $v'_\mu(0) = h(\mu)$. They are all $1$ if and only if
-$h = 1$. The metric is defined by the bases alone, and so is its volume measure.
+$h = 1$. The metric is defined by the tangent coordinates alone, and so is its volume measure.
 
 </Proof>
 
-On $\R^\dimension$, with $b$ the identity, it is Lebesgue measure. On the positive reals, with
-$b(\point) = \point$, the metric is $g_\point(u, w) = u w / \point^2$ and the measure is
-$\dd \point / \point$, which is why the chart of the example above, with Lebesgue measure, does not
+On $\R^\dimension$ it is Lebesgue measure. On the positive reals, whose tangent coordinate measures
+relative change, a coordinate $u$ at $\point$ is the velocity $\point u$ of the line, so the metric is
+$u w / \point^2$ on velocities and the measure is $\dd \point / \point$, which is why the chart of the example above, with Lebesgue measure, does not
 have volume $1$ at its centre. For an embedded manifold, the measure is computed from the storage.
 
 <Statement {...normalized} />
@@ -275,8 +275,8 @@ the one measure with that property ([%full](statement:basis)).
 </Proof>
 
 The measure a retraction normalizes is preserved by the group whenever the retraction commutes with
-it, since the action then carries the basis of each tangent space to the basis at the image, and
-with it the metric of [%full](statement:basis). So the hypotheses hold of the
+it, since the action then has $\D g(\point) = I_\dimension$ at every point, and so preserves the
+metric of [%full](statement:basis). So the hypotheses hold of the
 [rotations](../rotations/) as the quotient of the unit quaternions by the sign, with
 $\nu_{SO(3)} = \tfrac12 \pi_* \nu$.
 

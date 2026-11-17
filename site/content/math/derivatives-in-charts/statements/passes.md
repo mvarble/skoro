@@ -4,8 +4,8 @@ kind: proposition
 title: The passes compute chart derivatives
 ---
 
-Let a program's steps be maps between manifolds, with partial derivatives $\partial_j \map$ taken in
-tangent charts, and define each step's second-order map at its inputs $s$, with velocities
+Let a program's steps be maps between manifolds whose retractions are smooth near each slot's value,
+with partial derivatives $\partial_j \map$ taken in tangent charts, and define each step's second-order map at its inputs $s$, with velocities
 $\tangent_s$, by
 
 $$
