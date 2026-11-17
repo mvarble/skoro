@@ -11,15 +11,6 @@ The archive is the branch `archive`, tagged `archive-2026-10-09`; read it with `
 The goal is an initial release that shows what skoro does: a model built once, then estimated, filtered and sampled without being told its structure again.
 The items are in the order they should be taken.
 
-- **A broad normal on a rotation is not a weak prior.** Under the Cayley chart a tangent of length `r` is a turn by `2·arctan(r/2)`, and the density of a normal on `Rotation` against Haar measure is the Gaussian times `(1 + r²/4)²`, so its mean stops being a mode once its standard deviation passes 1 rad, and the mass then goes to the half-turns from the mean.
-  Computed from the chart (not drawn), the median angle between a drawn rotation and the mean is 1.31 rad at σ = 1, 2.32 rad at σ = 3, 2.88 rad at σ = 10, 3.12 rad at σ = 100 and 3.14 rad at σ = 1000.
-  So a very large standard deviation, the common way to write "unknown", gives a prior concentrated on the half-turns, where the chart is cut and a term is non-finite, and during optimization such a term pushes the estimate away from its mean.
-  The entry brings the uniform distribution on the compact types, which is how "unknown" is said, and decides whether a constant scale above about one radian on a curved type is refused or documented.
-  The measurements in `EVALUATION.md` were taken under the stereographic chart that `quaternion-signs` replaced, and the entry draws them again.
-  ```
-  /wf-start uniform feature The uniform distribution on compact types, and broad scales of a normal on a curved type, revises normal
-  ```
-
 - **Estimation reads only Gaussian-shaped terms.** `Linearizer` refuses a model with any term that binds no residual (`NoResidual`), and the roles it reads are the normal's.
   The log-volume role was already redefined as "the varying part of a remainder" to carry the improper factor's linear part.
   One term that is not a normal, such as the half-Cauchy prior on the scale that eight schools usually carries, makes the whole model unlinearizable, and robust losses, which real pose-graph data needs, have no route either.
