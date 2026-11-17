@@ -143,16 +143,17 @@ is the hairy ball theorem. The basis $B(\point)$ above is smooth off the south p
 rotations a group's left translations give one that is smooth everywhere.
 
 > [!TODO] Where the convention must be smooth
-> I would state the convention with no regularity, as above, and name this one assumption
-> ("smooth on an open $W$ containing the points involved") wherever a note compares bases at
-> different points: the mirror identity, the chart Hessian and the second-order half of the passes,
-> the smoothness of $(\point, \tangent) \mapsto \point \oplus \tangent$, and densities read in the
-> chart at a moving point. A convention that need not be smooth is right for everything at one
-> point. Across points it is false: $\point \ominus (\point \oplus \tangent)$ is measured in the basis
-> at $\point \oplus \tangent$, and if that basis jumps, the mirror identity fails at first order.
-> A related question: may the convention be defined only on an open subset of $\manifold$, as
-> $B(\point)$ is, with the computation kept inside it? I would allow it, since it is what the sphere
-> does.
+> I would state the convention with no regularity, as above. Everything at one point holds for any
+> convention: the derivative, the chain rule, the tangent chart. What compares bases at different
+> points does not: the mirror identity, the chart Hessian and the second-order half of the passes,
+> and densities read in the chart at a moving point. For example,
+> $\point \ominus (\point \oplus \tangent)$ is measured in the basis at $\point \oplus \tangent$, and if
+> that basis jumps, the mirror identity fails at first order. Those results would assume that
+> "$\oplus$ is smooth near $\point$". Because $\retr$ is smooth, this is the same as the convention
+> being smooth there (the retractions section shows why), so later notes can state the assumption
+> without naming the basis. A related question: may the convention be defined only on an open
+> subset of $\manifold$, as $B(\point)$ is, with the computation kept inside it? I would allow it,
+> since that is what the sphere does.
 
 ### Retractions
 
@@ -180,8 +181,20 @@ $$
 $$
 
 "The derivative at the origin is the identity" now has a meaning, given by [](eq:derivative),
-before it is used. Where the convention is smooth, $(\point, \tangent) \mapsto \point \oplus \tangent$
-is smooth, as the composite of $\retr$ with a smooth map.
+before it is used.
+
+The note also shows that the convention is smooth on an open set $W$ if and only if
+$(\point, \tangent) \mapsto \point \oplus \tangent$ is smooth on $W \times \R^\dimension$. If the
+convention is smooth, $\oplus$ is the composite of $\retr$ with a smooth map. Conversely, the
+retraction's condition on its differential gives
+
+$$
+	\basis_\point \tangent = \frac{\dd}{\dd t}\Big|_{t=0} (\point \oplus t\tangent) ,
+$$
+
+the velocity of a curve that depends smoothly on $(\point, \tangent)$ when $\oplus$ does. So later
+notes can state the regularity they need as "$\oplus$ is smooth near $\point$", and never need to
+mention the basis.
 
 The note keeps the two examples, rewritten to show the two pieces apart. On $\R^\dimension$,
 $\retr_\point(w) = \point + w$, with the identity convention. On the positive reals, with
@@ -274,9 +287,11 @@ it. The regularity the bases need is stated once and invoked where it is used, r
 for every point and then conceded for the sphere.
 
 **Later notes stay in coordinates.** After the table, a reader works with $\oplus$, $\ominus$, $\D$
-and vectors in $\R^\dimension$ alone, as the code does. Where the notes already speak of "the basis at
-$\point$", as [the quotient](../../math/quotient-manifold/) and
-[the chart volume](../../math/chart-volume/) do, that basis gets a name and a definition. A rule
+and vectors in $\R^\dimension$ alone, as the code does. Two notes speak of an action that "carries
+the basis at $\point$ to the basis at" its image: [the quotient](../../math/quotient-manifold/)
+and [the chart volume](../../math/chart-volume/). That is the matrix statement
+$\D(g\,\cdot)(\point) = I_\dimension$ under [](eq:derivative), and at publish they restate it that
+way. The regularity they need becomes "$\oplus$ is smooth". A rule
 goes into `authoring.md`, under "The math notes", so that new notes keep to it: past the first
 note, the geometry is written in tangent coordinates.
 
@@ -295,8 +310,9 @@ retraction's conditions, the tangent charts, and the derivative through the retr
 - `statement:math/derivatives-in-charts/chain-rule` moves to the first note, and the proof of the
   passes cites it there.
 - The notes after the first that rely on the old wording are reread: `product-manifold` (its
-  stacking of tangent spaces), `quotient-manifold` and `chart-volume` (the basis at a point, and
-  the smoothness their densities need), and `rotations` (its left-translated basis).
+  stacking of tangent spaces), `quotient-manifold` and `chart-volume` (the action on bases,
+  restated as $\D(g\,\cdot)(\point) = I$, and the smoothness of $\oplus$ that their densities need),
+  and `rotations` (its retraction, smooth everywhere).
 - `\basis` becomes a site-wide macro in `site/katex.config.ts`, and Absil, Mahony and Sepulchre
   enter `references.bib`.
 
