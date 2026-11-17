@@ -62,7 +62,20 @@ same volume. One generic declaration makes all three, for $k$ translations:
 
 The retraction normalizes its base point. On the type this changes nothing; off it, it keeps a
 point that a long run of retractions has carried off the sphere by rounding from passing that error
-on to every later step. The markers name the three declarations:
+on to every later step.
+
+Haar measure on the rotations, normalized at the chart's centre, has the finite mass $8\pi^2$, so
+the rotations [declare it](../spaces/#masses-and-uniform-points), with Shoemake's map from three
+variates to a unit quaternion of a uniform rotation; the poses and the extended poses, whose
+translations fill $\R^3$, have infinite mass and declare none:
+
+```rust
+{../../../../crates/skoro-spatial/src/types.rs:102..113}
+```
+
+A rotation of which nothing is known is given [the uniform distribution](../the-uniform/) by it. A
+pose with an unknown attitude is a model's to write, from a uniform rotation and a position of its
+own. The markers name the three declarations:
 
 ```rust
 {../../../../crates/skoro-spatial/src/types.rs:172..192}
@@ -239,6 +252,11 @@ start is chosen away from it.
 > hiding an error of a half-turn, and refusing a value within some angle of the cut would need an
 > angle that no model's noise sets. See
 > [the mathematics](../../archive/quaternion-signs/math.svx#the-rotations-the-rigid-motions-and-the-extended-poses).
+
+A normal with a large scale reaches the cut too, by the law and not by a start: its scale is in
+the chart's coordinates, and once it passes one radian the normal's mass goes towards the
+half-turns from its mean. [The normal](../the-normal/#a-large-scale-on-a-curved-type) says what
+that means, and why "unknown" is the uniform distribution instead.
 
 ## On the host
 

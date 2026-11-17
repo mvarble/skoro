@@ -12,7 +12,9 @@ dependency: its density, sampler and information on a curved type, Gauss–Newto
 log-volume, its refusals, the core's retirement replacements written with its stacked
 tangent, and its improper factor, retired along the bearings of two poses until it determines a
 landmark, binding its roles on a retirement's factor, needing a proposal for the quantity it leaves
-undetermined, and read on the sphere; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
+undetermined, and read on the sphere; the declared masses of the two spheres, checked against their draws and
+volumes, and the [uniform distribution](../skoro-uniform/) on the exponential sphere, whose chart the
+normal refuses; and the hierarchical normal the [guide](../../../guide/first-model/) opens on, written
 with `sample` and without it, generated, and queried with its range observed. One of its tests
 checks that none of the others names `skoro-core` or `skoro-tensor` directly.
 

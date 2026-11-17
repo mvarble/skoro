@@ -26,6 +26,11 @@ export const CRATES: Crate[] = [
         deps: ['skoro-core'],
     },
     {
+        name: 'skoro-uniform',
+        purpose: 'The uniform distribution, on every space whose measure has finite mass',
+        deps: ['skoro-normal'],
+    },
+    {
         name: 'skoro-spatial',
         purpose: 'The rotations, rigid motions and extended poses, and their maps',
         deps: ['skoro-core'],

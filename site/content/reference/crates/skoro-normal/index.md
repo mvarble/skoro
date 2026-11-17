@@ -6,7 +6,10 @@ an estimator reads: the whitened residual, the mean, the tangent at the mean, th
 role of its form, the log-volume, and the root of the expected information. A `Normal` is a `Distribution` by that
 `score`, so the core's `sample` makes a quantity and scores it by one in a single call. It takes every continuous space whose chart
 is global and whose volume is known, and refuses the others with the core's own errors; on those,
-`factor_at` holds a measurement as a likelihood factor over data.
+`factor_at` holds a measurement as a likelihood factor over data. On a curved type the scale is
+in the chart's coordinates, and its documentation says what a large one does: past one radian the
+mean stops being a mode and the mass goes towards the chart's cut, so "unknown" is said with
+[`skoro-uniform`](../skoro-uniform/) and not with a large scale.
 
 The scale is given in four forms, a standard deviation, a vector of them, a covariance factor or a
 whitening, from quantities or from constants that the crate factors on the host; the composites

@@ -2,7 +2,7 @@
 title: Spaces and quantities
 summary: Every value in a model lives in a space, which fixes how it is stored, how it moves, and the typed handle code holds it by.
 order: 1
-depends_on: [retraction, product-manifold, quotient-manifold, chart-volume]
+depends_on: [retraction, product-manifold, quotient-manifold, chart-volume, uniform]
 ---
 
 Everything a model holds (its uncertain quantities, its constants, and the values computed from
@@ -179,6 +179,54 @@ does a product with it among its factors; `has_measure` says so. Such a space ha
 term may score a quantity of it, no proposal may draw it, and no retirement may integrate it out,
 each refused with `NoVolume`. It may still be conditioned on, observed, and estimated by
 optimization, and a measurement of it is held as a likelihood factor over the measured value.
+
+## Masses and uniform points
+
+A reference measure may have finite mass $\nu(\manifold)$, and then the space has a uniform
+distribution, $\nu / \nu(\manifold)$. A categorical space has it without declaring anything: its
+counting measure has mass $n$. The Euclidean spaces, the positive orthant and the integers have
+infinite mass. An embedded type of finite mass says so as one more step of its declaration, with
+the logarithm of its mass and a uniform draw, a map from as many variates in $(0, 1)$ as it has
+dimensions to the storage of one point:
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:164..195}
+```
+
+```rust
+{../../../../crates/skoro-core/src/embedded.rs:367..397}
+```
+
+The mass is of the measure the declared volume is against, so a type declares its volume first.
+The draw is a function on the host and not a composite: no parameter reaches it, so no pass ever
+crosses it, and every sampler draws on the host in double precision. A space answers for its mass,
+and draws a uniform point, a product by its factors, each from the variates of its tangent range
+into its storage range:
+
+```rust
+{../../../../crates/skoro-core/src/retraction.rs:83..130}
+```
+
+Every other space has no mass to give, and says so with `NoMass`. The test sphere declares the
+mass of surface measure, $4\pi$, with Archimedes' draw, a uniform height and a uniform longitude:
+
+```rust
+{../../../../crates/skoro/tests/common/sphere.rs:90..102}
+```
+
+`testing::check_mass` holds a declaration to one identity that binds its draw, its volume and its
+mass together. By the note on [the uniform distribution](../../math/uniform/), the chart
+coordinate of a uniform point has the density $e^{\Lambda} / \nu(\manifold)$ on the chart's
+domain, so over uniform draws the mean of $\varphi(\tangent)\, e^{-\Lambda}$, with $\varphi$ the
+standard normal density, is the normal's mass of the domain over $\nu(\manifold)$. A draw that is
+not uniform, a volume wrong away from the centre or a wrong mass each break it:
+
+```rust
+{../../../../crates/skoro-core/src/testing.rs:982..1003}
+```
+
+The rotations declare their mass, $8 \pi^2$ ([Rotations and rigid motions](../rotations-and-motions/#the-three-types)),
+and [the uniform distribution](../the-uniform/) is the law it gives them.
 
 ## Types stored up to a group
 

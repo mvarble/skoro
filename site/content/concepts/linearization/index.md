@@ -1,7 +1,7 @@
 ---
 title: Linearization and elimination
 summary: A density query is linearized at a batch of points into factored least-squares problems over its free quantities, by its residuals or by its information roots, and each problem is eliminated in square-root form on the host into a step, marginals, an evidence, draws, or a retirement's replacement; the Levenberg–Marquardt method iterates the steps to the mode.
-order: 8
+order: 9
 depends_on:
     [
         concepts/queries,
@@ -141,6 +141,11 @@ linear term is the gradient of the bound log-volumes that are not folded, and it
 the query's gradient less what the rows account for: that difference would be rounding, which the
 solve would amplify. The constant makes the linearization agree with the query's negative
 log-density at the point.
+
+A factor may have no rows. The [uniform distribution](../the-uniform/#in-a-linearization) binds a
+residual of no components, so its factor is a constant alone: it adds nothing to the rows and keeps
+its $\log \nu(\manifold)$ in the constant. A quantity whose only factors have no rows is not
+determined by them, and its elimination reports it `Undetermined`.
 
 The rows are read onto the host once, and a point at which any of them is not finite is refused
 there, naming the first such factor's term and the row of the batch, rather than carried into the
