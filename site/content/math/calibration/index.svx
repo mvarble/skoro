@@ -1,7 +1,7 @@
 ---
 title: Calibration of credible sets
 part: estimation
-order: 7
+order: 8
 summary: Data drawn from a model come with the truth that generated them, and that truth is a draw from the posterior; so a set holding posterior probability α contains the truth with probability α over such data, and an approximate posterior is checked by how often its sets do, against a tolerance that keeps sampling error apart from the approximation's own.
 depends_on: [generative-models, laplace-approximation]
 ---

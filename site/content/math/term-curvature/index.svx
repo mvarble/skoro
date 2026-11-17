@@ -1,0 +1,261 @@
+---
+title: A curvature for every term
+part: estimation
+order: 7
+summary: A term that is not a sum of squares still enters a quadratic model as rows, from any positive semidefinite curvature and its exact gradient; the iteration stops where the gradient vanishes whatever the curvature, the curvature sets the rate and the damping's gain, and a term's own Hessian, its expected information and a reweighting of its residual are three curvatures with different costs.
+depends_on: [linearization, levenberg-marquardt, laplace-approximation, fisher-scoring]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as curvatureModel from './statements/curvature-model.md';
+	import * as curvatureIteration from './statements/curvature-iteration.md';
+	import * as gain from './statements/gain.md';
+</script>
+
+The [linearization](../linearization/) replaces each term of a sum of squares by rows: its
+Jacobian, and its residual as a right-hand side. [Fisher scoring](../fisher-scoring/) replaces some
+of those rows by a root of the expected information and keeps the gradient exact. Both are
+instances of one construction, which needs neither a residual nor an expectation: a term enters a
+quadratic model through any positive semidefinite matrix, its *curvature*, and its exact gradient.
+This note states the construction, shows that the curvature decides how fast an iteration
+converges and how a damping judges its steps, but never where the iteration stops, and compares
+three curvatures that a term which is not a sum of squares can be given.
+
+Throughout, $f = \sum_t \phi_t$ is a sum of smooth terms on a product of manifolds with
+retractions, each term reading only a few factors of the point, its *variables* $K_t$, and $g$ is
+the [chart gradient](../derivatives-in-charts/) of $f$ at the point $\hat \point$. A term of the
+linearization, $\phi_t = \tfrac12 \lvert r_t \rvert^2 + \lambda_t$, is one kind of term; a
+negative log-density that is not of that form, such as a Cauchy's or a Student's $t$, is another.
+
+## Rows from a curvature
+
+<Statement {...curvatureModel} />
+
+The model agrees with $f$ to first order, whatever the curvatures, and its matrix is theirs:
+
+$$
+	m(0) = f(\hat \point), \qquad \nabla m(0) = \sum_t \bigl( C_t\transpose u_t + \eta_t \bigr) = g, \qquad \nabla^2 m = \sum_t M_t . @tag(agreement)
+$$
+
+The rows $C_t$ and right-hand side $-u_t$ of each term are a factor of the problem
+[](eq:math/square-root-elimination/factored) over the blocks of $K_t$, and the $\eta_t$ are its
+linear term. So the model is eliminated as the linearization is, and its factor structure is that
+of the terms.
+
+**The linearization is an instance.** For a term of squares and a log-volume, $C_t = J_t$, $u_t =
+r_t + \hat c_t$ and $\eta_t = \nabla \lambda_t$ for a log-volume that is not folded, and
+[](eq:root) is the agreement of [](eq:math/linearization/agreement), term by term. Its curvature
+is $J_t\transpose J_t$, the Gauss–Newton matrix of the term. The Fisher linearization is another,
+with the root of the expected information for $C_t$ and the scale residual in $u_t$.
+
+**A root of any curvature.** A term with no residual has a curvature and a gradient and nothing
+else, and a root is made from them. Let $M_t = V \Lambda V\transpose$ be the eigendecomposition of
+its block, of the dimension $d_t$ of the tangent of $K_t$. Then
+
+$$
+	C_t = \Lambda^{1/2} V\transpose, \qquad u_t = \Lambda^{+1/2} V\transpose g_t, \qquad \eta_t = g_t - V \Lambda^{+} \Lambda V\transpose g_t , @tag(eigen-root)
+$$
+
+with $\Lambda^{+}$ and $\Lambda^{+1/2}$ inverting the positive eigenvalues and keeping the zero
+ones, is a root: $C_t\transpose u_t$ is the part of $g_t$ in the range of $M_t$, and $\eta_t$ the
+rest. It has $d_t$ rows whatever the rank of $M_t$, a row of zeros for each zero eigenvalue. Any
+other root differs from this one by an orthogonal factor on the left, $C_t \mapsto Q C_t$ and $u_t
+\mapsto Q u_t$, which elimination does not see, or by moving gradient between $u_t$ and $\eta_t$.
+
+**Keep the gradient in the rows.** A linear term is solved at the condition number $\kappa^2$ and
+the rows at $\kappa$ ([linear terms](../square-root-elimination/#linear-terms)), so a root puts in
+$u_t$ as much of $g_t$ as the range of $M_t$ allows, and leaves in $\eta_t$ only what lies outside
+it. When $M_t$ is positive definite on the block of $K_t$, $\eta_t = 0$. The root
+[](eq:eigen-root) does this, as the folding of a log-volume does for the linearization.
+
+**A row cannot carry negative curvature.** Every $C_t\transpose C_t$ is positive semidefinite, so
+a term's curvature must be. A term whose Hessian is indefinite, or negative, cannot give the rows
+its own second derivative, and must be given a curvature that differs from it. The three ways of
+doing so in [Three curvatures](#three-curvatures) differ in what they lose.
+
+## The curvature sets the rate, not the answer
+
+<Statement {...curvatureIteration} />
+
+The proof of [%full](statement:math/linearization/gauss-newton) holds with $M$ in the place of
+$J\transpose J$: nothing in it used the form of the matrix beyond its invertibility, and the
+derivative of the iteration at $q^\ast$ is $I - M^{-1} H^\ast$, of spectral radius $\rho$.
+
+So a term's gradient decides where an iteration stops, and its curvature only how fast it gets
+there. A curvature that is wrong by a little costs a slower rate, and one that is wrong by much
+costs convergence, without the iteration ever stopping at a point that is not stationary. Two
+cases from the notes before this one bracket what "by much" means. Gauss–Newton on a free scale
+omits as much curvature as it keeps, $H^\ast = 2M$ in the scale's direction, and $\rho = 1$
+([where the linearization fails](../linearization/#where-it-fails)). Fisher scoring on the same
+scale has $H^\ast = M$ there, and $\rho = 0$ in that direction
+([where the expected information is exact](../fisher-scoring/#where-the-expected-information-is-exact)).
+
+## The curvature and the damping
+
+The [Levenberg–Marquardt method](../levenberg-marquardt/) damps the model's minimizer and judges
+each step by the ratio of the decrease obtained to the decrease promised. Nothing in it needs the
+rows to be those of the linearization. The damped step solves $(M + \lambda D)\, \tangent = -g$,
+the penalty rows are added to any model's rows as they are to the linearization's, and the
+promise,
+
+$$
+	\Delta(\tangent) = m(0) - m(\tangent) = \tfrac12 \tangent\transpose M \tangent + \lambda\, \tangent\transpose D \tangent , @tag(promised)
+$$
+
+follows from $-g\transpose \tangent = \tangent\transpose (M + \lambda D)\, \tangent$ exactly as
+[](eq:math/levenberg-marquardt/promised) does, since that step used only the model's gradient at
+zero, which [](eq:agreement) keeps exact. Marquardt's diagonal is read off the columns of the rows,
+of any model, and the stopping rule on the promise and the check at the end carry over: the
+undamped decrement is $\tfrac12 g\transpose M^{-1} g$, zero exactly where $g$ is.
+
+The curvature shows in the gain.
+
+<Statement {...gain} />
+
+<Proof>
+
+Write $\delta = \lvert \hat \point \ominus q^\ast \rvert$. The gradient vanishes at $q^\ast$, so
+$g = O(\delta)$ and $\tangent = O(\delta)$, and $\Delta \ge \tfrac12 \tangent\transpose M \tangent
+\ge c \lvert \tangent \rvert^2$ for some $c > 0$ near $q^\ast$. Expanding the pull-back
+$\tangent \mapsto f(\hat \point \oplus \tangent)$ to second order, its Hessian at zero is $H^\ast +
+O(\delta)$, since it is continuous and equals the chart Hessian at the stationary point $q^\ast$
+([%full](statement:math/derivatives-in-charts/chart-hessian)), so
+
+$$
+	f(\hat \point) - f(\hat \point \oplus \tangent) = -g\transpose \tangent - \tfrac12 \tangent\transpose H^\ast \tangent + O(\delta \lvert \tangent \rvert^2) .
+$$
+
+With $-g\transpose \tangent = \tangent\transpose (M + \lambda D)\, \tangent = \Delta + \tfrac12
+\tangent\transpose M \tangent$, the obtained decrease is $\Delta + \tfrac12 \tangent\transpose (M -
+H^\ast)\, \tangent + O(\delta \lvert \tangent \rvert^2)$, and dividing by $\Delta$ gives
+[](eq:gain-limit). At $\lambda = 0$, $\Delta = \tfrac12 \tangent\transpose M \tangent$.
+
+</Proof>
+
+Three things follow.
+
+- **A damped step near a minimum is accepted.** The second term of [](eq:gain-limit) is at least
+  $-\tangent\transpose H^\ast \tangent / 2\Delta$, and $\Delta$ grows with $\lambda$, so a large
+  enough damping makes the gain positive, whatever the positive definite curvature. Damping a
+  model with the exact gradient is safe with any curvature.
+- **The undamped step is accepted when the curvature holds at least half the Hessian.** The gain of
+  the undamped step stays positive near the minimum exactly when $\tangent\transpose H^\ast
+  \tangent < 2\, \tangent\transpose M \tangent$ along the steps, and with $H^\ast$ positive
+  definite that is the condition $\rho < 1$ of [%full](statement:curvature-iteration). Then the
+  schedule [](eq:math/levenberg-marquardt/schedule) lowers $\lambda$ toward zero and the method
+  ends with the undamped iteration and its rate. Otherwise the damping stays bounded away from
+  zero, and the method converges, but only as fast as a scaled gradient descent.
+- **The two cases again.** For Gauss–Newton on a free scale, $H^\ast = 2M$ in the scale's
+  direction and the undamped gain tends to zero there: each step decreases $f$ by about nothing
+  of what it promised, and the damping is never released. For Fisher scoring, $H^\ast = M$ and the
+  gain tends to one. Damped Fisher scoring is the Levenberg–Marquardt method on the Fisher
+  linearization, and on a free scale it is the one of the two whose damping is released.
+
+## Three curvatures
+
+A term $\phi$ that is not a sum of squares can be given a curvature in three ways. Each keeps the
+gradient exact, by [](eq:root). They differ in what the curvature is, what computing it needs, and
+what a Gaussian built from it says.
+
+**Its own Hessian, made positive.** The chart Hessian $H_t$ of $\phi_t$ over its variables is the
+curvature it really has, and where it is positive semidefinite it is the best curvature there is:
+the term then contributes nothing to $H^\ast - M$. Where it is not, its negative eigenvalues are
+set to zero, $M_t = V \max(\Lambda, 0)\, V\transpose$, the nearest positive semidefinite matrix in
+the Frobenius norm; the root [](eq:eigen-root) is then built from the clipped eigenvalues, and the
+gradient along the clipped directions goes to $\eta_t$. Computing it needs second derivatives of
+the term, $d_t$ columns of Hessian products
+([forward-over-reverse](../automatic-differentiation/#forward-over-reverse-hessian-products)), and
+nothing of its form.
+
+Clipping is done term by term, and that is what it costs. A sum of terms can be positive definite
+where some of its terms are not: at a minimum, $H^\ast \succeq 0$ while a term's $H_t$ may have a
+negative eigenvalue, which the rows then omit. Clipping makes $M$ larger than the Hessian in the
+clipped directions, and so, read as a precision, more confident than the curvature at the minimum.
+
+**Its expected information.** When $\phi_t$ is the negative log-density of a law of some quantity,
+with parameters that are functions of the variables, its expected information in those parameters,
+lifted by their Jacobians, is a positive semidefinite curvature, as for the
+[normal](../normal/#the-expected-information). It needs only first derivatives of the parameters
+and a closed form from the distribution. It does not depend on the quantity's value, so it does
+not know whether that value is typical: it is the curvature of the law, not of this term at this
+point. And it exists only for a law of a quantity, and not for a
+[likelihood factor](../generative-models/#conditioning-and-likelihoods), which is the law of none.
+
+**A reweighting of its residual.** When $\phi_t = \varphi(\tfrac12 \lvert r_t \rvert^2)$ for a
+residual $r_t$ and an increasing concave $\varphi$, as for a robust loss, its gradient is
+$\varphi'\, J_t\transpose r_t$, with $J_t$ the residual's Jacobian and $\varphi'$ at the current
+value. The rows
+
+$$
+	C_t = \sqrt{\varphi'}\, J_t, \qquad u_t = \sqrt{\varphi'}\, r_t, \qquad \eta_t = 0 @tag(reweighted)
+$$
+
+are a root of the curvature $\varphi' J_t\transpose J_t$: the term's Gauss–Newton rows, weighted by
+the loss at its current value. Iterating the model's minimizer is iteratively reweighted least
+squares. Its Hessian is
+
+$$
+	H_t = \varphi' J_t\transpose J_t + \varphi'' J_t\transpose r_t\, r_t\transpose J_t + \varphi' \sum_i (r_t)_i\, \nabla^2 (r_t)_i , @tag(robust-hessian)
+$$
+
+so the rows omit, besides the residual's own curvature that every Gauss–Newton reading omits, the
+middle term, which is negative for a concave $\varphi$. They need only first derivatives, and they
+know which measurements are outliers: a residual far out has a small $\varphi'$, and its rows are
+nearly zero.
+
+**One law, three curvatures.** Student's $t$ with $\nu$ degrees of freedom on a whitened residual
+of dimension $d$ has, up to a constant, $\phi = \tfrac{\nu + d}{2} \log\bigl(1 + \lvert r \rvert^2 /
+\nu\bigr)$, which is $\varphi(\tfrac12 \lvert r \rvert^2)$ with $\varphi'(s) = (\nu + d) / (\nu +
+2s)$. Along the residual, where $J = I$, the three curvatures are
+
+$$
+	\begin{gathered}
+		\text{Hessian:} \quad \frac{(\nu + d)\,(\nu - \lvert r \rvert^2)}{(\nu + \lvert r \rvert^2)^2}, \qquad
+		\text{expected information:} \quad \frac{\nu + d}{\nu + d + 2}, \qquad
+		\text{reweighting:} \quad \frac{\nu + d}{\nu + \lvert r \rvert^2} .
+	\end{gathered} @tag(student)
+$$
+
+In the directions across the residual the Hessian and the reweighting agree, both
+$\varphi' = (\nu + d)/(\nu + \lvert r \rvert^2)$. The Hessian along the residual is negative beyond
+$\lvert r \rvert^2 = \nu$, so for a measurement more than $\sqrt \nu$ whitened units out it is
+clipped to zero. The expected information is a constant multiple of the normal's,
+$(\nu + d)/(\nu + d + 2)$, which is $\tfrac12$ for the Cauchy law, $\nu = d = 1$, whatever the residual. The
+reweighting falls off as $1/\lvert r \rvert^2$ and is never negative. At the centre, $r = 0$, the
+Hessian and the reweighting are both $(\nu + d)/\nu$, above the expected information, which is the
+Hessian's average over the law.
+
+**A convex term needs nothing.** The half-Cauchy law of scale $s$ on a positive quantity $\tau$,
+in the logarithmic chart $u = \log \tau$, has $\phi(u) = \log\bigl(1 + e^{2u} / s^2\bigr)$ up to a
+constant, with
+
+$$
+	\phi'(u) = \frac{2y}{1 + y}, \qquad \phi''(u) = \frac{4y}{(1 + y)^2}, \qquad y = \frac{\tau^2}{s^2} . @tag(half-cauchy)
+$$
+
+The second derivative is positive everywhere, so its Hessian is its curvature, unclipped, and the
+term adds nothing to $H^\ast - M$. Its gradient is bounded by $2$, and its curvature is largest,
+$1$, at $\tau = s$.
+
+## The Gaussian at a minimum
+
+A [Laplace approximation](../laplace-approximation/) built from the quadratic model has the
+precision $M$, and differs from the second-order approximation by
+
+$$
+	H^\ast - M = \sum_t \bigl( H_t - M_t \bigr) ,
+$$
+
+the curvature each term's model leaves out, plus the chart's part
+[](eq:math/laplace-approximation/omitted) where the space is curved. A term whose curvature is its
+own Hessian leaves nothing out, so a model in which every term that is not a sum of squares is
+convex in the chart, like the half-Cauchy above, has the error of the squares alone, the one the
+Laplace note measures. A clipped term leaves out a negative part, and its Gaussian is narrower than
+the second-order one in that direction. The reweighting leaves out the middle term of
+[](eq:robust-hessian), negative for a robust loss, with the same effect. The expected information
+leaves out the difference between the curvature of the law and that of the term at its value,
+which has no sign, and the Fisher note's reason applies: the integral of the density has the
+curvature of the density, not of its law, so the expected information gives a covariance of an
+estimator, and not of the posterior.
