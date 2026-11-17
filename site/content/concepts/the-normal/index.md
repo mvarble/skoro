@@ -33,11 +33,11 @@ works out what the mean and the scale mean once the space is curved. A normal is
 space, its mean and its scale:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:26..32}
+{../../../../crates/skoro-normal/src/normal.rs:26..37}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:47..60}
+{../../../../crates/skoro-normal/src/normal.rs:52..65}
 ```
 
 `Normal::on` reads the space from the marker a quantity was made with; `Normal::in_space` takes the
@@ -46,11 +46,11 @@ operations, as any value of a model is: the tangent by the space's inverse retra
 and the normalizer by composites of the scale's form, and the log-volume by the core's:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:151..177}
+{../../../../crates/skoro-normal/src/normal.rs:156..182}
 ```
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:119..135}
+{../../../../crates/skoro-normal/src/normal.rs:124..140}
 ```
 
 On a Euclidean space the log-volume is identically zero and left out. On the positive orthant it is
@@ -67,7 +67,7 @@ query and drawn in another.
 `score` adds the term, an exact sampler, and the roles:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:74..117}
+{../../../../crates/skoro-normal/src/normal.rs:79..122}
 ```
 
 It refuses what it cannot be exact on, at the caller's line, with the core's own errors: a discrete
@@ -78,7 +78,7 @@ quantity and scores it by a normal in one call, `sample("x", Real, normal)`, bui
 `quantity("x", Real)` and `normal.score(x)` build:
 
 ```rust
-{../../../../crates/skoro-normal/src/normal.rs:180..186}
+{../../../../crates/skoro-normal/src/normal.rs:185..191}
 ```
 
 > [!DECISION] The normal requires a global chart

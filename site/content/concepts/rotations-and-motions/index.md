@@ -57,7 +57,7 @@ moves its rotation by this chart and its translations in its own frame, $(q, p) 
 same volume. One generic declaration makes all three, for $k$ translations:
 
 ```rust
-{../../../../crates/skoro-spatial/src/types.rs:96..138}
+{../../../../crates/skoro-spatial/src/types.rs:115..162}
 ```
 
 The retraction normalizes its base point. On the type this changes nothing; off it, it keeps a
@@ -65,7 +65,7 @@ point that a long run of retractions has carried off the sphere by rounding from
 on to every later step. The markers name the three declarations:
 
 ```rust
-{../../../../crates/skoro-spatial/src/types.rs:148..168}
+{../../../../crates/skoro-spatial/src/types.rs:172..192}
 ```
 
 > [!DECISION] Quaternions up to sign, and the Cayley chart

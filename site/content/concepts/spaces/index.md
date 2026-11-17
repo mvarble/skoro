@@ -102,7 +102,7 @@ mathematics. The core gives each space its log-volume as a composite, beside its
 ```
 
 ```rust
-{../../../../crates/skoro-core/src/retraction.rs:60..88}
+{../../../../crates/skoro-core/src/retraction.rs:64..81}
 ```
 
 On the Euclidean spaces the chart is a translation and its log-volume is zero. On the positive
@@ -125,7 +125,7 @@ which is what lets [the linearization](../linearization/#folding-a-log-volume) f
 rows.
 
 ```rust
-{../../../../crates/skoro-core/src/retraction.rs:119..143}
+{../../../../crates/skoro-core/src/retraction.rs:172..196}
 ```
 
 > [!DECISION] The positive orthant keeps Lebesgue measure
@@ -140,11 +140,11 @@ stored, and for a type [stored up to a group](#types-stored-up-to-a-group), the 
 points.
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:115..133}
+{../../../../crates/skoro-core/src/embedded.rs:117..135}
 ```
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:292..296}
+{../../../../crates/skoro-core/src/embedded.rs:328..332}
 ```
 
 The log-volume $\Lambda(\iota(\point), \tangent)$ is an operation on the point's storage and the
@@ -156,7 +156,11 @@ of the chart's image, not only near its centre. The sphere of the core's tests d
 stereographic chart's volume so:
 
 ```rust
-{../../../../crates/skoro/tests/common/sphere.rs:76..92}
+{../../../../crates/skoro/tests/common/sphere.rs:78..88}
+```
+
+```rust
+{../../../../crates/skoro/tests/common/sphere.rs:104..110}
 ```
 
 `testing::check_volume` holds a declaration to the area formula of the
@@ -185,11 +189,11 @@ group of maps of its storage that carry a stored point to another storage of the
 by its generators, each a signed permutation of the storage's entries:
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:45..54}
+{../../../../crates/skoro-core/src/embedded.rs:47..56}
 ```
 
 ```rust
-{../../../../crates/skoro-core/src/embedded.rs:331..361}
+{../../../../crates/skoro-core/src/embedded.rs:399..429}
 ```
 
 A point of such a type is the set of its stored values, and the type's charts are read on the
