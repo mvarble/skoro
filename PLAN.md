@@ -14,11 +14,13 @@ The items are in the order they should be taken.
 - **Estimation reads only Gaussian-shaped terms.** `Linearizer` refuses a model with any term that binds no residual (`NoResidual`), and the roles it reads are the normal's.
   The log-volume role was already redefined as "the varying part of a remainder" to carry the improper factor's linear part.
   One term that is not a normal, such as the half-Cauchy prior on the scale that eight schools usually carries, makes the whole model unlinearizable, and robust losses, which real pose-graph data needs, have no route either.
-  The entry gives a term without a residual a place in a linearization, and weighs two routes (`EVALUATION.md`, the survey of inference algorithms).
+  The entry gives a term without a residual a place in a linearization, and weighs three routes (`EVALUATION.md`, the survey of inference algorithms).
   One is the term's gradient and Hessian products through the core's second-order passes, which is general and brings with it the Newton step and the observed information, a Laplace approximation that keeps the residual-weighted curvature Gauss–Newton drops.
-  The other is a distribution that declares its expected information in its parents' coordinates, as the normal declares its information root, lifted by the parents' Jacobians: positive semidefinite, of the linearization's shape, and for a robust loss such as the Student-t's a constant multiple of the normal's rows. A likelihood factor has no expected information, so it takes the first route.
-  The entry also damps Fisher scoring: `LevenbergMarquardt` refuses the Fisher assembly (`NotAnIntegral`), yet its gain ratio needs only the objective and a model with the objective's gradient, which the Fisher rows have; without it a free scale, such as eight schools' τ, has no damped route to a mode.
+  The other is a distribution that declares its expected information in its parents' coordinates, as the normal declares its information root, lifted by the parents' Jacobians: positive semidefinite, of the linearization's shape, and for a robust loss such as the Student-t's a constant multiple of the normal's rows, though its marginals do not know which measurements are outliers. A likelihood factor has no expected information, so it cannot take this route.
+  The third is the one factor-graph libraries take for robust losses: the whitened residual reweighted by the loss at its current value, which keeps the term in the residual assembly and its Laplace approximation.
+  The entry also damps Fisher scoring: `LevenbergMarquardt` refuses the Fisher assembly (`NotAnIntegral`), yet its gain ratio needs only the objective and a model with the objective's gradient, which the Fisher rows have; without it a model with a free scale, the calibration case, has no damped route to a mode.
   It comes before Hamiltonian Monte Carlo, whose example needs a mode and a Laplace approximation to start from.
+  This is analysis in `EVALUATION.md`, not yet run.
   ```
   /wf-start terms-without-residuals feature A place in a linearization for a term that binds no residual, and damped Fisher scoring, revises linearization
   ```
@@ -30,8 +32,9 @@ The items are in the order they should be taken.
   The scope is static HMC with dual-averaging step-size adaptation first, and NUTS as a follow-up; the Metropolis-adjusted Langevin algorithm, which is HMC with one leapfrog step, comes with it as the simplest sampler.
   The Laplace approximation serves as mass matrix and starting point: a mode, then Laplace, then HMC, all read off one model.
   Its diagnostics are R-hat and effective sample size, enough for the example to show its chains converged.
-  Its example is eight schools (a funnel, and a positive scale τ), the standard comparison with Stan.
+  Its example is eight schools (a positive scale τ with a half-Cauchy prior), the standard comparison with Stan.
   It is written non-centred, `θ_j = μ + τ η_j`: the centred form has no mode, since with every `θ_j = μ` its density in the logarithmic chart of τ grows like `τ^(-(J-1))` as `τ → 0`, so the mode and the Laplace approximation exist only for the non-centred form (`EVALUATION.md`, the survey of inference algorithms).
+  Written so by hand, it has no funnel in the coordinates the chains move in; the centred form and its funnel are left to the item on a metric that varies.
   The archive's climate model (`08-example-climate-mcmc`) waited on seeded sampling, HMC and the positive reals, and can follow once its ODE is unrolled in the graph.
   ```
   /wf-start hmc feature Static Hamiltonian Monte Carlo on flat quantities, with eight schools as its example
@@ -72,18 +75,18 @@ These are in no order; each returns when something needs it.
   The cost is mostly a fixed overhead of running each program's many small steps on the tensor backend, which a batch of rows shares and a single row pays in full; that reading is an inference from the timings, and the entry starts by profiling it.
   This suits many datasets or hypotheses at once, and does not yet suit one estimator running in real time, which the docs name as an audience.
   Fused kernels are the lever: `skoro-spatial` brought SO(3) and SE(3) back as embedded types whose maps are composites, and the archive's fused exponential and logarithm kernels for cubecl (`crates/skoro-so3/src/ops/exp/cube.rs`, `ops/log/cube.rs`) are the prior art.
-  Incremental elimination, below, is the algorithmic lever beside this arithmetic one, and the two are measured on the same loop.
   ```
   /wf-start fused-kernels feature The cost of a single row, and fused kernels for the maps that dominate it
   ```
 
-- **A metric that varies: Riemannian manifold HMC.** For a posterior whose scale changes by orders of magnitude, such as the funnel of eight schools, the sampler takes a metric `G` that changes from point to point.
+- **A metric that varies: Riemannian manifold HMC.** For a posterior whose scale changes by orders of magnitude, such as the funnel of the centred eight schools, the sampler takes a metric `G` that changes from point to point.
   Its integrator needs `G`, its log-determinant, solves against it, and the derivative of `G`, which costs one order more than whatever `G` is built from.
   A metric built from the Hessian needs third derivatives, a fourth variant of `Kernel` and a third-order rule for every primitive, and is not the route.
   The Fisher linearization already assembles `G = JᵀJ` from first derivatives and the information roots, so its derivative along a direction `u` is a tangent pass and a Hessian pass seeded with `J u`, both of which exist, and `skoro-elimination` gives the log-determinant and the solves.
   What is new is outside the core: an implicit integrator whose fixed-point iterations stop row by row, and the derivative of the log-determinant, at one second-order pass per coordinate.
   The one change to the core to consider is a Hessian pass that takes a seed for each velocity column, so that this costs one pass.
-  The entry weighs a cheaper cure for a funnel first: sampling in the whitened residual every normal binds, the non-centred parameterization read off the model, which needs cuts, below, and no metric.
+  The entry weighs a cheaper cure for a funnel first: sampling in the whitened residual every normal binds, the non-centred parameterization read off the model rather than written by hand as the HMC example's is, which needs cuts, below, and no metric.
+  Its example is the centred eight schools.
   This is analysis in `EVALUATION.md`, not yet run.
   ```
   /wf-start riemannian-hmc feature A metric that varies from point to point, from the Fisher linearization
@@ -106,10 +109,12 @@ These are in no order; each returns when something needs it.
   /wf-start device-sampling feature Draws on the target's device, and derivatives through a draw
   ```
 
-- **Incremental elimination.** A sliding window's snapshots differ from one tick to the next by a few terms and a retirement, and each tick eliminates the whole window again.
+- **Incremental elimination.** A model that keeps growing because nothing is retired, such as full smoothing with loop closures, is eliminated whole at every change, though each change adds only a few terms.
   The `Schedule`'s junction tree is the static half of iSAM2's Bayes tree (Kaess et al., 2012); the other half re-eliminates only the cliques on the paths from the blocks a change touches to the root, keeps the rest of the factorization, and relinearizes only the blocks whose step passed a threshold.
   The diff between snapshots is read off the ids of their terms and quantities, so the model is not told what changed.
-  It matters most for one estimator running indefinitely, which is where the single row is slow.
+  It does not address the cost of a single row: in the `sliding_window` loop elimination is 0.19 ms against 10.5 ms of linearization, and a retired window is bounded already.
+  Relinearizing only some blocks would cut the linearization too, but needs the linearizer to compile and run programs over a subset of terms, which it cannot do today.
+  This is analysis in `EVALUATION.md`, not yet run.
   ```
   /wf-start incremental-elimination feature Re-eliminating only the cliques a change of the model touches, revises linearization
   ```
@@ -118,12 +123,14 @@ These are in no order; each returns when something needs it.
   A sampler that tempers from the prior to the posterior with HMC moves (Del Moral, Doucet and Jasra, 2006) gives an unbiased estimate of the evidence for a posterior far from Gaussian, which nothing else in the plan does, and annealed importance sampling is its special case.
   A Rao–Blackwellized filter samples part of the state and carries the rest through the linearizer per particle.
   Each draw is a round trip from the device until draws on the device land, so the entry measures that cost first.
+  This is analysis in `EVALUATION.md`, not yet run.
   ```
   /wf-start smc feature Particle filters and tempered samplers, with an estimate of the evidence
   ```
 
 - **Sigma-point filtering.** The unscented transform propagates a Gaussian through a map by evaluating it at `2d + 1` points, with no derivative.
   It is the one Gaussian filter for a model with an operation that has no derivative rules, and it reads the same model as the linearizer.
+  This is analysis in `EVALUATION.md`, not yet run.
   ```
   /wf-start sigma-points feature The unscented transform, for Gaussian filtering without derivatives
   ```
