@@ -12,7 +12,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
 
 ## The core (`skoro-core`)
 
-- [ ] `Mass` and `UniformDraw`, `Embedded::with_mass` and `Embedded::mass` with the declaration's
+- [x] `Mass` and `UniformDraw`, `Embedded::with_mass` and `Embedded::mass` with the declaration's
       new field and its refusals, re-exported from `skoro_core`; `Error::NoMass` and its message;
       `Space::log_mass` and `Space::draw_uniform`, a product by its factors. Tests:
       `log_mass_of_the_spaces`, `with_mass_is_refused_without_a_volume_or_twice`,

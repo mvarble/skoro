@@ -132,6 +132,40 @@ mod tests {
     }
 
     #[test]
+    fn log_mass_of_the_spaces() {
+        assert_eq!(Space::Categorical(5).log_mass(), Ok(5f64.ln()));
+        assert_eq!(Space::BOOLEAN.log_mass(), Ok(2f64.ln()));
+        let flat = Space::product([Space::Real, Space::Vector(2)]).unwrap();
+        for space in [
+            Space::Real,
+            Space::Vector(3),
+            Space::Positive(2),
+            Space::Integer,
+            Space::Categorical(0),
+            flat,
+        ] {
+            let no_mass = Error::NoMass {
+                space: space.clone(),
+            };
+            assert_eq!(space.log_mass(), Err(no_mass.clone()), "{space:?}");
+            let mut point = vec![0.0; space.storage()];
+            let variates = vec![0.5; space.dimension().unwrap_or(1)];
+            assert_eq!(space.draw_uniform(&variates, &mut point), Err(no_mass));
+        }
+        // A categorical space has a mass, and its value is not a point of storage to draw into.
+        let boolean = Space::BOOLEAN;
+        assert_eq!(
+            boolean.draw_uniform(&[0.5], &mut [0.0]),
+            Err(Error::NoMass { space: boolean })
+        );
+        let shown = Error::NoMass { space: Space::Real }.to_string();
+        assert_eq!(
+            shown,
+            "Real has no finite mass: it has no uniform distribution"
+        );
+    }
+
+    #[test]
     fn blocks_of_a_nested_product() {
         let inner = Space::product([Space::Real, Space::Positive(2)]).unwrap();
         let space = Space::product([Space::Vector(2), inner.clone()]).unwrap();

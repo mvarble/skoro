@@ -1,5 +1,5 @@
 //! The retractions of the core's spaces, their inverses, and their charts' log-volumes and
-//! domains, as composites cached per space.
+//! domains, as composites cached per space; and the spaces' masses and uniform draws.
 //!
 //! | space | `x ⊕ t` | `y ⊖ x` |
 //! | --- | --- | --- |
@@ -18,6 +18,10 @@
 //! Euclidean and positive spaces, the measure an embedded type's retraction normalizes, and the
 //! product of the factors' on a product. An embedded type that declares no volume has none, and
 //! neither has a product with it among its factors (`NoVolume`).
+//!
+//! The mass `ν(𝕏)` of a reference measure is finite on `Categorical(n)`, where it is `n`, on an
+//! embedded type that declares one, and on a product of such types, where it is the product of
+//! the factors'. Every other space has infinite mass or declares none (`NoMass`).
 //!
 //! The tangent of every space is a `Vector` of the space's dimension.
 
@@ -73,6 +77,55 @@ impl Space {
             Ok(Domain::Global)
         } else {
             cached(self, Map::Domain).map(Domain::Within)
+        }
+    }
+
+    /// `log ν(𝕏)`: `log n` for `Categorical(n)`, the declared log-mass of an embedded type, and
+    /// the sum of the factors' for a product. Every other space has infinite mass or declares
+    /// none, and `Categorical(0)` has no point to give a law to (`NoMass`, naming this space).
+    pub fn log_mass(&self) -> Result<f64, Error> {
+        let no_mass = || Error::NoMass {
+            space: self.clone(),
+        };
+        match self {
+            Space::Categorical(n) if *n > 0 => Ok((*n as f64).ln()),
+            Space::Embedded(declaration) => declaration
+                .mass()
+                .map(|mass| mass.log_mass())
+                .ok_or_else(no_mass),
+            Space::Product(factors) => factors
+                .iter()
+                .map(|factor| factor.log_mass().map_err(|_| no_mass()))
+                .sum(),
+            _ => Err(no_mass()),
+        }
+    }
+
+    /// A uniform point of a continuous space of finite mass, from `dimension` variates, each in
+    /// (0, 1), into `point`, the storage of one point: an embedded type by its declared draw, a
+    /// product factor by factor, each from the variates of its tangent range into its storage
+    /// range (`NoMass` otherwise, a categorical space included, whose value is not a point of
+    /// storage).
+    pub fn draw_uniform(&self, variates: &[f64], point: &mut [f64]) -> Result<(), Error> {
+        let no_mass = || Error::NoMass {
+            space: self.clone(),
+        };
+        match self {
+            Space::Embedded(declaration) => {
+                let mass = declaration.mass().ok_or_else(no_mass)?;
+                (mass.draw())(variates, point);
+                Ok(())
+            }
+            Space::Product(_) => {
+                for block in self.blocks() {
+                    block
+                        .space
+                        .draw_uniform(&variates[block.tangent], &mut point[block.storage])
+                        .map_err(|_| no_mass())?;
+                }
+                Ok(())
+            }
+            _ => Err(no_mass()),
         }
     }
 

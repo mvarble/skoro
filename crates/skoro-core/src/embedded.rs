@@ -22,10 +22,11 @@ use crate::{
 };
 
 /// A curved type of storage `n` and dimension `d`, declared by its retraction and its inverse,
-/// and optionally its projection and its chart's volume.
+/// and optionally its projection, its chart's volume and its measure's mass.
 ///
 /// A name and its parameters name the declaration whole: two declarations under one name and the
-/// same parameters are one space, so they must not differ in any part, the volume included.
+/// same parameters are one space, so they must not differ in any part, the volume and the mass
+/// included.
 #[derive(Clone)]
 pub struct Embedded {
     name: &'static str,
@@ -36,6 +37,7 @@ pub struct Embedded {
     inverse: Arc<Composite>,
     projection: Option<Arc<Composite>>,
     volume: Option<Volume>,
+    mass: Option<Mass>,
     flat: bool,
     /// The generators of the finite group the type is stored up to; empty when it is stored as
     /// itself.
@@ -160,6 +162,38 @@ impl Volume {
     }
 }
 
+/// A uniform point of a type from variates: `variates`, as many as the type has dimensions, each
+/// in (0, 1), to `point`, the storage of one point. It carries Lebesgue measure on the cube to
+/// the type's reference measure divided by its mass.
+pub type UniformDraw = fn(variates: &[f64], point: &mut [f64]);
+
+/// The mass of a type's reference measure, finite, and how a uniform point is drawn: what a type
+/// declares to have a uniform distribution.
+///
+/// The draw is a function of the host and not a composite: no parameter reaches it, so no pass
+/// crosses it, and every sampler draws on the host in double precision.
+#[derive(Clone, Copy, Debug)]
+pub struct Mass {
+    log_mass: f64,
+    draw: UniformDraw,
+}
+
+impl Mass {
+    /// The mass whose logarithm is `log_mass`, and the draw of a uniform point.
+    pub fn new(log_mass: f64, draw: UniformDraw) -> Mass {
+        Mass { log_mass, draw }
+    }
+
+    /// `log ν(𝕏)`.
+    pub fn log_mass(&self) -> f64 {
+        self.log_mass
+    }
+
+    pub fn draw(&self) -> UniformDraw {
+        self.draw
+    }
+}
+
 impl Embedded {
     /// `retraction`, `Vector(n)` and `Vector(d)` to `Vector(n)`, is the `R` of the mathematics;
     /// `inverse`, two of `Vector(n)` to `Vector(d)`, its `Q`; `projection`, `Vector(n)` to
@@ -208,6 +242,7 @@ impl Embedded {
             inverse,
             projection,
             volume: None,
+            mass: None,
             flat: false,
             identification: Vec::new(),
         }))
@@ -248,6 +283,7 @@ impl Embedded {
             inverse,
             projection: Some(projection),
             volume: Some(Volume::global(log_volume)),
+            mass: None,
             flat: true,
             identification: Vec::new(),
         }))
@@ -326,6 +362,38 @@ impl Embedded {
     /// The chart's volume, when the type declares one.
     pub fn volume(&self) -> Option<&Volume> {
         self.volume.as_ref()
+    }
+
+    /// This declaration, with the mass of the measure its volume is against. Refuses a
+    /// declaration without a volume, whose measure is not fixed, a flat one, one that already
+    /// declares a mass, and a log-mass that is not finite (`InvalidDeclaration`).
+    pub fn with_mass(self: Arc<Self>, mass: Mass) -> Result<Arc<Embedded>, Error> {
+        let invalid = |reason: &str| Error::InvalidDeclaration {
+            name: self.name.to_string(),
+            reason: reason.to_string(),
+        };
+        if self.flat {
+            return Err(invalid("a flat type's measure has infinite mass"));
+        }
+        if self.volume.is_none() {
+            return Err(invalid(
+                "it declares no volume, so the measure of its mass is not fixed",
+            ));
+        }
+        if self.mass.is_some() {
+            return Err(invalid("it already declares a mass"));
+        }
+        if !mass.log_mass.is_finite() {
+            return Err(invalid("its log-mass is not finite"));
+        }
+        let mut declaration = Arc::unwrap_or_clone(self);
+        declaration.mass = Some(mass);
+        Ok(Arc::new(declaration))
+    }
+
+    /// The mass, when the type declares one.
+    pub fn mass(&self) -> Option<&Mass> {
+        self.mass.as_ref()
     }
 
     /// This declaration, stored up to the finite group `generators` generate: a point of the

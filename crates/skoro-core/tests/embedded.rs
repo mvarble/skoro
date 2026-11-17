@@ -8,8 +8,8 @@ use skoro_core::scope::{apply, constant, project, quantity};
 use skoro_core::testing::{check_embedded, check_volume, close_up_to, lower};
 use skoro_core::{
     Composite, Declares, Domain, Embedded, Error, FirstOrder, IntoHostValue, Kernel, Linear,
-    Lowered, Lowering, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector, Volume,
-    Writer,
+    Lowered, Lowering, Mass, Operation, Order, Param, QDyn, Query, Space, Typed, Values, Vector,
+    Volume, Writer,
 };
 use skoro_tensor::{HostData, HostValue, Target, Value};
 
@@ -624,6 +624,86 @@ fn declaration_without_volume_has_no_measure() {
         };
         assert_eq!(space.log_volume().err(), Some(no_volume.clone()));
         assert!(matches!(space.domain(), Err(e) if e == no_volume));
+    }
+}
+
+/// A point of the circle at the angle `2π u`: uniform in arc length, of mass `2π`.
+fn uniform_angle(u: &[f64], x: &mut [f64]) {
+    let theta = std::f64::consts::TAU * u[0];
+    (x[0], x[1]) = (theta.cos(), theta.sin());
+}
+
+fn circle_mass() -> Mass {
+    Mass::new(std::f64::consts::TAU.ln(), uniform_angle)
+}
+
+#[test]
+fn with_mass_is_refused_without_a_volume_or_twice() {
+    let mass = circle_mass();
+    // No volume: the measure the mass would be of is not fixed.
+    assert!(is_invalid(circle().with_mass(mass)));
+    let flat = Embedded::declare_flat("test.flat.mass", Vec::new(), 2).unwrap();
+    assert!(flat.mass().is_none());
+    assert!(is_invalid(flat.with_mass(mass)));
+    let measured = || ball_circle("test.circle.massive", 3.0);
+    assert!(measured().mass().is_none());
+    for log_mass in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+        let not_finite = Mass::new(log_mass, uniform_angle);
+        assert!(is_invalid(measured().with_mass(not_finite)), "{log_mass}");
+    }
+    let declared = measured().with_mass(mass).unwrap();
+    let found = declared.mass().expect("the mass was declared");
+    assert_eq!(found.log_mass(), std::f64::consts::TAU.ln());
+    let mut x = [0.0; 2];
+    (found.draw())(&[0.5], &mut x);
+    assert!((x[0] + 1.0).abs() < 1e-15 && x[1].abs() < 1e-15, "{x:?}");
+    // The volume is kept, and the declaration is the type it was.
+    assert!(declared.volume().is_some());
+    assert_eq!(declared, measured());
+    assert!(is_invalid(declared.with_mass(mass)));
+}
+
+#[test]
+fn a_product_has_the_mass_of_its_factors() {
+    let circle = |name| {
+        let declared = ball_circle(name, 3.0).with_mass(circle_mass()).unwrap();
+        Space::Embedded(declared)
+    };
+    let (a, b) = (
+        circle("test.circle.mass.one"),
+        circle("test.circle.mass.two"),
+    );
+    let log_mass = std::f64::consts::TAU.ln();
+    assert_eq!(a.log_mass(), Ok(log_mass));
+    let pair = Space::product([a.clone(), b.clone()]).unwrap();
+    assert_eq!(pair.log_mass(), Ok(2.0 * log_mass));
+    // Each factor's storage is filled from its own variate.
+    let mut point = [f64::NAN; 4];
+    pair.draw_uniform(&[0.25, 0.5], &mut point).unwrap();
+    let expected = [0.0, 1.0, -1.0, 0.0];
+    for (found, expected) in point.iter().zip(expected) {
+        assert!((found - expected).abs() < 1e-15, "{point:?}");
+    }
+    // A product within a product is drawn by its own factors.
+    let nested = Space::product([pair.clone(), a.clone()]).unwrap();
+    assert_eq!(nested.log_mass(), Ok(3.0 * log_mass));
+    let mut point = [f64::NAN; 6];
+    nested.draw_uniform(&[0.25, 0.5, 0.75], &mut point).unwrap();
+    let expected = [0.0, 1.0, -1.0, 0.0, 0.0, -1.0];
+    for (found, expected) in point.iter().zip(expected) {
+        assert!((found - expected).abs() < 1e-15, "{point:?}");
+    }
+    // One factor of infinite mass, or of none declared, and the product has none.
+    let bare = Space::Embedded(ball_circle("test.circle.mass.none", 3.0));
+    for factor in [Space::Real, bare] {
+        let space = Space::product([a.clone(), factor]).unwrap();
+        let no_mass = Error::NoMass {
+            space: space.clone(),
+        };
+        assert_eq!(space.log_mass(), Err(no_mass.clone()));
+        let mut point = vec![0.0; space.storage()];
+        let variates = vec![0.5; space.dimension().unwrap()];
+        assert_eq!(space.draw_uniform(&variates, &mut point), Err(no_mass));
     }
 }
 
