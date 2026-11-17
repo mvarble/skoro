@@ -44,6 +44,13 @@ The items are in the order they should be taken.
   /wf-start hmc-curved feature Hamiltonian Monte Carlo on curved quantities, in a fixed global chart
   ```
 
+- **The umbrella re-exports every crate.** `skoro` re-exports only `skoro-core` and `skoro-tensor`, so a model that uses a distribution or an estimator also depends on `skoro-normal`, `skoro-uniform`, `skoro-spatial`, `skoro-linearize` or `skoro-elimination` by name, and the examples, the guide and the umbrella's own tests import them directly.
+  By the release, `skoro` is the one crate a user depends on: it re-exports each feature crate under a module of its own (`skoro::normal`, `skoro::uniform`, `skoro::spatial`, `skoro::linearize`, `skoro::elimination`), every crate added before the release joins it, and the examples, the guide's snippets and the umbrella's tests are written against `skoro` alone, as `tests_use_the_public_interface_alone` already requires of the core.
+  The feature crates depend on the core and never on `skoro`, so the umbrella can depend on all of them without a cycle; whether some of them sit behind cargo features is settled in the entry.
+  ```
+  /wf-start umbrella chore The skoro crate re-exports every crate of the workspace, and the examples and guide use it alone
+  ```
+
 - **The release, 0.1.0.** The README leads with what skoro does and a model of twenty lines or so that compiles, with the development process lower down, and is included in the `skoro` crate's documentation (`#![doc = include_str!("../README.md")]`) so that the snippet is doc-tested.
   It does not claim real-time use until the cost of a single row, below, has been measured again, and wgpu goes in it only if an example shows it paying off.
   Each crate gets rustdoc, a docs.rs build check, crates.io metadata, and `cargo publish --dry-run` in dependency order.
