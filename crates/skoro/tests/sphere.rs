@@ -12,7 +12,7 @@ use common::sphere::{
 };
 use skoro::scope::{project, quantity};
 use skoro::tensor::{Frame, HostData, HostValue, Value};
-use skoro::testing::{check_agreement, check_embedded, check_operation, check_volume};
+use skoro::testing::{check_agreement, check_embedded, check_mass, check_operation, check_volume};
 use skoro::{
     Composite, Embedded, Frames, Q, QDyn, Query, Space, Target, Values, Vector, VectorDyn, Volume,
     Writer,
@@ -471,7 +471,11 @@ fn trapezoid(f: impl Fn(&[f64]) -> Vec<f64>, a: f64, b: f64, n: usize) -> f64 {
 
 #[test]
 fn sphere_charts_have_the_mass_of_the_sphere() {
-    let four_pi = 4.0 * std::f64::consts::PI;
+    // The masses the two declare, which are those of one sphere.
+    let declared = |sphere: &Embedded| sphere.mass().unwrap().log_mass().exp();
+    let (of_stereographic, of_exponential) = (declared(&SPHERE), declared(&EXPONENTIAL));
+    assert!((of_stereographic - 4.0 * std::f64::consts::PI).abs() < 1e-12);
+    assert_eq!(of_stereographic, of_exponential);
     for x in points(3) {
         // The stereographic chart over all of ℝ², in u = atan(r / 2): r = 2 tan u, dr = 2 sec²u du.
         let stereographic = trapezoid(
@@ -493,7 +497,7 @@ fn sphere_charts_have_the_mass_of_the_sphere() {
             20_000,
         );
         assert!(
-            (stereographic - four_pi).abs() < 1e-6,
+            (stereographic - of_stereographic).abs() < 1e-6,
             "the stereographic chart's mass is {stereographic}"
         );
         // The exponential chart over the ball of radius π.
@@ -511,10 +515,71 @@ fn sphere_charts_have_the_mass_of_the_sphere() {
             20_000,
         );
         assert!(
-            (exponential - four_pi).abs() < 1e-6,
+            (exponential - of_exponential).abs() < 1e-6,
             "the exponential chart's mass is {exponential}"
         );
     }
+}
+
+/// The draw, the volume and the mass of each sphere are one law: on the stereographic chart,
+/// which is global, and on the exponential one, whose domain is the disc of radius π, of which
+/// the standard normal of the plane has the mass `1 - e^{-π²/2}`.
+#[test]
+fn sphere_masses_check() {
+    let data: Vec<f64> = points(3).into_iter().flatten().collect();
+    let at = HostValue::new(Some(3), 3, HostData::Continuous(data)).unwrap();
+    check_mass(&SPHERE, &at, 1.0).unwrap();
+    let pi = std::f64::consts::PI;
+    let of_the_disc = 1.0 - (-pi * pi / 2.0).exp();
+    check_mass(&EXPONENTIAL, &at, of_the_disc).unwrap();
+    // The check tells the disc from the plane, a mass from one a twentieth larger, and a draw
+    // that is not uniform from one that is.
+    assert!(check_mass(&EXPONENTIAL, &at, 1.0).is_err());
+    let heavier = |log_mass: f64| {
+        let name = "sphere.mass.heavier";
+        let volume = Volume::global(common::sphere::log_volume());
+        Embedded::declare(
+            name,
+            Vec::new(),
+            3,
+            2,
+            common::sphere::retraction(),
+            common::sphere::inverse(),
+            None,
+        )
+        .and_then(|sphere| sphere.with_volume(volume))
+        .and_then(|sphere| {
+            sphere.with_mass(skoro::Mass::new(log_mass, common::sphere::uniform_point))
+        })
+        .unwrap()
+    };
+    let error = check_mass(&heavier((4.2 * pi).ln()), &at, 1.0).unwrap_err();
+    assert!(error.contains("are not of one law"), "{error}");
+    let lopsided = Embedded::declare(
+        "sphere.mass.lopsided",
+        Vec::new(),
+        3,
+        2,
+        common::sphere::retraction(),
+        common::sphere::inverse(),
+        None,
+    )
+    .and_then(|sphere| sphere.with_volume(Volume::global(common::sphere::log_volume())))
+    .and_then(|sphere| {
+        // The northern hemisphere alone, at twice the density.
+        let draw = |u: &[f64], x: &mut [f64]| {
+            let (c, phi) = (u[0], std::f64::consts::TAU * u[1]);
+            let s = (1.0 - c * c).sqrt();
+            (x[0], x[1], x[2]) = (s * phi.cos(), s * phi.sin(), c);
+        };
+        sphere.with_mass(skoro::Mass::new((4.0 * pi).ln(), draw))
+    })
+    .unwrap();
+    let error = check_mass(&lopsided, &at, 1.0).unwrap_err();
+    assert!(error.contains("are not of one law"), "{error}");
+    // A declaration without a mass is named.
+    let bare = exponential_sphere(Near::Guarded);
+    assert!(check_mass(&bare, &at, 1.0).unwrap_err().contains("no mass"));
 }
 
 #[test]

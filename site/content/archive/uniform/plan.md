@@ -17,7 +17,7 @@ ranges reach, so that `pnpm build` passes until the publish stage rewrites the q
       `Space::log_mass` and `Space::draw_uniform`, a product by its factors. Tests:
       `log_mass_of_the_spaces`, `with_mass_is_refused_without_a_volume_or_twice`,
       `a_product_has_the_mass_of_its_factors`.
-- [ ] `testing::check_mass`; the test spheres `SPHERE` and `EXPONENTIAL` declare `log 4π` and
+- [x] `testing::check_mass`; the test spheres `SPHERE` and `EXPONENTIAL` declare `log 4π` and
       Archimedes' draw; the spheres' quadrature compared with the declared masses; and the
       additions recorded in the public interface. Tests: `sphere_masses_check`,
       `sphere_charts_have_the_mass_of_the_sphere` (amended), `public_interface`.

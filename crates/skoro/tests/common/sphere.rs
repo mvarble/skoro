@@ -7,7 +7,7 @@ use std::sync::{Arc, LazyLock};
 use skoro::primitive::Select;
 use skoro::scope::{apply, constant};
 use skoro::tensor::{HostData, HostValue};
-use skoro::{Composite, Declares, Embedded, IntoHostValue, QDyn, Real, Space, Typed, Volume};
+use skoro::{Composite, Declares, Embedded, IntoHostValue, Mass, QDyn, Real, Space, Typed, Volume};
 
 /// `1 / a`, written `e^{-log a}`, for `a` positive on the domain.
 pub fn reciprocal(a: QDyn) -> QDyn {
@@ -87,10 +87,25 @@ pub fn log_volume() -> Arc<Composite> {
     .unwrap()
 }
 
+/// A uniform point of the sphere from two variates, by Archimedes: the height `c = 1 - 2u₁` is
+/// uniform on `(-1, 1)` and the longitude `φ = 2πu₂` on the circle, to
+/// `(√(1 - c²) cos φ, √(1 - c²) sin φ, c)`.
+pub fn uniform_point(u: &[f64], x: &mut [f64]) {
+    let c = 1.0 - 2.0 * u[0];
+    let (s, phi) = ((1.0 - c * c).sqrt(), std::f64::consts::TAU * u[1]);
+    (x[0], x[1], x[2]) = (s * phi.cos(), s * phi.sin(), c);
+}
+
+/// The mass of surface measure on the sphere, `4π`, and Archimedes' draw.
+pub fn mass() -> Mass {
+    Mass::new((4.0 * std::f64::consts::PI).ln(), uniform_point)
+}
+
 pub static SPHERE: LazyLock<Arc<Embedded>> = LazyLock::new(|| {
     let (r, q, p) = (retraction(), inverse(), projection());
     Embedded::declare("sphere", Vec::new(), 3, 2, r, q, Some(p))
         .and_then(|sphere| sphere.with_volume(Volume::global(log_volume())))
+        .and_then(|sphere| sphere.with_mass(mass()))
         .unwrap()
 });
 
@@ -369,6 +384,8 @@ pub static EXPONENTIAL: std::sync::LazyLock<Arc<Embedded>> = std::sync::LazyLock
         "sphere.exp.measured",
         Volume::within(exponential_log_volume(true), ball_of_radius_pi()),
     )
+    .with_mass(mass())
+    .unwrap()
 });
 
 /// The exponential sphere's marker.
