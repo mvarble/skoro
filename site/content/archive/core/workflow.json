@@ -161,18 +161,34 @@
             "document": "archive/core/math",
             "by": "mathematics-in-order",
             "commit": "a7dd3d2"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "amend",
+            "stage": "implementation",
+            "document": "archive/core/implementation",
+            "by": "tangent-clarification",
+            "commit": "2e5013c"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "amend",
+            "stage": "math",
+            "document": "archive/core/math",
+            "by": "tangent-clarification",
+            "commit": "2e5013c"
         }
     ],
     "approvals": {
         "math": {
             "date": "2026-10-29",
             "commit": "dcaf04c",
-            "hash": "6f403452f6e7bb1c88c05582b814283f3d299a1b3bd382e60b792b22d59daff4"
+            "hash": "c16723b6d1ebe250c41454b743739aa3aec4d878f93b4f2e7b5060b44aca787a"
         },
         "implementation": {
             "date": "2026-10-29",
             "commit": "a13281f",
-            "hash": "e290030c801514abbfeec28eb1bdf3b6109065eb2bfebce91854d67034f6bd85"
+            "hash": "869c6fb60452744dcd4b8c4a84e7fe91e349097f229433e808873bb0c096b834"
         },
         "plan": {
             "date": "2026-10-29",
