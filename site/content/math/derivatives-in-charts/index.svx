@@ -1,8 +1,8 @@
 ---
-title: Derivatives in tangent charts
+title: Gradients and Hessians in tangent charts
 part: geometry
 order: 3
-summary: The derivative of a map between manifolds, its gradient and its Hessian product, all read in the tangent charts a retraction provides, and why automatic differentiation computes them unchanged.
+summary: The gradient of a scalar function and its Hessian product, read in the tangent charts a retraction provides, and why the passes of automatic differentiation compute them unchanged.
 depends_on: [retraction, automatic-differentiation]
 katex_macros:
     '\dimx': 'd_x'
@@ -12,60 +12,24 @@ katex_macros:
 <script>
 	import Statement from '$lib/components/Statement.svelte';
 	import Proof from '$lib/components/Proof.svelte';
-	import * as chainRule from './statements/chain-rule.md';
 	import * as chartHessian from './statements/chart-hessian.md';
 	import * as passes from './statements/passes.md';
 </script>
 
-A [retraction](../retraction/) gives every point of a manifold a chart, its tangent space. This note
-reads derivatives in those charts: the derivative of a map between manifolds as a matrix, the
-gradient of a scalar function as a vector, and its second derivative along a direction. Each is
-what an optimizer or a sampler needs at a point, and none needs a metric.
+The [first note](../retraction/) reads the derivative of a map between manifolds in tangent
+coordinates, as a matrix, and computes it through a retraction. This note reads the first and second
+derivatives of a scalar function the same way: its gradient as a vector, and its second derivative
+along a direction. Each is what an optimizer or a sampler needs at a point, and none needs a
+metric. It ends by showing that the passes of
+[automatic differentiation](../automatic-differentiation/) compute them unchanged.
 
-## The derivative
-
-Let $\map : \manifold \to \otherManifold$ be smooth, between manifolds of dimensions $\dimx$
-and $\dimy$, each with a retraction, and let $\otherPoint = \map(\point)$. The derivative of $\map$ at
-$\point$ is the $\dimy \times \dimx$ matrix of $\map$ read in the chart at $\point$ and the chart at
-$\otherPoint$:
-
-$$
-	\D \map(\point)\, \tangent \defeq \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point \oplus t \tangent) \ominus \otherPoint\bigr),
-	\qquad \tangent \in \R^\dimx . @tag(derivative)
-$$
-
-Equivalently, $\D \map(\point)$ is the ordinary Jacobian at $0$ of the *local representative*
-$\hat \map_\point = R_\otherPoint^{-1} \circ \map \circ R_\point$, a map from a neighbourhood of $0$
-in $\R^\dimx$ to $\R^\dimy$. Because each $\D R_\point(0)$ is the identity, it is also the
-intrinsic differential of $\map$, written in the bases that identify the tangent spaces with
-$\R^\dimx$ and $\R^\dimy$.
-
-<Statement {...chainRule} />
-
-<Proof>
-
-Near $0$, $\widehat{G \circ \map}_\point = R_z^{-1} \circ G \circ \map \circ R_\point
-= (R_z^{-1} \circ G \circ R_\otherPoint) \circ (R_\otherPoint^{-1} \circ \map \circ R_\point)
-= \hat G_\otherPoint \circ \hat \map_\point$, with $z = G(\otherPoint)$, because
-$R_\otherPoint \circ R_\otherPoint^{-1}$ is the identity near $\otherPoint$. The ordinary chain rule
-at $0$, with $\hat \map_\point(0) = 0$, gives the claim.
-
-</Proof>
-
-So derivatives in charts compose exactly as Jacobians do, and the passes of
-[automatic differentiation](../automatic-differentiation/) apply unchanged to a program whose steps
-are maps between manifolds, as long as each step's derivative is taken in charts. To derive one by
-hand:
-
-1. perturb the input, $\point_t = \point \oplus t \tangent$;
-2. push it through, $\otherPoint_t = \map(\point_t)$;
-3. solve $\otherPoint_t = \otherPoint \oplus \otherTangent(t)$ for $\otherTangent(t)$;
-4. the Jacobian–vector product is $\otherTangent'(0)$, and the vector–Jacobian product is its
-   transpose.
-
-The transpose is taken in coordinates: a cotangent at $\otherPoint$ is a row of $\dimy$ numbers acting
-on tangent coordinates, and $\D \map(\point)\transpose$ maps it to a cotangent at $\point$. No inner
-product on the tangent spaces is involved.
+By [%full](statement:math/retraction/chain-rule), derivatives in tangent coordinates compose exactly
+as Jacobians do, so the passes apply to a program whose steps are maps between manifolds, as long as
+each step's derivative is read in tangent coordinates, by
+[%full](statement:math/retraction/through-retraction). The transpose of a derivative is taken in
+coordinates: a cotangent at $\otherPoint$ is a column of $\dimy$ numbers acting on tangent
+coordinates, and $\D \map(\point)\transpose$ maps it to a cotangent at $\point$. No inner product on
+the tangent spaces is involved.
 
 ## The gradient
 
@@ -84,7 +48,9 @@ Riemannian gradient.
 
 The second derivative needs a choice that the first does not, because moving along a direction
 moves the chart as well. The *chart Hessian* differentiates the gradient along a direction
-$\tangent$, reading the gradient at each point in that point's own chart:
+$\tangent$, reading the gradient at each point in that point's own chart. It compares the tangent
+coordinates at nearby points, so it is defined where $\oplus$ is smooth near $\point$
+([%full](statement:math/retraction/smoothness)), which this note assumes from here on:
 
 $$
 	H(\point)\, \tangent \defeq \frac{\dd}{\dd t}\Big|_{t=0} g(\point \oplus t \tangent) . @tag(chart-hessian)
@@ -134,7 +100,7 @@ second-order map is read in charts the same way.
 
 <Proof>
 
-First order is [%full](statement:chain-rule) applied step by step. For the second, the reverse
+First order is [%full](statement:math/retraction/chain-rule) applied step by step. For the second, the reverse
 recurrence holds identically in $\point$, with every $\partial_j \map$ evaluated at the slot values
 computed from $\point$ and read in the charts at those values. Differentiate it along
 $\point_t = \point \oplus t \tangent$. Each slot traces a curve $s(\point_t)$ through $s(\point)$

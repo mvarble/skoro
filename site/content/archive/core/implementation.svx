@@ -1768,7 +1768,7 @@ the double-precision one, to a relative $10^{-4}$.
 `testing::check_operation(operation, inputs, target)` is the check of
 [the primitives](math.svx#the-primitives), applied to one operation: its tangent map is the
 derivative of its forward map, by finite differences of
-[](eq:math/derivatives-in-charts/derivative) with inputs moved by their spaces' retractions; its
+[](eq:math/retraction/directional) with inputs moved by their spaces' retractions; its
 cotangent map is the transpose, by $\langle \alpha, J \tangent \rangle = \langle J\transpose \alpha, \tangent \rangle$
 on random frames; its second-order map is the derivative of the cotangent map along the
 velocities with $\alpha$ fixed; an input marked not differentiable receives `None`; and a missing

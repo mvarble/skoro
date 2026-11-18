@@ -1,85 +1,251 @@
 ---
-title: Retractions and tangent charts
+title: Smooth manifolds, smooth maps, and retractions
 part: geometry
 order: 1
-summary: A retraction moves a point of a manifold along a tangent vector; it makes each tangent space a chart around its point, and gives the operations $\oplus$ and $\ominus$.
+summary: Smooth manifolds, tangent vectors and the tangent bundle as Lee defines them; a basis of each tangent space, which makes every differential a matrix; and a retraction, which moves a point along a tangent vector, makes each tangent space a chart, and gives the notation $\oplus$, $\ominus$ and $\D$ that every later note uses.
+katex_macros:
+    '\dimx': 'd_x'
+    '\dimy': 'd_y'
 ---
 
 <script>
 	import Statement from '$lib/components/Statement.svelte';
 	import Proof from '$lib/components/Proof.svelte';
 	import * as retraction from './statements/retraction.md';
+	import * as smoothness from './statements/smoothness.md';
+	import * as chainRule from './statements/chain-rule.md';
+	import * as throughRetraction from './statements/through-retraction.md';
 	import * as mirror from './statements/mirror.md';
 </script>
 
-Estimation moves points. On $\R^\dimension$ a step is an addition, $\point + \tangent$; on a curved manifold, such
-as the rotations or the unit sphere, there is no addition, and a *retraction* takes its place. This
-note defines it, shows how it turns every tangent space into a chart, and introduces the notation
-$\oplus$ and $\ominus$ used throughout these notes.
+Estimation moves points. On $\R^\dimension$ a step is an addition, $\point + \tangent$. On a curved
+manifold, such as the rotations or the unit sphere, there is no addition, and a *retraction* takes
+its place. A retraction is defined by its derivative, so this note first recalls what a derivative
+on a manifold is. It then fixes the coordinates in which tangent vectors are written, defines a
+retraction, shows how it turns every tangent space into a chart, and ends with the notation that
+the later notes use. After this note, a tangent vector is a column of numbers and a derivative is a
+matrix.
 
-## The definition
+## Smooth manifolds and smooth maps
 
-Let $\manifold$ be a smooth manifold of dimension $\dimension$. In computation, a tangent space
-$\T_\point\manifold$ is never handled abstractly: each is identified with $\R^\dimension$ by a basis chosen
-smoothly in $\point$, and a tangent vector is a column of $\dimension$ numbers. We assume such an identification
-throughout. Some manifolds have none that is smooth everywhere: by the hairy ball theorem, no
-smooth choice of tangent bases covers the whole sphere $S^2$. There the identification is smooth on
-an open part of the manifold, and a computation stays inside it.
+The theory of smooth manifolds is set out in [Chapters 1 and 2](cite:lee2013). This note recalls
+only what it uses, and proves none of it.
+
+A smooth manifold $\manifold$ of dimension $\dimension$ is a topological manifold with a smooth
+structure: a maximal atlas of charts $(U, \varphi)$, each a homeomorphism from an open
+$U \subseteq \manifold$ onto an open subset of $\R^\dimension$, whose transition maps are smooth.
+Let $\otherManifold$ be a second smooth manifold, and write $\dimx$ and $\dimy$ for the dimensions
+of $\manifold$ and $\otherManifold$. A map $\map : \manifold \to \otherManifold$ is of class $C^k$
+when it is continuous and, for every chart $(U, \varphi)$ of $\manifold$ and every chart
+$(V, \psi)$ of $\otherManifold$, its coordinate representation
+
+$$
+	\psi \circ \map \circ \varphi^{-1} : \varphi\bigl(U \cap \map^{-1}(V)\bigr) \to \R^\dimy
+$$
+
+is of class $C^k$. Continuity makes $U \cap \map^{-1}(V)$ open, so the representation is a map
+between open subsets of Euclidean spaces. Because the transition maps are smooth, it is enough to
+check this for the charts of any one atlas. These maps form $C^k(\manifold, \otherManifold)$, and a
+*smooth* map is one of class $C^\infty$. A *diffeomorphism* is a smooth bijection whose inverse is
+smooth, and a map from an open subset of $\manifold$ onto an open subset of $\R^\dimension$ is a chart of
+the smooth structure exactly when it is a diffeomorphism.
+
+## Tangent vectors and the tangent bundle
+
+Tangent vectors are set out in [Chapter 3](cite:lee2013). This note uses four facts from it.
+
+1. Each point $\point$ has a *tangent space* $\T_\point\manifold$, a real vector space of dimension
+   $\dimension$. A smooth map $\map$ has at each point a *differential*
+   $\dd\map_\point : \T_\point\manifold \to \T_{\map(\point)}\otherManifold$, a linear map, and the
+   differentials obey the chain rule, $\dd(G \circ \map)_\point = \dd G_{\map(\point)} \circ \dd\map_\point$.
+2. A chart $(U, \varphi)$ around $\point$ gives a basis of $\T_\point\manifold$, its *coordinate
+   basis*. In the coordinate bases of charts around $\point$ and $\map(\point)$, the matrix of
+   $\dd\map_\point$ is the Jacobian of the coordinate representation at $\varphi(\point)$.
+3. A finite-dimensional vector space $E$ has each tangent space $\T_e E$ identified with $E$
+   itself, canonically. On $\R^n$ this makes the differential of a map the Jacobian.
+4. The *tangent bundle* $\T\manifold$, the disjoint union of the tangent spaces, is a smooth manifold
+   of dimension $2\dimension$. Its charts are built from those of $\manifold$: a point read in a chart,
+   paired with the components of a tangent vector in that chart's coordinate basis. It contains the
+   *zero section*, the zero vectors $0_\point \in \T_\point\manifold$.
+
+## Tangent coordinates
+
+A computation does not handle derivations. It writes a tangent vector as a column of $\dimension$
+numbers, so every tangent space needs a basis. Fix, for each point $\point$, a linear isomorphism
+
+$$
+	\basis_\point : \R^\dimension \to \T_\point\manifold , @tag(basis)
+$$
+
+whose columns $\basis_\point e_1, \dots, \basis_\point e_\dimension$ are a basis of the tangent space
+at $\point$. The coordinate basis of a chart around $\point$ is one choice, and every choice is the
+coordinate basis of some chart. On $\R^n$, and on any vector space, the convention is the canonical
+identification of fact 3.
+
+No regularity in $\point$ is asked of the convention, and it need not be defined everywhere. It may
+be given on an open subset of $\manifold$ only, and everything below is then said of points of that
+subset, with every computation kept inside it. The unit sphere $S^2 \subset \R^3$ is an example:
+by the hairy ball theorem it has no continuous basis of its tangent planes, so a convention that is
+smooth must leave out a point, such as the south pole. On a Lie group, the left translations of one
+basis at the identity give a convention that is defined and smooth everywhere.
+
+In these coordinates the differential of a smooth map is a matrix, the *derivative*
+
+$$
+	\D\map(\point) \defeq \basis_{\map(\point)}^{-1} \circ \dd\map_\point \circ \basis_\point \in \R^{\dimy \times \dimx} . @tag(derivative)
+$$
+
+On $\R^n$ it is the Jacobian. The chain rule of fact 1 becomes a product of matrices, since the
+bases at $\map(\point)$ cancel.
+
+<Statement {...chainRule} />
+
+A convention without regularity serves everything that happens at one point: the derivative, the
+chain rule and, below, the tangent chart at $\point$. It does not serve what compares the
+coordinates at nearby points, such as differentiating a function of $\point$ that is read in the
+coordinates at $\point$. The convention is *smooth near* $\point$ when, on an open $W \ni \point$,
+the map $(\otherPoint, \tangent) \mapsto \basis_\otherPoint \tangent$ is smooth from
+$W \times \R^\dimension$ to $\T\manifold$. Equivalently, its columns form a smooth local frame on $W$
+[Chapter 8](cite:lee2013). Results that compare nearby points assume this, and
+[%full](statement:smoothness) restates it in terms of the retraction.
+
+## Retractions
+
+A retraction is defined on the tangent bundle, without reference to any basis, as it is in
+optimization on manifolds [Section 4.1](cite:absil2008).
 
 <Statement {...retraction} />
 
+The retraction at $\point$ is the restriction $\retr_\point$ of $\retr$ to $\T_\point\manifold$. Its
+condition on the differential is coordinate-free, so it holds whatever the convention. Read in the
+coordinates [](eq:basis), the retraction at $\point$ is a map from $\R^\dimension$, written as an
+addition:
+
+$$
+	R_\point \defeq \retr_\point \circ \basis_\point : \R^\dimension \to \manifold ,
+	\qquad \point \oplus \tangent \defeq R_\point(\tangent) . @tag(oplus)
+$$
+
+The two conditions of the definition become, for every convention,
+
+$$
+	\point \oplus 0 = \point
+	\qquad \text{and} \qquad
+	\D R_\point(0) = \basis_\point^{-1} \circ \dd(\retr_\point)_{0_\point} \circ \basis_\point = I_\dimension , @tag(conditions)
+$$
+
+where $\R^\dimension$ carries its canonical convention. The derivative of a retraction at the origin
+is the identity, in the sense of [](eq:derivative).
+
+<Statement {...smoothness} />
+
+<Proof>
+
+If the convention is smooth on $W$, then $(\point, \tangent) \mapsto \point \oplus \tangent$ is the
+composite of the smooth map $(\point, \tangent) \mapsto \basis_\point \tangent$ with $\retr$. If
+instead $\oplus$ is smooth on $W \times \R^\dimension$, then by [](eq:conditions)
+$\basis_\point \tangent = \dd(\retr_\point)_{0_\point}(\basis_\point \tangent)$ is the velocity at
+$t = 0$ of the curve $t \mapsto \point \oplus t\tangent$. That velocity is the differential of
+$\oplus$ at $(\point, 0)$ applied to $(0, \tangent)$, and so depends smoothly on
+$(\point, \tangent)$.
+
+</Proof>
+
 The definition is the one used in optimization on manifolds, where retractions replace the
-exponential map of a Riemannian manifold. The exponential map is a retraction, but
-so is any map that agrees with it to first order, which is usually cheaper. Nothing here needs a
-metric.
+exponential map of a Riemannian manifold. The exponential map is a retraction, but so is any map
+that agrees with it to first order, which is usually cheaper. Nothing here needs a metric.
 
-Two examples.
+Two examples show the retraction and the convention apart.
 
-1. The space is $\R^\dimension$, its tangent space at $\point$ is $\R^\dimension$, and the retraction is
-   $R_\point(\tangent) = \point + \tangent$. This is the addition that retractions replace on curved manifolds.
-2. The space is the positive reals $\positive = (0, \infty)$, its tangent space $\T_\point\positive$ is identified
-   with $\R$ by measuring relative change, and the retraction is $R_\point(\tangent) = \point\,e^{\tangent}$. It is
-   defined for every $\tangent$ and never leaves the positive reals. It satisfies
-   $\frac{\dd}{\dd\tangent} \point e^\tangent \big|_{0} = \point$, which is the identity in the chosen
-   identification, since a tangent at $\point$ of coordinate $1$ is the velocity $\point$.
+1. On $\R^\dimension$, with the canonical convention, the retraction is
+   $\retr_\point(w) = \point + w$, so $\point \oplus \tangent = \point + \tangent$. This is the addition that
+   retractions replace on curved manifolds.
+2. On the positive reals $\positive = (0, \infty)$, each $\T_\point\positive$ is $\R$ canonically, and
+   $\retr_\point(w) = \point\, e^{w / \point}$ is a retraction: it is defined for every $w$, never
+   leaves the positive reals, and has derivative $1$ at $w = 0$. With the convention
+   $\basis_\point(\tangent) = \point\, \tangent$, which measures a tangent vector as a relative change,
+   $\point \oplus \tangent = \point\, e^{\tangent}$.
 
 ## Tangent charts
 
-Because $\D R_\point(0)$ is invertible, the inverse function theorem makes $R_\point$ a diffeomorphism
-from a neighbourhood of $0 \in \R^\dimension$ onto a neighbourhood of $\point$. So $R_\point$ is a *chart* of
-$\manifold$ around $\point$, the tangent chart at $\point$, and every point near $\point$ has coordinates in it.
-As is common in robotics, we write
+By [](eq:conditions), the differential of $R_\point$ at $0$ is $\basis_\point$, an isomorphism. The
+inverse function theorem for manifolds [Chapter 4](cite:lee2013) makes $R_\point$ a
+diffeomorphism from an open neighbourhood of $0 \in \R^\dimension$ onto an open neighbourhood of
+$\point$. Its inverse is a chart of $\manifold$ centred at $\point$, the *tangent chart* at
+$\point$, and every point near $\point$ has coordinates in it. We write
 
 $$
-	\point \oplus \tangent \defeq R_\point(\tangent), \qquad \otherPoint \ominus \point \defeq R_\point^{-1}(\otherPoint), @tag(oplus)
+	\otherPoint \ominus \point \defeq R_\point^{-1}(\otherPoint) @tag(ominus)
 $$
 
-the second for $\otherPoint$ in the neighbourhood where $R_\point$ is invertible. In words, $\otherPoint \ominus \point$ is where
-$\otherPoint$ sits in the chart at $\point$. By construction,
+for $\otherPoint$ in the neighbourhood where $R_\point$ is invertible. In words, $\otherPoint \ominus \point$ is
+where $\otherPoint$ sits in the chart at $\point$. By construction,
 
 $$
 	(\point \oplus \tangent) \ominus \point = \tangent @tag(roundtrip)
 $$
 
-for every $\tangent$ in the chart's domain, and $\point \oplus (\otherPoint \ominus \point) = \otherPoint$ for every $\otherPoint$ in its
-image. On $\R^\dimension$, $\oplus$ and $\ominus$ are addition and subtraction; on the positive reals above,
-$\otherPoint \ominus \point = \log(\otherPoint / \point)$.
+for every $\tangent$ in the chart's domain, and $\point \oplus (\otherPoint \ominus \point) = \otherPoint$ for every
+$\otherPoint$ in its image. On $\R^\dimension$, $\oplus$ and $\ominus$ are addition and subtraction; on the
+positive reals above, $\otherPoint \ominus \point = \log(\otherPoint / \point)$.
+
+The coordinate basis of the tangent chart at its centre is $\basis_\point$, again by
+[](eq:conditions). So the tangent chart reproduces the convention at $\point$, though at other
+points its coordinate basis need not be the convention's.
+
+## Derivatives through the retraction
+
+Since $\D R_\point(0) = I_\dimension$, its inverse has $\D(\cdot \ominus \point)(\point) = I_\dimension$
+too, and the chain rule turns the derivative [](eq:derivative) into an ordinary Jacobian. This is
+how every later note computes a derivative.
+
+<Statement {...throughRetraction} />
+
+<Proof>
+
+Near $0$, $(\cdot \ominus \otherPoint) \circ \map \circ (\point \oplus \cdot)$ is a composite of
+three smooth maps, and [%full](statement:chain-rule) gives its derivative at $0$ as
+$\D(\cdot \ominus \otherPoint)(\otherPoint)\, \D\map(\point)\, \D R_\point(0) = \D\map(\point)$. Its domain
+and codomain are open subsets of Euclidean spaces with their canonical conventions, so this derivative
+is the Jacobian.
+
+</Proof>
+
+The *local representative* of $\map$ at $\point$ is
+$\hat\map_\point = (\cdot \ominus \otherPoint) \circ \map \circ (\point \oplus \cdot)$, and
+[%full](statement:through-retraction) says that $\D\map(\point)$ is its Jacobian at $0$. Applied to
+a direction, it is a derivative along a curve,
+
+$$
+	\D\map(\point)\, \tangent = \frac{\dd}{\dd t}\Big|_{t=0} \bigl(\map(\point \oplus t\tangent) \ominus \otherPoint\bigr) , @tag(directional)
+$$
+
+which is also how it is checked by finite differences. To derive one by hand:
+
+1. perturb the input, $\point_t = \point \oplus t \tangent$;
+2. push it through, $\otherPoint_t = \map(\point_t)$;
+3. solve $\otherPoint_t = \otherPoint \oplus \otherTangent(t)$ for $\otherTangent(t)$;
+4. the Jacobian–vector product is $\otherTangent'(0)$, and the vector–Jacobian product is its
+   transpose.
 
 ## The mirror identity
 
-On $\R^\dimension$, $\point \ominus (\point \oplus \tangent) = -\tangent$ as well: the step back from $\point \oplus \tangent$ to
-$\point$ is the reverse of the step forward. On a curved manifold it generally is not, because the left
-side is measured in the chart at the *moved* point $\point \oplus \tangent$, not at $\point$.
+On $\R^\dimension$, $\point \ominus (\point \oplus \tangent) = -\tangent$ as well: the step back from
+$\point \oplus \tangent$ to $\point$ is the reverse of the step forward. On a curved manifold it
+generally is not, because the left side is measured in the chart at the *moved* point
+$\point \oplus \tangent$, not at $\point$. So it also compares the coordinates at two points, and
+holds even to first order only when the convention is smooth.
 
 <Statement {...mirror} />
 
 <Proof>
 
-Write $\otherPoint = \point \oplus \tangent$ and $\varphi(\tangent, c) = R_\point^{-1}(R_{\point \oplus \tangent}(c))$, the chart
-at $\otherPoint$ read in the chart at $\point$. It is smooth near $(0, 0)$, with $\varphi(\tangent, 0) = \tangent$
-and, since $R_{\point \oplus 0} = R_\point$, $\varphi(0, c) = c$. Hence
+Write $\varphi(\tangent, c) = R_\point^{-1}(R_{\point \oplus \tangent}(c))$, the chart at
+$\point \oplus \tangent$ read in the chart at $\point$. It is smooth near $(0, 0)$, because $\oplus$
+is smooth near $\point$, with $\varphi(\tangent, 0) = \tangent$ and, since
+$R_{\point \oplus 0} = R_\point$, $\varphi(0, c) = c$. Hence
 $\varphi(\tangent, c) = \tangent + c + O(\lvert\tangent\rvert\,\lvert c\rvert)$. The coordinate
-$c = \point \ominus \otherPoint$ is the one with $\varphi(\tangent, c) = R_\point^{-1}(\point) = 0$, so
+$c = \point \ominus (\point \oplus \tangent)$ is the one with $\varphi(\tangent, c) = R_\point^{-1}(\point) = 0$, so
 $c = -\tangent + O(\lvert\tangent\rvert\,\lvert c\rvert)$, and $\lvert c \rvert = O(\lvert\tangent\rvert)$
 gives the claim.
 
@@ -93,3 +259,31 @@ coordinate is $-\tangent$" must not assume it.
 
 A manifold whose retraction is $\point + \tangent$, so that both identities hold exactly and every chart is
 the same affine chart, is called *flat* in these notes.
+
+## Notation from here on
+
+The later notes never write $\retr$, $\dd\map_\point$ or $\basis_\point$. They write a tangent vector as
+a column of numbers attached to a point, and keep the name $\T_\point\manifold$ for the space of those
+columns, so that it stays visible which point a vector belongs to. Inside this note
+$\T_\point\manifold$ is the space of fact 1; after it, it is its coordinate space $\R^\dimension$.
+Every such abuse of notation stands for an object of this note read through the convention
+[](eq:basis), and this table lists them all.
+
+| written later as | stands for | first used in |
+| --- | --- | --- |
+| $\T_\point\manifold = \R^\dimension$, the tangent space at $\point$ | $\T_\point\manifold$, read through $\basis_\point$ | every later note |
+| $\tangent \in \T_\point\manifold$, a column of $\dimension$ numbers | the tangent vector $\basis_\point \tangent$ | every later note |
+| a frame, a $\dimension \times n$ matrix of tangent vectors at $\point$ | $n$ tangent vectors, each read through $\basis_\point$ | automatic differentiation; gradients and Hessians |
+| a cotangent $\alpha \in \R^\dimension$, a column acting by $\alpha\transpose \tangent$ | the covector $\alpha\transpose \basis_\point^{-1}$ on $\T_\point\manifold$ | gradients and Hessians |
+| $\D\map(\point) \in \R^{\dimy \times \dimx}$ | the differential $\dd\map_\point$, by [](eq:derivative) | this note, and every later one |
+| $\D\map(\point)\transpose$, applied to a cotangent | the pull-back of a covector by $\dd\map_\point$ | gradients and Hessians |
+| the gradient $g(\point) = \D f(\point)\transpose 1$ | the differential $\dd f_\point$, not a Riemannian gradient | gradients and Hessians |
+| $\point \oplus \tangent$, $\otherPoint \ominus \point$, $R_\point$, $R_\point^{-1}$ | $\retr(\basis_\point \tangent)$ and its local inverse | this note, and every later one |
+| pairs $(\point, \tangent)$ with $\tangent \in \R^\dimension$ | the tangent bundle $\T\manifold$ over the convention's domain | this note |
+| "$\oplus$ is smooth near $\point$" | the convention is a smooth local frame near $\point$ | this note; gradients and Hessians; densities in tangent charts |
+| $\T_\point\manifold = \T_{\point_1}\manifold_1 \oplus \cdots \oplus \T_{\point_k}\manifold_k$, stacked columns | the direct sum, with the convention that is each factor's on its block | product manifolds |
+| Lebesgue measure on $\T_\point\manifold$, and densities with respect to it | Lebesgue measure on $\R^\dimension$, carried to $\T_\point\manifold$ by $\basis_\point$ | densities in tangent charts; the normal |
+
+The last row is where the convention matters most. A density on a tangent space changes by the
+absolute determinant of a change of basis, so a density "on $\T_\point\manifold$" is always one in the
+coordinates the convention gives.

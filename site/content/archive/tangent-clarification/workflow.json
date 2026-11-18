@@ -1,0 +1,49 @@
+{
+    "kind": "decision",
+    "stage": "done",
+    "started": "2026-11-17",
+    "events": [
+        {
+            "date": "2026-11-17",
+            "action": "start",
+            "stage": "writeup"
+        },
+        {
+            "date": "2026-11-17",
+            "action": "approve",
+            "stage": "writeup",
+            "commit": "b5f6304"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "reopen",
+            "stage": "writeup",
+            "reason": "The chain-rule statement moved to the first note, so the writeup's reference to it no longer resolves.",
+            "commit": "146bdb4"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "approve",
+            "stage": "writeup",
+            "commit": "cac04b7"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "approve",
+            "stage": "publish",
+            "commit": "2e5013c"
+        }
+    ],
+    "approvals": {
+        "writeup": {
+            "date": "2026-11-18",
+            "commit": "cac04b7",
+            "hash": "9ce65603a90a2cad89bf31342a573aa7a562756bd754c58b65a4d05fe6be9f47"
+        },
+        "publish": {
+            "date": "2026-11-18",
+            "commit": "2e5013c"
+        }
+    },
+    "finished": "2026-11-18"
+}

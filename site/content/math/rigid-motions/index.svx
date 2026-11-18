@@ -87,7 +87,7 @@ frame is a different manifold with a retraction, the product of the rotations wi
 chart is $(q \oplus \phi,\ p + \rho)$. The two have the same points, and the identity between them
 is a change of chart: the product's coordinates $(\phi, \rho)$ reach $(q \oplus \phi,\ p + \rho)$,
 whose coordinates in the motion's chart are $(\phi,\ \pi(q)\transpose \rho)$, so the
-[derivative in charts](../derivatives-in-charts/) of the identity from the product to the motion
+[derivative in charts](../retraction/#derivatives-through-the-retraction) of the identity from the product to the motion
 is $\operatorname{diag}(I, \pi(q)\transpose)$.
 
 ## The maps of the group

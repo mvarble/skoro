@@ -42,7 +42,7 @@ A *proposal* for a free quantity is a conditional density $\proposal_i(\point_i 
 against the quantity's own reference measure $\nu_i$, from which the quantity can be drawn. A
 quantity's own kernel is a proposal for it, with $\proposal_i = \density_i$, and is called *exact*.
 A parameter has no kernel, so its proposal is always something else. Drawing the free quantities
-in an [ancestral order](../generative-models/#the-dependence-graph), each from its proposal given
+in an [ancestral order](../generative-models/#graphical-representations), each from its proposal given
 the quantities drawn or fixed before it, is an *ancestral draw*. Its weight is
 
 $$

@@ -84,6 +84,16 @@ concept pages, which say what it now is. Where a statement about skoro is an ins
 one, the general one gets the note and the instance stays behind. A note never speaks of skoro,
 links to a page or to the archive, or lists either in its `depends_on`.
 
+**The geometry is written in tangent coordinates.** The first note,
+[Smooth manifolds, smooth maps, and retractions](../../site/content/math/retraction/index.svx),
+defines tangent spaces, differentials and retractions without coordinates, then fixes a basis
+$\basis_\point$ of each tangent space and ends with an index of the abuses of notation that follow
+from it. Every later note writes a tangent vector as a column in $\T_\point\manifold = \R^\dimension$,
+a derivative as the matrix $\D\map(\point)$, and a retraction as $\oplus$ and $\ominus$, and never
+writes $\retr$, $\dd\map_\point$ or $\basis_\point$. A note that needs a new abuse adds a row to
+that index. A result that compares tangent coordinates at nearby points (a second derivative, a
+density in a moving chart) assumes that $\oplus$ is smooth near the point, and says so.
+
 **A note is a chapter.** It may assume the notes before it, use their notation and results without
 restating them, and refer back to them by equation and statement. It never rests on a note after
 it. It is still one idea, and its `depends_on` is still the least a reader needs, not everything
@@ -207,7 +217,8 @@ on automatic differentiation the computation and backpropagation graphs, until t
 do.
 
 Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
-and refer to them as `[](eq:slug)`, which renders as "(1)". From another document:
+and refer to them as `[](eq:slug)`, which renders as "(1)". The reference brings its own
+parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))". From another document:
 `[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
 should point at the equations it implements this way.
 
@@ -248,7 +259,9 @@ Statements and equations share one count within a document. Refer to one as
 ## Citations
 
 Entries go in `site/content/references.bib`, keyed `<surname><year>`. `[](cite:absil2008)` renders
-as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`; each page ends with
+as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`. A citation
+brings its own brackets, so never wrap it in parentheses: "a smooth local frame
+[Chapter 8](cite:lee2013)", not "([Chapter 8](cite:lee2013))". Each page ends with
 exactly what it cites. Cite only sources you are certain of, with their real details: leave a
 citation out rather than guess one.
 

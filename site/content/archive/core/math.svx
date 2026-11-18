@@ -47,7 +47,7 @@ $$
 
 For a manifold-valued quantity, $\point \oplus \tangent$ and $\otherPoint \ominus \point$ are its
 retraction and inverse retraction [](eq:math/retraction/oplus), and derivatives are read in tangent
-charts [](eq:math/derivatives-in-charts/derivative). A quantity's *dimension* is that of its tangent
+charts [](eq:math/retraction/derivative). A quantity's *dimension* is that of its tangent
 space; its *storage size* is the number of reals that represent a point, which may be larger (a
 rotation has dimension $3$ and is stored as $9$ or $4$ numbers). Every flat vector of derivative
 coordinates in this document is indexed by dimension, never by storage.
@@ -126,7 +126,7 @@ $\R^{mn}$ for its tangent coordinates, so its dimension equals its storage size.
 $n$, $m$ are fixed for each quantity when it is created, and every operation checks them then.
 
 **Positive quantities.** Scales, rates and variances live on the positive orthant
-$\positive^n$, where $\positive = (0, \infty)$, with the retraction of [the example in retractions](../../math/retraction/#the-definition),
+$\positive^n$, where $\positive = (0, \infty)$, with the retraction of [the example in retractions](../../math/retraction/#retractions),
 elementwise:
 
 $$
@@ -183,7 +183,7 @@ inverse function theorem, $R(\point, \cdot)$ is a diffeomorphism from a neighbou
 neighbourhood of $\point$ in $\manifold$, and $Q(\point, \cdot)$ is a left inverse of it there,
 hence its inverse: $\otherPoint \ominus \point = Q(\point, \otherPoint)$.
 
-The derivatives follow from [](eq:math/derivatives-in-charts/derivative). For the inclusion,
+The derivatives follow from [](eq:math/retraction/directional). For the inclusion,
 $\iota(\point \oplus t u) - \iota(\point) = R(\point, t u) - \point$ has the derivative
 $B(\point)\, u$ at $t = 0$. For the retraction, the chart at its output $\otherPoint$ reads a point
 $z$ as $Q(\otherPoint, z)$, so its partial derivatives are those of
@@ -303,7 +303,7 @@ $\otherManifold$ a value that rounding has carried off it. The composition of tw
 one, is the product of their matrices, projected. Without a projection, a map into a type is a
 retraction from a base point, valid in that point's chart alone, or a fused operation with its
 derivatives in charts written by hand and checked against finite differences of
-[](eq:math/derivatives-in-charts/derivative). The projection is optional because not every type
+[](eq:math/retraction/directional). The projection is optional because not every type
 has one that the primitives compose: the projection of a matrix onto the rotations needs a singular
 value decomposition, so the rotations' entry will write it as a fused operation, with a composite
 where one can be written.
@@ -581,7 +581,7 @@ for its logarithm near angle $\pi$. It owes three things.
 1. **A reference.** It names the composite it fuses, when one can be written, and every pass over
    it agrees with every pass over that composite, to within rounding, at both precisions. When
    none can, its derivative maps are checked against finite differences of
-   [](eq:math/derivatives-in-charts/derivative), at both precisions, as a primitive's are.
+   [](eq:math/retraction/directional), at both precisions, as a primitive's are.
 2. **Every backend.** It runs on every backend skoro supports, or runs the composite it fuses on
    the backends its kernels do not cover.
 3. **A name.** It is registered under a name, as every operation is, so that a serialized model
@@ -696,7 +696,7 @@ factor and the sphere as real numbers, through their inclusions. It checks, at p
 
 The sphere's boundary operations are checked the same way first, [](eq:inclusion),
 [](eq:retraction-maps), [](eq:retraction-second) and [](eq:projection) against finite differences
-of [](eq:math/derivatives-in-charts/derivative), and its $Q$ against the retraction it must invert,
+of [](eq:math/retraction/directional), and its $Q$ against the retraction it must invert,
 so that a failure of the acceptance test points at the product rather than at the type. The two
 ways into the type are checked against each other as well: the retraction, and the projection of
 the retraction computed in storage, $\pi(R(\iota(\point), \tangent))$, a map into the sphere
