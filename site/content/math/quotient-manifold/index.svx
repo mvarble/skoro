@@ -51,11 +51,11 @@ representative alike.
 <Proof>
 
 Differentiating the condition on $R$ at $\tangent = 0$ gives $\D R_{g\point}(0) = \D g(\point)\,
-\D R_\point(0)$, and both derivatives of $R$ are the identity, so $\D g(\point)$ is the identity in
-the coordinates of the two tangent spaces: the action carries the basis at $\point$ to the basis at
-$g \point$. Since $\varpi \circ g = \varpi$, the basis that $\D \varpi$ carries to $[\point]$ is
-then the same from every representative, and it identifies the tangent space of $N$ there with
-$\R^\dimension$.
+\D R_\point(0)$, and both derivatives of $R$ are the identity, so $\D g(\point) = I_\dimension$: the
+action reads the same in the tangent coordinates at $\point$ and at $g \point$. Since
+$\varpi \circ g = \varpi$, the chain rule gives $\D \varpi(\point) = \D \varpi(g\point)\, \D g(\point)
+= \D \varpi(g\point)$, so the tangent coordinates of $N$ at $[\point]$ may be taken to be those in
+which $\D \varpi(\point) = I_\dimension$, and they are the same from every representative.
 
 For the first claim, $\varpi(R_{g\point}(\tangent)) = \varpi(g\, R_\point(\tangent)) =
 \varpi(R_\point(\tangent))$. The map is smooth, as $\varpi \circ R$ read through a local inverse of
@@ -78,7 +78,7 @@ $$
 $$
 
 so $f$ read in the chart of $\manifold$ at any representative is $\bar f$ read in the chart of $N$
-at $[\point]$. Their [derivatives in charts](../derivatives-in-charts/) agree, and so do the
+at $[\point]$. Their [derivatives](../retraction/#derivatives-through-the-retraction) agree, and so do the
 gradients at every point, and with them the chart Hessian
 [](eq:math/derivatives-in-charts/chart-hessian), which differentiates the gradient along
 $\point \oplus t \tangent$, a curve over $[\point] \oplus t \tangent$.

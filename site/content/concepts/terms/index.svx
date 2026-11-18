@@ -117,13 +117,14 @@ The mathematics of all this is in the note on [generative models](../../math/gen
 skoro is built on that note's view of a model: not a function $\density$ to be evaluated, but a
 probability space built forward, quantity by quantity, which the library lets its users work with
 in every way the measure theory allows. It states a model as the note's sum of logarithms, one
-term for each kernel, likelihood factor and score. And where the note has one
-[dependence graph](../../math/generative-models/#the-dependence-graph), of quantities alone, skoro
-keeps two graphs in its place: the probabilistic graph above, of quantities and terms, and the
+term for each kernel, likelihood factor and score. Of the
+[graphs the note draws](../../math/generative-models/#graphical-representations) of a model, skoro
+keeps the probabilistic graph above, of quantities and terms, and adds the
 [compilation graph](../building/#the-compilation-graph) of the values each term is computed from,
-over which derivatives are taken. Contracting each term of the probabilistic graph into edges from
-the quantities it is conditioned on to the quantity it scores gives back the dependence graph, and
-the Markov blanket read on either is the same.
+over which derivatives are taken. The note's dependence graph and factor graph are both read off
+the probabilistic graph: contracting each term into edges from the quantities it is conditioned on
+to the quantity it scores gives the first, and forgetting the directions gives the second, on which
+the Markov blanket is read.
 
 A term may also carry a **sampler**, which draws the quantity it scores, and **bindings**, which
 mark its parts by role (a residual, a whitening factor) for the algorithms that read them. A

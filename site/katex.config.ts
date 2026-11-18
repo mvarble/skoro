@@ -63,6 +63,7 @@ const config: KatexOptions & Settings = {
         '\\positive': '\\mathbb{R}_{>0}', // the positive reals, (0, ∞), and never [0, ∞)
         '\\E': '\\mathbb{E}',
         '\\T': '\\mathrm{T}',
+        '\\basis': '\\iota', // the basis of a tangent space by which it is read as columns
         '\\retr': '\\operatorname{retract}',
         '\\invretr': '\\operatorname{retract}^{-1}',
 

@@ -126,6 +126,13 @@
             "document": "archive/rotations/statements/volume",
             "by": "mathematics-in-order",
             "commit": "a7dd3d2"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "amend",
+            "document": "archive/rotations/statements/first-order",
+            "by": "tangent-clarification",
+            "commit": "2e5013c"
         }
     ],
     "approvals": {
