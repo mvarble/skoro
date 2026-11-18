@@ -139,7 +139,7 @@ export const factorGraph = defineGraph({
     nodeRadius: 25,
     nodeKinds: { quantity, kernel, likelihood },
     edgeKinds: { involves: { name: 'involves' } },
-    nodes: nodes.map(({ annotation: _, ...node }) => node),
+    nodes: nodes.map((node) => ({ ...node, annotation: undefined })),
     edges: factors.flatMap(({ node, reads, scores }) =>
         [...reads, ...(scores ? [scores] : [])].map((quantity): EdgeSpec => ({
             from: node.id,
