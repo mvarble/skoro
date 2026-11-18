@@ -17,6 +17,8 @@ summary: Why an abstract probability space serves modelling as an abstract vecto
 	import * as integral from './statements/integral.md';
 	import * as conditioning from './statements/conditioning.md';
 	import * as likelihoodFactor from './statements/likelihood-factor.md';
+	import ModelGraph from '$lib/components/ModelGraph.svelte';
+	import { probabilistic, factorGraph } from './dependence.graph';
 </script>
 
 This note is for the reader who knows measure theory far better than statistics, and who wants to
@@ -409,6 +411,15 @@ $$
 	\density(\point) = \prod_{i=1}^n \density_i(\point_i \mid \point_{\operatorname{pa}(i)}) . @tag(factorization)
 $$
 
+Drawing the factors of the joint density as nodes too gives the model's *probabilistic graph*. Its
+nodes are the quantities and the factors, the kernel densities of [](eq:factorization) and any
+likelihood factors, and it has an edge from each quantity to every factor that reads it and from
+each kernel density to the quantity it is the density of. Contracting each kernel density into edges
+from the quantities it reads to the one it scores, and dropping the likelihood factors, gives back
+the dependence graph.
+
+<ModelGraph spec={probabilistic} />
+
 Two things are read off the graph, and both are what make large models tractable.
 
 **An ancestral order** is any order of the quantities in which every parent comes before its
@@ -425,5 +436,11 @@ and so is proportional, as a function of $\point_i$, to the product of the facto
 $\point_i$, which read nothing outside the blanket. Whatever is done to one quantity, whether it is
 resampled, optimized or integrated out, therefore touches only the factors that read it and
 concerns only its blanket.
+
+Forgetting the directions of the probabilistic graph gives the model's *factor graph*, in which
+each factor is joined to every quantity it involves. The blanket of a quantity is read off it as the
+quantities two edges away.
+
+<ModelGraph spec={factorGraph} />
 
 A picture of the graph is a picture of the model, and a model is commonly given by one.
