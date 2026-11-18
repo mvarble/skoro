@@ -15,7 +15,7 @@ depends_on: [normal, square-root-elimination]
 </script>
 
 Integrating a quantity out of a model leaves a function of the quantities it was tied to, its
-[Markov blanket](../generative-models/#the-dependence-graph). For a model of
+[Markov blanket](../generative-models/#graphical-representations). For a model of
 [normals](../normal/) that function is Gaussian in shape, and it is tempting to write it as a
 normal density of the blanket. A normal density has a covariance, though, and so can only describe
 a function that pins down every direction of the blanket. Many do not. A landmark seen by bearing

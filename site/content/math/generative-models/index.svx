@@ -18,7 +18,7 @@ summary: Why an abstract probability space serves modelling as an abstract vecto
 	import * as conditioning from './statements/conditioning.md';
 	import * as likelihoodFactor from './statements/likelihood-factor.md';
 	import ModelGraph from '$lib/components/ModelGraph.svelte';
-	import { probabilistic, factorGraph } from './dependence.graph';
+	import { dependence, probabilistic, factorGraph, markovBlanket } from './dependence.graph';
 </script>
 
 This note is for the reader who knows measure theory far better than statistics, and who wants to
@@ -357,6 +357,18 @@ allows, of which evaluating $\density$ is only one.
   the kernel of [%full](statement:joint-law), so that the model is
   $\mu = \kernel_1 \otimes \kernel_2 \otimes \cdots \otimes \kernel_n$ and appending a quantity is
   appending a kernel, as in [%full](statement:ionescu-tulcea).
+  The kernel is a function of every quantity before it, but it need not depend on all of them, and
+  it seldom does: most kernels read only a few, which is what the
+  [graphical representations](#graphical-representations) below are about. Writing
+
+  $$
+  	\randomPoint_i \sim \kernel_i(\dd\point_i \mid \randomPoint_{<i})
+  $$
+
+  says that the space is augmented by a new quantity $\randomPoint_i$ with kernel $\kernel_i$. When
+  the reference measure $\nu_i$ is canonical, or does not matter where it is written,
+  $\randomPoint_i \sim \density_i(\point_i \mid \randomPoint_{<i})\, \nu_i(\dd\point_i)$ is
+  shortened to $\randomPoint_i \sim \density_i(\point_i \mid \randomPoint_{<i})$.
 - **Likelihoods are built incrementally too.** A likelihood factor $L_j$ may be added at any point,
   as a function of the quantities that exist when it is added, and the model's likelihood is their
   product $L = \prod_j L_j$. The measure the model describes is then $L\, \mu$, normalized, by
@@ -398,49 +410,80 @@ allows, of which evaluating $\density$ is only one.
   involves; and a normalizing constant becomes an additive constant, which every algorithm that
   ignores the normalization simply drops.
 
-## The dependence graph
+## Graphical representations
 
-A quantity's density seldom reads every quantity before it. It reads a few, its *parents*
-$\operatorname{pa}(i) \subseteq \{1, \dots, i - 1\}$, so that $\density_i(\point_i \mid \point_{<i}) =
-\density_i(\point_i \mid \point_{\operatorname{pa}(i)})$. The quantities, with an edge from each
-parent to its child, form the model's *dependence graph*. Its nodes are the quantities, its roots
-are the quantities with no parent, and it is acyclic, because every edge points forward in the
-order the model was built. The joint density factorizes over it:
+A quantity's kernel seldom reads every quantity before it. It reads a few, its *parents*
+$\operatorname{pa}(i) \subseteq \{1, \dots, i - 1\}$: the kernel is constant in the coordinates
+$\point_j$ with $j < i$ and $j \notin \operatorname{pa}(i)$, and so is its density. This is written
 
 $$
-	\density(\point) = \prod_{i=1}^n \density_i(\point_i \mid \point_{\operatorname{pa}(i)}) . @tag(factorization)
+	\begin{aligned}
+		\kernel_i(\dd\point_i \mid \point_{<i}) &= \kernel_i(\dd\point_i \mid \point_{\operatorname{pa}(i)}), \\
+		\density_i(\point_i \mid \point_{<i}) &= \density_i(\point_i \mid \point_{\operatorname{pa}(i)}),
+	\end{aligned}
 $$
 
-Drawing the factors of the joint density as nodes too gives the model's *probabilistic graph*. Its
-nodes are the quantities and the factors, the kernel densities of [](eq:factorization) and any
-likelihood factors, and it has an edge from each quantity to every factor that reads it and from
-each kernel density to the quantity it is the density of. Contracting each kernel density into edges
-from the quantities it reads to the one it scores, and dropping the likelihood factors, gives back
-the dependence graph.
+which is an abuse of notation: the right-hand sides are not $\kernel_i$ and $\density_i$ but the
+maps they define once the coordinates in which they are constant are removed from their arguments.
+Read the other way, a statement
+$\randomPoint_i \sim \kernel_i(\dd\point_i \mid \randomPoint_{i_1}, \dots, \randomPoint_{i_n})$, or
+$\randomPoint_i \sim \density_i(\point_i \mid \randomPoint_{i_1}, \dots, \randomPoint_{i_n})$,
+names the parents of the new quantity at once: $\operatorname{pa}(i) = \{i_1, \dots, i_n\}$.
 
-<ModelGraph spec={probabilistic} />
+A running example shows what is read off the parents. Five quantities are built as
 
-Two things are read off the graph, and both are what make large models tractable.
+$$
+	\begin{aligned}
+		\randomPoint_1 &\sim \density_1(\point_1), \\
+		\randomPoint_2 &\sim \density_2(\point_2), \\
+		\randomPoint_3 &\sim \density_3(\point_3 \mid \randomPoint_1, \randomPoint_2), \\
+		\randomPoint_4 &\sim \density_4(\point_4 \mid \randomPoint_3), \\
+		\randomPoint_5 &\sim \density_5(\point_5 \mid \randomPoint_3),
+	\end{aligned}
+$$
 
-**An ancestral order** is any order of the quantities in which every parent comes before its
+and a likelihood factor $L(\randomPoint_2, \randomPoint_4)$ is added. The quantities, with an edge
+from each parent to its child, form the model's *dependence graph*. Its roots are the quantities
+with no parent, and it is acyclic, because every edge points forward in the order the model was
+built.
+
+<ModelGraph spec={dependence} />
+
+The dependence graph shows how the quantities may be generated from one another through their
+kernels. An *ancestral order* is any order of the quantities in which every parent comes before its
 children. The order the model was built in is one, and there are usually others. Drawing the
 quantities in any ancestral order, each from its kernel, samples $\mu$, since each kernel reads
 only quantities already drawn.
 
-**The Markov blanket** of a quantity is the set of other quantities that appear with it in some
-factor of [](eq:factorization) or in some likelihood factor: its parents, its children, the other
-parents of its children, and whatever a likelihood factor ties it to. Given its blanket, a quantity
-is conditionally independent of everything else. By [%full](statement:conditioning) its
-conditional density given all the others is the joint density divided by a function of the others,
-and so is proportional, as a function of $\point_i$, to the product of the factors that read
-$\point_i$, which read nothing outside the blanket. Whatever is done to one quantity, whether it is
-resampled, optimized or integrated out, therefore touches only the factors that read it and
-concerns only its blanket.
+The dependence graph says nothing of the likelihood factors, nor of the terms of the joint density
+at all. The model's *probabilistic graph* shows them. Its nodes are the quantities and the terms,
+the kernel densities and the likelihood factors, and it has an edge from each quantity to every
+term that reads it and from each kernel density to the quantity it is the density of.
 
-Forgetting the directions of the probabilistic graph gives the model's *factor graph*, in which
-each factor is joined to every quantity it involves. The blanket of a quantity is read off it as the
-quantities two edges away.
+<ModelGraph spec={probabilistic} />
+
+Whatever the model, the density of the measure it describes, before normalizing, is a product of
+its terms, each of the form $\density_i(\point_i \mid \point_{i_1}, \dots, \point_{i_n})$ or
+$L(\point_{i_1}, \dots, \point_{i_n})$. Which term reads which quantity is then what matters, more
+than which quantity generated which: it says which factors of the joint density change when a
+quantity does. That is the probabilistic graph with its directions forgotten, the model's
+*factor graph*, in which each term is joined to every quantity it involves.
 
 <ModelGraph spec={factorGraph} />
 
-A picture of the graph is a picture of the model, and a model is commonly given by one.
+**The Markov blanket** of a quantity is the set of other quantities that appear with it in some
+term: its parents, its children, the other parents of its children, and whatever a likelihood
+factor ties it to. Given its blanket, a quantity is conditionally independent of everything else.
+By [%full](statement:conditioning) its conditional density given all the others is the joint
+density divided by a function of the others, and so is proportional, as a function of $\point_i$,
+to the product of the terms that read $\point_i$, which read nothing outside the blanket. Whatever
+is done to one quantity, whether it is resampled, optimized or integrated out, therefore touches
+only the terms that read it and concerns only its blanket. In the factor graph the blanket is the
+set of quantities two edges away: across each term that involves the quantity, to the other
+quantities that term involves.
+
+<ModelGraph spec={markovBlanket} />
+
+Every model built forward has all three graphs, each a picture of it at a different level of
+abstraction: which quantity generates which, which term reads and scores which quantity, and which
+term involves which quantity. A model is commonly given by one of them.

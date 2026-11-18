@@ -2,6 +2,7 @@
 title: "Smooth maps before retractions"
 pages:
     - concepts/queries
+    - concepts/terms
 crates: []
 revises: [mathematics-in-order]
 amends:
@@ -23,3 +24,9 @@ tangent vectors as columns, so that no later note speaks of coordinate-free obje
 note keeps the gradient, the chart Hessian and the passes as
 [Gradients and Hessians in tangent charts](../../math/derivatives-in-charts/). The results that
 compare coordinates at nearby points now say that they assume $\oplus$ is smooth.
+
+Along the way, the note on [models built forward](../../math/generative-models/) gained a notation
+for augmenting a model, $\randomPoint_i \sim \kernel_i(\dd\point_i \mid \randomPoint_{<i})$, and its
+section on the dependence graph became one on graphical representations. That section works one
+example through its dependence graph, probabilistic graph and factor graph, and reads its Markov
+blanket off the last.

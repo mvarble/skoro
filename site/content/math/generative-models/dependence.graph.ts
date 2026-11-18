@@ -1,9 +1,10 @@
 import { defineGraph, type EdgeSpec, type NodeKindSpec, type NodeSpec } from '$lib/graph/spec';
 
-// One small model built forward, drawn twice. Two roots X₁ and X₂ are the parents of X₃, which is
-// the parent of X₄ and X₅, and a likelihood factor L reads X₂ and X₄. The probabilistic graph keeps
-// the direction of each kernel, from the quantities it reads to the quantity it gives the density
-// of; the factor graph forgets it, and its neighbours of neighbours are the Markov blankets.
+// The running example of "Graphical representations", drawn four ways. Two roots X₁ and X₂ are the
+// parents of X₃, which is the parent of X₄ and X₅, and a likelihood factor L reads X₂ and X₄. The
+// dependence graph has the quantities alone; the probabilistic graph adds the factors of the joint
+// density, with the direction of each kernel; the factor graph forgets the directions; and the last
+// figure picks out the Markov blanket of X₂ in the factor graph.
 
 const quantity: NodeKindSpec = { name: 'Quantity', hue: 'orange' };
 const kernel: NodeKindSpec = { name: 'Kernel density', hue: 'purple', shape: 'square' };
@@ -107,9 +108,27 @@ const factors: {
 
 const nodes = [...quantities, ...factors.map((factor) => factor.node)];
 
+export const dependence = defineGraph({
+    title: 'A dependence graph',
+    caption: String.raw`The quantities of the running example, with an arrow from each parent to its child: $\operatorname{pa}(3) = \{1, 2\}$ and $\operatorname{pa}(4) = \operatorname{pa}(5) = \{3\}$. The roots $\randomPoint_1$ and $\randomPoint_2$ may be drawn in either order, and so may $\randomPoint_4$ and $\randomPoint_5$, so $1, 2, 3, 4, 5$ and $2, 1, 3, 5, 4$ are both ancestral orders. The likelihood factor generates nothing, and does not appear.`,
+    width: 660,
+    height: 360,
+    fontSize: 22,
+    nodeRadius: 25,
+    nodeKinds: { quantity },
+    edgeKinds: { parent: { name: 'is a parent of' } },
+    nodes: quantities.map((node) => ({ ...node, x: node.x - 80, y: node.y })),
+    edges: [
+        { from: 'x1', to: 'x3', kind: 'parent' },
+        { from: 'x2', to: 'x3', kind: 'parent' },
+        { from: 'x3', to: 'x4', kind: 'parent' },
+        { from: 'x3', to: 'x5', kind: 'parent' },
+    ],
+});
+
 export const probabilistic = defineGraph({
     title: 'A probabilistic graph',
-    caption: String.raw`Each quantity is a circle and each factor of the joint density a square: a kernel density, solid, or a likelihood factor, dashed. A solid arrow runs from a quantity to each factor that reads it, and a dotted arrow from a kernel density to the quantity it is the density of. Contracting each kernel density into arrows from what it reads to what it scores, and dropping the likelihood factor, gives the dependence graph, with $\operatorname{pa}(3) = \{1, 2\}$ and $\operatorname{pa}(4) = \operatorname{pa}(5) = \{3\}$.`,
+    caption: String.raw`The running example with its terms. Each quantity is a circle and each term a square: a kernel density, solid, or a likelihood factor, dashed. A solid arrow runs from a quantity to each term that reads it, and a dotted arrow from a kernel density to the quantity it is the density of. Contracting each kernel density into arrows from what it reads to what it scores, and dropping the likelihood factor, gives back the dependence graph.`,
     width: 760,
     height: 450,
     fontSize: 22,
@@ -121,31 +140,62 @@ export const probabilistic = defineGraph({
     },
     nodes,
     edges: factors.flatMap(({ node, reads, scores }) => [
-        ...reads.map((from): EdgeSpec => ({
-            from,
-            to: node.id,
-            kind: 'reads',
-        })),
+        ...reads.map((from): EdgeSpec => ({ from, to: node.id, kind: 'reads' })),
         ...(scores ? [{ from: node.id, to: scores, kind: 'scores' }] : []),
     ]),
 });
 
+// Each term joined to every quantity it involves, without direction.
+const involvements = (muted: (factor: string) => boolean = () => false) =>
+    factors.flatMap(({ node, reads, scores }) =>
+        [...reads, ...(scores ? [scores] : [])].map((quantity): EdgeSpec => ({
+            from: node.id,
+            to: quantity,
+            kind: 'involves',
+            arrow: 'none',
+            muted: muted(node.id),
+        })),
+    );
+
+const unannotated = nodes.map((node) => ({ ...node, annotation: undefined }));
+
 export const factorGraph = defineGraph({
-    title: 'The factor graph of the same model',
-    caption: String.raw`The same factors with their directions forgotten: a line joins each factor to every quantity it reads or scores. The Markov blanket of a quantity is the set of quantities two lines away from it. That of $\randomPoint_3$ is $\{\randomPoint_1, \randomPoint_2, \randomPoint_4, \randomPoint_5\}$, its parents and its children. That of $\randomPoint_2$ is $\{\randomPoint_1, \randomPoint_3, \randomPoint_4\}$: its child, the other parent $\randomPoint_1$ of that child, and $\randomPoint_4$, which only the likelihood factor ties it to.`,
+    title: 'A factor graph',
+    caption: String.raw`The probabilistic graph of the running example with its directions forgotten: a line joins each term to every quantity it reads or scores. The terms that involve $\randomPoint_3$ are $\density_3$, which scores it, and $\density_4$ and $\density_5$, which read it; no other term reads it.`,
     width: 760,
     height: 450,
     fontSize: 22,
     nodeRadius: 25,
     nodeKinds: { quantity, kernel, likelihood },
     edgeKinds: { involves: { name: 'involves' } },
-    nodes: nodes.map((node) => ({ ...node, annotation: undefined })),
-    edges: factors.flatMap(({ node, reads, scores }) =>
-        [...reads, ...(scores ? [scores] : [])].map((quantity): EdgeSpec => ({
-            from: node.id,
-            to: quantity,
-            kind: 'involves',
-            arrow: 'none',
-        })),
-    ),
+    nodes: unannotated,
+    edges: involvements(),
+});
+
+// The terms that involve X₂, and the quantities they involve besides it.
+const touching = new Set(['p2', 'p3', 'L']);
+const blanketOf2 = new Set(['x1', 'x3', 'x4']);
+
+export const markovBlanket = defineGraph({
+    title: 'A Markov blanket in the factor graph',
+    caption: String.raw`The Markov blanket of $\randomPoint_2$, the quantities two lines away from it in the factor graph. The terms that involve it are $\density_2$, $\density_3$ and $L$; besides $\randomPoint_2$ they involve $\randomPoint_1$, the other parent of its child; $\randomPoint_3$, its child; and $\randomPoint_4$, which only the likelihood factor ties it to. Resampling, optimizing or integrating out $\randomPoint_2$ reads only those three terms, and nothing outside $\{\randomPoint_1, \randomPoint_3, \randomPoint_4\}$.`,
+    width: 760,
+    height: 450,
+    fontSize: 22,
+    nodeRadius: 25,
+    nodeKinds: {
+        focus: { name: String.raw`The quantity $\randomPoint_2$`, hue: 'blue', fill: 'shaded' },
+        blanket: { name: 'Its Markov blanket', hue: 'orange', fill: 'shaded' },
+        quantity,
+        kernel,
+        likelihood,
+    },
+    edgeKinds: { involves: { name: 'involves' } },
+    nodes: unannotated.map((node) => {
+        if (node.id == 'x2') return { ...node, kind: 'focus' };
+        if (blanketOf2.has(node.id)) return { ...node, kind: 'blanket' };
+        if (node.kind == 'quantity') return { ...node, muted: true };
+        return { ...node, muted: !touching.has(node.id) };
+    }),
+    edges: involvements((factor) => !touching.has(factor)),
 });
