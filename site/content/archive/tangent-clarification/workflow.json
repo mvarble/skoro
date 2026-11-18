@@ -1,6 +1,6 @@
 {
     "kind": "decision",
-    "stage": "writeup",
+    "stage": "publish",
     "started": "2026-11-17",
     "events": [
         {
@@ -20,14 +20,19 @@
             "stage": "writeup",
             "reason": "The chain-rule statement moved to the first note, so the writeup's reference to it no longer resolves.",
             "commit": "146bdb4"
+        },
+        {
+            "date": "2026-11-18",
+            "action": "approve",
+            "stage": "writeup",
+            "commit": "cac04b7"
         }
     ],
     "approvals": {
         "writeup": {
-            "date": "2026-11-17",
-            "commit": "b5f6304",
-            "hash": "c923fe058320beaa1897e15b0745923c41980234f897d36c5b9a50ad8ebcbaf5",
-            "stale": true
+            "date": "2026-11-18",
+            "commit": "cac04b7",
+            "hash": "9ce65603a90a2cad89bf31342a573aa7a562756bd754c58b65a4d05fe6be9f47"
         }
     }
 }
