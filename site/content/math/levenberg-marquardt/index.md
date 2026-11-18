@@ -121,4 +121,4 @@ So convergence is checked apart from the rule: at the final point, with $\lambda
 elimination gives the Gauss–Newton step $\tangent_0$ and its decrement $\tfrac12 \lvert J \tangent_0
 \rvert^2$, which must be at most a small multiple of $\epsilon$. That is the statement that the
 point is stationary for $f$, since when the rows have full rank $\tangent_0 = 0$ exactly where $g =
-0$ ([](eq:math/linearization/step)).
+0$, by [](eq:math/linearization/step).

@@ -106,7 +106,7 @@ coordinates at nearby points, such as differentiating a function of $\point$ tha
 coordinates at $\point$. The convention is *smooth near* $\point$ when, on an open $W \ni \point$,
 the map $(\otherPoint, \tangent) \mapsto \basis_\otherPoint \tangent$ is smooth from
 $W \times \R^\dimension$ to $\T\manifold$. Equivalently, its columns form a smooth local frame on $W$
-([Chapter 8](cite:lee2013)). Results that compare nearby points assume this, and
+[Chapter 8](cite:lee2013). Results that compare nearby points assume this, and
 [%full](statement:smoothness) restates it in terms of the retraction.
 
 ## Retractions
@@ -169,7 +169,7 @@ Two examples show the retraction and the convention apart.
 ## Tangent charts
 
 By [](eq:conditions), the differential of $R_\point$ at $0$ is $\basis_\point$, an isomorphism. The
-inverse function theorem for manifolds ([Chapter 4](cite:lee2013)) makes $R_\point$ a
+inverse function theorem for manifolds [Chapter 4](cite:lee2013) makes $R_\point$ a
 diffeomorphism from an open neighbourhood of $0 \in \R^\dimension$ onto an open neighbourhood of
 $\point$. Its inverse is a chart of $\manifold$ centred at $\point$, the *tangent chart* at
 $\point$, and every point near $\point$ has coordinates in it. We write

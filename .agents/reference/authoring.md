@@ -217,7 +217,8 @@ on automatic differentiation the computation and backpropagation graphs, until t
 do.
 
 Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
-and refer to them as `[](eq:slug)`, which renders as "(1)". From another document:
+and refer to them as `[](eq:slug)`, which renders as "(1)". The reference brings its own
+parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))". From another document:
 `[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
 should point at the equations it implements this way.
 
@@ -258,7 +259,9 @@ Statements and equations share one count within a document. Refer to one as
 ## Citations
 
 Entries go in `site/content/references.bib`, keyed `<surname><year>`. `[](cite:absil2008)` renders
-as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`; each page ends with
+as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`. A citation
+brings its own brackets, so never wrap it in parentheses: "a smooth local frame
+[Chapter 8](cite:lee2013)", not "([Chapter 8](cite:lee2013))". Each page ends with
 exactly what it cites. Cite only sources you are certain of, with their real details: leave a
 citation out rather than guess one.
 
