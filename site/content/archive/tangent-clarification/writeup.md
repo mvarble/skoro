@@ -133,8 +133,8 @@ $$
 On $\R^n$ the convention is the identity, under the canonical identification, so $\D$ of a map
 between Euclidean spaces is its Jacobian. The chain rule becomes the product of matrices,
 $\D(G \circ \map)(\point) = \D G(\map(\point))\, \D\map(\point)$, because the bases at
-$\map(\point)$ cancel. This is [%full](statement:math/derivatives-in-charts/chain-rule), which the third note proves today,
-moved and proved in one line.
+$\map(\point)$ cancel. This is [%full](statement:math/retraction/chain-rule), which the third note used to prove and the
+first note now proves in one line.
 
 No regularity in $\point$ is asked of the convention, and it need not be defined everywhere. It may
 be given on an open subset $\manifold_\circ \subseteq \manifold$ only, and everything below is then
@@ -304,7 +304,10 @@ retraction's conditions, the tangent charts, and the derivative through the retr
   or the reference is amended, since the build does not check anchors.
 - `eq:math/derivatives-in-charts/derivative`, cited from `archive/core/math`,
   `archive/core/implementation` and `archive/rotations/statements/first-order`, moves to
-  `eq:math/retraction/derivative`, and those references are amended and listed under `amends`.
+  the first note, and those references are amended and listed under `amends`: to
+  `eq:math/retraction/derivative` where they cite the definition, and to
+  `eq:math/retraction/directional`, the derivative written through the retraction, where they cite
+  the formula a finite difference checks.
 - `statement:math/derivatives-in-charts/chain-rule` moves to the first note, and the proof of the
   passes cites it there.
 - `derivatives-in-charts` keeps its slug and its place, geometry 3, retitled *Gradients and
@@ -349,3 +352,12 @@ $\T_\point\manifold$ is a subspace of $\R^n$ and needs no derivations. Not every
 is embedded as it is stored (the rotations are stored up to the sign of a quaternion), and the ambient
 coordinates have $n$ entries rather than $\dimension$, while every tangent in skoro is a vector of
 the space's dimension.
+
+## Revisions
+
+**2026-11-17.** The publish moved the chain-rule statement into the first note, so this writeup's
+reference to it, written while it was still in the third, no longer resolved. The reference now
+points to `statement:math/retraction/chain-rule`. The list of moved labels also said that the
+archive's references to the derivative would all go to `eq:math/retraction/derivative`. Most of
+them cite the derivative as a finite difference checks it, so the publish sent them to
+`eq:math/retraction/directional`, and the list now says so.
