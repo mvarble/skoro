@@ -80,9 +80,11 @@ loses that dependence as follows.
   [](eq:math/square-root-elimination/factored), and argues for folding a log-volume into the rows
   by the condition numbers of [linear terms](../../math/square-root-elimination/#linear-terms).
   The identification is reversed: elimination, coming later, says that the linearization is an
-  instance of its factored problem. The argument for folding moves to `normal-equations`, which
-  is where the cost of a linear term can first be stated, since it is a cost of the normal
-  equations.
+  instance of its factored problem. The argument for folding moves to `normal-equations`: the
+  part of a solution that comes from a linear term is $(A\transpose A)^{-1} \eta$, as sensitive
+  as a solve of the normal equations whatever method factors $A$, and that can be said before any
+  such method is. *Linear terms* keeps its own statement of the cost, and the fold of a linear
+  term $A\transpose c$ into $b$, which the archive cites.
 - **The improper Gaussian factor** rests on elimination for one section, *What elimination
   leaves*, and the Kalman filter in it. That section is the eighth note's. The rest of the note,
   the factor, its forms (whose orthogonal reduction needs only that an orthogonal matrix keeps
@@ -115,10 +117,12 @@ the estimator's explains marginals, accumulation and the Laplace approximation. 
 both, and a reader who knows one vocabulary should find the other's word for each thing, so note 5
 ends with a table that sets them side by side: the objective and the negative log-density, the
 minimizer and the mode, the model's Hessian and the precision or information, its inverse and the
-covariance, the gradient and the score, the step and the factor's mean, the trust radius or the
-damping and a prior on the step, the gain ratio and the fit of the factor to the density, the
-Gauss–Newton matrix and the information in its expected and observed forms. Notes never name
-skoro, and the table names only general terms.
+covariance, the gradient and the negative of the score, the step and the factor's mean, the trust
+radius or the damping and a prior on the step, the gain ratio and the fit of the factor to the
+density. The curvatures need the most care, since telling them apart is what Fisher scoring is
+for: the Hessian of $f$ is the observed information, and the Gauss–Newton matrix is the expected
+information, the two agreeing for a normal of fixed scale. Notes never name skoro, and the table
+names only general terms.
 
 > [!TODO] Where the table of terms stands
 > The table is placed at the end of `improper-gaussian`, the first note in which both readings
@@ -140,7 +144,7 @@ says what forming $A\transpose A$ costs: its condition number is $\kappa(A)^2$, 
 elimination's first section, in which $1 + 10^{-16}$ rounds to $1$ and the matrix is singular as
 computed, moves here with that argument. So does the cost of a linear term, which no method that
 works with $A$ alone escapes, and with it the reason the linearization folds a log-volume into its
-rows. Elimination then opens with the question the note leaves, how to solve the system without
+rows; elimination's *Linear terms* keeps the same cost as it arises in the triangular root. Elimination then opens with the question the note leaves, how to solve the system without
 forming it, and answers it as it does now.
 
 ### What stays where it is
@@ -173,8 +177,10 @@ what comes first.
   scoring are each that note with one choice made, and their notes shrink to the choice.
 - **Elimination is motivated before it is met.** A reader reaches Householder reflections knowing
   which system they solve and why the obvious way of solving it fails.
-- **Three notes are new, and one is split.** About a third of the part's prose is rewritten or
-  moved, and its depth grows by three notes before the first that has an algorithm to run.
+- **Four notes are new, and one is split off another.** `map-estimation`, `trust-regions`,
+  `nonlinear-least-squares` and `normal-equations` are new, and the eighth note leaves
+  `improper-gaussian`. About a third of the part's prose is rewritten or moved, and the
+  linearization, now fourth, has three notes before it where it had two.
 - **The entry on terms without residuals, still open, rebases onto this order.** Its open question
   on the Newton step and the observed information has a note to cite for Newton's method, and its
   note on the curvature of every term states its rate as an instance of `trust-regions` rather
