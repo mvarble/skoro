@@ -53,6 +53,9 @@ katex_macros: # this document only; wins over katex.config.ts
 ---
 ```
 
+Write prose one sentence to a line, however long, and never break a line inside a sentence; Prettier leaves prose as it is written.
+The archive's documents approved before this rule keep their old wrapping, since they are frozen.
+
 The math notes are read in order, part by part.
 The build refuses a note without a `part` and an `order`, two notes at one place, and a note whose `depends_on` names anything but a note before it; a page's `depends_on` may likewise name no page of its own track at its place or after it.
 
