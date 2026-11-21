@@ -3,11 +3,19 @@ import { cms } from '$cms';
 import { resolve } from '$app/paths';
 import { linkOf, type DocumentLink } from '$lib/documents';
 import { crateNames } from '$lib/server/reading';
-import { ARCHIVE, MATH, TRACKS } from '$lib/site';
+import { ARCHIVE, MATH, MATH_PARTS, TRACKS } from '$lib/site';
 import type { LayoutServerLoad } from './$types';
 
-/** A link in the navigation: a document's, or a crate's page, listed under the page of the crates. */
-export type NavItem = Pick<DocumentLink, 'key' | 'title' | 'href' | 'status'> & { crate?: boolean };
+/**
+ * A link in the navigation: a document's, a crate's page (listed under the page of the crates), a
+ * part of the mathematics or an entry of the archive. The last two hold `children`, which the
+ * sidebar unfolds only while the reader is on one of them, or anywhere under `within`.
+ */
+export type NavItem = Pick<DocumentLink, 'key' | 'title' | 'href' | 'status'> & {
+    crate?: boolean;
+    children?: NavItem[];
+    within?: string;
+};
 
 export interface NavSection {
     id: string;
@@ -15,12 +23,16 @@ export interface NavSection {
     short: string;
     href: string;
     items: NavItem[];
+    // Whether the sidebar lists the items only while the reader is under `href`.
+    folded?: boolean;
 }
 
 // The navigation: the three tracks a reader reads (the guide, the concepts and the math notes),
 // then the reference, with each crate's page under its page of the crates, and the archive's
 // entries. The tracks of pages keep their order in `TRACKS`; the math notes go after the last
-// track that is read, before the reference, which is looked up.
+// track that is read, before the reference, which is looked up. The math notes are listed by part,
+// each part linking to its first note and holding the rest; the archive lists its entries, each
+// holding its documents, and is folded away outside the archive.
 export const load: LayoutServerLoad = () => {
     const tracks: NavSection[] = TRACKS.map((track) => ({
         ...track,
@@ -30,14 +42,36 @@ export const load: LayoutServerLoad = () => {
     const math: NavSection = {
         ...MATH,
         href: resolve('/math'),
-        items: cms.math.list().map(linkOf),
+        items: MATH_PARTS.flatMap((part) => {
+            const notes = cms.math.list(part.id).map(linkOf);
+            const first = notes[0];
+            return first
+                ? [
+                      {
+                          key: `math-part/${part.id}`,
+                          title: part.title,
+                          href: first.href,
+                          children: notes,
+                      },
+                  ]
+                : [];
+        }),
     };
     const reference = tracks.findIndex((track) => track.id == 'reference');
     if (reference < 0) tracks.push(math);
     else tracks.splice(reference, 0, math);
     const nav: NavSection[] = [
         ...tracks,
-        { ...ARCHIVE, href: resolve('/archive'), items: cms.archive.list().map(linkOf) },
+        {
+            ...ARCHIVE,
+            href: resolve('/archive'),
+            folded: true,
+            items: cms.archive.list().map((entry) => {
+                const link = linkOf(entry);
+                const children = cms.archive.documents(entry.key).map(linkOf);
+                return children.length ? { ...link, children, within: link.href } : link;
+            }),
+        },
     ];
     // Where the site is hosted, when the build knows it (`SITE_URL=https://example.org`): a link
     // preview, such as LinkedIn's, takes only an absolute URL for its image.
