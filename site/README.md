@@ -229,10 +229,10 @@ file-reference fence, passed in as the component's children:
 
 ```rust
 {../../../../crates/skoro-core/tests/queries.rs:31..57}
-````
+```
 
 </Walkthrough>
-```
+````
 
 Put each spec in a `*.walk.ts` file beside its page. A spec is a graph figure's spec (above), with
 labelled `regions` drawn behind it (a scope, a snapshot, a cache) and its `steps`:
