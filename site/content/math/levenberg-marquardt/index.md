@@ -1,19 +1,20 @@
 ---
 title: The Levenberg–Marquardt method
 part: estimation
-order: 4
+order: 10
 summary: A Gauss–Newton step is trusted only as far as the linearization is; damping shortens it, the ratio of the decrease obtained to the decrease promised says whether to trust it more or less, and a stopping rule on the promise alone tells convergence from rounding.
-depends_on: [linearization, square-root-elimination]
+depends_on: [linearization, trust-regions, square-root-elimination]
 ---
 
 A [Gauss–Newton step](../linearization/) minimizes a model of the function, and the model is good
 only near the point where it was made. From a poor start the step overshoots, and the function
-rises. The Levenberg–Marquardt method [](cite:levenberg1944) [](cite:marquardt1963) keeps the step
-and limits its length, by an amount it adapts as it learns how far the model can be trusted. This
-note states the method as four choices: the damping, the measure of trust, the schedule that
-adapts it, and the rule that stops it.
+rises. The Levenberg–Marquardt method [](cite:levenberg1944) [](cite:marquardt1963) is the
+[trust-region method](../trust-regions/#the-trust-region) on the Gauss–Newton model: it keeps the
+step and limits its length, by a damping it adapts as it learns how far the model can be trusted.
+The frame is general; this note states the method's four choices within it: the damping, the
+measure of trust, the schedule that adapts it, and the rule that stops it.
 
-Throughout, $f$ is the sum of squares and log-volumes [](eq:math/linearization/objective), $m$ its
+Throughout, $f$ is the sum of squares and log-volumes [](eq:math/nonlinear-least-squares/objective), $m$ its
 linearization at the current point $\hat \point$, $J$ the stacked Jacobian of the residuals there,
 and $g$ the gradient.
 
@@ -29,8 +30,11 @@ $$
 	(J\transpose J + \lambda D)\, \tangent = -g . @tag(damped-step)
 $$
 
-At $\lambda = 0$ it is the Gauss–Newton step. As $\lambda$ grows it turns toward $-D^{-1} g /
-\lambda$, a short step down the gradient.
+It is the damped step [](eq:math/linearization/damped), and by
+[%full](statement:math/trust-regions/trust-region-step) the trust-region step of the radius
+$\lvert \tangent \rvert_D$: the method chooses the damping, and the radius follows. At $\lambda =
+0$ it is the Gauss–Newton step. As $\lambda$ grows it turns toward $-D^{-1} g / \lambda$, a short
+step down the gradient.
 
 The diagonal is Marquardt's, the squared norms of the columns of $J$,
 
@@ -55,7 +59,7 @@ $$
 since $m(0) - m(\tangent) = -g\transpose \tangent - \tfrac12 \tangent\transpose J\transpose J
 \tangent$ and $-g\transpose \tangent = \tangent\transpose (J\transpose J + \lambda D) \tangent$ by
 [](eq:damped-step). What it obtains is $f(\hat \point) - f(\hat \point \oplus \tangent)$. Their
-ratio
+ratio, the gain ratio [](eq:math/trust-regions/gain) of this model,
 
 $$
 	\varrho_\lambda = \frac{f(\hat \point) - f(\hat \point \oplus \tangent)}{\Delta(\tangent)} @tag(gain)

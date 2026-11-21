@@ -1,9 +1,9 @@
 ---
 title: The Laplace approximation
 part: estimation
-order: 5
+order: 11
 summary: A Laplace approximation replaces a density near a point by a Gaussian in the chart there; taken in a chart it approximates the density times the chart's volume, its mean, marginals, draws and evidence are computations on the linearization's rows, and its covariance omits curvature of the order of the noise's variance on a curved space.
-depends_on: [linearization, square-root-elimination, chart-volume]
+depends_on: [map-estimation, linearization, square-root-elimination, chart-volume]
 ---
 
 Once a mode has been found, the question is how sure the answer is: the spread of the density
@@ -13,7 +13,7 @@ approximation_ replaces the density by a Gaussian fitted at a point, and reads t
 Gaussian. This note fits it from the [linearization](../linearization/), says what each answer
 costs to compute, and measures what the fitted covariance leaves out when the space is curved.
 
-Throughout, $f$ is the negative log-density [](eq:math/linearization/objective) of a point $\point$
+Throughout, $f$ is the negative log-density [](eq:math/nonlinear-least-squares/objective) of a point $\point$
 of a product of manifolds, against the product $\nu$ of their reference measures, $\hat \point$ is
 the point of approximation, and $J$ is the stacked Jacobian of the residuals there.
 
@@ -29,7 +29,7 @@ $$
 
 with $\lambda_{\hat \point}$ the log-volume of the chart at $\hat \point$. What is approximated by a
 Gaussian in $\tangent$ is therefore the _chart objective_ $f(\hat \point \oplus \tangent) -
-\lambda_{\hat \point}(\tangent)$, and not $f$ alone. Its linearization, the _chart linearization_,
+\lambda_{\hat \point}(\tangent)$ of [](eq:math/map-estimation/chart-objective), and not $f$ alone. Its linearization, the _chart linearization_,
 has the rows of the linearization of $f$, with $\eta - \nabla \lambda_{\hat \point}(0)$ and $c_0 -
 \lambda_{\hat \point}(0)$ in place of $\eta$ and $c_0$. The difference shows in two places.
 
@@ -180,8 +180,8 @@ reported from the rows should be reported with the order of its error.
 ## A marginal kept as a Gaussian
 
 Integrating variables out by elimination of the linearization leaves an
-[improper Gaussian factor](../improper-gaussian/#what-elimination-leaves) on the variables that
-remain, anchored at the point of linearization. For linear-Gaussian terms it is the exact marginal.
+[improper Gaussian factor](../improper-gaussian/) on the variables that remain, by
+[what elimination leaves](../integrating-out/), anchored at the point of linearization. For linear-Gaussian terms it is the exact marginal.
 Otherwise it approximates the logarithm of the marginal density, and it differs from the marginal
 of a Laplace approximation in two ways. The chart's part of [](eq:omitted) is there only for the
 variables integrated over, so nothing offsets the terms' log-volumes on the variables kept. And

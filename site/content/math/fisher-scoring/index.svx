@@ -1,7 +1,7 @@
 ---
 title: Fisher scoring
 part: estimation
-order: 6
+order: 12
 summary: Where a scale is itself estimated, the Gauss–Newton rows omit as much curvature as they keep; Fisher scoring puts the expected information in the Hessian's place, assembled from roots as a second set of rows whose gradient is exact, and it is the Gauss–Newton linearization again when every scale is fixed.
 depends_on: [normal, linearization]
 ---
