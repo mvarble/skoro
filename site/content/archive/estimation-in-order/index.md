@@ -1,18 +1,22 @@
 ---
 title: "Least squares, motivated from MAP estimation and trust regions"
-pages: []
+pages:
+    - concepts/linearization
 crates: []
 revises: [mathematics-in-order]
 ---
 
-This entry reorders the mathematics' part on least squares and Gaussian approximations so that it
-begins with the problem and not with its linear algebra. The part opens today with elimination in
-square-root form, a note about matrices alone, and a reader meets Householder reflections before
-being told what they are for. The entry sets out a new order: the mode of a posterior density as
-the estimate sought; Newton's method and trust-region methods as the general way to find it; the
-mode of a model of normals as a nonlinear least-squares problem; linearizing the residuals, read
-first as a trust-region method and then as a Gaussian factor on the increment from the point of
-linearization; a table that puts the two vocabularies, of optimization and of state estimation,
-side by side; the normal equations, which both readings end in; and only then elimination, as the
-way to solve them without forming them. It argues which notes the order needs, new, revised and
-moved, and how each keeps resting only on the notes before it.
+This entry reordered the mathematics' part on least squares and Gaussian approximations so that it
+begins with the estimate sought and ends with the linear algebra that computes it. Five notes are
+new: [maximum a posteriori estimation](../../math/map-estimation/),
+[Newton's method and trust regions](../../math/trust-regions/),
+[models of normals as least squares](../../math/nonlinear-least-squares/),
+[the normal equations](../../math/normal-equations/), and a table that pairs the optimizer's names
+with the estimator's, [optimization and estimation, term by term](../../math/optimization-and-estimation/),
+which closes the part. Two more were split off the improper Gaussian factor:
+[what elimination leaves](../../math/integrating-out/) and [the Kalman filter](../../math/kalman-filter/).
+[The linearization](../../math/linearization/) gained its reading as a model in a trust region,
+[the improper Gaussian factor](../../math/improper-gaussian/) its reading of the linearization as a
+Gaussian on the increment, and [elimination in square-root form](../../math/square-root-elimination/)
+moved from first to seventh, opened by the normal equations it solves without forming. Every
+equation, statement and section the archive cites stayed in its note, so no done entry was amended.

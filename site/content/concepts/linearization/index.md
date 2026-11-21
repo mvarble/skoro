@@ -22,12 +22,15 @@ Laplace approximation and a Kalman filter's update all end in them. skoro has th
 `skoro-elimination` is the note [elimination in square-root form](../../math/square-root-elimination/)
 as code, numbers and matrices alone. `skoro-linearize` turns a [query](../queries/) into such
 problems, reading the roles that [the normal](../the-normal/#the-roles) binds. This page shows each
-piece. The mathematics is in the notes on
-[linearization and the Gauss–Newton step](../../math/linearization/),
+piece. The mathematics is in the part of the notes on
+[least squares and Gaussian approximations](../../math/map-estimation/), from the mode a query's
+minimizer seeks, through [linearization and the Gauss–Newton step](../../math/linearization/) and
+[the normal equations](../../math/normal-equations/), to
 [the Levenberg–Marquardt method](../../math/levenberg-marquardt/),
 [the Laplace approximation](../../math/laplace-approximation/) and
-[Fisher scoring](../../math/fisher-scoring/), and why skoro made each of its choices is in
-[the entry](../../archive/linearization/).
+[Fisher scoring](../../math/fisher-scoring/); [a table](../../math/optimization-and-estimation/)
+pairs the optimizer's names for each thing with the estimator's. Why skoro made each of its choices
+is in [the entry](../../archive/linearization/).
 
 ## The factored problem
 
