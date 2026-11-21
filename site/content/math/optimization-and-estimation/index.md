@@ -14,19 +14,14 @@ depends_on:
     ]
 ---
 
-The notes of this part read one computation in two vocabularies. An optimizer sees a function to
-be minimized by steps that each minimize a model of it. A state estimator sees a posterior to be
-approximated by Gaussians, combined by adding factors and reduced by integrating quantities out.
-The [linearization](../linearization/) and the [improper Gaussian factor](../improper-gaussian/)
-are where the two meet: one quadratic, read once as a model in a trust region and once as a
-Gaussian on the increment from the point of linearization. Most of what follows from either
-reading has a name in both, and this note is the table of those names.
+The notes of this part read one computation in two vocabularies.
+An optimizer sees a function to be minimized by steps that each minimize a model of it.
+A state estimator sees a posterior to be approximated by Gaussians, combined by adding factors and reduced by integrating quantities out.
+The [linearization](../linearization/) and the [improper Gaussian factor](../improper-gaussian/) are where the two meet: one quadratic, read once as a model in a trust region and once as a Gaussian on the increment from the point of linearization.
+Most of what follows from either reading has a name in both, and this note is the table of those names.
 
-Each row pairs an optimizer's term with an estimator's and names the note that defines them. The
-pairs are exact under the condition the row states, and where none is stated they are exact
-throughout this part: a model built forward, its objective $f$ the negative logarithm of its joint
-density at the observations, and its terms read in the charts at the current point $\hat
-\point$.
+Each row pairs an optimizer's term with an estimator's and names the note that defines them.
+The pairs are exact under the condition the row states, and where none is stated they are exact throughout this part: a model built forward, its objective $f$ the negative logarithm of its joint density at the observations, and its terms read in the charts at the current point $\hat \point$.
 
 ## The problem
 
@@ -93,14 +88,11 @@ density at the observations, and its terms read in the charts at the current poi
 
 Two rows look like pairs and are not.
 
-- **A change of variables against a change of measure.** An optimizer may reparametrize freely:
-  the minimizer of $f$ moves with the variables and is the same point. A density is a density
-  against a measure, and its mode is not: the log-normal's mode against Lebesgue measure is
-  $e^{m - s^2}$, and against $\dd \point / \point$ it is $e^m$. Every method of this part reads its
-  derivatives in charts and still minimizes $f$, the density against the spaces' own measures; a
-  Gaussian fitted in a chart is fitted to the chart objective
-  [](eq:math/map-estimation/chart-objective), with the chart's volume.
-- **The Hessian against the expected information.** An optimizer has one Hessian. An estimator has
-  two informations, the observed, which is that Hessian, and the expected, which is its expectation
-  over the data. For normals with fixed scales the expected information is the Gauss–Newton matrix,
-  and not the Hessian; with a free scale it is neither.
+- **A change of variables against a change of measure.**
+  An optimizer may reparametrize freely: the minimizer of $f$ moves with the variables and is the same point.
+  A density is a density against a measure, and its mode is not: the log-normal's mode against Lebesgue measure is $e^{m - s^2}$, and against $\dd \point / \point$ it is $e^m$.
+  Every method of this part reads its derivatives in charts and still minimizes $f$, the density against the spaces' own measures; a Gaussian fitted in a chart is fitted to the chart objective [](eq:math/map-estimation/chart-objective), with the chart's volume.
+- **The Hessian against the expected information.**
+  An optimizer has one Hessian.
+  An estimator has two informations, the observed, which is that Hessian, and the expected, which is its expectation over the data.
+  For normals with fixed scales the expected information is the Gauss–Newton matrix, and not the Hessian; with a free scale it is neither.

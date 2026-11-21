@@ -1,18 +1,17 @@
 # skoro
 
-skoro is a probabilistic modeling library in Rust. This repository started over on 2026-10-09:
-everything before then is on the `archive` branch (tagged `archive-2026-10-09`), and comes back
-one piece at a time, each with a written record of the mathematics and the design behind it.
+skoro is a probabilistic modeling library in Rust.
+This repository started over on 2026-10-09: everything before then is on the `archive` branch (tagged `archive-2026-10-09`), and comes back one piece at a time, each with a written record of the mathematics and the design behind it.
 
 ## How to work here
 
-**Conversation is the default.** Answer questions, explain the code, explore the `archive`
-branch, sketch ideas in the reply: none of that needs a workflow, and none of it should start one.
+**Conversation is the default.**
+Answer questions, explain the code, explore the `archive` branch, sketch ideas in the reply: none of that needs a workflow, and none of it should start one.
 
-**The development workflow runs only when the user invokes it**, through the `/wf-*` commands
-(`.agents/skills/wf-*`). Every change to the library's code goes through an entry of the
-workflow: its mathematics, its implementation companion, its plan, its build, and its pages, each
-approved by the user. The procedure is in `.agents/reference/workflow.md`. In short:
+**The development workflow runs only when the user invokes it**, through the `/wf-*` commands (`.agents/skills/wf-*`).
+Every change to the library's code goes through an entry of the workflow: its mathematics, its implementation companion, its plan, its build, and its pages, each approved by the user.
+The procedure is in `.agents/reference/workflow.md`.
+In short:
 
 | command                                         | what it does                                           |
 | ----------------------------------------------- | ------------------------------------------------------ |
@@ -26,16 +25,14 @@ approved by the user. The procedure is in `.agents/reference/workflow.md`. In sh
 
 Rules that hold whether or not a command was invoked:
 
-- Never start, approve, reopen, abandon or resume an entry on your own judgment, and never run
-  `bin/wf start|approve|reopen|abandon|resume` except inside the skill the user invoked for it.
-- Never do a stage's work outside its skill. Asked to write code with no entry at the build stage,
-  say so and point to the command that would get there.
-- `bin/wf guard` runs before every edit in Claude Code (`.claude/settings.json`) and refuses one
-  the stage does not allow. Do not work around a refusal; it is telling you which command the
-  user would need to give.
+- Never start, approve, reopen, abandon or resume an entry on your own judgment, and never run `bin/wf start|approve|reopen|abandon|resume` except inside the skill the user invoked for it.
+- Never do a stage's work outside its skill.
+  Asked to write code with no entry at the build stage, say so and point to the command that would get there.
+- `bin/wf guard` runs before every edit in Claude Code (`.claude/settings.json`) and refuses one the stage does not allow.
+  Do not work around a refusal; it is telling you which command the user would need to give.
 - When work at one stage shows an earlier stage wrong, stop and say so; the user may reopen it.
-- Not gated: the tooling (`bin/`, `tools/`), the skills, CI, and the site's own code
-  (`site/src/`). Changes to those are ordinary work.
+- Not gated: the tooling (`bin/`, `tools/`), the skills, CI, and the site's own code (`site/src/`).
+  Changes to those are ordinary work.
 
 ## Layout
 
@@ -54,22 +51,20 @@ Rules that hold whether or not a command was invoked:
 
 ## Writing documents
 
-Everything in `site/content/` is written as `.agents/reference/authoring.md` says. The short of
-it: pages say what is and quote real code; math notes say what is true, one idea to a note, in an
-order in which each rests only on the notes before it; archive documents discuss what may be,
-sketch code inline, and are frozen once approved.
+Everything in `site/content/` is written as `.agents/reference/authoring.md` says.
+The short of it: pages say what is and quote real code; math notes say what is true, one idea to a note, in an order in which each rests only on the notes before it; archive documents discuss what may be, sketch code inline, and are frozen once approved.
 
 ## The archive branch
 
-`archive` is skoro as it stood before the restart: read it as prior art, with
-`git show archive:<path>`, `git log archive -- <path>` and `git grep <term> archive`. A design
-there informs a new entry; it does not bind it. Never merge from it.
+`archive` is skoro as it stood before the restart: read it as prior art, with `git show archive:<path>`, `git log archive -- <path>` and `git grep <term> archive`.
+A design there informs a new entry; it does not bind it.
+Never merge from it.
 
 ## Commits
 
-Commit often: each revision of a document, each task of a plan. The first line says what changed,
-as an imperative sentence ("Derive the Jacobian of the whitened residual"); the body, when there
-is one, says why. Push when your environment expects it.
+Commit often: each revision of a document, each task of a plan.
+The first line says what changed, as an imperative sentence ("Derive the Jacobian of the whitened residual"); the body, when there is one, says why.
+Push when your environment expects it.
 
 ## Checks
 
@@ -87,15 +82,14 @@ cd site && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same, and `bin/wf check --merge` on pull requests into
-`main`.
+CI (`.github/workflows/ci.yml`) runs the same, and `bin/wf check --merge` on pull requests into `main`.
 
-wgpu is the one GPU runtime skoro claims, and CI has no adapter to run it on. A change to
-`skoro-tensor`, to a primitive's kernel or to a fused operation is pushed only after
+wgpu is the one GPU runtime skoro claims, and CI has no adapter to run it on.
+A change to `skoro-tensor`, to a primitive's kernel or to a fused operation is pushed only after
 
 ```sh
 cargo test --workspace --features wgpu
 ```
 
-passes on a machine with an adapter, and its commit says so. Without an adapter the wgpu tests
-fail, naming it, rather than pass with nothing run.
+passes on a machine with an adapter, and its commit says so.
+Without an adapter the wgpu tests fail, naming it, rather than pass with nothing run.

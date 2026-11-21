@@ -4,19 +4,15 @@ kind: proposition
 title: The normalized measure of an embedded manifold
 ---
 
-Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$ with a retraction $\oplus$
-smooth on an open $W \subseteq \manifold$, $B(\point) = \partial_\tangent R_\point(0) \in \R^{n \times \dimension}$ its
-tangent coordinates read in storage, and $\sigma$ the
-$\dimension$-dimensional surface measure induced by $\R^n$. The volume of the chart at $\mu$ with
-respect to $\sigma$ is
+Let $\manifold \subset \R^n$ be a submanifold of dimension $\dimension$ with a retraction $\oplus$ smooth on an open $W \subseteq \manifold$, $B(\point) = \partial_\tangent R_\point(0) \in \R^{n \times \dimension}$ its tangent coordinates read in storage, and $\sigma$ the $\dimension$-dimensional surface measure induced by $\R^n$.
+The volume of the chart at $\mu$ with respect to $\sigma$ is
 
 $$
 	v^\sigma_\mu(\tangent) = \sqrt{\det\bigl(\partial R_\mu(\tangent)\transpose\, \partial R_\mu(\tangent)\bigr)},
 $$
 
 with $\partial R_\mu(\tangent) \in \R^{n \times \dimension}$ the Jacobian of $R_\mu$ in storage.
-There is exactly one measure $\nu$ on $W$ with a continuous density with respect to
-$\sigma$ such that $v_\mu(0) = 1$ at every $\mu \in W$, namely
+There is exactly one measure $\nu$ on $W$ with a continuous density with respect to $\sigma$ such that $v_\mu(0) = 1$ at every $\mu \in W$, namely
 
 $$
 	\dd \nu(\point) = \det\bigl(B(\point)\transpose B(\point)\bigr)^{-1/2} \, \dd \sigma(\point),
@@ -29,5 +25,4 @@ $$
 	\qquad v^\sigma_\point(0) = \det\bigl(B(\point)\transpose B(\point)\bigr)^{1/2},
 $$
 
-which is $v^\sigma_\mu(\tangent) / v^\sigma_\mu(0)$ when $\det(B\transpose B)$ is the same at
-every point.
+which is $v^\sigma_\mu(\tangent) / v^\sigma_\mu(0)$ when $\det(B\transpose B)$ is the same at every point.

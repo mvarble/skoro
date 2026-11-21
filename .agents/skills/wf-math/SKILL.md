@@ -7,27 +7,25 @@ argument-hint: '[what to write, answer or change]'
 
 # /wf-math: the mathematics
 
-The first stage of a feature: a writeup of the mathematics at play, revised with the user until
-both agree on it. No code is designed or written here.
+The first stage of a feature: a writeup of the mathematics at play, revised with the user until both agree on it.
+No code is designed or written here.
 
 ## Before anything
 
-Run `bin/wf status --expect math`. If it fails, stop and tell the user what it said, and which
-step it points to. Answering a question about the mathematics needs no skill: do that in
-conversation instead, without writing the document.
+Run `bin/wf status --expect math`.
+If it fails, stop and tell the user what it said, and which step it points to.
+Answering a question about the mathematics needs no skill: do that in conversation instead, without writing the document.
 
-Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the
-entry's `index.md`, and the current draft (`bin/wf path`), if there is one.
+Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the entry's `index.md`, and the current draft (`bin/wf path`), if there is one.
 
 ## Writing
 
-Each invocation is one revision. Read what the user asked, then change the document to answer it,
-whether a question, an objection, a new direction, or "start". The answer to a question goes
-into the document, where the next reader will need it, and is summarized in your reply.
+Each invocation is one revision.
+Read what the user asked, then change the document to answer it, whether a question, an objection, a new direction, or "start".
+The answer to a question goes into the document, where the next reader will need it, and is summarized in your reply.
 
-Search before writing: the math notes (`site/content/math/`) for ideas the site already explains,
-and the `archive` branch for how skoro did this before, if it did (`git grep -i <term> archive`,
-`git show archive:docs/<file>`). Prior art informs the writeup; it does not bind it.
+Search before writing: the math notes (`site/content/math/`) for ideas the site already explains, and the `archive` branch for how skoro did this before, if it did (`git grep -i <term> archive`, `git show archive:docs/<file>`).
+Prior art informs the writeup; it does not bind it.
 
 The document, `site/content/archive/<slug>/math.md` (`.svx` if it shows statements):
 
@@ -61,21 +59,16 @@ parameters, what is differentiated with respect to what. No types or traits; tha
 Each as a `> [!TODO]` callout, until it is answered.
 ```
 
-Whatever in the mathematics is general, true without naming anything skoro defines, is written
-as a math note in `site/content/math/<slug>/index.md`, or as a section of an existing note, at its
-place in the order (`authoring.md`, under "The math notes"; the notes are open at this stage). The
-document links to the note and keeps what is skoro's own: the problem, the choices, and the
-reading in skoro's terms. A new note is given its `part` and `order`, and the notes after it are
-reread and rewritten where they explained what it now explains.
+Whatever in the mathematics is general, true without naming anything skoro defines, is written as a math note in `site/content/math/<slug>/index.md`, or as a section of an existing note, at its place in the order (`authoring.md`, under "The math notes"; the notes are open at this stage).
+The document links to the note and keeps what is skoro's own: the problem, the choices, and the reading in skoro's terms.
+A new note is given its `part` and `order`, and the notes after it are reread and rewritten where they explained what it now explains.
 
-After a reopening, keep a `## Revisions` section at the end: for each reopening, the date, what
-changed and why, in a short paragraph. The earlier text is not kept there; git has it.
+After a reopening, keep a `## Revisions` section at the end: for each reopening, the date, what changed and why, in a short paragraph.
+The earlier text is not kept there; git has it.
 
 ## Finishing a revision
 
-1. `cd site && pnpm build` if the math is new or changed, and fix any `katex:` warning or broken
-   link it reports.
-2. Commit the revision, with a message saying what changed ("Derive the whitened residual's
-   Jacobian").
-3. Reply with what changed, what remains open, and, when nothing does, that `/wf-approve` moves
-   to the implementation. Never approve, and never start the implementation, yourself.
+1. `cd site && pnpm build` if the math is new or changed, and fix any `katex:` warning or broken link it reports.
+2. Commit the revision, with a message saying what changed ("Derive the whitened residual's Jacobian").
+3. Reply with what changed, what remains open, and, when nothing does, that `/wf-approve` moves to the implementation.
+   Never approve, and never start the implementation, yourself.

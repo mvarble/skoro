@@ -14,14 +14,11 @@ depends_on: [nonlinear-least-squares, trust-regions, chart-volume]
 	import * as exact from './statements/exact.md';
 </script>
 
-The [mode of a model of normals](../nonlinear-least-squares/) minimizes a sum of squared
-residuals and log-volumes. [Newton's method](../trust-regions/) would minimize it with the
-function's whole curvature, which needs the second derivatives of every residual. Almost every
-method that estimates such a model does something cheaper: it replaces each residual by its
-first-order expansion at a point, and is left with a quadratic model whose curvature needs first
-derivatives alone. This note defines that replacement, says exactly what it keeps of the function
-and what it leaves out, reads it as a model in a trust region, and proves what the iteration built
-on it converges to. The note after it reads the same replacement as a Gaussian.
+The [mode of a model of normals](../nonlinear-least-squares/) minimizes a sum of squared residuals and log-volumes.
+[Newton's method](../trust-regions/) would minimize it with the function's whole curvature, which needs the second derivatives of every residual.
+Almost every method that estimates such a model does something cheaper: it replaces each residual by its first-order expansion at a point, and is left with a quadratic model whose curvature needs first derivatives alone.
+This note defines that replacement, says exactly what it keeps of the function and what it leaves out, reads it as a model in a trust region, and proves what the iteration built on it converges to.
+The note after it reads the same replacement as a Gaussian.
 
 ## The setting
 
@@ -29,13 +26,10 @@ on it converges to. The note after it reads the same replacement as a Gaussian.
      normals as least squares and which a document of the archive still links to. -->
 <span id="a-sum-of-squares-and-what-else"></span>
 
-The function to be linearized is the objective [](eq:math/nonlinear-least-squares/objective), a
-sum over terms $t$ of half a squared whitened residual $r_t$ and a log-volume $\lambda_t$, on a
-product of manifolds with retractions with the stacked tangent $\R^\dimension$. Each term reads only
-its variables $K_t$. Write $g$ for the [chart gradient](../derivatives-in-charts/) of $f$ at the
-point of linearization $\hat \point$. Every derivative below is in the charts at $\hat \point$, so
-that on a curved factor it is the derivative of a function of $\hat \point \oplus \tangent$ at
-$\tangent = 0$.
+The function to be linearized is the objective [](eq:math/nonlinear-least-squares/objective), a sum over terms $t$ of half a squared whitened residual $r_t$ and a log-volume $\lambda_t$, on a product of manifolds with retractions with the stacked tangent $\R^\dimension$.
+Each term reads only its variables $K_t$.
+Write $g$ for the [chart gradient](../derivatives-in-charts/) of $f$ at the point of linearization $\hat \point$.
+Every derivative below is in the charts at $\hat \point$, so that on a curved factor it is the derivative of a function of $\hat \point \oplus \tangent$ at $\tangent = 0$.
 
 ## The linearization
 
@@ -47,126 +41,90 @@ $$
 	m(0) = f(\hat \point), \qquad \nabla m(0) = g, \qquad \nabla^2 m = \sum_t J_t\transpose J_t . @tag(agreement)
 $$
 
-The first holds by the choice of $c_0$. For the second, the gradient of $f$ is $g = \sum_t
-J_t\transpose r_t + \sum_t \nabla \lambda_t$, while the gradient of $m$ at $\tangent = 0$ is $\sum_t
-J_t\transpose (r_t + \hat c_t) + \eta$. For a folded term, $\D r_t = W_t \D s_t$, so $\nabla
-\lambda_t = \D s_t\transpose \nabla \lambda_t(s_t) = J_t\transpose W_t^{-\top} \nabla \lambda_t(s_t) =
-J_t\transpose \hat c_t$, and the two gradients agree term by term.
+The first holds by the choice of $c_0$.
+For the second, the gradient of $f$ is $g = \sum_t J_t\transpose r_t + \sum_t \nabla \lambda_t$, while the gradient of $m$ at $\tangent = 0$ is $\sum_t J_t\transpose (r_t + \hat c_t) + \eta$.
+For a folded term, $\D r_t = W_t \D s_t$, so $\nabla \lambda_t = \D s_t\transpose \nabla \lambda_t(s_t) = J_t\transpose W_t^{-\top} \nabla \lambda_t(s_t) = J_t\transpose \hat c_t$, and the two gradients agree term by term.
 
-**Folding a log-volume into its rows.** A folded log-volume's gradient lies in the row space of its
-own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, and not by the linear
-term. The normal's log-volume is folded on the Euclidean spaces, where it is zero, and on the
-curved ones, where it is a function of $s_t = \point \ominus \mu$ alone: of $s_t$ itself on a group
-whose chart translates the identity's, and of $\lvert s_t \rvert$ on the sphere with orthonormal
-bases. On a positive space it is $\sum_i \log \point_i$, which depends on the point and not only on
-$s_t$, and it stays in $\eta$. So a model of Euclidean and curved quantities has $\eta = 0$
-exactly. Folding costs nothing, since $\hat c_t$ is a gradient of the size of $s_t$; why it is worth
-doing, and why $\eta$ is read off the unfolded log-volumes rather than computed as a difference of
-gradients, are questions of how the model is solved, which
-[the normal equations](../normal-equations/#a-linear-term-and-a-fold) answer.
+**Folding a log-volume into its rows.**
+A folded log-volume's gradient lies in the row space of its own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, and not by the linear term.
+The normal's log-volume is folded on the Euclidean spaces, where it is zero, and on the curved ones, where it is a function of $s_t = \point \ominus \mu$ alone: of $s_t$ itself on a group whose chart translates the identity's, and of $\lvert s_t \rvert$ on the sphere with orthonormal bases.
+On a positive space it is $\sum_i \log \point_i$, which depends on the point and not only on $s_t$, and it stays in $\eta$.
+So a model of Euclidean and curved quantities has $\eta = 0$ exactly.
+Folding costs nothing, since $\hat c_t$ is a gradient of the size of $s_t$; why it is worth doing, and why $\eta$ is read off the unfolded log-volumes rather than computed as a difference of gradients, are questions of how the model is solved, which [the normal equations](../normal-equations/#a-linear-term-and-a-fold) answer.
 
-Each term's rows $J_t$ are nonzero only in the columns of its variables $K_t$, and each piece of
-the linear term is the gradient of one log-volume, nonzero only on the variables of its own term.
-So the linearization is a sum of pieces, one for each term, each a function of a few blocks of
-$\tangent$, with the structure of the terms alone.
+Each term's rows $J_t$ are nonzero only in the columns of its variables $K_t$, and each piece of the linear term is the gradient of one log-volume, nonzero only on the variables of its own term.
+So the linearization is a sum of pieces, one for each term, each a function of a few blocks of $\tangent$, with the structure of the terms alone.
 
 ## What is left out
 
-The Hessian of $\tangent \mapsto f(\hat \point \oplus \tangent)$ at $\tangent = 0$, which at a
-stationary point is the chart Hessian of
-[%full](statement:math/derivatives-in-charts/chart-hessian), is
+The Hessian of $\tangent \mapsto f(\hat \point \oplus \tangent)$ at $\tangent = 0$, which at a stationary point is the chart Hessian of [%full](statement:math/derivatives-in-charts/chart-hessian), is
 
 $$
 	\nabla^2 f = \sum_t J_t\transpose J_t + \sum_t \sum_i (r_t)_i\, \nabla^2 (r_t)_i + \sum_t \nabla^2 \lambda_t . @tag(hessian)
 $$
 
-The linearization keeps the first sum. The second is what every Gauss–Newton method omits: it is
-small where the residuals are, and it is what makes the Hessian indefinite far from a minimum. The
-third is the curvature of the log-volumes: zero on the Euclidean spaces, zero on the positive ones,
-whose log-volume is linear in their chart, and on a curved space of the relative order of the
-noise's variance. The right-hand sides and the linear term keep the log-volumes' gradients
-exactly.
+The linearization keeps the first sum.
+The second is what every Gauss–Newton method omits: it is small where the residuals are, and it is what makes the Hessian indefinite far from a minimum.
+The third is the curvature of the log-volumes: zero on the Euclidean spaces, zero on the positive ones, whose log-volume is linear in their chart, and on a curved space of the relative order of the noise's variance.
+The right-hand sides and the linear term keep the log-volumes' gradients exactly.
 
-When the rows determine every direction, the minimizer of the linearization is the *Gauss–Newton
-step*
+When the rows determine every direction, the minimizer of the linearization is the *Gauss–Newton step*
 
 $$
 	\tangent^* = -\Bigl(\sum_t J_t\transpose J_t\Bigr)^{-1} g , @tag(step)
 $$
 
-computed from the rows and never from this formula, for reasons that
-[the normal equations](../normal-equations/) give. The step returns to the manifold by the
-retraction, $\hat \point \oplus \tangent^*$, factor by factor.
-A factor whose rows do not determine it, such as a landmark seen from one place along one
-direction, has no step: the direction is the model's to fix, by a prior or by a damping, and not
-the linear algebra's to guess.
+computed from the rows and never from this formula, for reasons that [the normal equations](../normal-equations/) give.
+The step returns to the manifold by the retraction, $\hat \point \oplus \tangent^*$, factor by factor.
+A factor whose rows do not determine it, such as a landmark seen from one place along one direction, has no step: the direction is the model's to fix, by a prior or by a damping, and not the linear algebra's to guess.
 
 ## A model in a trust region
 
-The linearization is a quadratic model [](eq:math/trust-regions/model) of $f$ at $\hat \point$: it
-has the gradient $g$ and the curvature $M = \sum_t J_t\transpose J_t$, positive semidefinite by
-construction. Minimizing it is the step [](eq:math/trust-regions/step) of that curvature, and the
-Gauss–Newton step is a quasi-Newton step whose curvature leaves out the last two sums of
-[](eq:hessian).
+The linearization is a quadratic model [](eq:math/trust-regions/model) of $f$ at $\hat \point$: it has the gradient $g$ and the curvature $M = \sum_t J_t\transpose J_t$, positive semidefinite by construction.
+Minimizing it is the step [](eq:math/trust-regions/step) of that curvature, and the Gauss–Newton step is a quasi-Newton step whose curvature leaves out the last two sums of [](eq:hessian).
 
-Like every such model it is good only near $\hat \point$, and the [trust region](../trust-regions/#the-trust-region)
-applies to it unchanged. By [%full](statement:math/trust-regions/trust-region-step), the step
-within a radius solves
+Like every such model it is good only near $\hat \point$, and the [trust region](../trust-regions/#the-trust-region) applies to it unchanged.
+By [%full](statement:math/trust-regions/trust-region-step), the step within a radius solves
 
 $$
 	\Bigl( \sum_t J_t\transpose J_t + \lambda D \Bigr) \tangent = -g @tag(damped)
 $$
 
-for a damping $\lambda \ge 0$, and every damped step is the trust-region step of some radius. The
-Gauss–Newton step is the trust-region step with the radius infinite, $\lambda = 0$. It is not
-itself a trust-region method: alone it trusts the model everywhere, and from a poor start it
-overshoots. The method that chooses $\lambda$ by the gain ratio [](eq:math/trust-regions/gain) of
-each step, the Levenberg–Marquardt method, is the trust-region method on this model, and a later
-note states its choices.
+for a damping $\lambda \ge 0$, and every damped step is the trust-region step of some radius.
+The Gauss–Newton step is the trust-region step with the radius infinite, $\lambda = 0$.
+It is not itself a trust-region method: alone it trusts the model everywhere, and from a poor start it overshoots.
+The method that chooses $\lambda$ by the gain ratio [](eq:math/trust-regions/gain) of each step, the Levenberg–Marquardt method, is the trust-region method on this model, and a later note states its choices.
 
 ## What the iteration converges to
 
-Repeating the step is the Gauss–Newton method. It uses the gradient of all of $f$ and the
-curvature of the squares alone, and the next statement says that the first decides where it stops
-and the second only how fast it gets there.
+Repeating the step is the Gauss–Newton method.
+It uses the gradient of all of $f$ and the curvature of the squares alone, and the next statement says that the first decides where it stops and the second only how fast it gets there.
 
 <Statement {...gaussNewton} />
 
 <Proof>
 
-This is [%full](statement:math/trust-regions/curvature-iteration) with $M = J\transpose J$, whose
-rate is the spectral radius of $I - (J\transpose J)^{-1} H^\ast = -(J\transpose J)^{-1} E$.
+This is [%full](statement:math/trust-regions/curvature-iteration) with $M = J\transpose J$, whose rate is the spectral radius of $I - (J\transpose J)^{-1} H^\ast = -(J\transpose J)^{-1} E$.
 
 </Proof>
 
 With $s = \sum_t \lambda_t$, this is the iteration of the linearization, and three things follow.
 
-- **The answer depends on the gradient alone.** Whatever matrix stands on the left, the iteration
-  stops where $g = 0$. An iteration that includes the log-volumes' gradients converges to a
-  stationary point of $f$ itself, the mode of the model's density; one that leaves them out
-  converges to the minimum of the squares alone, which is
-  [the mode of another model](../normal/#the-gaussian-part-alone). The sparsity of $J\transpose J$
-  is the same either way, since each log-volume depends on the variables its own residual already
-  reads.
-- **Leaving the log-volumes' Hessian out costs little.** Write $t_i$ for the tangent coordinate
-  $\point \ominus \mu$ of the $i$-th term, $A_i = \D t_i$, and $\Lambda_i$ and $\Sigma_i$ for its
-  precision and covariance. In $E$ the log-volumes contribute $\D^2 s = \sum_i A_i\transpose \nabla^2
-  \lambda_i\, A_i$, besides terms in $\nabla \lambda_i$ that vanish at $t_i = 0$, while $J\transpose
-  J = \sum_i A_i\transpose \Lambda_i A_i$. If $-\kappa \Lambda_i \preceq \nabla^2 \lambda_i \preceq
-  \kappa \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq \D^2 s \preceq \kappa
-  J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with $\kappa = \max_i \lvert
-  \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rvert$. Near $t = 0$ that is $\sigma^2$ for the
-  Cayley and stereographic charts, with $\sigma^2$ the largest variance of a rotation's or a
-  direction's noise: $0.01$ per iteration at $\sigma = 0.1$ rad. The rest of $E$ is the residuals'
-  curvature, which on a curved space includes the second derivatives of $\ominus$, of the same
-  relative order $\sigma^2$. The log-volume does not change the order of the approximation, and a
-  positive factor adds nothing at all to $E$, its log-volume being linear in its chart.
-- **Adding it is safe where a Gaussian approximation is.** When $\kappa < 1$, $J\transpose J + \D^2
-  s \succeq (1 - \kappa)\, J\transpose J$ is positive definite, so it may stand on the left
-  instead. The condition $\kappa < 1$ is, term by term, the one under which
-  [a normal's mean is a mode at all](../normal/#what-the-parameters-mean), $\sigma < 1$ in the
-  chart's coordinates. Where it fails, the density is not concentrated around one mode, and no
-  method of this kind fits it.
+- **The answer depends on the gradient alone.**
+  Whatever matrix stands on the left, the iteration stops where $g = 0$.
+  An iteration that includes the log-volumes' gradients converges to a stationary point of $f$ itself, the mode of the model's density; one that leaves them out converges to the minimum of the squares alone, which is [the mode of another model](../normal/#the-gaussian-part-alone).
+  The sparsity of $J\transpose J$ is the same either way, since each log-volume depends on the variables its own residual already reads.
+- **Leaving the log-volumes' Hessian out costs little.**
+  Write $t_i$ for the tangent coordinate $\point \ominus \mu$ of the $i$-th term, $A_i = \D t_i$, and $\Lambda_i$ and $\Sigma_i$ for its precision and covariance.
+  In $E$ the log-volumes contribute $\D^2 s = \sum_i A_i\transpose \nabla^2 \lambda_i\, A_i$, besides terms in $\nabla \lambda_i$ that vanish at $t_i = 0$, while $J\transpose J = \sum_i A_i\transpose \Lambda_i A_i$.
+  If $-\kappa \Lambda_i \preceq \nabla^2 \lambda_i \preceq \kappa \Lambda_i$ for every term, then $-\kappa J\transpose J \preceq \D^2 s \preceq \kappa J\transpose J$, and the log-volumes add at most $\kappa$ to $\rho$, with $\kappa = \max_i \lvert \Sigma_i^{1/2} \nabla^2 \lambda_i\, \Sigma_i^{1/2} \rvert$.
+  Near $t = 0$ that is $\sigma^2$ for the Cayley and stereographic charts, with $\sigma^2$ the largest variance of a rotation's or a direction's noise: $0.01$ per iteration at $\sigma = 0.1$ rad.
+  The rest of $E$ is the residuals' curvature, which on a curved space includes the second derivatives of $\ominus$, of the same relative order $\sigma^2$.
+  The log-volume does not change the order of the approximation, and a positive factor adds nothing at all to $E$, its log-volume being linear in its chart.
+- **Adding it is safe where a Gaussian approximation is.**
+  When $\kappa < 1$, $J\transpose J + \D^2 s \succeq (1 - \kappa)\, J\transpose J$ is positive definite, so it may stand on the left instead.
+  The condition $\kappa < 1$ is, term by term, the one under which [a normal's mean is a mode at all](../normal/#what-the-parameters-mean), $\sigma < 1$ in the chart's coordinates.
+  Where it fails, the density is not concentrated around one mode, and no method of this kind fits it.
 
 ## Where it is exact
 
@@ -174,30 +132,19 @@ With $s = \sum_t \lambda_t$, this is the iteration of the linearization, and thr
 
 <Proof>
 
-On a space flat in disguise the chart at $\hat \point$ and the chart at any other point differ by a
-translation, by [](eq:math/normal/translation), so a function affine in one chart's coordinates is
-affine in every chart's, and the hypothesis does not depend on $\hat \point$. An affine residual
-has $r_t(\hat \point \oplus \tangent) = r_t + J_t \tangent$ exactly, and an affine log-volume is
-equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t \tfrac12 \lvert r_t
-+ J_t \tangent \rvert^2 + \sum_t \lambda_t(\hat \point \oplus \tangent)$, plus the constant, is
-$m(\tangent)$.
+On a space flat in disguise the chart at $\hat \point$ and the chart at any other point differ by a translation, by [](eq:math/normal/translation), so a function affine in one chart's coordinates is affine in every chart's, and the hypothesis does not depend on $\hat \point$.
+An affine residual has $r_t(\hat \point \oplus \tangent) = r_t + J_t \tangent$ exactly, and an affine log-volume is equal to its first-order expansion, so $f(\hat \point \oplus \tangent) = \sum_t \tfrac12 \lvert r_t + J_t \tangent \rvert^2 + \sum_t \lambda_t(\hat \point \oplus \tangent)$, plus the constant, is $m(\tangent)$.
 
 </Proof>
 
-The normal on a Euclidean space with a fixed scale and a mean affine in the variables is such a
-term, and so is the normal on a positive space, the log-normal, with a mean whose logarithm is
-affine in their logarithms. A model of such terms is *linear-Gaussian*, and on it one Gauss–Newton
-step from anywhere lands on the mode.
+The normal on a Euclidean space with a fixed scale and a mean affine in the variables is such a term, and so is the normal on a positive space, the log-normal, with a mean whose logarithm is affine in their logarithms.
+A model of such terms is *linear-Gaussian*, and on it one Gauss–Newton step from anywhere lands on the mode.
 
 ## Where it fails
 
-The linearization rests on the normalizers being constant, and so on the scales being fixed
-([where the form breaks](../nonlinear-least-squares/#where-the-form-breaks)). Carrying a free
-scale's normalizer's gradient in $\eta$ would not mend it. The residual depends on the scale, and the residual's own curvature in the
-scale's coordinates, which the rows omit, is as large as what they keep. For an isotropic scale in
-its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in $u$ is
-$\lvert r \rvert^2$ and the squares' is $2 \lvert r \rvert^2$, while the normalizer $-\dimension u$
-is linear. At the stationary point $\lvert r \rvert^2 = \dimension$, the omitted part equals the
-kept part, and the rate of [%full](statement:gauss-newton) is one: the iteration need not
-converge. A scale is estimated with the expected information in the Hessian's place, by
-[Fisher scoring](../fisher-scoring/).
+The linearization rests on the normalizers being constant, and so on the scales being fixed ([where the form breaks](../nonlinear-least-squares/#where-the-form-breaks)).
+Carrying a free scale's normalizer's gradient in $\eta$ would not mend it.
+The residual depends on the scale, and the residual's own curvature in the scale's coordinates, which the rows omit, is as large as what they keep.
+For an isotropic scale in its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in $u$ is $\lvert r \rvert^2$ and the squares' is $2 \lvert r \rvert^2$, while the normalizer $-\dimension u$ is linear.
+At the stationary point $\lvert r \rvert^2 = \dimension$, the omitted part equals the kept part, and the rate of [%full](statement:gauss-newton) is one: the iteration need not converge.
+A scale is estimated with the expected information in the Hessian's place, by [Fisher scoring](../fisher-scoring/).

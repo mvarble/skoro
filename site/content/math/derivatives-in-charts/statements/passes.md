@@ -4,14 +4,12 @@ kind: proposition
 title: The passes compute chart derivatives
 ---
 
-Let a program's steps be maps between manifolds, with partial derivatives $\partial_j \map$ taken in
-tangent charts. Then for a scalar target $f$, the reverse pass delivers the chart gradient
-$g(\point)$ at the roots. If moreover $\oplus$ is smooth near each slot's value, and each step's
-second-order map at its inputs $s$, with velocities $\tangent_s$, is
+Let a program's steps be maps between manifolds, with partial derivatives $\partial_j \map$ taken in tangent charts.
+Then for a scalar target $f$, the reverse pass delivers the chart gradient $g(\point)$ at the roots.
+If moreover $\oplus$ is smooth near each slot's value, and each step's second-order map at its inputs $s$, with velocities $\tangent_s$, is
 
 $$
 	\hvp_j(\alpha) = \frac{\dd}{\dd t}\Big|_{t=0} \partial_j \map(s \oplus t\tangent_s)\transpose \alpha ,
 $$
 
-then forward-over-reverse with velocities $\tangent$ delivers the chart Hessian product
-$H(\point)\,\tangent$.
+then forward-over-reverse with velocities $\tangent$ delivers the chart Hessian product $H(\point)\,\tangent$.

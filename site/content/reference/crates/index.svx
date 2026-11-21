@@ -8,13 +8,9 @@ order: 2
 	import CrateMap from '$lib/components/CrateMap.svelte';
 </script>
 
-skoro is a workspace of eight crates, drawn here in layers, foundations first: each is built on
-the crates it names, which lie in the layers above it, and through them on theirs. A user
-depends on `skoro`, which re-exports the core and the tensor layer, and on each feature crate a
-model or an algorithm uses, such as `skoro-normal`, `skoro-uniform`, `skoro-spatial` and
-`skoro-linearize`. Each
-crate has a page of its own, which says what it is for and gives the order in which to read its modules, computed from its sources when
-the site is built: an order that uses as little as possible before it is read.
+skoro is a workspace of eight crates, drawn here in layers, foundations first: each is built on the crates it names, which lie in the layers above it, and through them on theirs.
+A user depends on `skoro`, which re-exports the core and the tensor layer, and on each feature crate a model or an algorithm uses, such as `skoro-normal`, `skoro-uniform`, `skoro-spatial` and `skoro-linearize`.
+Each crate has a page of its own, which says what it is for and gives the order in which to read its modules, computed from its sources when the site is built: an order that uses as little as possible before it is read.
 
 <CrateMap />
 
@@ -29,9 +25,5 @@ the site is built: an order that uses as little as possible before it is read.
 | `skoro-linearize` | The [linearization](../../concepts/linearization/) of a density query at a batch of points, by its residuals or by its information roots, into the problems `skoro-elimination` eliminates, with steps, marginals, evidence and draws, the Levenberg–Marquardt method to a mode, and a retirement's linearized replacement as the normal's improper factor. |
 | `skoro`        | The crate a user depends on: it re-exports `skoro-core`, and `skoro-tensor` as `skoro::tensor`, with `Device`, `Precision` and `Target` at its root, and the [examples](../../guide/pose-graph/) that run in CI. |
 
-The normal and the uniform are the first distributions, the rotations and rigid motions the first curved types, and
-linearization and elimination the first pieces of the estimators built on them. What is left for
-later entries (other distributions, spheres, linear algebra, estimators beyond Levenberg–Marquardt,
-serialization and bindings among them)
-is listed in the repository's
-[`PLAN.md`](https://github.com/mvarble/skoro/blob/main/PLAN.md).
+The normal and the uniform are the first distributions, the rotations and rigid motions the first curved types, and linearization and elimination the first pieces of the estimators built on them.
+What is left for later entries (other distributions, spheres, linear algebra, estimators beyond Levenberg–Marquardt, serialization and bindings among them) is listed in the repository's [`PLAN.md`](https://github.com/mvarble/skoro/blob/main/PLAN.md).

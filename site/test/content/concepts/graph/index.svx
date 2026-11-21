@@ -10,8 +10,7 @@ created: 2026-01-03
 	import { building } from './graph.walk';
 </script>
 
-The compilation graph: a node for each value, an edge from each input of an operation to its
-output.
+The compilation graph: a node for each value, an edge from each input of an operation to its output.
 
 <Walkthrough spec={building}>
 

@@ -10,8 +10,7 @@ $$
 	\density_O(\point_O) = \int \density(\point_F, \point_O)\, \nu_F(\dd\point_F) .
 $$
 
-Then $\density_O$ is a density of the law of $\randomPoint_O$, finite $\nu_O$-almost everywhere, and the
-kernel
+Then $\density_O$ is a density of the law of $\randomPoint_O$, finite $\nu_O$-almost everywhere, and the kernel
 
 $$
 	\rmP_{\randomPoint_F \mid \randomPoint_O}(\dd\point_F \mid \point_O) = \frac{\density(\point_F, \point_O)}{\density_O(\point_O)}\, \nu_F(\dd\point_F)

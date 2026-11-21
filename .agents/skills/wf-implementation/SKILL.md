@@ -7,31 +7,28 @@ argument-hint: '[what to write, answer or change]'
 
 # /wf-implementation: the implementation companion
 
-The second stage of a feature: a document that turns the approved mathematics into a design. It
-should be complete enough that someone who knows Rust, the mathematics and the neighbouring
-interfaces could build it without designing anything of their own, and it ends with the tests
-that will show the design works.
+The second stage of a feature: a document that turns the approved mathematics into a design.
+It should be complete enough that someone who knows Rust, the mathematics and the neighbouring interfaces could build it without designing anything of their own, and it ends with the tests that will show the design works.
 
 ## Before anything
 
-Run `bin/wf status --expect implementation`. If it fails, stop and tell the user what it said.
+Run `bin/wf status --expect implementation`.
+If it fails, stop and tell the user what it said.
 
-Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the
-entry's `index.md`, its approved `math.md`, and the current draft (`bin/wf path`), if any. The
-mathematics is frozen: if the design shows it to be wrong, stop and say so, and suggest
-`/wf-reopen math <reason>`. Do not design around it.
+Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the entry's `index.md`, its approved `math.md`, and the current draft (`bin/wf path`), if any.
+The mathematics is frozen: if the design shows it to be wrong, stop and say so, and suggest `/wf-reopen math <reason>`.
+Do not design around it.
 
 ## Researching the design
 
-Read the code the feature has to live with before proposing anything: the traits it implements,
-the types it consumes and produces, the crates it would sit in, and their tests. Compare with the
-`archive` branch if skoro did this before (`git show archive:crates/<crate>/src/<file>`), and say
-what is kept from that design and what is not, and why. Write no code outside the document.
+Read the code the feature has to live with before proposing anything: the traits it implements, the types it consumes and produces, the crates it would sit in, and their tests.
+Compare with the `archive` branch if skoro did this before (`git show archive:crates/<crate>/src/<file>`), and say what is kept from that design and what is not, and why.
+Write no code outside the document.
 
 ## Writing
 
-Each invocation is one revision, as at the math stage. The document,
-`site/content/archive/<slug>/implementation.md`:
+Each invocation is one revision, as at the math stage.
+The document, `site/content/archive/<slug>/implementation.md`:
 
 ```markdown
 ---
@@ -69,11 +66,11 @@ named in the code.
 `> [!TODO]` callouts, until answered.
 ```
 
-`## Tests` is required: `wf approve` refuses the document without it. After a reopening, keep a
-`## Revisions` section as described in `/wf-math`.
+`## Tests` is required: `wf approve` refuses the document without it.
+After a reopening, keep a `## Revisions` section as described in `/wf-math`.
 
 ## Finishing a revision
 
-Build the site (`cd site && pnpm build`) if links or math changed, commit the revision, and reply
-with what changed and what remains open. When nothing does, `/wf-approve` moves to the plan.
+Build the site (`cd site && pnpm build`) if links or math changed, commit the revision, and reply with what changed and what remains open.
+When nothing does, `/wf-approve` moves to the plan.
 Never approve yourself.

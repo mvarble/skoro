@@ -12,12 +12,9 @@ depends_on: [improper-gaussian, square-root-elimination]
 	import * as integrateBlock from './statements/integrate-block.md';
 </script>
 
-An [improper Gaussian factor](../improper-gaussian/) was introduced by an integral: what is left of
-a model of normals on a quantity's neighbours once the quantity is integrated out. The examples
-there were integrals done by hand. [Elimination](../square-root-elimination/) does the same
-integral by an orthogonal factorization of the rows, and this note states what it leaves, in
-general: a factor of the same kind on the blocks that were tied to the one eliminated, which need
-not determine them.
+An [improper Gaussian factor](../improper-gaussian/) was introduced by an integral: what is left of a model of normals on a quantity's neighbours once the quantity is integrated out.
+The examples there were integrals done by hand.
+[Elimination](../square-root-elimination/) does the same integral by an orthogonal factorization of the rows, and this note states what it leaves, in general: a factor of the same kind on the blocks that were tied to the one eliminated, which need not determine them.
 
 ## The integral
 
@@ -25,47 +22,30 @@ not determine them.
 
 <Proof>
 
-The first part is part 2 of [%full](statement:math/square-root-elimination/eliminate-one), with
-the constant $c$ carried along: $e^{\logterm} = e^{c - \phi}$. The right-hand side is a squared
-affine residual in $\tangent_S$, a linear term and a constant, which is the definition
-[%full](statement:math/improper-gaussian/factor), and nothing in it requires $A'$ to have full
-rank. For the second, take $n \ne 0$ with $A_k n = 0$; along the line $\tangent_k + t n$ the squares
-do not change and $\logterm$ changes linearly, by $-t\, \eta_k\transpose n$, so $e^{\logterm}$ is
-constant or grows exponentially along the line and its integral over $\R^{d_k}$ diverges.
+The first part is part 2 of [%full](statement:math/square-root-elimination/eliminate-one), with the constant $c$ carried along: $e^{\logterm} = e^{c - \phi}$.
+The right-hand side is a squared affine residual in $\tangent_S$, a linear term and a constant, which is the definition [%full](statement:math/improper-gaussian/factor), and nothing in it requires $A'$ to have full rank.
+For the second, take $n \ne 0$ with $A_k n = 0$; along the line $\tangent_k + t n$ the squares do not change and $\logterm$ changes linearly, by $-t\, \eta_k\transpose n$, so $e^{\logterm}$ is constant or grows exponentially along the line and its integral over $\R^{d_k}$ diverges.
 
 </Proof>
 
-That is an improper Gaussian factor of the variables left: its rows are the rows the
-factorization did not use, its linear term is what is left of the linear terms, and its constant
-collects the rest. Nothing requires $A'$ to have full rank, and when the eliminated block was the
-only thing tying down some direction of $\tangent_S$, it has not. The factor is the exact answer
-all the same.
+That is an improper Gaussian factor of the variables left: its rows are the rows the factorization did not use, its linear term is what is left of the linear terms, and its constant collects the rest.
+Nothing requires $A'$ to have full rank, and when the eliminated block was the only thing tying down some direction of $\tangent_S$, it has not.
+The factor is the exact answer all the same.
 
-The integral is over the block's tangent coordinates, against Lebesgue measure. On a Euclidean
-space that is the integral over the quantity itself. On a curved or a positive space it is the
-integral of the factor as written in the chart at the anchor, and an integral against the space's
-own measure carries the chart's volume, as
-[](eq:math/map-estimation/chart-objective) does for a mode.
+The integral is over the block's tangent coordinates, against Lebesgue measure.
+On a Euclidean space that is the integral over the quantity itself.
+On a curved or a positive space it is the integral of the factor as written in the chart at the anchor, and an integral against the space's own measure carries the chart's volume, as [](eq:math/map-estimation/chart-objective) does for a mode.
 
-**What the factor is.** Repeated block by block, the statement integrates any set of blocks out of
-a sum of factors, in any order, leaving a sum of factors on the rest; when the rows left determine
-every direction, the sum is a normal, and its mean and precision are those of the marginal of
-[%full](statement:math/square-root-elimination/marginal). Restricted to the factors joined to the
-blocks integrated out, as in [](eq:math/square-root-elimination/replace), it is the single factor
-on their [Markov blanket](../generative-models/#graphical-representations) that replaces them:
-the factor that a model keeps when it forgets a quantity.
+**What the factor is.**
+Repeated block by block, the statement integrates any set of blocks out of a sum of factors, in any order, leaving a sum of factors on the rest; when the rows left determine every direction, the sum is a normal, and its mean and precision are those of the marginal of [%full](statement:math/square-root-elimination/marginal).
+Restricted to the factors joined to the blocks integrated out, as in [](eq:math/square-root-elimination/replace), it is the single factor on their [Markov blanket](../generative-models/#graphical-representations) that replaces them: the factor that a model keeps when it forgets a quantity.
 
-**A block that is not determined.** The second part says when a block cannot be integrated out:
-when its own rows do not determine it, the integral over it is infinite. A landmark seen from one
-pose along one direction, with no prior, cannot be integrated out, since its rows say nothing of it
-across that direction; the pose, which has a prior, can be, and leaves on the landmark a factor that
-is flat along the bearing, the first example of the
-[improper factor's note](../improper-gaussian/#two-examples). The elimination's diagonal reports
-which: a block whose triangular root has a zero diagonal entry has no integral.
+**A block that is not determined.**
+The second part says when a block cannot be integrated out: when its own rows do not determine it, the integral over it is infinite.
+A landmark seen from one pose along one direction, with no prior, cannot be integrated out, since its rows say nothing of it across that direction; the pose, which has a prior, can be, and leaves on the landmark a factor that is flat along the bearing, the first example of the [improper factor's note](../improper-gaussian/#two-examples).
+The elimination's diagonal reports which: a block whose triangular root has a zero diagonal entry has no integral.
 
-**The order of integration.** Integrating out is elimination by part 2 of
-[%full](statement:math/square-root-elimination/eliminate-one), and elimination by part 1 leaves
-the same rows and differs only in the constant. So the order that keeps the factorization cheap,
-the [elimination tree](../square-root-elimination/#order-fill-and-the-elimination-tree), is the
-order that keeps integrating out cheap, and a chain of quantities integrated out from one end is
-eliminated with no fill at all. The [next note](../kalman-filter/) is that chain.
+**The order of integration.**
+Integrating out is elimination by part 2 of [%full](statement:math/square-root-elimination/eliminate-one), and elimination by part 1 leaves the same rows and differs only in the constant.
+So the order that keeps the factorization cheap, the [elimination tree](../square-root-elimination/#order-fill-and-the-elimination-tree), is the order that keeps integrating out cheap, and a chain of quantities integrated out from one end is eliminated with no fill at all.
+The [next note](../kalman-filter/) is that chain.

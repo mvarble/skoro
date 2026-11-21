@@ -8,86 +8,68 @@ order: 90
 	import TrackCard from '$lib/components/TrackCard.svelte';
 </script>
 
-These docs are read along three tracks, each of which answers a different question and can be
-followed alone, beside a reference to look things up in and an archive of how the library came to
-be.
+These docs are read along three tracks, each of which answers a different question and can be followed alone, beside a reference to look things up in and an archive of how the library came to be.
 
 ## Three tracks
 
-Two tracks say what the library is today, and are rewritten whenever it changes. The third says
-what it rests on.
+Two tracks say what the library is today, and are rewritten whenever it changes.
+The third says what it rests on.
 
-- **The [guide](../../guide/) is top-down.** It starts from what a user writes (a model, a
-  distribution, a density to evaluate) and reaches into the machinery only as far as an example
-  needs. Read it to use skoro.
-- **The [concepts](../../concepts/) are bottom-up.** They build the library from its primitive
-  objects upward, each idea resting only on the ones before it. Read them to understand why skoro
-  works the way it does, or before changing it.
-- **The [mathematics](../../math/) is the ground under both.** It is bottom-up too, and independent
-  of skoro: every piece of mathematics the pages rely on that would be true if the library did not
-  exist, one idea to a note, such as a retraction, the normal distribution on a curved space or the
-  Laplace approximation. Read it to know why what the library computes is right.
+- **The [guide](../../guide/) is top-down.**
+  It starts from what a user writes (a model, a distribution, a density to evaluate) and reaches into the machinery only as far as an example needs.
+  Read it to use skoro.
+- **The [concepts](../../concepts/) are bottom-up.**
+  They build the library from its primitive objects upward, each idea resting only on the ones before it.
+  Read them to understand why skoro works the way it does, or before changing it.
+- **The [mathematics](../../math/) is the ground under both.**
+  It is bottom-up too, and independent of skoro: every piece of mathematics the pages rely on that would be true if the library did not exist, one idea to a note, such as a retraction, the normal distribution on a curved space or the Laplace approximation.
+  Read it to know why what the library computes is right.
 
-The tracks meet. A guide page links down into the concepts for the curious, and a concepts page
-links the notes it needs, so that a reader may start on any track and cross to another where a
-question takes them.
+The tracks meet.
+A guide page links down into the concepts for the curious, and a concepts page links the notes it needs, so that a reader may start on any track and cross to another where a question takes them.
 
 ## The mathematics in order
 
-The notes stand in an order, in three parts: spaces and their charts, probability on those spaces,
-and least squares with the Gaussian approximations built on it. Each note rests only on the notes
-before it, so that read from the first to the last they tell the whole of the mathematics once. A
-note says which earlier notes it builds on, so a reader who arrives in the middle knows how far
-back to go. The map on that page draws the whole network, together with the archive's documents
-that use it.
+The notes stand in an order, in three parts: spaces and their charts, probability on those spaces, and least squares with the Gaussian approximations built on it.
+Each note rests only on the notes before it, so that read from the first to the last they tell the whole of the mathematics once.
+A note says which earlier notes it builds on, so a reader who arrives in the middle knows how far back to go.
+The map on that page draws the whole network, together with the archive's documents that use it.
 
-What is skoro's own, a choice among true things or a statement about something the library
-defines, is not in the notes. It is in the concepts, which say what it is, and in the archive,
-which argued for it.
+What is skoro's own, a choice among true things or a statement about something the library defines, is not in the notes.
+It is in the concepts, which say what it is, and in the archive, which argued for it.
 
 ## Looking things up
 
-The [reference](../../reference/) holds what is looked up rather than read: the crates, each with
-what it is for and the order in which to read its modules, and how skoro is developed.
+The [reference](../../reference/) holds what is looked up rather than read: the crates, each with what it is for and the order in which to read its modules, and how skoro is developed.
 
 ## How it came to be
 
-The [archive](../../archive/) keeps the record of every piece of development. A feature's entry
-holds the mathematics worked out for it, the implementation companion that turned the mathematics
-into a design, and the plan it was built by, each kept as it was approved. A decision's entry holds
-the argument for it.
+The [archive](../../archive/) keeps the record of every piece of development.
+A feature's entry holds the mathematics worked out for it, the implementation companion that turned the mathematics into a design, and the plan it was built by, each kept as it was approved.
+A decision's entry holds the argument for it.
 
-The archive is history, and history is not rewritten. One thing in a finished entry may change:
-where a note it refers to has since been rewritten, the reference is brought up to date, and the
-entry says which later entry did so. Where the concepts track _tells_ you what is,
-an entry _discusses_ what might be, as it stood when it was written. When the library later
-changes, a new entry revises the old one, and the old one says so at its top. Every page lists the
-entries that made it what it is, under "How this came to be", and every entry lists the pages it
-changed.
+The archive is history, and history is not rewritten.
+One thing in a finished entry may change: where a note it refers to has since been rewritten, the reference is brought up to date, and the entry says which later entry did so.
+Where the concepts track _tells_ you what is, an entry _discusses_ what might be, as it stood when it was written.
+When the library later changes, a new entry revises the old one, and the old one says so at its top.
+Every page lists the entries that made it what it is, under "How this came to be", and every entry lists the pages it changed.
 
 > [!NOTE]
-> Every document is also served as Markdown (follow "View as Markdown" at its foot), and
-> [llms.txt](../../llms.txt) indexes all of them for language models.
+> Every document is also served as Markdown (follow "View as Markdown" at its foot), and [llms.txt](../../llms.txt) indexes all of them for language models.
 
 ## Where to go next
 
-Pick the track that matches what you came for. Each card opens the track's first page, and every
-page ends by pointing to the next.
+Pick the track that matches what you came for.
+Each card opens the track's first page, and every page ends by pointing to the next.
 
 <div class="card-grid">
 	<TrackCard
-		id="guide"
-		eyebrow="To use skoro"
-		blurb="Write a model, generate from it, estimate it: start from the code a user writes, and reach into the machinery only when an example needs it."
+		id="guide" eyebrow="To use skoro" blurb="Write a model, generate from it, estimate it: start from the code a user writes, and reach into the machinery only when an example needs it."
 	/>
 	<TrackCard
-		id="concepts"
-		eyebrow="To understand skoro"
-		blurb="Build the library from its spaces and operations upward, one idea at a time, each resting only on the ones before it."
+		id="concepts" eyebrow="To understand skoro" blurb="Build the library from its spaces and operations upward, one idea at a time, each resting only on the ones before it."
 	/>
 	<TrackCard
-		id="math"
-		eyebrow="To know why it is right"
-		blurb="Read the mathematics skoro rests on from the beginning, one idea to a note, each resting only on the notes before it."
+		id="math" eyebrow="To know why it is right" blurb="Read the mathematics skoro rests on from the beginning, one idea to a note, each resting only on the notes before it."
 	/>
 </div>

@@ -4,5 +4,4 @@ kind: lemma
 title: The mirror identity holds to first order
 ---
 
-If $\oplus$ is smooth near $\point$, then for $\tangent$ small enough,
-$\point \ominus (\point \oplus \tangent) = -\tangent + O(\lvert\tangent\rvert^2)$.
+If $\oplus$ is smooth near $\point$, then for $\tangent$ small enough, $\point \ominus (\point \oplus \tangent) = -\tangent + O(\lvert\tangent\rvert^2)$.
