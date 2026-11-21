@@ -75,8 +75,8 @@ the eighth.
 | 11 | `levenberg-marquardt` | revised, from 4 | the method as an instance of 2 on the Gauss–Newton model: Marquardt's diagonal, the schedule, the stopping rule and the checks at the end | linearization, trust-regions, square-root-elimination |
 | 12–14 | `laplace-approximation`, `fisher-scoring`, `calibration` | order and references | as now, citing 1 for the measure a mode is taken against and 2 for the rate a curvature sets | as now, with 1 and 2 where they are used |
 
-The order puts elimination after the normal equations, and two of the notes before it rest on elimination today. Each
-loses that dependence as follows.
+The order puts elimination after the normal equations, and two of the notes before it rest on
+elimination today. Each loses that dependence as follows.
 
 - **The linearization** names its problem as elimination's factored problem
   [](eq:math/square-root-elimination/factored), and argues for folding a log-volume into the rows
