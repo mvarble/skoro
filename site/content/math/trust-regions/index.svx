@@ -1,0 +1,201 @@
+---
+title: Newton's method and trust regions
+part: estimation
+order: 2
+summary: A smooth function on a manifold is minimized by steps that each minimize a quadratic model of it in the chart at the current point; Newton's model has the function's own curvature and converges quadratically, any other curvature with the exact gradient converges to the same points at a linear rate, and a trust region keeps the step where the model can be believed, judging it by the ratio of the decrease obtained to the decrease promised.
+depends_on: [derivatives-in-charts, product-manifold]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as newton from './statements/newton.md';
+	import * as curvatureIteration from './statements/curvature-iteration.md';
+	import * as trustRegionStep from './statements/trust-region-step.md';
+</script>
+
+A [mode](../map-estimation/) is the minimizer of a smooth function $f$, and except for the
+simplest models it has no closed form. It is found by iteration: at the current point, replace $f$
+by a model simple enough to minimize, minimize the model, and move. This note is about the model
+every method of this part uses, a quadratic in the chart at the point, and about the two questions
+any method built on it must answer: which curvature to give the model, and how far to believe it.
+The answers to the first decide how fast an iteration converges, never where. The answer to the
+second, the trust region, is what makes an iteration converge from a poor start at all.
+
+Throughout, $f$ is a smooth function on a [product](../product-manifold/) of manifolds with
+retractions, with the stacked tangent $\R^\dimension$, $\hat \point$ is the current point, and $g$
+and $H$ are the [chart gradient and chart Hessian](../derivatives-in-charts/) of $f$ there. Every
+result that compares charts at nearby points assumes that $\oplus$ is smooth near them.
+
+## The quadratic model
+
+Along a step $\tangent$ in the chart at $\hat \point$,
+
+$$
+	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + g\transpose \tangent + \tfrac12 \tangent\transpose M \tangent , @tag(model)
+$$
+
+for a symmetric matrix $M$, the model's *curvature*. The model agrees with $f$ in value and
+gradient at $\tangent = 0$ whatever $M$ is. With $M$ the Hessian of the pull-back $\tangent \mapsto
+f(\hat \point \oplus \tangent)$ it agrees to second order as well, and that Hessian equals the chart
+Hessian at a stationary point by [%full](statement:math/derivatives-in-charts/chart-hessian). When
+$M$ is positive definite the model has one minimizer, the solution of
+
+$$
+	M \tangent = -g , @tag(step)
+$$
+
+and the iteration moves to $\hat \point \oplus \tangent$. The step is a *descent direction*,
+$g\transpose \tangent = -g\transpose M^{-1} g < 0$ whenever $g \ne 0$, so a short enough step along
+it decreases $f$. When $M$ is indefinite, the model has no minimizer, and [](eq:step) solves for a
+stationary point of the model that may be a saddle or a maximum.
+
+## Newton's method
+
+Newton's method takes the model's curvature from $f$: $M = H$, solved as [](eq:step) at every
+iterate.
+
+<Statement {...newton} />
+
+<Proof>
+
+Read the iteration in the chart at $q^\ast$, as the map $\Phi(q) = q \oplus \delta(q)$ with
+$\delta(q) = -H(q)^{-1} g(q)$. It is smooth near $q^\ast$, since $H$ is continuous and invertible at
+$q^\ast$, and $\Phi(q^\ast) = q^\ast$ since $g(q^\ast) = 0$. The derivative of $q \oplus \delta$ in
+$q$ at $\delta = 0$ is the identity, and its derivative in $\delta$ at $\delta = 0$ is the identity
+too, by the defining property of a retraction. The derivative of $\delta$ at $q^\ast$ is
+$-H(q^\ast)^{-1}$ times the derivative of $g$ there, the term from the derivative of $H^{-1}$
+multiplying $g(q^\ast) = 0$, and the derivative of $g$ along $\tangent$ is $H(q^\ast)\, \tangent$ by
+the definition [](eq:math/derivatives-in-charts/chart-hessian). So
+
+$$
+	\D \Phi(q^\ast) = I - H(q^\ast)^{-1} H(q^\ast) = 0 .
+$$
+
+$\Phi$ is twice continuously differentiable near $q^\ast$, so by Taylor's theorem in the chart's
+coordinates $\lvert \Phi(q) \ominus q^\ast \rvert \le C \lvert q \ominus q^\ast \rvert^2$ for $q$ in a
+ball about $q^\ast$, with $C$ the bound of half the second derivative of $\Phi$ there. On the
+smaller ball where $C \lvert q \ominus q^\ast \rvert < 1$ the map contracts, so an iterate that
+starts there stays there and the bound holds at every step.
+
+</Proof>
+
+Quadratic convergence doubles the number of correct digits at every step, and is the best that any
+method of this kind achieves. It comes at two costs. The first is the Hessian itself: second
+derivatives of every term, which for a function of many variables is more work, and more code, than
+the gradient. The second is that nothing in the proof asked for a minimum. Newton's method
+converges as fast to a maximum or a saddle as to a minimum, and away from a minimum, where $H$ may
+be indefinite, its step may increase $f$.
+
+## Any curvature
+
+A curvature other than the Hessian gives up the quadratic rate and keeps everything else.
+
+<Statement {...curvatureIteration} />
+
+<Proof>
+
+$M(q_k)$ is invertible, so $\delta_k = 0$ exactly when $g(q_k) = 0$. Read the iteration in the chart
+at $q^\ast$ as the map $\Phi(q) = q \oplus \bigl(-M(q)^{-1} g(q)\bigr)$. As in the proof of
+[%full](statement:newton), $\D \Phi(q^\ast) = I - (M^\ast)^{-1} H^\ast$. A fixed point of a map whose
+derivative there has spectral radius $\rho < 1$ attracts every start near enough to it, at the
+linear rate $\rho$, by Ostrowski's theorem [](cite:ortega1970).
+
+</Proof>
+
+So the gradient decides where an iteration stops, and the curvature only how fast it gets there.
+Any curvature that is invertible leaves the stationary points of $f$ where they were; Newton's
+curvature makes $\rho = 0$; one that is wrong by a little costs a slow linear rate, and one that is
+wrong by much, $\rho \ge 1$, costs convergence, without the iteration ever stopping at a point
+that is not stationary. A curvature that is positive definite everywhere, as Newton's is not, makes
+every step a descent direction. The methods of this part are each a choice of $M$: the
+Gauss–Newton matrix of a sum of squares, which needs first derivatives alone and is positive
+semidefinite by construction, and the expected information of a distribution, which is the same
+matrix where it applies and differs from it where a scale is estimated.
+
+## The trust region
+
+Every model of this kind is good only near $\hat \point$. From a poor start the minimizer of the
+model lies far from it, where $f$ is nothing like $m$, and the step overshoots. A *trust region*
+limits the step to where the model is believed,
+
+$$
+	\min_{\tangent} m(\tangent) \quad \text{subject to} \quad \lvert \tangent \rvert_D \le \Delta , @tag(subproblem)
+$$
+
+for a *radius* $\Delta > 0$ and a norm $\lvert \tangent \rvert_D = (\tangent\transpose D
+\tangent)^{1/2}$ with $D$ a positive diagonal matrix, which puts the coordinates on a common scale.
+Its solution, the *trust-region step*, is characterized by a single scalar.
+
+<Statement {...trustRegionStep} />
+
+<Proof>
+
+For part 1, $m_\lambda(\tangent) = m(\tangent) + \tfrac12 \lambda \lvert \tangent \rvert_D^2$ is
+convex, since $M + \lambda D$ is positive semidefinite, and its gradient $(M + \lambda D)\,
+\tangent + g$ vanishes at $\tangent^\ast$, so $\tangent^\ast$ minimizes it over all of
+$\R^\dimension$. The condition $\lambda (\Delta - \lvert \tangent^\ast \rvert_D) = 0$ gives $\lambda
+\lvert \tangent^\ast \rvert_D^2 = \lambda \Delta^2$. For $\lvert \tangent \rvert_D \le \Delta$, then,
+
+$$
+	\begin{aligned}
+		m(\tangent) = m_\lambda(\tangent) - \tfrac12 \lambda \lvert \tangent \rvert_D^2
+		&\ge m_\lambda(\tangent^\ast) - \tfrac12 \lambda \Delta^2 \\
+		&= m(\tangent^\ast) .
+	\end{aligned}
+$$
+
+For parts 2 and 3, write $u = D^{1/2} \tangent$, $\tilde M = D^{-1/2} M D^{-1/2} = V
+\operatorname{diag}(\mu_i) V\transpose$ and $\tilde g = D^{-1/2} g$. For $\lambda$ with $\tilde M +
+\lambda I$ invertible, the solution of $(M + \lambda D)\, \tangent = -g$ has
+
+$$
+	\lvert \tangent(\lambda) \rvert_D^2 = \sum_i \frac{(v_i\transpose \tilde g)^2}{(\mu_i + \lambda)^2} ,
+$$
+
+which does not increase with $\lambda > 0$, since every $\mu_i \ge 0$. That is the second half of
+part 3, and the first is part 1 with $\Delta = \lvert \tangent(\lambda) \rvert_D$. For part 2, the
+$\mu_i$ are positive. If $\lvert M^{-1} g \rvert_D \le \Delta$, $\lambda = 0$ and $\tangent^\ast =
+-M^{-1} g$ satisfy part 1. Otherwise $g \ne 0$, the sum is continuous and strictly decreasing in
+$\lambda \ge 0$, exceeds $\Delta^2$ at $\lambda = 0$ and tends to zero, so exactly one $\lambda > 0$
+gives $\lvert \tangent(\lambda) \rvert_D = \Delta$. The minimizer is unique because $m$ is strictly
+convex, and so is $\lambda$, which $(M + \lambda D)\, \tangent^\ast = -g$ determines when
+$\tangent^\ast \ne 0$; when $\tangent^\ast = 0$, $\lambda = 0$ by the third condition.
+
+</Proof>
+
+The scalar $\lambda$ is a *damping*. At $\lambda = 0$ the step is the model's own minimizer, and as
+$\lambda$ grows it shortens and turns toward $-D^{-1} g / \lambda$, a short step down the gradient
+in the scale of $D$. Part 3 says that a method may choose $\lambda$ instead of $\Delta$: every
+damped step is the trust-region step of some radius, and a larger damping a smaller radius. Doing
+so saves solving for the $\lambda$ of a given radius, and changes nothing else. With a curvature
+that is only positive semidefinite, or indefinite, as Newton's may be, the subproblem still has a
+solution, characterized as in part 1 with $M + \lambda D$ required to be positive semidefinite,
+and computing it needs more care where $g$ is orthogonal to the eigenvectors of the least
+eigenvalue [](cite:more1983).
+
+## The gain ratio
+
+A trust-region method adapts its radius to what the steps teach it about the model. A step
+$\tangent$ promises the decrease $m(0) - m(\tangent)$, which is positive for every solution of
+[](eq:subproblem) when $g \ne 0$, and obtains $f(\hat \point) - f(\hat \point \oplus \tangent)$.
+Their ratio,
+
+$$
+	\varrho = \frac{f(\hat \point) - f(\hat \point \oplus \tangent)}{m(0) - m(\tangent)} , @tag(gain)
+$$
+
+is the *gain ratio*. It is one when $f$ is the model over the step, near one where the model is
+good, and small or negative where it is not. Every trust-region method uses it the same way:
+
+- a step with $\varrho$ above a small threshold, often zero, is accepted, and the iteration moves
+  to $\hat \point \oplus \tangent$; one below it is rejected, and the iteration stays;
+- a step with $\varrho$ near one, which the model predicted well, lets the radius grow, or the
+  damping shrink; a step with small $\varrho$ makes the radius shrink, or the damping grow.
+
+The methods differ in the thresholds and the factors, and in whether they adapt $\Delta$ or
+$\lambda$. With a curvature that is bounded, a function that is bounded below and an acceptance
+threshold above zero, the gradients of such a method's iterates tend to zero from any start, and
+near a minimum at which the model's curvature is the Hessian it takes the full step and inherits
+Newton's rate [Chapter 4](cite:nocedal2006). The trust region is what turns a step that converges from near
+the answer into a method that converges from far from it.

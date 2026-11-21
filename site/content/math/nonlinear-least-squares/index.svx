@@ -1,0 +1,86 @@
+---
+title: Models of normals as least squares
+part: estimation
+order: 3
+summary: When every term of a model is a normal with a fixed scale and a mean computed from other quantities, its negative log-density is half a sum of squared whitened residuals plus the charts' log-volumes and a constant, so its mode is a nonlinear least-squares problem; a scale that is estimated breaks the form.
+depends_on: [normal, map-estimation]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as leastSquares from './statements/least-squares.md';
+</script>
+
+The [mode](../map-estimation/) of a posterior is the minimizer of a sum of terms, one for each of
+the model's kernels. For one family of models, by far the most common in estimation, each term is
+a square. A quantity measured with Gaussian noise, a state that follows another up to Gaussian
+noise, a parameter with a Gaussian prior: each is a [normal](../normal/) whose mean is computed
+from other quantities, and a model built of such terms, its means depending on quantities that
+are themselves scored by normals, is hierarchical in the plainest sense. This note shows that its
+mode is a *nonlinear least-squares problem*, says what the problem keeps of the density besides
+its squares, and where the form breaks.
+
+## A sum of squares, and what else
+
+<Statement {...leastSquares} />
+
+<Proof>
+
+By [](eq:math/map-estimation/sum), $f$ is the sum of the terms' negative log-densities. By
+[](eq:math/normal/log-density), the term of a normal scoring $\point_{s_t}$ with mean $\mu_t$ and
+whitening $W_t$ is
+
+$$
+	-\logterm_{\mathcal N} = \tfrac12 \lvert r_t \rvert^2 - \sum_i \log (W_t)_{ii} + \tfrac{d_t}{2} \log 2\pi + \lambda_{\mu_t}(\point_{s_t} \ominus \mu_t) ,
+$$
+
+with $d_t$ the dimension of the quantity's space. The scale is fixed, so the middle two summands
+are constants.
+
+</Proof>
+
+The objective is written, from here on, as
+
+$$
+	f(\point) = \sum_t \Bigl( \tfrac12 \lvert r_t(\point) \rvert^2 + \lambda_t(\point) \Bigr) + \text{a constant}, @tag(objective)
+$$
+
+a sum over *terms* $t$, each with a smooth *whitened residual* $r_t$, of any number of components,
+and a smooth scalar $\lambda_t$, which for many terms is zero, over a point $\point = (\point_1,
+\dots, \point_n)$ of a [product](../product-manifold/) of manifolds with retractions, the free
+quantities. Each term reads only a few of the factors of $\point$, its *variables* $K_t$: the
+quantity it scores, if that is free, and the free quantities its mean is computed from. The notes
+that follow use only this form, and the terms need not come from normals: any function of this
+shape is minimized by the same methods.
+
+**The squares are what least squares sees.** A residual is the difference between a quantity and
+the mean the model predicts for it, in the coordinates of the chart at the mean and in units of its
+noise. Its square is the measurement's disagreement with the model, and the sum of squares is what
+an engineer would write down as the cost of a fit without any probability at all. Minimizing it
+alone is the classical problem.
+
+**The log-volumes are what make $f$ a negative log-density.** The log-volume $\lambda_t$ is zero on
+a Euclidean space. On the positive orthant it is $\sum_i \log \point_{s_t, i}$, which depends on the
+scored quantity and not only on its residual. On a curved space, such as the rotations with the
+Cayley chart, it is a function of the residual's coordinates, of the relative order of the noise's
+variance near a zero residual. Leaving the log-volumes out minimizes the sum of squares alone,
+which is the mode of [another model](../normal/#the-gaussian-part-alone), and keeping them finds
+the mode of this one against the reference measure of its spaces. On Euclidean spaces the two
+coincide.
+
+**A residual of no components.** A term may have $r_t$ of no components and a nonzero $\lambda_t$:
+a factor that adds a function of the point and no square. It fits the form, and the methods of the
+following notes carry its gradient exactly.
+
+## Where the form breaks
+
+The form rests on the normalizers being constant, and so on the scales being fixed. A scale that
+is itself a free quantity breaks it in two places. The normalizer $-\sum_i \log (W_t)_{ii}$ is then a
+function of the point, and so is the residual, through $W_t$. For an isotropic scale $\sigma$, in its
+logarithmic chart $u = \log \sigma$, the residual is $e^{-u} (\point_{s_t} \ominus \mu_t)$ and the
+normalizer is $d_t u$: the first falls as the scale grows and the second rises. Such an objective
+is still a sum of squares and a smooth remainder, and the methods of the following notes still
+apply to it, but the remainder is now as large as the squares near the mode, and the methods that
+neglect the curvature of the squares' residuals lose their reason. A scale is estimated by a
+curvature that keeps its share, the expected information, which a later note takes up.
