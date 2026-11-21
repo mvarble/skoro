@@ -1,9 +1,9 @@
 ---
 title: Elimination in square-root form
 part: estimation
-order: 1
+order: 7
 summary: A sum of squared linear residuals and linear terms is minimized, integrated or marginalized one block of variables at a time by orthogonal factorizations of its rows, without ever forming its normal equations; each elimination leaves a conditional and a smaller problem of the same form.
-depends_on: []
+depends_on: [normal-equations]
 ---
 
 <script>
@@ -19,53 +19,33 @@ depends_on: []
 	import { mapFactors, mapTree, mapJunction } from './junction.graph';
 </script>
 
-Gauss–Newton and Levenberg–Marquardt steps, Laplace approximations and Kalman filters all end in
-the same piece of linear algebra: a function of a vector $\tangent \in \R^\dimension$ that is half
-a sum of squared affine residuals, plus a linear term,
+The steps and the Gaussians of the notes before this one end in the
+[normal equations](../normal-equations/) of a function of a vector $\tangent \in \R^\dimension$
+that is half a sum of squared affine residuals, plus a linear term,
 
 $$
 	\phi(\tangent) = \tfrac12 \lvert A \tangent - b \rvert^2 + \eta\transpose \tangent , @tag(problem)
 $$
 
 which is to be minimized, integrated as $e^{-\phi}$, or reduced to a function of some of its
-variables. This note shows how to do each without forming the matrix $A\transpose A$, and how to
+variables. Forming the matrix $A\transpose A$ of those equations squares the condition number, and
+can lose every digit. This note shows how to do each of the three without forming it, and how to
 do it one block of variables at a time when $A$ is sparse. It is a note about numbers and matrices
 alone, and nothing in it depends on where the rows came from.
 
 ## Linear least squares
 
-With $\eta = 0$, minimizing [](eq:problem) is the *linear least-squares problem*. Its gradient
-$A\transpose (A \tangent - b)$ vanishes at the minimizer, which therefore solves the *normal
-equations*
+With $\eta = 0$, minimizing [](eq:problem) is the *linear least-squares problem*. Its minimizer
+solves the normal equations
 
 $$
-	A\transpose A\, \tangent = A\transpose b . @tag(normal-equations)
+	A\transpose A\, \tangent = A\transpose b , @tag(normal-equations)
 $$
 
-They are the obvious way to compute it, and the wrong one. Floating-point arithmetic rounds each
-operation with a relative error of at most the *unit roundoff* $u$, about $1.1 \times 10^{-16}$ in
-double precision, and a linear system amplifies such errors by its *condition number*
-$\kappa(M) = \sigma_{\max}(M) / \sigma_{\min}(M)$, the ratio of its extreme singular values: a
-solution computed stably is accurate to about $u\, \kappa$, so that a solve loses about
-$\log_{10} \kappa$ of its sixteen digits. The singular values of $A\transpose A$ are the squares of
-those of $A$, so $\kappa(A\transpose A) = \kappa(A)^2$, and forming the normal equations doubles
-the digits lost. A Jacobian with $\kappa(A) = 10^6$, common when variables have different scales,
-leaves ten digits to a method that works with $A$ and four to one that works with $A\transpose A$.
-
-The loss can be total. With $\varepsilon = 10^{-8}$, take
-
-$$
-	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} ,
-	\qquad
-	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
-$$
-
-The least-squares solution is $(1, 1)$, with zero residual, and $\kappa(A) \approx 1.4 \times 10^8$,
-well within double precision. But
-$A\transpose A = \left[\begin{smallmatrix} 1 + \varepsilon^2 & 1 \\ 1 & 1 + \varepsilon^2 \end{smallmatrix}\right]$,
-and $1 + 10^{-16}$ rounds to $1$, so the matrix of the normal equations, as computed, is singular.
-The information was lost when the matrix was formed, and no solver of [](eq:normal-equations) can
-recover it. The factorization below returns $(1, 1)$ to full precision.
+and the example of [what forming them costs](../normal-equations/#what-forming-them-costs) is one
+whose matrix, as computed, is singular, though the problem is well within double precision. The
+cure is to work with $A$ itself, by transformations that preserve the residual's length and so
+amplify no error. The factorization below returns that example's solution to full precision.
 
 ## Householder reflections
 
@@ -359,6 +339,11 @@ the problem [](eq:problem) is
 $$
 	\phi(\tangent) = \sum_f \tfrac12 \bigl\lvert A_f\, \tangent_{K_f} - b_f \bigr\rvert^2 + \sum_k \eta_k\transpose \tangent_k . @tag(factored)
 $$
+
+The [linearization](../linearization/) of a sum of squares is such a problem, with one factor for
+each term: the rows $A_f = J_t$ over the blocks of the term's variables $K_t$, the right-hand side
+$b_f = -(r_t + \hat c_t)$, and the linear term $\eta$, split by block. Each piece of the linear term
+involves a single block, so the factor structure is that of the terms alone.
 
 The factors say where the matrix $A\transpose A$ is zero. Its block $(j, k)$ is the sum, over the
 factors that involve both $j$ and $k$, of the product of their columns for $j$, transposed, with

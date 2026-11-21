@@ -1,0 +1,126 @@
+---
+title: The normal equations
+part: estimation
+order: 6
+summary: The Gauss–Newton step, the damped step and the mean of a Gaussian factor all solve one linear system, the normal equations, whose matrix is the precision and whose determinant normalizes the integral; forming that matrix squares the condition number, a linear term costs the square whatever is done, and a linear term in the row space is therefore folded into the right-hand side.
+depends_on: [improper-gaussian]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as normalEquations from './statements/normal-equations.md';
+</script>
+
+The two readings of a linearization end in the same computation. Read as a
+[model in a trust region](../linearization/#a-model-in-a-trust-region), its step minimizes a
+quadratic. Read as an [improper Gaussian factor](../improper-gaussian/), its mean, its precision
+and its integral are the answers. Both are a sum of squared affine rows and a linear term, and both
+come down to one linear system. This note states the system, says what each reading takes from it,
+and says what it costs to solve it the obvious way, which is what the note after it is written to
+avoid.
+
+## One system
+
+Stack the rows of every term into one matrix $A$ and one right-hand side $b$, and write the linear
+term as $\eta$. The function is
+
+$$
+	\phi(\tangent) = \tfrac12 \lvert A \tangent - b \rvert^2 + \eta\transpose \tangent , @tag(problem)
+$$
+
+<Statement {...normalEquations} />
+
+<Proof>
+
+$A\transpose A$ is positive definite, since $\tangent\transpose A\transpose A\, \tangent = \lvert A
+\tangent \rvert^2 > 0$ for $\tangent \ne 0$ when $A$ has rank $\dimension$, so the normal equations
+have exactly one solution. $\phi$ is quadratic, with the gradient $A\transpose (A \tangent - b) +
+\eta$, which vanishes at $\tangent^\ast$, and the Hessian $A\transpose A$, so its Taylor expansion
+at $\tangent^\ast$ is exact and is the first identity, which shows $\tangent^\ast$ to be the one
+minimizer. The integral of $e^{-\frac12 \tangent\transpose P \tangent}$ over $\R^\dimension$ is
+$(2\pi)^{\dimension/2} \det P^{-1/2}$ for positive definite $P$, and translating by $\tangent^\ast$
+gives the second.
+
+</Proof>
+
+Each of the earlier readings is this statement.
+
+- **The Gauss–Newton step.** For the [linearization](../linearization/), $A$ stacks the Jacobians
+  $J_t$ and $b$ the right-hand sides $-(r_t + \hat c_t)$, so $A\transpose A$ is the Gauss–Newton
+  matrix and $A\transpose b - \eta = -g$ by [](eq:math/linearization/agreement), and the solution
+  is the step [](eq:math/linearization/step).
+- **The damped step.** A damping adds $\tfrac12 \lambda \tangent\transpose D \tangent$, which is
+  the square of the rows $\sqrt \lambda\, D^{1/2}$ with a right-hand side of zero. Appended to $A$,
+  they turn the matrix into $A\transpose A + \lambda D$, and the solution is the damped step
+  [](eq:math/linearization/damped). For $\lambda > 0$ the stacked rows have full rank whatever $A$
+  has.
+- **The Gaussian factor.** For the factor of [%full](statement:math/improper-gaussian/full-rank),
+  $e^{-\phi}$ is a normal density of $\tangent$ times a constant: its mean is $\tangent^\ast$, its
+  precision $A\transpose A$, its covariance $(A\transpose A)^{-1}$, and its integral the one above.
+
+So the matrix of the normal equations is the curvature of the optimizer's model and the precision
+of the estimator's Gaussian, and their right-hand side is the negative gradient and the
+precision times the mean, the *information vector*. Writing a Gaussian by its precision and its
+information vector, rather than by its covariance and its mean, is its *information form*, and the
+normal equations are a Gaussian in information form.
+
+## What forming them costs
+
+The normal equations are the obvious way to compute $\tangent^\ast$, and the wrong one. Floating-point
+arithmetic rounds each operation with a relative error of at most the *unit roundoff* $u$, about
+$1.1 \times 10^{-16}$ in double precision, and a linear system amplifies such errors by its
+*condition number* $\kappa(M) = \sigma_{\max}(M) / \sigma_{\min}(M)$, the ratio of its extreme
+singular values: a solution computed stably is accurate to about $u\, \kappa$, so that a solve
+loses about $\log_{10} \kappa$ of its sixteen digits. The singular values of $A\transpose A$ are
+the squares of those of $A$, so $\kappa(A\transpose A) = \kappa(A)^2$, and forming the normal
+equations doubles the digits lost. A Jacobian with $\kappa(A) = 10^6$, common when variables have
+different scales, leaves ten digits to a method that works with $A$ and four to one that works with
+$A\transpose A$.
+
+The loss can be total. With $\varepsilon = 10^{-8}$, take
+
+$$
+	A = \begin{bmatrix} 1 & 1 \\ \varepsilon & 0 \\ 0 & \varepsilon \end{bmatrix} ,
+	\qquad
+	b = \begin{bmatrix} 2 \\ \varepsilon \\ \varepsilon \end{bmatrix} .
+$$
+
+The least-squares solution is $(1, 1)$, with zero residual, and $\kappa(A) \approx 1.4 \times 10^8$,
+well within double precision. But
+$A\transpose A = \left[\begin{smallmatrix} 1 + \varepsilon^2 & 1 \\ 1 & 1 + \varepsilon^2 \end{smallmatrix}\right]$,
+and $1 + 10^{-16}$ rounds to $1$, so the matrix of the normal equations, as computed, is singular.
+The information was lost when the matrix was formed, and no solver of the normal equations can
+recover it. A method that factors $A$ itself by orthogonal transformations, which preserve lengths
+and amplify no error, returns $(1, 1)$ to full precision; the next note is that method.
+
+## A linear term, and a fold
+
+The solution splits by its sources, $\tangent^\ast = (A\transpose A)^{-1} A\transpose b - (A\transpose
+A)^{-1} \eta$. The first part is the least-squares solution of $A \tangent = b$, which a method that
+works with $A$ computes at the condition number $\kappa(A)$. The second is a solve with the matrix
+$A\transpose A$ itself, and is as sensitive as one, at $\kappa(A)^2$, however it is computed: the
+sensitivity belongs to the map $\eta \mapsto (A\transpose A)^{-1} \eta$, and not to a method. A
+linear term costs the square of the condition number, always.
+
+Unless it can be moved. A linear term in the row space of $A$, $\eta = A\transpose c$ for some
+vector $c$, is the same function as a shift of the right-hand side,
+
+$$
+	\tfrac12 \lvert A \tangent - b \rvert^2 + c\transpose A \tangent = \tfrac12 \lvert A \tangent - (b - c) \rvert^2 + c\transpose b - \tfrac12 \lvert c \rvert^2 , @tag(fold)
+$$
+
+and *folded* into $b$ it is solved with the rows, at $\kappa(A)$. Only the part of a linear term
+outside the row space must stay one. This is why the [linearization](../linearization/) folds a
+log-volume into its own term's right-hand side wherever the log-volume's gradient lies in the
+term's row space, and keeps in $\eta$ only the log-volumes that are functions of the point and not
+of the residual alone: on a model of Euclidean and curved quantities with fixed scales, every
+log-volume is folded, $\eta = 0$, and the whole step is solved at $\kappa(J)$.
+
+**Where $\eta$ comes from.** In exact arithmetic $\eta = g - \sum_t J_t\transpose (r_t + \hat
+c_t)$, and both terms of that difference are derivatives the linearization needs anyway. It should
+not be computed so. On a model whose log-volumes are all folded, $\eta$ is exactly zero, while $g$
+and $\sum_t J_t\transpose r_t$ are each of the size of $\lvert J \rvert \lvert r \rvert$ and each
+rounded: their difference is rounding of that size, not zero, and a linear term is amplified by
+$\kappa(J)^2$ in the solve. Read off the log-volumes that are not folded, $\eta$ is exactly zero
+wherever there are none, and otherwise only as large, and as rounded, as their own gradients.

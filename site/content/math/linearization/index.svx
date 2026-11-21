@@ -1,9 +1,9 @@
 ---
 title: Linearization and the Gauss–Newton step
 part: estimation
-order: 3
-summary: The negative log-density of a model of normals is a sum of squared whitened residuals and log-volumes; linearizing the residuals at a point gives a sum of squared affine rows and a linear term, which agrees with the function in value and gradient, whose minimizer is the Gauss–Newton step, and which is exact when the model is linear-Gaussian.
-depends_on: [derivatives-in-charts, product-manifold, chart-volume, normal, square-root-elimination]
+order: 4
+summary: Linearizing the residuals of a sum of squares and log-volumes at a point gives a quadratic model that agrees with the function in value and gradient and whose curvature is the Gauss–Newton matrix; its minimizer is the Gauss–Newton step, its minimizer in a trust region the damped step, its iteration converges where the gradient vanishes at a rate set by the curvature it omits, and it is exact when the model is linear-Gaussian.
+depends_on: [nonlinear-least-squares, trust-regions, chart-volume]
 ---
 
 <script>
@@ -14,41 +14,28 @@ depends_on: [derivatives-in-charts, product-manifold, chart-volume, normal, squa
 	import * as exact from './statements/exact.md';
 </script>
 
-A model whose terms are [normals](../normal/) has a log-density that is, up to constants, a sum of
-squares. Almost every method that estimates such a model does the same thing with it: it replaces
-each residual by its first-order expansion at a point, and is left with a problem of
-[linear algebra](../square-root-elimination/). This note defines that replacement, says exactly
-what it keeps of the function and what it leaves out, and proves what the iteration built on it
-converges to. The two notes after it use the same linearization twice more, with a damping and as
-a Gaussian approximation.
+The [mode of a model of normals](../nonlinear-least-squares/) minimizes a sum of squared
+residuals and log-volumes. [Newton's method](../trust-regions/) would minimize it with the
+function's whole curvature, which needs the second derivatives of every residual. Almost every
+method that estimates such a model does something cheaper: it replaces each residual by its
+first-order expansion at a point, and is left with a quadratic model whose curvature needs first
+derivatives alone. This note defines that replacement, says exactly what it keeps of the function
+and what it leaves out, reads it as a model in a trust region, and proves what the iteration built
+on it converges to. The note after it reads the same replacement as a Gaussian.
 
-## A sum of squares, and what else
+## The setting
 
-Let $\point = (\point_1, \dots, \point_n)$ be a point of a [product](../product-manifold/) of
-manifolds with retractions, with the stacked tangent $\R^\dimension$ at each point. The function to
-be linearized is
+<!-- The anchor of the section that defined the objective, which moved to the note on models of
+     normals as least squares and which a document of the archive still links to. -->
+<span id="a-sum-of-squares-and-what-else"></span>
 
-$$
-	f(\point) = \sum_t \Bigl( \tfrac12 \lvert r_t(\point) \rvert^2 + \lambda_t(\point) \Bigr) + \text{a constant}, @tag(objective)
-$$
-
-a sum over *terms* $t$, each with a smooth *whitened residual* $r_t$, of any number of components,
-and a smooth scalar $\lambda_t$, which for many terms is zero. Each term reads only a few of the
-factors of $\point$, its *variables* $K_t$.
-
-This is the negative log-density of a model of normals whose scales are fixed. A normal's
-log-density [](eq:math/normal/log-density) is $-\tfrac12 \lvert r \rvert^2$ with $r = W(\point
-\ominus \mu)$, plus a normalizer that is constant when the scale is, less the log-volume
-$\lambda_\mu(\point \ominus \mu)$ of the chart, which is zero on a Euclidean space and is a function
-of the point on a positive or a curved one. An
-[improper Gaussian factor](../improper-gaussian/) is of the same form, with its linear part
-$\eta\transpose \delta$ in the place of $\lambda$. The squares are what least squares sees. The
-log-volumes are what makes $f$ the negative logarithm of a density, and the linearization keeps
-their gradients.
-
-Write $g$ for the [chart gradient](../derivatives-in-charts/) of $f$ at the point of
-linearization $\hat \point$. Every derivative below is in the charts at $\hat \point$, so that on a
-curved factor it is the derivative of a function of $\hat \point \oplus \tangent$ at $\tangent = 0$.
+The function to be linearized is the objective [](eq:math/nonlinear-least-squares/objective), a
+sum over terms $t$ of half a squared whitened residual $r_t$ and a log-volume $\lambda_t$, on a
+product of manifolds with retractions with the stacked tangent $\R^\dimension$. Each term reads only
+its variables $K_t$. Write $g$ for the [chart gradient](../derivatives-in-charts/) of $f$ at the
+point of linearization $\hat \point$. Every derivative below is in the charts at $\hat \point$, so
+that on a curved factor it is the derivative of a function of $\hat \point \oplus \tangent$ at
+$\tangent = 0$.
 
 ## The linearization
 
@@ -67,32 +54,21 @@ J_t\transpose (r_t + \hat c_t) + \eta$. For a folded term, $\D r_t = W_t \D s_t$
 J_t\transpose \hat c_t$, and the two gradients agree term by term.
 
 **Folding a log-volume into its rows.** A folded log-volume's gradient lies in the row space of its
-own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, and not by a linear
+own term's rows, so it is carried by the right-hand side, $-(r_t + \hat c_t)$, and not by the linear
 term. The normal's log-volume is folded on the Euclidean spaces, where it is zero, and on the
 curved ones, where it is a function of $s_t = \point \ominus \mu$ alone: of $s_t$ itself on a group
 whose chart translates the identity's, and of $\lvert s_t \rvert$ on the sphere with orthonormal
 bases. On a positive space it is $\sum_i \log \point_i$, which depends on the point and not only on
-$s_t$, and it stays in $\eta$. Folding costs nothing, since $\hat c_t$ is a gradient of the size of
-$s_t$, and it gains two things. A folded linear term is solved with the residuals, at the condition
-number $\kappa(J)$, and not at $\kappa(J)^2$ as
-[a linear term is](../square-root-elimination/#linear-terms). And elimination keeps it in the
-rows: a linear term in the row space stays in the row space of every new factor, so a model of
-Euclidean and curved quantities has $\eta = 0$ exactly, before and after any elimination.
+$s_t$, and it stays in $\eta$. So a model of Euclidean and curved quantities has $\eta = 0$
+exactly. Folding costs nothing, since $\hat c_t$ is a gradient of the size of $s_t$; why it is worth
+doing, and why $\eta$ is read off the unfolded log-volumes rather than computed as a difference of
+gradients, are questions of how the model is solved, which
+[the normal equations](../normal-equations/#a-linear-term-and-a-fold) answer.
 
-**Where $\eta$ comes from.** In exact arithmetic $\eta = g - \sum_t J_t\transpose (r_t + \hat
-c_t)$, and both terms of that difference are derivatives the linearization needs anyway. It should
-not be computed so. On a model of normals with fixed scales on Euclidean and curved spaces, $\eta$
-is exactly zero, while $g$ and $\sum_t J_t\transpose r_t$ are each of the size of $\lvert J \rvert
-\lvert r \rvert$ and each rounded: their difference is rounding of that size, not zero, and a
-linear term is amplified by $\kappa(J)^2$ in the solve. Read off the log-volumes that are not
-folded, $\eta$ is exactly zero wherever there are none, and otherwise only as large, and as
-rounded, as their own gradients.
-
-The linearization is the problem [](eq:math/square-root-elimination/factored) of the note on
-elimination, with one factor for each term: the rows $A_t = J_t$ over the blocks of $K_t$, the
-right-hand side $b_t = -(r_t + \hat c_t)$, and the linear term $\eta$, split by block. Each piece
-of the linear term involves a single block, so the factor structure is that of the terms alone,
-and only the columns of $K_t$ are nonzero in $J_t$.
+Each term's rows $J_t$ are nonzero only in the columns of its variables $K_t$, and each piece of
+the linear term is the gradient of one log-volume, nonzero only on the variables of its own term.
+So the linearization is a sum of pieces, one for each term, each a function of a few blocks of
+$\tangent$, with the structure of the terms alone.
 
 ## What is left out
 
@@ -118,12 +94,35 @@ $$
 	\tangent^* = -\Bigl(\sum_t J_t\transpose J_t\Bigr)^{-1} g , @tag(step)
 $$
 
-computed by elimination of the rows and never from this formula: the part from the right-hand
-sides, folded log-volumes included, at $\kappa(J)$, and the part from $\eta$ at $\kappa(J)^2$. The
-step returns to the manifold by the retraction, $\hat \point \oplus \tangent^*$, factor by factor.
+computed from the rows and never from this formula, for reasons that
+[the normal equations](../normal-equations/) give. The step returns to the manifold by the
+retraction, $\hat \point \oplus \tangent^*$, factor by factor.
 A factor whose rows do not determine it, such as a landmark seen from one place along one
 direction, has no step: the direction is the model's to fix, by a prior or by a damping, and not
 the linear algebra's to guess.
+
+## A model in a trust region
+
+The linearization is a quadratic model [](eq:math/trust-regions/model) of $f$ at $\hat \point$: it
+has the gradient $g$ and the curvature $M = \sum_t J_t\transpose J_t$, positive semidefinite by
+construction. Minimizing it is the step [](eq:math/trust-regions/step) of that curvature, and the
+Gauss–Newton step is a quasi-Newton step whose curvature leaves out the last two sums of
+[](eq:hessian).
+
+Like every such model it is good only near $\hat \point$, and the [trust region](../trust-regions/#the-trust-region)
+applies to it unchanged. By [%full](statement:math/trust-regions/trust-region-step), the step
+within a radius solves
+
+$$
+	\Bigl( \sum_t J_t\transpose J_t + \lambda D \Bigr) \tangent = -g @tag(damped)
+$$
+
+for a damping $\lambda \ge 0$, and every damped step is the trust-region step of some radius. The
+Gauss–Newton step is the trust-region step with the radius infinite, $\lambda = 0$. It is not
+itself a trust-region method: alone it trusts the model everywhere, and from a poor start it
+overshoots. The method that chooses $\lambda$ by the gain ratio [](eq:math/trust-regions/gain) of
+each step, the Levenberg–Marquardt method, is the trust-region method on this model, and a later
+note states its choices.
 
 ## What the iteration converges to
 
@@ -135,16 +134,8 @@ and the second only how fast it gets there.
 
 <Proof>
 
-The matrix $J\transpose J$ is invertible, so $\delta_k = 0$ exactly when $g(q_k) = 0$. Read the
-iteration in the chart at $q^*$ as the map $\Phi(q) = q \oplus \bigl(-(J\transpose J)^{-1}
-g(q)\bigr)$. At $q^*$, $g = 0$, so the derivative of $\Phi$ there is
-$I - (J\transpose J)^{-1} \D g(q^*)$, the derivative of the retraction in its tangent argument
-being the identity at $0$. At a stationary point the derivative of the chart gradient is the chart
-Hessian, the correction term of [%full](statement:math/derivatives-in-charts/chart-hessian)
-vanishing with the gradient, so $\D \Phi(q^*) = I - (J\transpose J)^{-1} H^* =
--(J\transpose J)^{-1} E$. A fixed point of a smooth map whose derivative has spectral radius
-$\rho < 1$ attracts every start near enough to it, at the linear rate $\rho$, by Ostrowski's
-theorem [](cite:ortega1970).
+This is [%full](statement:math/trust-regions/curvature-iteration) with $M = J\transpose J$, whose
+rate is the spectral radius of $I - (J\transpose J)^{-1} H^\ast = -(J\transpose J)^{-1} E$.
 
 </Proof>
 
@@ -200,9 +191,9 @@ step from anywhere lands on the mode.
 
 ## Where it fails
 
-The linearization rests on the normalizers being constant, and so on the scales being fixed.
-A scale that is itself a variable breaks it, and carrying the normalizer's gradient in $\eta$
-would not mend it. The residual depends on the scale, and the residual's own curvature in the
+The linearization rests on the normalizers being constant, and so on the scales being fixed
+([where the form breaks](../nonlinear-least-squares/#where-the-form-breaks)). Carrying a free
+scale's normalizer's gradient in $\eta$ would not mend it. The residual depends on the scale, and the residual's own curvature in the
 scale's coordinates, which the rows omit, is as large as what they keep. For an isotropic scale in
 its logarithmic chart $u = \log \sigma$, $r = e^{-u} \varepsilon$, so the rows' curvature in $u$ is
 $\lvert r \rvert^2$ and the squares' is $2 \lvert r \rvert^2$, while the normalizer $-\dimension u$

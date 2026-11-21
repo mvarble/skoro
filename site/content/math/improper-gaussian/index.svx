@@ -1,9 +1,9 @@
 ---
 title: The improper Gaussian factor
 part: estimation
-order: 2
-summary: A sum of squared affine rows of any number, a linear term and a constant, in the tangent coordinates of several points at fixed anchors, is Gaussian along its rows and flat or linear across them; such factors add, are a normal exactly when their rows have full rank, and are what integrating a variable out of a linear-Gaussian model leaves on its neighbours, the Kalman filter's update and prediction among them.
-depends_on: [normal, square-root-elimination]
+order: 5
+summary: A sum of squared affine rows of any number, a linear term and a constant, in the tangent coordinates of several points at fixed anchors, is Gaussian along its rows and flat or linear across them; the linearization of a sum of squares is one, a Gaussian factor on the increment from the point of linearization whose mean is the Gauss–Newton step, and such factors add and are a normal exactly when their rows have full rank.
+depends_on: [normal, linearization]
 ---
 
 <script>
@@ -24,9 +24,16 @@ which direction the landmark lies, and nothing about how far. What is left is Ga
 bearing and constant along it, and no covariance describes it. Forced into a normal, it must either
 be refused or be given a depth that the data never supplied.
 
-This note defines the function that needs neither: the *improper Gaussian factor*. It keeps exactly
-what was said and nothing more, such factors add, and when one does determine its blanket it is a
-normal.
+The same function appears earlier, and more often, without any integral. The
+[linearization](../linearization/) of a sum of squares at a point is a quadratic model of the
+function, read by an optimizer as something to minimize. Its exponential is Gaussian in the step
+along its rows and flat across them, and it is a statement about the increment from the point of
+linearization to the point: what the residuals, once made affine, say of where the point lies.
+
+This note defines the function that describes both: the *improper Gaussian factor*. It keeps
+exactly what was said and nothing more, such factors add, and when one does determine its points
+it is a normal. Read on a linearization, it is the second reading of the same model, a Gaussian
+where the [note before](../linearization/) saw a model in a trust region.
 
 ## The factor
 
@@ -97,6 +104,52 @@ has full rank over Euclidean points, drawing $\delta$ from the normal of
 [%full](statement:full-rank) and setting $\point_i = p_i \oplus \delta_i$ is a proposal under which
 every draw has the same [weight](../importance-weights/).
 
+## The linearization is a factor
+
+Take the [linearization](../linearization/) $m$ of the objective $f$ at $\hat \point$, anchor
+every factor of the point at $\hat \point$ itself, so that the stacked tangent is the increment
+$\delta(\point) = \point \ominus \hat \point$, and set
+
+$$
+	A = \begin{bmatrix} \vdots \\ J_t \\ \vdots \end{bmatrix} , \qquad
+	b = -\begin{bmatrix} \vdots \\ r_t + \hat c_t \\ \vdots \end{bmatrix} , \qquad
+	c = -c_0 ,
+$$
+
+with the linear term $\eta$ of the linearization. Then $-m(\delta)$ is the improper Gaussian
+factor with these rows, term for term, and since $m(\tangent)$ agrees with $f(\hat \point \oplus
+\tangent)$ to first order,
+
+$$
+	e^{-f(\point)} \approx e^{\logterm(\point)} = e^{-m(\point \ominus \hat \point)} @tag(linearization)
+$$
+
+near $\hat \point$. Linearizing the residuals is saying that the increment from the point of
+linearization to the point has a Gaussian factor. Each term contributes its own rows, so the factor
+is a sum of factors, one for each term, over the term's variables; it is the linearization's
+structure read as a sum of likelihoods.
+
+When the rows have full rank, the factor is by [%full](statement:full-rank) a normal of the
+increment. Its mean $(A\transpose A)^{-1}(A\transpose b - \eta) = -(\sum_t J_t\transpose
+J_t)^{-1} g$, by [](eq:math/linearization/agreement), is the Gauss–Newton step
+[](eq:math/linearization/step), and its precision $A\transpose A$ is the Gauss–Newton matrix. The
+optimizer's minimizer and the estimator's mean are one vector, and the optimizer's curvature and
+the estimator's precision one matrix. When the rows do not have full rank, the optimizer has no
+step and the estimator no mean, for the same reason: some direction of the increment is not
+determined, and the factor is flat or linear along it.
+
+A damping is a factor too. The penalty $\tfrac12 \lambda\, \delta\transpose D \delta$ of the
+damped step [](eq:math/linearization/damped) is, as a factor, a normal of the increment with mean
+zero and precision $\lambda D$: a prior that the point lies near $\hat \point$. Adding it to the
+linearization's factor, as factors add, gives a factor of full rank whose mean is the damped step.
+The trust region's radius is, in this reading, the prior's scale.
+
+The factor is a likelihood factor in $\delta$, and $e^{\logterm}$ approximates $e^{-f}$, a density
+against the reference measure of the points' spaces. As a density of $\delta$ against Lebesgue
+measure, the posterior near $\hat \point$ is $e^{-f(\hat \point \oplus \delta)}$ times the volume of
+the chart, by [](eq:math/map-estimation/chart-objective); the two differ on a curved space, and the
+Gaussian fitted to a posterior in a chart keeps the chart's volume.
+
 ## Two examples
 
 **A bearing in the plane.** Take a landmark $\ell \in \R^2$ and poses $\point_k \in \R^2$, each with
@@ -152,52 +205,6 @@ most its projection onto that space, $(-\tfrac12, \tfrac12)$, can be moved into 
 $(\tfrac12, \tfrac12)$ remains. Along the null direction $(1, 1)$ the factor falls linearly. This
 is why the factor carries $\eta$: a log-volume that depends on the point and not only on a
 residual, as the positive reals' does, leaves a slope that no row can hold.
-
-## What elimination leaves
-
-The two examples were integrals done by hand. In general, integrating a block of variables out of
-a sum of squared rows and linear terms is part 2 of
-[%full](statement:math/square-root-elimination/eliminate-one): with the notation of that lemma,
-
-$$
-	\log \int e^{-\phi(\tangent_k, \tangent_S)}\, \dd \tangent_k
-	= -\tfrac12 \lvert A' \tangent_S - b' \rvert^2 - (\eta_S - T\transpose y)\transpose \tangent_S
-	- \gamma + \tfrac{d_k}{2} \log 2\pi - \log \lvert \det R \rvert . @tag(eliminated)
-$$
-
-That is an improper Gaussian factor of the variables left: its rows are the rows the
-factorization did not use, its linear term is what is left of the linear terms, and its constant
-collects the rest. Nothing requires $A'$ to have full rank, and when the eliminated block was the
-only thing tying down some direction of $\tangent_S$, it has not. The factor is the exact answer
-all the same.
-
-**The Kalman filter.** Take the scalar chain
-
-$$
-	\randomPoint_0 \sim \mathcal N(a, s^2), \quad
-	\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2), \quad
-	\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2) ,
-$$
-
-and integrate $\randomPoint_0$ out with $\bfz_0$ observed at $\hat z_0$. Completing the square in
-$\point_0$ gives $\mathcal N(a, s^2)(\point_0)\, \mathcal N(\point_0, r^2)(\hat z_0) = \mathcal N(a,
-s^2 + r^2)(\hat z_0)\, \mathcal N(\mu, P)(\point_0)$, writing $\mathcal N(m, v)(\point)$ for the
-normal density of mean $m$ and variance $v$ at $\point$, and integrating the motion against it
-gives
-
-$$
-	\logterm_B(\point_1) = \log \mathcal N(a, s^2 + r^2)(\hat z_0) + \log \mathcal N(\mu, P + q^2)(\point_1),
-	\qquad
-	K = \frac{s^2}{s^2 + r^2}, \quad \mu = a + K(\hat z_0 - a), \quad P = (1 - K)\, s^2 . @tag(kalman)
-$$
-
-The factor on $\point_1$ has full rank, and reads as two things. Its normal is the filter's
-*prediction* of $\randomPoint_1$, made from the *update* $\mathcal N(\mu, P)$ of $\randomPoint_0$
-by the measurement, with $K$ the gain. Its constant is the *evidence*, the density of the
-measurement that was integrated over. A Kalman filter is this elimination repeated along a chain,
-one state at a time, and it is exact because every term is linear and Gaussian. The improper
-factor is what the same elimination gives when a state is not yet determined by what has been
-measured, and the filter's covariance does not exist.
 
 ## Forms of one factor
 
