@@ -106,7 +106,8 @@ the covariance form's subtraction $(I - K H) P$ does, at that of the matrices bu
 measurements so far. Elimination along the chain, followed by back substitution from the last
 state to the first, gives instead the mode of every state given every measurement, the minimizer of
 the whole chain's objective; on a linear-Gaussian chain that is the mean of each state's
-posterior given all the data, which a filter, looking only backward, does not compute. And on a
+posterior given all the data, the *smoothed* mean, which a filter, looking only backward, does not
+compute. And on a
 chain whose means are not linear, the filter that linearizes each step at its prediction takes one
 [Gauss–Newton step](../linearization/) per state, from that prediction, and is not the mode of
 anything: it is exact where the linearization is.

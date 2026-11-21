@@ -142,7 +142,8 @@ A damping is a factor too. The penalty $\tfrac12 \lambda\, \delta\transpose D \d
 damped step [](eq:math/linearization/damped) is, as a factor, a normal of the increment with mean
 zero and precision $\lambda D$: a prior that the point lies near $\hat \point$. Adding it to the
 linearization's factor, as factors add, gives a factor of full rank whose mean is the damped step.
-The trust region's radius is, in this reading, the prior's scale.
+The trust region's radius is, in this reading, set by the prior: the tighter the prior, the shorter
+the step.
 
 The factor is a likelihood factor in $\delta$, and $e^{\logterm}$ approximates $e^{-f}$, a density
 against the reference measure of the points' spaces. As a density of $\delta$ against Lebesgue

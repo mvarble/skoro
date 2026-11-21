@@ -66,7 +66,10 @@ negative logarithm of the joint density divided by $h$ gives $f'$.
 
 </Proof>
 
-The posterior does not move: the same law, the same expectations, the same credible sets. Only
+This is not a change of variables. An optimizer that writes $f$ in other coordinates moves its
+minimizer with the coordinates, and finds the same point. A change of measure changes the function,
+and the point. The posterior does not move: the same law, the same expectations, the same credible
+sets. Only
 its density changes, and with it the point at which the density is greatest. The mode is a
 property of the pair of a law and a reference measure, and not of the law alone.
 
@@ -106,7 +109,9 @@ $$
 one *term* $\phi_t$ for each kernel, factor and score, as the
 [logarithms of a model](../generative-models/#working-with-a-model-built-forward) are. Each term
 reads only the few quantities its kernel reads, its *variables* $K_t$, and the observed quantities
-are held at their values. So the gradient of $f$ is a sum of gradients that are each zero outside
+are held at their values. The term of a free quantity's own kernel is its prior, and an optimizer
+would call it a *regularizer*, a penalty on the variables; the terms of observed quantities are the
+likelihood, which an optimizer calls the cost of the fit. So the gradient of $f$ is a sum of gradients that are each zero outside
 the coordinates of a few quantities, and its Hessian a sum of blocks, each on the variables of one
 term. Two quantities that share no term have a zero block between them. The methods that find a
 mode inherit this structure, and the factorization that ends this part's linear algebra is built

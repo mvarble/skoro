@@ -3,7 +3,7 @@ title: Fisher scoring
 part: estimation
 order: 12
 summary: Where a scale is itself estimated, the Gauss–Newton rows omit as much curvature as they keep; Fisher scoring puts the expected information in the Hessian's place, assembled from roots as a second set of rows whose gradient is exact, and it is the Gauss–Newton linearization again when every scale is fixed.
-depends_on: [normal, linearization]
+depends_on: [normal, trust-regions, linearization]
 ---
 
 <script>
@@ -80,7 +80,7 @@ $$
 $$
 
 stops only where $g = 0$, at a stationary point of $f$, log-volumes included, by the argument of
-[%full](statement:math/linearization/gauss-newton) with this matrix on the left. It converges
+[%full](statement:math/trust-regions/curvature-iteration) with this matrix as the curvature. It converges
 there at the linear rate that the difference between the Hessian and the expected information
 sets.
 

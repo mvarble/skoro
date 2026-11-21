@@ -35,7 +35,9 @@ $$
 	f(\hat \point \oplus \tangent) \approx m(\tangent) = f(\hat \point) + g\transpose \tangent + \tfrac12 \tangent\transpose M \tangent , @tag(model)
 $$
 
-for a symmetric matrix $M$, the model's *curvature*. The model agrees with $f$ in value and
+for a symmetric matrix $M$, the model's *curvature*. When $f$ is a negative log-density, as it is
+for a mode, $g$ is the negative of the *score*, the gradient of the log-density, and the Hessian of
+$f$ at a mode is the *observed information*. The model agrees with $f$ in value and
 gradient at $\tangent = 0$ whatever $M$ is. With $M$ the Hessian of the pull-back $\tangent \mapsto
 f(\hat \point \oplus \tangent)$ it agrees to second order as well, and that Hessian equals the chart
 Hessian at a stationary point by [%full](statement:math/derivatives-in-charts/chart-hessian). When
@@ -52,8 +54,8 @@ stationary point of the model that may be a saddle or a maximum.
 
 ## Newton's method
 
-Newton's method takes the model's curvature from $f$: $M = H$, solved as [](eq:step) at every
-iterate.
+Newton's method takes the model's curvature from $f$.
+It decides $M = H$, solved as [](eq:step) at every iterate.
 
 <Statement {...newton} />
 
@@ -186,7 +188,9 @@ $$
 $$
 
 is the *gain ratio*. It is one when $f$ is the model over the step, near one where the model is
-good, and small or negative where it is not. Every trust-region method uses it the same way:
+good, and small or negative where it is not. Read as the logarithm of a Gaussian, as the model is
+by the notes that fit one, the ratio measures how well that Gaussian follows the density over the
+step. Every trust-region method uses it the same way:
 
 - a step with $\varrho$ above a small threshold, often zero, is accepted, and the iteration moves
   to $\hat \point \oplus \tangent$; one below it is rejected, and the iteration stays;
@@ -197,5 +201,6 @@ The methods differ in the thresholds and the factors, and in whether they adapt 
 $\lambda$. With a curvature that is bounded, a function that is bounded below and an acceptance
 threshold above zero, the gradients of such a method's iterates tend to zero from any start, and
 near a minimum at which the model's curvature is the Hessian it takes the full step and inherits
-Newton's rate [Chapter 4](cite:nocedal2006). The trust region is what turns a step that converges from near
+Newton's rate, on a Euclidean space [Chapter 4](cite:nocedal2006) and on a manifold with a retraction
+[Chapter 7](cite:absil2008). The trust region is what turns a step that converges from near
 the answer into a method that converges from far from it.

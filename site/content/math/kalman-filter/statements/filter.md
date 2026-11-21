@@ -24,8 +24,9 @@ $$
 	\end{gathered}
 $$
 
-Then integrating $\point_0, \dots, \point_{k-1}$ out of the joint density, in that order, leaves on
-$\point_k$ the factor
+Then integrating $\point_0, \dots, \point_{k-1}$, in that order, out of the terms that read only
+them and $\point_k$, the prior, the motions up to $\point_k$ and the measurements $\bfz_0, \dots,
+\bfz_{k-1}$ at their values, leaves on $\point_k$ the factor
 
 $$
 	\log \mathcal N(\point_k;\, \mu_k^-, P_k^-) + \sum_{j < k} \log \mathcal N(\nu_j;\, 0, S_j) ,

@@ -34,7 +34,9 @@ It is the damped step [](eq:math/linearization/damped), and by
 [%full](statement:math/trust-regions/trust-region-step) the trust-region step of the radius
 $\lvert \tangent \rvert_D$: the method chooses the damping, and the radius follows. At $\lambda =
 0$ it is the Gauss–Newton step. As $\lambda$ grows it turns toward $-D^{-1} g / \lambda$, a short
-step down the gradient.
+step down the gradient. Read as a Gaussian, the damping is a
+[normal prior on the step](../improper-gaussian/#the-linearization-is-a-factor), and the damped step
+its mean.
 
 The diagonal is Marquardt's, the squared norms of the columns of $J$,
 
