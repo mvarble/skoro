@@ -56,7 +56,7 @@ The part is reordered to tell one story: what is estimated, how such an estimate
 general, why a model of normals makes the finding a least-squares problem, what the linearization
 of that problem is under each reading, the linear system both readings end in, and last, how to
 solve that system well. Elimination keeps everything it holds and moves from the first place to
-the seventh.
+the eighth.
 
 ### The notes, and their order
 
@@ -67,13 +67,15 @@ the seventh.
 | 3 | `nonlinear-least-squares` | new | a model of normals whose scales are fixed and whose means are computed from other quantities: its $f$ is $\sum_t \tfrac12 \lvert r_t \rvert^2 + \lambda_t$ plus a constant, so its mode is a nonlinear least-squares problem; a free scale breaks the form | normal, map-estimation |
 | 4 | `linearization` | revised | the linearization of the residuals, its agreement with $f$ to first order, and what it leaves out of the Hessian; Gauss–Newton as the step of 2 with the curvature $J\transpose J$, and its convergence as an instance of 2's; the trust-region step on the Gauss–Newton model as the damped step; where the linearization is exact | nonlinear-least-squares, trust-regions, chart-volume |
 | 5 | `improper-gaussian` | revised, from 2 | the factor, when it is a normal, the two examples worked by hand, its forms, how factors add, its derivatives, as now; opened by a new instance: the linearization is a factor in the increment $\delta = \point \ominus \hat \point$ at the anchor $\hat \point$, whose mean, when it has full rank, is the Gauss–Newton step | normal, linearization |
-| 6 | `normal-equations` | new | the step, the damped step and the factor's mean each solve $A\transpose A\, \tangent = A\transpose b - \eta$; $A\transpose A$ as the precision and its determinant in the integral; what forming $A\transpose A$ costs, $\kappa^2$ and the example that loses everything; why a linear term costs $\kappa^2$ and a log-volume is folded into the rows | improper-gaussian |
-| 7 | `square-root-elimination` | revised, from 1 | as now, from Householder reflections on, opened by the normal equations it solves without forming | normal-equations |
-| 8 | *what elimination leaves* | new, from 5 | integrating a block out by elimination leaves an improper factor on its neighbours, of any rank; the Kalman filter as that elimination repeated along a chain | improper-gaussian, square-root-elimination |
-| 9 | `levenberg-marquardt` | revised, from 4 | the method as an instance of 2 on the Gauss–Newton model: Marquardt's diagonal, the schedule, the stopping rule and the checks at the end | linearization, trust-regions, square-root-elimination |
-| 10–12 | `laplace-approximation`, `fisher-scoring`, `calibration` | order and references | as now, citing 1 for the measure a mode is taken against and 2 for the rate a curvature sets | as now, with 1 and 2 where they are used |
+| 6 | `optimization-and-estimation` | new | a table of the two vocabularies, a row for each thing the notes before it name twice: the objective and the negative log-density, the step and the factor's mean, the curvatures and the informations, the trust region and the prior on the step | improper-gaussian, trust-regions |
+| 7 | `normal-equations` | new | the step, the damped step and the factor's mean each solve $A\transpose A\, \tangent = A\transpose b - \eta$; $A\transpose A$ as the precision and its determinant in the integral; what forming $A\transpose A$ costs, $\kappa^2$ and the example that loses everything; why a linear term costs $\kappa^2$ and a log-volume is folded into the rows | improper-gaussian |
+| 8 | `square-root-elimination` | revised, from 1 | as now, from Householder reflections on, opened by the normal equations it solves without forming | normal-equations |
+| 9 | `integrating-out` | new, from 5 | what elimination leaves: integrating a block out of a sum of squared rows and linear terms leaves an improper factor on its neighbours, of any rank, exactly | improper-gaussian, square-root-elimination |
+| 10 | `kalman-filter` | new, from 5 | the filter as that integral repeated along a chain of states: the update, the prediction, the gain and the evidence; the filter in information form, which carries a state that is not yet determined and whose covariance does not exist | integrating-out |
+| 11 | `levenberg-marquardt` | revised, from 4 | the method as an instance of 2 on the Gauss–Newton model: Marquardt's diagonal, the schedule, the stopping rule and the checks at the end | linearization, trust-regions, square-root-elimination |
+| 12–14 | `laplace-approximation`, `fisher-scoring`, `calibration` | order and references | as now, citing 1 for the measure a mode is taken against and 2 for the rate a curvature sets | as now, with 1 and 2 where they are used |
 
-The order needs elimination last, and two of the notes before it rest on elimination today. Each
+The order puts elimination after the normal equations, and two of the notes before it rest on elimination today. Each
 loses that dependence as follows.
 
 - **The linearization** names its problem as elimination's factored problem
@@ -86,7 +88,8 @@ loses that dependence as follows.
   such method is. *Linear terms* keeps its own statement of the cost, and the fold of a linear
   term $A\transpose c$ into $b$, which the archive cites.
 - **The improper Gaussian factor** rests on elimination for one section, *What elimination
-  leaves*, and the Kalman filter in it. That section is the eighth note's. The rest of the note,
+  leaves*, and the Kalman filter in it. The section becomes the ninth note, and the filter the
+  tenth. The rest of the note,
   the factor, its forms (whose orthogonal reduction needs only that an orthogonal matrix keeps
   lengths) and accumulation, needs no elimination, and the linearization takes the place of the
   integral as the instance that opens it.
@@ -114,21 +117,31 @@ under it.
 
 Neither reading is the more fundamental. The optimizer's explains convergence and the gain ratio;
 the estimator's explains marginals, accumulation and the Laplace approximation. The part needs
-both, and a reader who knows one vocabulary should find the other's word for each thing, so note 5
-ends with a table that sets them side by side: the objective and the negative log-density, the
+both, and a reader who knows one vocabulary should find the other's word for each thing. The
+note after them, `optimization-and-estimation`, is a table that sets the two side by side, a note
+of its own so that it can be found by its title and returned to: the objective and the negative log-density, the
 minimizer and the mode, the model's Hessian and the precision or information, its inverse and the
 covariance, the gradient and the negative of the score, the step and the factor's mean, the trust
 radius or the damping and a prior on the step, the gain ratio and the fit of the factor to the
 density. The curvatures need the most care, since telling them apart is what Fisher scoring is
 for: the Hessian of $f$ is the observed information, and the Gauss–Newton matrix is the expected
-information, the two agreeing for a normal of fixed scale. Notes never name skoro, and the table
-names only general terms.
+information, the two agreeing for a normal of fixed scale. Each row says which note defines each
+of its two terms. Notes never name skoro, and the table names only general terms.
 
-> [!TODO] Where the table of terms stands
-> The table is placed at the end of `improper-gaussian`, the first note in which both readings
-> exist. It could instead be a short note of its own, between `improper-gaussian` and
-> `normal-equations`, which a reader could find by title. A table is not an idea, which argues for
-> the section; it is the part's glossary, which argues for the note. Which is it?
+A note rests only on the notes before it, and the table is no exception: it has a row for each
+term the first five notes define, and none for what comes after. The words of the notes after it
+are each defined in one vocabulary and read in the other where they are introduced. The Kalman
+filter's update and prediction are integrals of the ninth note, and its gain the weight the update
+gives the innovation.
+
+> [!TODO] Where the table stands
+> Placed sixth, after the two readings and before the normal equations, the table explains the
+> readings at the moment they meet, and leaves out the words of the notes after it: the normal
+> equations' information form, the filter's gain and innovation, the Laplace approximation's
+> covariance. Placed last in the part, it could have a row for every pair the part names, at the
+> cost of being met only at the end, or of being read before the notes it rests on. Sixth, as
+> here, keeps the order's rule and the order the part was asked to take; the later notes then each
+> carry their own translations. Is sixth right, or should it close the part?
 
 ### The normal equations, then elimination
 
@@ -144,8 +157,9 @@ says what forming $A\transpose A$ costs: its condition number is $\kappa(A)^2$, 
 elimination's first section, in which $1 + 10^{-16}$ rounds to $1$ and the matrix is singular as
 computed, moves here with that argument. So does the cost of a linear term, which no method that
 works with $A$ alone escapes, and with it the reason the linearization folds a log-volume into its
-rows; elimination's *Linear terms* keeps the same cost as it arises in the triangular root. Elimination then opens with the question the note leaves, how to solve the system without
-forming it, and answers it as it does now.
+rows; elimination's *Linear terms* keeps the same cost as it arises in the triangular root.
+Elimination then opens with the question the note leaves, how to solve the system without forming
+it, and answers it as it does now.
 
 ### What stays where it is
 
@@ -154,10 +168,10 @@ The archive cites this part by name, and every name it cites stays in its note.
 `integral`, `replace`, `clique-chain` and `damping`, its statements `triangular-root`,
 `eliminate-one` and `marginal`, and its sections *Linear terms*, *Eliminating one block*, *Order,
 fill and the elimination tree*, *Cliques and the junction tree* and *What the eliminated problem
-answers*. The pages cite [Levenberg–Marquardt](../../math/levenberg-marquardt/)'s `marquardt`, `gain` and
-`schedule`, and elimination's junction tree, and these stay too. The slugs of the moved notes do
+answers*. The pages cite [Levenberg–Marquardt](../../math/levenberg-marquardt/)'s `marquardt`,
+`gain` and `schedule`, and elimination's junction tree, and these stay too. The slugs of the moved notes do
 not change. What moves (the linearization's `objective` to `nonlinear-least-squares`, the
-improper factor's `eliminated` and `kalman` to the eighth note, elimination's `normal-equations` to
+improper factor's `eliminated` to `integrating-out` and `kalman` to `kalman-filter`, elimination's `normal-equations` to
 the note of that name, and the gain ratio's general form to `trust-regions`, with
 `levenberg-marquardt`'s tags kept as its instance) is cited only from other notes, which are
 rewritten with it. So no done entry is amended.
@@ -177,9 +191,9 @@ what comes first.
   scoring are each that note with one choice made, and their notes shrink to the choice.
 - **Elimination is motivated before it is met.** A reader reaches Householder reflections knowing
   which system they solve and why the obvious way of solving it fails.
-- **Four notes are new, and one is split off another.** `map-estimation`, `trust-regions`,
-  `nonlinear-least-squares` and `normal-equations` are new, and the eighth note leaves
-  `improper-gaussian`. About a third of the part's prose is rewritten or moved, and the
+- **Five notes are new, and two are split off another.** `map-estimation`, `trust-regions`,
+  `nonlinear-least-squares`, `optimization-and-estimation` and `normal-equations` are new, and
+  `integrating-out` and `kalman-filter` leave `improper-gaussian`. About a third of the part's prose is rewritten or moved, and the
   linearization, now fourth, has three notes before it where it had two.
 - **The entry on terms without residuals, still open, rebases onto this order.** Its open question
   on the Newton step and the observed information has a note to cite for Newton's method, and its
@@ -212,15 +226,17 @@ linearization would then come after elimination, or be written in the linearizat
 without the factor it is an instance of, and the normal equations would be stated for a model and
 not for a Gaussian. Splitting the note costs one section's move.
 
-**Do it in the entry that needed it.** The entry on terms without residuals, still open, asks whether the Newton step belongs in it,
-and a note on Newton's method could have arrived there. The reordering is not that entry's subject,
-it touches every note of the part, and it is argued here, where it can be read and approved alone.
+**Put the table at the end of `improper-gaussian`.** It is the first note in which both readings
+exist, and a table is not an idea. But it is the part's glossary, read more often than any one
+note and by readers who come for it alone, and it should be found by its title and not at the
+foot of a note on another subject.
 
-> [!TODO] The note of what elimination leaves
-> The eighth note holds what is now the improper factor's *What elimination leaves*: the factor an
-> integral leaves on a block's neighbours, and the Kalman filter.
-> It could stand alone, as "What elimination leaves" (`integrating-out`) or under the method a
-> reader would look for, "The Kalman filter" (`kalman-filter`). Or it could be a section of
-> elimination, beside *What the eliminated problem answers*, though elimination is about numbers
-> and matrices alone and the filter is about a model. A note of its own, named for the Kalman
-> filter, is the choice here unless there is reason against it.
+**Keep the filter with what elimination leaves, or in elimination.** The Kalman filter is that
+note's integral repeated, and could be its closing example; or the two could be a section of
+elimination, beside *What the eliminated problem answers*. Elimination is about numbers and
+matrices alone, and the filter is about a model. And what an integral leaves holds of any model,
+the filter of a chain: two ideas, and the second is a method a reader looks for by its name.
+
+**Do it in the entry that needed it.** The entry on terms without residuals, still open, asks
+whether the Newton step belongs in it, and a note on Newton's method could have arrived there. The reordering is not that entry's subject,
+it touches every note of the part, and it is argued here, where it can be read and approved alone.
