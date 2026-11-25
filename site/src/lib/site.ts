@@ -96,9 +96,10 @@ export const MATH_PARTS: Part[] = [
         id: 'estimation',
         title: 'Least squares and Gaussian approximations',
         blurb:
-            'Elimination by orthogonal factorization, and what is built on it: linearization, ' +
-            'damping, the Laplace approximation, Fisher scoring, and how an approximation is ' +
-            'checked against the model.',
+            'The mode of a posterior and how it is found: Newton steps and trust regions, a ' +
+            'model of normals as least squares, its linearization read as a model and as a ' +
+            'Gaussian, the normal equations and their elimination, the Kalman filter, damping, ' +
+            'the Laplace approximation, Fisher scoring, and a table of the two vocabularies.',
     },
 ];
 

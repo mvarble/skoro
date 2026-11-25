@@ -14,33 +14,27 @@ depends_on: [chart-volume, normal]
 	import * as broad from './statements/broad.md';
 </script>
 
-On the real line, nothing says that a point is unknown: Lebesgue measure has infinite mass, and a
-normal with a large variance is the usual stand-in. On a compact manifold the statement has an
-exact form, the *uniform distribution*, and the stand-in fails: a
-[normal](../normal/) with a large scale is not nearly uniform, and becomes less so as its scale
-grows. This note defines the uniform distribution, reads it in a tangent chart, where it turns out
-to be a Student t, says how a uniform point is drawn, and shows what a normal with a large scale
-is instead.
+On the real line, nothing says that a point is unknown: Lebesgue measure has infinite mass, and a normal with a large variance is the usual stand-in.
+On a compact manifold the statement has an exact form, the *uniform distribution*, and the stand-in fails: a [normal](../normal/) with a large scale is not nearly uniform, and becomes less so as its scale grows.
+This note defines the uniform distribution, reads it in a tangent chart, where it turns out to be a Student t, says how a uniform point is drawn, and shows what a normal with a large scale is instead.
 
 ## The definition
 
-Let $\manifold$ be a manifold with a reference measure $\nu$ of finite *mass* $\nu(\manifold)$. A
-compact manifold always has one, since a measure with a continuous density in every chart is finite
-on compact sets. The uniform distribution on $\manifold$ is the law with the constant density
+Let $\manifold$ be a manifold with a reference measure $\nu$ of finite *mass* $\nu(\manifold)$.
+A compact manifold always has one, since a measure with a continuous density in every chart is finite on compact sets.
+The uniform distribution on $\manifold$ is the law with the constant density
 
 $$
 	\density(\point) = \frac{1}{\nu(\manifold)}, \qquad \logterm(\point) = -\log \nu(\manifold) , @tag(log-density)
 $$
 
-with respect to $\nu$: the law $\nu / \nu(\manifold)$. It has no parameters. It is uniform with
-respect to $\nu$ and to nothing else, so its meaning is that of the reference measure. On a compact
-Lie group with Haar measure it is the one law that a translation on either side leaves unchanged,
-and on a sphere with surface measure the one law that every rotation of the sphere leaves
-unchanged. A measure of infinite mass has no uniform distribution: $\R^\dimension$ has none, nor
-has the group of rigid motions, whose translations are not compact.
+with respect to $\nu$: the law $\nu / \nu(\manifold)$.
+It has no parameters.
+It is uniform with respect to $\nu$ and to nothing else, so its meaning is that of the reference measure.
+On a compact Lie group with Haar measure it is the one law that a translation on either side leaves unchanged, and on a sphere with surface measure the one law that every rotation of the sphere leaves unchanged.
+A measure of infinite mass has no uniform distribution: $\R^\dimension$ has none, nor has the group of rigid motions, whose translations are not compact.
 
-The masses of the spaces of [the chart volumes' table](../chart-volume/#the-usual-charts), each
-with the measure its retraction normalizes, are these.
+The masses of the spaces of [the chart volumes' table](../chart-volume/#the-usual-charts), each with the measure its retraction normalizes, are these.
 
 | space | measure | $\nu(\manifold)$ |
 | --- | --- | --- |
@@ -50,43 +44,31 @@ with the measure its retraction normalizes, are these.
 | a product $\manifold_1 \times \cdots \times \manifold_k$ | the product measure | $\prod_i \nu_i(\manifold_i)$ |
 | a quotient by a free action of $m$ elements | the image measure, divided by $m$ | $\nu(\manifold) / m$ |
 
-The mass of the rotations is half that of the unit quaternions, which cover them twice
-([%full](statement:math/chart-volume/quotient)), and it is also the integral of the Cayley chart's
-volume, $\int_{\R^3} (1 + \lvert \tangent \rvert^2 / 4)^{-2}\, \dd \tangent = 8 \pi^2$, as
-[](eq:math/chart-volume/image) with $g = 1$ says it must be. A uniform point of a product is a
-tuple of independent uniform points of its factors, since a constant density is a product of
-constants. The image of a uniform point under a quotient map is uniform on the quotient, since the
-sum of a constant density over an orbit is constant. A finite set with counting measure fits the
-same definition, with the number of its elements as its mass.
+The mass of the rotations is half that of the unit quaternions, which cover them twice ([%full](statement:math/chart-volume/quotient)), and it is also the integral of the Cayley chart's volume, $\int_{\R^3} (1 + \lvert \tangent \rvert^2 / 4)^{-2}\, \dd \tangent = 8 \pi^2$, as [](eq:math/chart-volume/image) with $g = 1$ says it must be.
+A uniform point of a product is a tuple of independent uniform points of its factors, since a constant density is a product of constants.
+The image of a uniform point under a quotient map is uniform on the quotient, since the sum of a constant density over an orbit is constant.
+A finite set with counting measure fits the same definition, with the number of its elements as its mass.
 
 ## In a chart
 
-A point drawn from a normal is a mean moved by Gaussian noise through its chart. A uniform point is
-any point moved through its chart by noise of another law, whose density is the chart's volume.
+A point drawn from a normal is a mean moved by Gaussian noise through its chart.
+A uniform point is any point moved through its chart by noise of another law, whose density is the chart's volume.
 
 <Statement {...tangent} />
 
 <Proof>
 
-By [](eq:math/chart-volume/image) with $g = 1$, $\int_{U_\mu} v_\mu = \nu(V_\mu) = \nu(\manifold)$,
-the chart being full, so $f$ is a probability density. By
-[%full](statement:math/chart-volume/pushforward), $\mu \oplus \varepsilon$ has the density $f / v_\mu
-= 1 / \nu(\manifold)$ on $V_\mu$ and zero on its complement, which has measure zero: that is the
-uniform density. Conversely, if $\randomPoint$ is uniform it lies in $V_\mu$ almost surely, and for
-a Borel set $A \subseteq U_\mu$, $\Pr(\randomPoint \ominus \mu \in A) = \nu(R_\mu(A)) /
-\nu(\manifold) = \int_A v_\mu / \nu(\manifold)$, by the definition of the volume.
+By [](eq:math/chart-volume/image) with $g = 1$, $\int_{U_\mu} v_\mu = \nu(V_\mu) = \nu(\manifold)$, the chart being full, so $f$ is a probability density.
+By [%full](statement:math/chart-volume/pushforward), $\mu \oplus \varepsilon$ has the density $f / v_\mu = 1 / \nu(\manifold)$ on $V_\mu$ and zero on its complement, which has measure zero: that is the uniform density.
+Conversely, if $\randomPoint$ is uniform it lies in $V_\mu$ almost surely, and for a Borel set $A \subseteq U_\mu$, $\Pr(\randomPoint \ominus \mu \in A) = \nu(R_\mu(A)) / \nu(\manifold) = \int_A v_\mu / \nu(\manifold)$, by the definition of the volume.
 
 </Proof>
 
-The centre $\mu$ is arbitrary: every chart describes the same law, and the tangent coordinate of a
-uniform point has the same density at every centre whenever the volume does not depend on it.
+The centre $\mu$ is arbitrary: every chart describes the same law, and the tangent coordinate of a uniform point has the same density at every centre whenever the volume does not depend on it.
 
-For the usual global charts that density is a familiar one. The *Student t* distribution on
-$\R^\dimension$ with $n$ degrees of freedom and scale $s$ has the density proportional to
-$(1 + \lvert \tangent \rvert^2 / n s^2)^{-(n + \dimension)/2}$, and with $n = 1$ it is the Cauchy
-distribution. The volumes of the Cayley and stereographic charts are powers of $1 + \lvert \tangent
-\rvert^2 / c$, and matching the exponent and the constant gives the law of the tangent coordinate
-of a uniform point.
+For the usual global charts that density is a familiar one.
+The *Student t* distribution on $\R^\dimension$ with $n$ degrees of freedom and scale $s$ has the density proportional to $(1 + \lvert \tangent \rvert^2 / n s^2)^{-(n + \dimension)/2}$, and with $n = 1$ it is the Cauchy distribution.
+The volumes of the Cayley and stereographic charts are powers of $1 + \lvert \tangent \rvert^2 / c$, and matching the exponent and the constant gives the law of the tangent coordinate of a uniform point.
 
 | space, chart | $v_\mu(\tangent)$ | law of $\randomPoint \ominus \mu$ for uniform $\randomPoint$ |
 | --- | --- | --- |
@@ -96,22 +78,16 @@ of a uniform point.
 
 So a uniform rotation is a Cauchy vector pushed through the Cayley chart, at any centre.
 
-A Student t vector is a normal vector with a random scale: $\varepsilon = s \zeta / \sqrt{w / n}$
-with $\zeta$ standard normal on $\R^\dimension$ and $w$ independent of it with the $\chi^2$ law of
-$n$ degrees of freedom. Given $w$, $\varepsilon$ is normal with the covariance $\sigma^2 I$, and so
-the uniform distribution is a mixture of the normals $\mathcal N(\mu, \sigma^2 I)$ of the chart
-over their scale,
+A Student t vector is a normal vector with a random scale: $\varepsilon = s \zeta / \sqrt{w / n}$ with $\zeta$ standard normal on $\R^\dimension$ and $w$ independent of it with the $\chi^2$ law of $n$ degrees of freedom.
+Given $w$, $\varepsilon$ is normal with the covariance $\sigma^2 I$, and so the uniform distribution is a mixture of the normals $\mathcal N(\mu, \sigma^2 I)$ of the chart over their scale,
 
 $$
 	\frac{\nu}{\nu(\manifold)} = \E\bigl[\mathcal N(\mu, \sigma^2 I)\bigr], \qquad \sigma = \frac{s}{\sqrt{w / n}}, \quad w \sim \chi^2_n . @tag(mixture)
 $$
 
-On the rotations $\sigma = 2 / \lvert g \rvert$ with $g$ standard normal on the line: the scale has
-the median $2.97$, is below $1$ with probability $0.046$, and has no mean. The same formula has a
-second reading there. The vector $\varepsilon = 2 \zeta / g$ is the Cayley coordinate
-[](eq:math/chart-volume/cayley-inverse) of the unit quaternion $(g, \zeta) / \lvert (g, \zeta)
-\rvert$, a standard normal vector of $\R^4$ scaled to length one, which is uniform on $S^3$ because
-the normal law of $\R^4$ is invariant under its rotations.
+On the rotations $\sigma = 2 / \lvert g \rvert$ with $g$ standard normal on the line: the scale has the median $2.97$, is below $1$ with probability $0.046$, and has no mean.
+The same formula has a second reading there.
+The vector $\varepsilon = 2 \zeta / g$ is the Cayley coordinate [](eq:math/chart-volume/cayley-inverse) of the unit quaternion $(g, \zeta) / \lvert (g, \zeta) \rvert$, a standard normal vector of $\R^4$ scaled to length one, which is uniform on $S^3$ because the normal law of $\R^4$ is invariant under its rotations.
 
 ## Drawing a uniform point
 
@@ -122,139 +98,92 @@ Another draws the point directly, from as many uniform variates as the manifold 
 
 <Proof>
 
-1. The map $(c, \varphi) \mapsto (\sqrt{1 - c^2} \cos \varphi, \sqrt{1 - c^2} \sin \varphi, c)$ of
-   $(-1, 1) \times (0, 2\pi)$ into $S^2$ has partial derivatives that are orthogonal, of lengths
-   $1 / \sqrt{1 - c^2}$ and $\sqrt{1 - c^2}$, so it carries Lebesgue measure to surface measure, on
-   the sphere less an arc of measure zero. The variates $(u_1, u_2)$ are mapped to $(c, \varphi)$
-   by an affine map, so $(c, \varphi)$ is uniform on the rectangle, and the point on the sphere.
-2. Identify $\R^4$ with $\mathbb C^2$, the point being $(a, b)$ with $a = \sqrt{1 - u_1}\,
-   e^{i \varphi}$ and $b = \sqrt{u_1}\, e^{i \psi}$. In the polar coordinates of each factor,
-   Lebesgue measure is $r_a\, \dd r_a\, \dd \varphi\; r_b\, \dd r_b\, \dd \psi$, and with $r_a = r
-   \cos \eta$ and $r_b = r \sin \eta$ it is $r^3\, \dd r \cdot \cos \eta \sin \eta\, \dd \eta\,
-   \dd \varphi\, \dd \psi$. Lebesgue measure is also $r^3\, \dd r$ times surface measure, so
-   surface measure is $\cos \eta \sin \eta\, \dd \eta\, \dd \varphi\, \dd \psi = \tfrac12\, \dd
-   \rho\, \dd \varphi\, \dd \psi$ with $\rho = \sin^2 \eta = \lvert b \rvert^2$. It has a constant
-   density in $(\rho, \varphi, \psi) = (u_1, 2 \pi u_2, 2 \pi u_3)$, so the point is uniform on
-   $S^3$, and its image is uniform on the rotations, as the image of a uniform point under a
-   quotient map is.
+1. The map $(c, \varphi) \mapsto (\sqrt{1 - c^2} \cos \varphi, \sqrt{1 - c^2} \sin \varphi, c)$ of $(-1, 1) \times (0, 2\pi)$ into $S^2$ has partial derivatives that are orthogonal, of lengths $1 / \sqrt{1 - c^2}$ and $\sqrt{1 - c^2}$, so it carries Lebesgue measure to surface measure, on the sphere less an arc of measure zero.
+   The variates $(u_1, u_2)$ are mapped to $(c, \varphi)$ by an affine map, so $(c, \varphi)$ is uniform on the rectangle, and the point on the sphere.
+2. Identify $\R^4$ with $\mathbb C^2$, the point being $(a, b)$ with $a = \sqrt{1 - u_1}\, e^{i \varphi}$ and $b = \sqrt{u_1}\, e^{i \psi}$.
+   In the polar coordinates of each factor, Lebesgue measure is $r_a\, \dd r_a\, \dd \varphi\; r_b\, \dd r_b\, \dd \psi$, and with $r_a = r \cos \eta$ and $r_b = r \sin \eta$ it is $r^3\, \dd r \cdot \cos \eta \sin \eta\, \dd \eta\, \dd \varphi\, \dd \psi$.
+   Lebesgue measure is also $r^3\, \dd r$ times surface measure, so surface measure is $\cos \eta \sin \eta\, \dd \eta\, \dd \varphi\, \dd \psi = \tfrac12\, \dd \rho\, \dd \varphi\, \dd \psi$ with $\rho = \sin^2 \eta = \lvert b \rvert^2$.
+   It has a constant density in $(\rho, \varphi, \psi) = (u_1, 2 \pi u_2, 2 \pi u_3)$, so the point is uniform on $S^3$, and its image is uniform on the rotations, as the image of a uniform point under a quotient map is.
 
 </Proof>
 
-The first is Archimedes' theorem, that the height of a uniform point of the sphere is uniform, and
-the second is Shoemake's method for uniform rotations. On a sphere of any dimension a standard
-normal vector of $\R^{n+1}$ scaled to length one is uniform, which is Muller's method, by the
-invariance used above, at the cost of one variate more than the sphere has dimensions. A uniform point of a
-product is drawn factor by factor. On the finite set $\{0, \dots, n - 1\}$, the integer part $\lfloor n
-u \rfloor$ of $n$ times one uniform variate $u$ is uniform, each value being the image of an interval
-of length $1/n$.
+The first is Archimedes' theorem, that the height of a uniform point of the sphere is uniform, and the second is Shoemake's method for uniform rotations.
+On a sphere of any dimension a standard normal vector of $\R^{n+1}$ scaled to length one is uniform, which is Muller's method, by the invariance used above, at the cost of one variate more than the sphere has dimensions.
+A uniform point of a product is drawn factor by factor.
+On the finite set $\{0, \dots, n - 1\}$, the integer part $\lfloor n u \rfloor$ of $n$ times one uniform variate $u$ is uniform, each value being the image of an interval of length $1/n$.
 
 ## A normal with a large scale
 
-The [normal](../normal/) $\mathcal N(\mu, \Sigma)$ of a manifold with a global chart is the law of
-$\mu \oplus \varepsilon$ for $\varepsilon$ normal on $\R^\dimension$. On $\R^\dimension$ a large
-$\Sigma$ spreads it thinly over everything. On a compact manifold it does the opposite.
+The [normal](../normal/) $\mathcal N(\mu, \Sigma)$ of a manifold with a global chart is the law of $\mu \oplus \varepsilon$ for $\varepsilon$ normal on $\R^\dimension$.
+On $\R^\dimension$ a large $\Sigma$ spreads it thinly over everything.
+On a compact manifold it does the opposite.
 
 <Statement {...broad} />
 
 <Proof>
 
-The density of $\varepsilon_k$ is at most $(2\pi)^{-\dimension/2} (\det \Sigma_k)^{-1/2}$, its value
-at $0$, so for a bounded Borel set $B$, $\Pr(\varepsilon_k \in B) \le \operatorname{vol}(B)\,
-(2\pi)^{-\dimension/2} (\det \Sigma_k)^{-1/2} \to 0$. If $K \subseteq V_\mu$ is compact, so is $B =
-R_\mu^{-1}(K)$, the inverse of the chart being continuous on $V_\mu$, and $\Pr(\randomPoint_k \in K)
-= \Pr(\varepsilon_k \in B)$.
+The density of $\varepsilon_k$ is at most $(2\pi)^{-\dimension/2} (\det \Sigma_k)^{-1/2}$, its value at $0$, so for a bounded Borel set $B$, $\Pr(\varepsilon_k \in B) \le \operatorname{vol}(B)\, (2\pi)^{-\dimension/2} (\det \Sigma_k)^{-1/2} \to 0$.
+If $K \subseteq V_\mu$ is compact, so is $B = R_\mu^{-1}(K)$, the inverse of the chart being continuous on $V_\mu$, and $\Pr(\randomPoint_k \in K) = \Pr(\varepsilon_k \in B)$.
 
-Let $\manifold$ be compact and the chart full, and let $\eta > 0$. The open set $V_\mu$ is a
-countable union of compact sets and $\nu(V_\mu) = \nu(\manifold)$ is finite, so there is a compact
-$K \subseteq V_\mu$ with $\nu(K) \ge (1 - \eta)\, \nu(\manifold)$. The uniform distribution gives
-$K$ at least $1 - \eta$ and the law of $\randomPoint_k$ gives it a probability tending to $0$, so
-the total variation distance is eventually at least $1 - 2\eta$. Finally, if a subsequence of the
-laws converges weakly to $P$, then for every open $O$ whose closure is a compact subset of $V_\mu$,
-$P(O) \le \liminf_k \Pr(\randomPoint_k \in O) = 0$, and $V_\mu$ is a countable union of such sets,
-so $P(V_\mu) = 0$.
+Let $\manifold$ be compact and the chart full, and let $\eta > 0$.
+The open set $V_\mu$ is a countable union of compact sets and $\nu(V_\mu) = \nu(\manifold)$ is finite, so there is a compact $K \subseteq V_\mu$ with $\nu(K) \ge (1 - \eta)\, \nu(\manifold)$.
+The uniform distribution gives $K$ at least $1 - \eta$ and the law of $\randomPoint_k$ gives it a probability tending to $0$, so the total variation distance is eventually at least $1 - 2\eta$.
+Finally, if a subsequence of the laws converges weakly to $P$, then for every open $O$ whose closure is a compact subset of $V_\mu$, $P(O) \le \liminf_k \Pr(\randomPoint_k \in O) = 0$, and $V_\mu$ is a countable union of such sets, so $P(V_\mu) = 0$.
 
 </Proof>
 
-The proof uses nothing of the manifold but the chart: the mass of a broad normal goes to infinity in
-the tangent space, as it does on $\R^\dimension$, and a global chart of a compact manifold sends
-infinity to the few points it does not reach. Those are the half-turns from $\mu$ for the Cayley
-chart of the rotations, and the antipode $-\mu$ for the stereographic chart of a sphere. With an
-isotropic scale $\sigma$ the limit is explicit. The direction of $\varepsilon$ is uniform and
-independent of its length, which tends to infinity, so on the rotations $\mathcal N(\mu, \sigma^2
-I)$ converges to the law of $\mu$ turned by a half-turn about a uniformly distributed axis, and on
-the sphere to the point mass at $-\mu$.
+The proof uses nothing of the manifold but the chart: the mass of a broad normal goes to infinity in the tangent space, as it does on $\R^\dimension$, and a global chart of a compact manifold sends infinity to the few points it does not reach.
+Those are the half-turns from $\mu$ for the Cayley chart of the rotations, and the antipode $-\mu$ for the stereographic chart of a sphere.
+With an isotropic scale $\sigma$ the limit is explicit.
+The direction of $\varepsilon$ is uniform and independent of its length, which tends to infinity, so on the rotations $\mathcal N(\mu, \sigma^2 I)$ converges to the law of $\mu$ turned by a half-turn about a uniformly distributed axis, and on the sphere to the point mass at $-\mu$.
 
-On the rotations with the Cayley chart, the angle between a draw and its mean is $\theta = 2
-\arctan(\sigma \chi / 2)$, with $\chi$ the length of a standard normal vector of $\R^3$, while the
-angle of a uniform rotation from any fixed one has the density $(1 - \cos \theta) / \pi$ on $[0,
-\pi]$, with the median $2.31$ rad.
+On the rotations with the Cayley chart, the angle between a draw and its mean is $\theta = 2 \arctan(\sigma \chi / 2)$, with $\chi$ the length of a standard normal vector of $\R^3$, while the angle of a uniform rotation from any fixed one has the density $(1 - \cos \theta) / \pi$ on $[0, \pi]$, with the median $2.31$ rad.
 
 | $\sigma$ | $0.5$ | $1$ | $2.4$ | $3$ | $10$ | $100$ | uniform |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | median angle, rad | $0.73$ | $1.31$ | $2.15$ | $2.32$ | $2.88$ | $3.12$ | $2.31$ |
 | total variation from uniform | $0.87$ | $0.65$ | $0.37$ | $0.38$ | $0.65$ | $0.93$ | $0$ |
 
-No isotropic normal on the rotations is closer to uniform than $0.37$ in total variation, which
-the scale $\sigma = 2.4$ attains, and the scale whose median angle is that of the uniform
-distribution, near $3$, puts that angle on a shell around the mean and not, as the uniform
-distribution does, in a law with no centre.
+No isotropic normal on the rotations is closer to uniform than $0.37$ in total variation, which the scale $\sigma = 2.4$ attains, and the scale whose median angle is that of the uniform distribution, near $3$, puts that angle on a shell around the mean and not, as the uniform distribution does, in a law with no centre.
 
-**Where the modes are.** Read in the chart at $\mu$, the log-density
-[](eq:math/normal/log-density) is $-\tfrac12 \lvert W \tangent \rvert^2 - \lambda_\mu(\tangent)$ up
-to a constant, with the Hessian $-\Lambda - \nabla^2 \lambda_\mu(0)$ at $\tangent = 0$. For the
-Cayley chart of the rotations and the stereographic chart of $S^2$, $\nabla^2 \lambda_\mu(0) = -I$,
-so $\mu$ is a strict local maximum of the density when every eigenvalue of $\Sigma$ is below $1$,
-and is not a local maximum when one of them is above it. With an isotropic scale $\sigma > 1$ the
-maxima are the points with $1 + \lvert \tangent \rvert^2 / 4 = \sigma^2$, a shell of rotations by
-the angle $\theta$ with $\cos(\theta / 2) = 1 / \sigma$: $1.68$ rad at $\sigma = 1.5$ and $2.46$ rad
-at $\sigma = 3$.
+**Where the modes are.**
+Read in the chart at $\mu$, the log-density [](eq:math/normal/log-density) is $-\tfrac12 \lvert W \tangent \rvert^2 - \lambda_\mu(\tangent)$ up to a constant, with the Hessian $-\Lambda - \nabla^2 \lambda_\mu(0)$ at $\tangent = 0$.
+For the Cayley chart of the rotations and the stereographic chart of $S^2$, $\nabla^2 \lambda_\mu(0) = -I$, so $\mu$ is a strict local maximum of the density when every eigenvalue of $\Sigma$ is below $1$, and is not a local maximum when one of them is above it.
+With an isotropic scale $\sigma > 1$ the maxima are the points with $1 + \lvert \tangent \rvert^2 / 4 = \sigma^2$, a shell of rotations by the angle $\theta$ with $\cos(\theta / 2) = 1 / \sigma$: $1.68$ rad at $\sigma = 1.5$ and $2.46$ rad at $\sigma = 3$.
 
-**No chart mends this.** A global chart is covered by [%full](statement:broad), whichever it is. A
-chart that is not global, such as the exponential chart, wraps a broad normal around the manifold
-instead, and on the rotations that does not give the uniform distribution either: the length of
-$\varepsilon$ taken modulo $2\pi$ tends to a uniform law on the circle, so the angle of the rotation
-tends to a uniform law on $[0, \pi]$, with the median $\pi / 2$, and not to the density $(1 - \cos
-\theta) / \pi$. Wrapping gives the uniform distribution on a torus, where the exponential is a
-group homomorphism, and not in general.
+**No chart mends this.**
+A global chart is covered by [%full](statement:broad), whichever it is.
+A chart that is not global, such as the exponential chart, wraps a broad normal around the manifold instead, and on the rotations that does not give the uniform distribution either: the length of $\varepsilon$ taken modulo $2\pi$ tends to a uniform law on the circle, so the angle of the rotation tends to a uniform law on $[0, \pi]$, with the median $\pi / 2$, and not to the density $(1 - \cos \theta) / \pi$.
+Wrapping gives the uniform distribution on a torus, where the exponential is a group homomorphism, and not in general.
 
 ## Laws that do reach the uniform
 
-Two families of laws around a point $\mu$ contain the uniform distribution or tend to it, and
-neither is the normal.
+Two families of laws around a point $\mu$ contain the uniform distribution or tend to it, and neither is the normal.
 
-**Student t noise.** By [%full](statement:tangent) the law of $\mu \oplus \varepsilon$ for
-$\varepsilon$ a Student t vector is, for one number of degrees of freedom and one scale, the uniform
-distribution exactly, and with many degrees of freedom it is nearly a normal. Its density with
-respect to $\nu$ is the t density over the chart's volume. On the rotations, with Cauchy noise of
-scale $s$, that is proportional to $(1 + r^2/4)^2 / (1 + r^2/s^2)^2$ in the chart's radius $r$,
-which rises from $1$ at the mean to $(s/2)^4$ at the half-turns when $s > 2$: a scale above the
-uniform's still leans towards the half-turns, by a bounded factor.
+**Student t noise.**
+By [%full](statement:tangent) the law of $\mu \oplus \varepsilon$ for $\varepsilon$ a Student t vector is, for one number of degrees of freedom and one scale, the uniform distribution exactly, and with many degrees of freedom it is nearly a normal.
+Its density with respect to $\nu$ is the t density over the chart's volume.
+On the rotations, with Cauchy noise of scale $s$, that is proportional to $(1 + r^2/4)^2 / (1 + r^2/s^2)^2$ in the chart's radius $r$, which rises from $1$ at the mean to $(s/2)^4$ at the half-turns when $s > 2$: a scale above the uniform's still leans towards the half-turns, by a bounded factor.
 
-**A Gaussian against the reference measure.** The function $\exp(-\tfrac12 \lvert W (\point \ominus
-\mu) \rvert^2)$, normalized as a density with respect to $\nu$ and not to Lebesgue measure in the
-chart, is the law of [the Gaussian part alone](../normal/#the-gaussian-part-alone),
+**A Gaussian against the reference measure.**
+The function $\exp(-\tfrac12 \lvert W (\point \ominus \mu) \rvert^2)$, normalized as a density with respect to $\nu$ and not to Lebesgue measure in the chart, is the law of [the Gaussian part alone](../normal/#the-gaussian-part-alone),
 
 $$
 	\density(\point) = \frac{1}{Z} \exp\bigl(-\tfrac12 \lvert W (\point \ominus \mu) \rvert^2\bigr), \qquad Z = \int_{\R^\dimension} \exp\bigl(-\tfrac12 \lvert W \tangent \rvert^2\bigr)\, v_\mu(\tangent)\, \dd \tangent , @tag(against-measure)
 $$
 
-for a global and full chart. Its density is largest at $\mu$, at every scale. As every eigenvalue of
-$\Sigma$ grows, the integrand of $Z$ increases to $v_\mu$, so $Z \to \nu(\manifold)$ and the density
-tends to $1 / \nu(\manifold)$ at every point of $V_\mu$: the law tends to the uniform distribution,
-in total variation. For a concentrated scale it is nearly the normal, from which it differs by the
-factor $v_\mu$, close to $1$ near the mean. It has two costs. Its normalizer depends on the scale
-through an integral that has a closed form only in special cases; on the rotations with the Cayley
-chart and an isotropic scale,
+for a global and full chart.
+Its density is largest at $\mu$, at every scale.
+As every eigenvalue of $\Sigma$ grows, the integrand of $Z$ increases to $v_\mu$, so $Z \to \nu(\manifold)$ and the density tends to $1 / \nu(\manifold)$ at every point of $V_\mu$: the law tends to the uniform distribution, in total variation.
+For a concentrated scale it is nearly the normal, from which it differs by the factor $v_\mu$, close to $1$ near the mean.
+It has two costs.
+Its normalizer depends on the scale through an integral that has a closed form only in special cases; on the rotations with the Cayley chart and an isotropic scale,
 
 $$
 	Z(\sigma) = 16 \pi^2 \Bigl( \bigl(\tfrac12 + a\bigr)\, e^{a} \operatorname{erfc}\bigl(\sqrt a\bigr) - \sqrt{a / \pi} \Bigr), \qquad a = \frac{2}{\sigma^2} , @tag(normalizer)
 $$
 
-which is $(2\pi)^{3/2} \sigma^3$ to leading order as $\sigma \to 0$ and $8\pi^2$ as $\sigma \to
-\infty$. And its draw is not a point moved by noise of a known law: it is made by rejection, either
-from a normal $\varepsilon$ accepted with probability $v_\mu(\varepsilon)$, which succeeds with
-probability $Z / (2\pi)^{\dimension/2} (\det \Sigma)^{1/2}$, or from a uniform point accepted with
-probability $\exp(-\tfrac12 \lvert W (\point \ominus \mu) \rvert^2)$, which succeeds with probability
-$Z / \nu(\manifold)$. On the rotations these are $0.43$ and $0.085$ at $\sigma = 1$, $0.070$ and
-$0.38$ at $\sigma = 3$, and $0.0037$ and $0.73$ at $\sigma = 10$. Either spends a random number of
-variates on a draw.
+which is $(2\pi)^{3/2} \sigma^3$ to leading order as $\sigma \to 0$ and $8\pi^2$ as $\sigma \to \infty$.
+And its draw is not a point moved by noise of a known law: it is made by rejection, either from a normal $\varepsilon$ accepted with probability $v_\mu(\varepsilon)$, which succeeds with probability $Z / (2\pi)^{\dimension/2} (\det \Sigma)^{1/2}$, or from a uniform point accepted with probability $\exp(-\tfrac12 \lvert W (\point \ominus \mu) \rvert^2)$, which succeeds with probability $Z / \nu(\manifold)$.
+On the rotations these are $0.43$ and $0.085$ at $\sigma = 1$, $0.070$ and $0.38$ at $\sigma = 3$, and $0.0037$ and $0.73$ at $\sigma = 10$.
+Either spends a random number of variates on a draw.

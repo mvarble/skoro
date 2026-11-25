@@ -14,9 +14,5 @@ $$
 	\quad \bigl(w(\bar q \otimes p) \ne 0\bigr) .
 $$
 
-Then $(-q) \oplus \tangent = -(q \oplus \tangent)$, and $p \ominus q$ is unchanged when either $p$
-or $q$ is negated. The map $\tangent \mapsto \pi(q \oplus \tangent)$ is a diffeomorphism of $\R^3$
-onto the rotations by less than $\pi$ from $\pi(q)$, with inverse $R \mapsto p \ominus q$ for either
-$p$ over $R$; $\gamma(\tangent)$ is the rotation by $\theta = 2 \arctan(\lvert \tangent \rvert / 2)$
-about $\tangent$; $\pi(q \oplus \tangent) = \pi(q)\, (I + [\tangent]_\times) + O(\lvert \tangent
-\rvert^2)$; and $q \oplus \tangent = (1 \oplus \pi(q)\, \tangent) \otimes q$.
+Then $(-q) \oplus \tangent = -(q \oplus \tangent)$, and $p \ominus q$ is unchanged when either $p$ or $q$ is negated.
+The map $\tangent \mapsto \pi(q \oplus \tangent)$ is a diffeomorphism of $\R^3$ onto the rotations by less than $\pi$ from $\pi(q)$, with inverse $R \mapsto p \ominus q$ for either $p$ over $R$; $\gamma(\tangent)$ is the rotation by $\theta = 2 \arctan(\lvert \tangent \rvert / 2)$ about $\tangent$; $\pi(q \oplus \tangent) = \pi(q)\, (I + [\tangent]_\times) + O(\lvert \tangent \rvert^2)$; and $q \oplus \tangent = (1 \oplus \pi(q)\, \tangent) \otimes q$.

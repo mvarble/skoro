@@ -13,8 +13,7 @@ pnpm todos                        # every `[!TODO]` left in the content
 SITE_CONTENT=test/content pnpm build   # the fixture, with a document of every kind
 ```
 
-Run every command from `site/`: file references resolve against the repository root, which is
-taken to be the parent of the working directory.
+Run every command from `site/`: file references resolve against the repository root, which is taken to be the parent of the working directory.
 
 ## Layout
 
@@ -36,13 +35,9 @@ taken to be the parent of the working directory.
 | `src/lib/cms/`                           | The content layout: what each file under `content/` is, how its links resolve, and the queries the routes call.                                                                                                                          |
 | `test/cms/`                              | The fixture `src/lib/cms/preset.test.ts` reads, with a few documents that are wrong on purpose.                                                                                                                                          |
 
-The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms)
-with the preset in `src/lib/cms/`: it reads every document, resolves links, numbers equations and statements,
-collects citations, and serves all of it to the routes as `$cms`. A link to a document that does
-not exist, or a `depends_on` that names nothing, is reported when the site builds. KaTeX and the
-scroll box around display math come from
-[`@mvarble/mesearch-markdown`](https://github.com/mvarble/mesearch/tree/main/packages/markdown),
-and the map on the Mathematics page is `@mvarble/mesearch-ui`'s, in skoro's colours.
+The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms) with the preset in `src/lib/cms/`: it reads every document, resolves links, numbers equations and statements, collects citations, and serves all of it to the routes as `$cms`.
+A link to a document that does not exist, or a `depends_on` that names nothing, is reported when the site builds.
+KaTeX and the scroll box around display math come from [`@mvarble/mesearch-markdown`](https://github.com/mvarble/mesearch/tree/main/packages/markdown), and the map on the Mathematics page is `@mvarble/mesearch-ui`'s, in skoro's colours.
 
 ## Writing a document
 
@@ -58,23 +53,21 @@ katex_macros: # this document only; wins over katex.config.ts
 ---
 ```
 
-The math notes are read in order, part by part. The build refuses a note without a `part` and an
-`order`, two notes at one place, and a note whose `depends_on` names anything but a note before
-it; a page's `depends_on` may likewise name no page of its own track at its place or after it.
+Write prose one sentence to a line, however long, and never break a line inside a sentence; Prettier leaves prose as it is written.
+The archive's documents approved before this rule keep their old wrapping, since they are frozen.
 
-An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`),
-the `crates` it changed (`[skoro-core]`), the earlier entries it `revises`, and the documents of
-finished entries it `amends` (`[archive/normal/math]`), whose pages then say which entry brought
-their references up to date. Each page then shows
-the entries that changed it, newest first, under "How this came to be"; an entry links each of its
-crates to that crate's page in the reference; and an entry that a later one revises says so at its top.
+The math notes are read in order, part by part.
+The build refuses a note without a `part` and an `order`, two notes at one place, and a note whose `depends_on` names anything but a note before it; a page's `depends_on` may likewise name no page of its own track at its place or after it.
 
-- **Math:** `$inline$` and `$$display$$`. A KaTeX error does not fail the build. The formula
-  renders in red, and the build prints a `katex:` warning naming the file.
-- **Numbered equations:** `$$ ... @tag(slug) $$` numbers a display equation, and `[](eq:slug)`
-  refers to it as `(1)`. From another document: `[](eq:math/<slug>/<eq-slug>)`.
-- **Statements:** a theorem or definition is a small document of its own beside the one that
-  shows it, with `type: statement` and a `kind`:
+An entry's `index.md` also lists the `pages` it changed (`[guide/first-model, concepts/graph]`), the `crates` it changed (`[skoro-core]`), the earlier entries it `revises`, and the documents of finished entries it `amends` (`[archive/normal/math]`), whose pages then say which entry brought their references up to date.
+Each page then shows the entries that changed it, newest first, under "How this came to be"; an entry links each of its crates to that crate's page in the reference; and an entry that a later one revises says so at its top.
+
+- **Math:** `$inline$` and `$$display$$`.
+  A KaTeX error does not fail the build.
+  The formula renders in red, and the build prints a `katex:` warning naming the file.
+- **Numbered equations:** `$$ ... @tag(slug) $$` numbers a display equation, and `[](eq:slug)` refers to it as `(1)`.
+  From another document: `[](eq:math/<slug>/<eq-slug>)`.
+- **Statements:** a theorem or definition is a small document of its own beside the one that shows it, with `type: statement` and a `kind`:
 
     ```svelte
     <script>
@@ -85,31 +78,28 @@ crates to that crate's page in the reference; and an entry that a later one revi
     <Statement {...whitening} />
     ```
 
-    It is numbered along with the document's equations, and `[%full](statement:whitening)` refers
-    to it as "Lemma 2". `$lib/components/Proof.svelte` frames a proof.
+    It is numbered along with the document's equations, and `[%full](statement:whitening)` refers to it as "Lemma 2".
+    `$lib/components/Proof.svelte` frames a proof.
 
-- **Citations:** `[](cite:key)` renders as `[Foll99]`, and the page ends with the references it
-  cites.
-- **Callouts:** GitHub-style blockquotes, which stay plain Markdown in the `.md` exports:
-  `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!DECISION]`, `> [!TODO]`. Text after the marker
-  on the first line becomes the title. `pnpm todos` lists every `[!TODO]`, and `bin/wf approve`
-  refuses a document that still has one.
-- **Quoting source:** a fence whose only line is `{path}` or `{path:start..end}` is replaced by
-  that file's lines. The path is relative to the document, and line numbers are **1-indexed and
-  inclusive**. The block gets a caption linking to GitHub. If every quoted line is a `///` or
-  `//!` doc comment, the markers are stripped and the block is highlighted as Markdown, unless the
-  fence names a language (use `rust` to quote a doctest's code). Pages quote the code that exists;
-  the archive's documents, written before it did, sketch it inline.
-- **Links:** write them the way the files sit on disk: `../../math/retraction/`, `plan.md`,
-  `../../concepts/`. They are rewritten to the site's URLs, and to `.md` URLs in the exports.
-- **Svelte:** a `.svx` document can import components (see Model-graph figures below). Outside
-  code and math, `{` and `<` are Svelte syntax, so put generics like `Q<B, M>` in backticks.
+- **Citations:** `[](cite:key)` renders as `[Foll99]`, and the page ends with the references it cites.
+- **Callouts:** GitHub-style blockquotes, which stay plain Markdown in the `.md` exports: `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!DECISION]`, `> [!TODO]`.
+  Text after the marker on the first line becomes the title.
+  `pnpm todos` lists every `[!TODO]`, and `bin/wf approve` refuses a document that still has one.
+- **Quoting source:** a fence whose only line is `{path}` or `{path:start..end}` is replaced by that file's lines.
+  The path is relative to the document, and line numbers are **1-indexed and inclusive**.
+  The block gets a caption linking to GitHub.
+  If every quoted line is a `///` or `//!` doc comment, the markers are stripped and the block is highlighted as Markdown, unless the fence names a language (use `rust` to quote a doctest's code).
+  Pages quote the code that exists; the archive's documents, written before it did, sketch it inline.
+- **Links:** write them the way the files sit on disk: `../../math/retraction/`, `plan.md`, `../../concepts/`.
+  They are rewritten to the site's URLs, and to `.md` URLs in the exports.
+- **Svelte:** a `.svx` document can import components (see Model-graph figures below).
+  Outside code and math, `{` and `<` are Svelte syntax, so put generics like `Q<B, M>` in backticks.
 - `h2`/`h3` headings get anchors and appear in "On this page".
 
 ## KaTeX in components
 
-`$…$` in a `.svx` page is rendered by the build. For math inside Svelte markup or props, use
-`<Tex>`, or `renderTex` / `renderMixed` from `$lib/tex`:
+`$…$` in a `.svx` page is rendered by the build.
+For math inside Svelte markup or props, use `<Tex>`, or `renderTex` / `renderMixed` from `$lib/tex`:
 
 ```svelte
 <script>
@@ -120,23 +110,19 @@ crates to that crate's page in the reference; and an entry that a later one revi
 <Tex display src={String.raw`\int_0^1 f`} macros={{ '\\f': 'g' }} />
 ```
 
-- It renders synchronously, so prerendering writes the math into the static HTML and it displays
-  without JavaScript. Svelte keeps those nodes when it hydrates.
-- A client-side navigation renders the page in the browser, so KaTeX (about 76 kB gzipped) ships in
-  the JS chunk of any page that uses these components, and only those pages.
-- The macros are the site-wide ones in `katex.config.ts`, plus any you pass. Frontmatter
-  `katex_macros` belong to the Markdown pipeline and don't reach components.
+- It renders synchronously, so prerendering writes the math into the static HTML and it displays without JavaScript.
+  Svelte keeps those nodes when it hydrates.
+- A client-side navigation renders the page in the browser, so KaTeX (about 76 kB gzipped) ships in the JS chunk of any page that uses these components, and only those pages.
+- The macros are the site-wide ones in `katex.config.ts`, plus any you pass.
+  Frontmatter `katex_macros` belong to the Markdown pipeline and don't reach components.
 - A bad formula renders in KaTeX's red, and the build prints a `katex: component` warning.
 
 ## Graph figures
 
-`<ModelGraph spec={…} />` draws a hand-placed figure of a graph as SVG: one of skoro's graphs (a
-compilation graph, a probabilistic graph, or a program's computation or backpropagation graph), or
-any other. The component knows nothing of what a node means. Each figure declares its own kinds of
-node and edge, with the name the legend and the Markdown export give each, and how each is drawn: a
-hue from a fixed palette (`gray`, `blue`, `orange`, `green`, `purple`, `teal`, `red`, `sky`,
-`amber`, `olive`, `magenta`), a shape, a fill and an outline for nodes, a line style for edges. It
-adds a legend of the kinds the figure uses, in the order it declares them, and a caption.
+`<ModelGraph spec={…} />` draws a hand-placed figure of a graph as SVG: one of skoro's graphs (a compilation graph, a probabilistic graph, or a program's computation or backpropagation graph), or any other.
+The component knows nothing of what a node means.
+Each figure declares its own kinds of node and edge, with the name the legend and the Markdown export give each, and how each is drawn: a hue from a fixed palette (`gray`, `blue`, `orange`, `green`, `purple`, `teal`, `red`, `sky`, `amber`, `olive`, `magenta`), a shape, a fill and an outline for nodes, a line style for edges.
+It adds a legend of the kinds the figure uses, in the order it declares them, and a caption.
 
 Put each spec in a `*.graph.ts` file beside its page, and import it by name:
 
@@ -187,37 +173,32 @@ export const normal = defineGraph({
 });
 ```
 
-- **Kinds are the figure's own.** A node's `kind` and an edge's `kind` are keys of the figure's
-  `nodeKinds` and `edgeKinds`, and a key the figure does not define fails the build. An edge with no
-  kind is a plain solid line in the neutral colour, and the legend leaves it out. Kind names may
-  contain TeX.
-- **Coordinates are mathematical:** the origin is the bottom-left corner and +Y points up. Angles are
-  degrees counter-clockwise from +X, so 90 is straight up.
-- **Endpoints are computed for you.** An edge meets a node's boundary (circle, or square for
-  `log-likelihood`) where the line toward its next point crosses it. Set `fromAngle` / `toAngle` to
-  pick the spot yourself.
-- **Routing:** `via` adds intermediate points. `curve: 'bezier'` draws a smooth curve through them
-  that leaves and meets each node along its normal. `bend: θ` curves a direct edge like TikZ's
-  `bend left=θ`.
-- **Text:** node `label`s, `annotation`s, edge `label`s and the `caption` may mix plain text with
-  `$…$` TeX (`\\$` is a literal dollar). Write TeX in `String.raw` or double the backslashes. A
-  spec's `katexMacros` are added over the site-wide macros for that figure. Text is laid out in an
-  HTML layer over the SVG rather than inside it, so it needs no `<foreignObject>` and no JavaScript.
-- **Styling:** `arrow` (`end`, `start`, `both`, `none`), `label` / `labelAt`, `muted`, and the
-  escape hatches `class` / `style` on nodes and edges. The hues are tokens `--graph-<hue>` in
-  `src/styles/tokens/colors.css`, and the rules are in `src/styles/utils/graph.css`.
-- A mistake, such as an edge to a missing node or a kind the figure does not define, fails the
-  build with the figure's title in the message.
-- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with the
-  figure's names for their kinds, so a language model reads the same figure.
+- **Kinds are the figure's own.**
+  A node's `kind` and an edge's `kind` are keys of the figure's `nodeKinds` and `edgeKinds`, and a key the figure does not define fails the build.
+  An edge with no kind is a plain solid line in the neutral colour, and the legend leaves it out.
+  Kind names may contain TeX.
+- **Coordinates are mathematical:** the origin is the bottom-left corner and +Y points up.
+  Angles are degrees counter-clockwise from +X, so 90 is straight up.
+- **Endpoints are computed for you.**
+  An edge meets a node's boundary (circle, or square for `log-likelihood`) where the line toward its next point crosses it.
+  Set `fromAngle` / `toAngle` to pick the spot yourself.
+- **Routing:** `via` adds intermediate points.
+  `curve: 'bezier'` draws a smooth curve through them that leaves and meets each node along its normal.
+  `bend: θ` curves a direct edge like TikZ's `bend left=θ`.
+- **Text:** node `label`s, `annotation`s, edge `label`s and the `caption` may mix plain text with `$…$` TeX (`\\$` is a literal dollar).
+  Write TeX in `String.raw` or double the backslashes.
+  A spec's `katexMacros` are added over the site-wide macros for that figure.
+  Text is laid out in an HTML layer over the SVG rather than inside it, so it needs no `<foreignObject>` and no JavaScript.
+- **Styling:** `arrow` (`end`, `start`, `both`, `none`), `label` / `labelAt`, `muted`, and the escape hatches `class` / `style` on nodes and edges.
+  The hues are tokens `--graph-<hue>` in `src/styles/tokens/colors.css`, and the rules are in `src/styles/utils/graph.css`.
+- A mistake, such as an edge to a missing node or a kind the figure does not define, fails the build with the figure's title in the message.
+- In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with the figure's names for their kinds, so a language model reads the same figure.
 - The geometry is `src/lib/graph/geometry.ts`, tested by `pnpm test`.
 
 ## Walkthroughs
 
-`<Walkthrough spec={…}>` animates a graph figure step by step above the code that builds it: each
-step adds or removes nodes, edges and regions, changes their kinds, mutes them or runs a pass along
-them, and highlights the lines of the quoted code it is about. The code is the page's own
-file-reference fence, passed in as the component's children:
+`<Walkthrough spec={…}>` animates a graph figure step by step above the code that builds it: each step adds or removes nodes, edges and regions, changes their kinds, mutes them or runs a pass along them, and highlights the lines of the quoted code it is about.
+The code is the page's own file-reference fence, passed in as the component's children:
 
 ````svelte
 <script>
@@ -229,13 +210,13 @@ file-reference fence, passed in as the component's children:
 
 ```rust
 {../../../../crates/skoro-core/tests/queries.rs:31..57}
-````
-
-</Walkthrough>
 ```
 
-Put each spec in a `*.walk.ts` file beside its page. A spec is a graph figure's spec (above), with
-labelled `regions` drawn behind it (a scope, a snapshot, a cache) and its `steps`:
+</Walkthrough>
+````
+
+Put each spec in a `*.walk.ts` file beside its page.
+A spec is a graph figure's spec (above), with labelled `regions` drawn behind it (a scope, a snapshot, a cache) and its `steps`:
 
 ```ts
 import { defineWalkthrough } from '$lib/walk/spec';
@@ -260,36 +241,27 @@ export const building = defineWalkthrough({
 });
 ```
 
-- **Nodes and regions start hidden**, and a step `show`s them (`show: 'all'` shows everything). An
-  edge is drawn once both its nodes are, unless a step `hide`s it, so a node appears with its
-  input edges.
+- **Nodes and regions start hidden**, and a step `show`s them (`show: 'all'` shows everything).
+  An edge is drawn once both its nodes are, unless a step `hide`s it, so a node appears with its input edges.
 - **What carries from step to step:** `show`/`hide`, `kind`, `annotate`, `label`, `mute`/`unmute`.
-  **What lasts one step:** `emphasize`, `flow` (a pass running along edges) and `flowBack`
-  (against them).
-- **A step points at code by text**, never by line number: `code` is a substring of a line, a
-  `{ from, to }` pair spanning the lines from one to the next, or a list of these. The `.md` export
-  fails the build when a match finds no line of the quoted code, so a walkthrough cannot drift
-  from the code it quotes.
-- Every text of a walkthrough (a note, a label, an annotation, a region's label, the caption) may
-  contain `$…$` TeX and `` `code` ``. Write a text with code as a quoted string, doubling the TeX
-  backslashes: a `String.raw` template keeps the backslash of an escaped `` \` ``, which then
-  shows. A mistake in a spec, such as an id it does not have, a kind it does not define or a
-  `flow` along a node, fails the build with the walkthrough's title in the message.
-- The prerendered page shows the last step and lists every note, which is the whole walkthrough
-  without JavaScript. Once mounted, it starts at the first step, with play, step and scrub
-  controls and the arrow keys. Transitions respect `prefers-reduced-motion`.
-- In the `.md` exports, the tag is replaced by the code it quotes and a numbered list of the steps:
-  each note, the code it points at, and what appears, changes, goes or flows.
-- The frames are `src/lib/walk/frames.ts` and the checks are in `src/lib/walk/spec.ts`, both tested
-  by `pnpm test`. The styles are `src/styles/utils/walkthrough.css`, over `graph.css`.
+  **What lasts one step:** `emphasize`, `flow` (a pass running along edges) and `flowBack` (against them).
+- **A step points at code by text**, never by line number: `code` is a substring of a line, a `{ from, to }` pair spanning the lines from one to the next, or a list of these.
+  The `.md` export fails the build when a match finds no line of the quoted code, so a walkthrough cannot drift from the code it quotes.
+- Every text of a walkthrough (a note, a label, an annotation, a region's label, the caption) may contain `$…$` TeX and `` `code` ``.
+  Write a text with code as a quoted string, doubling the TeX backslashes: a `String.raw` template keeps the backslash of an escaped `` \` ``, which then shows.
+  A mistake in a spec, such as an id it does not have, a kind it does not define or a `flow` along a node, fails the build with the walkthrough's title in the message.
+- The prerendered page shows the last step and lists every note, which is the whole walkthrough without JavaScript.
+  Once mounted, it starts at the first step, with play, step and scrub controls and the arrow keys.
+  Transitions respect `prefers-reduced-motion`.
+- In the `.md` exports, the tag is replaced by the code it quotes and a numbered list of the steps: each note, the code it points at, and what appears, changes, goes or flows.
+- The frames are `src/lib/walk/frames.ts` and the checks are in `src/lib/walk/spec.ts`, both tested by `pnpm test`.
+  The styles are `src/styles/utils/walkthrough.css`, over `graph.css`.
 
 ## Reading orders
 
-`<ReadingOrder spec={…} />` draws the order in which to read a crate's modules: the modules top to
-bottom, each use of an earlier module as an arc on the left, and each use of a later one as a dashed
-orange arc on the right, with the items it uses named beside the module. A band marks each cycle,
-and hovering, focusing or tapping a module shows all of its uses and what uses it. Uses that a
-longer chain of earlier uses already implies are hidden until the checkbox shows them.
+`<ReadingOrder spec={…} />` draws the order in which to read a crate's modules: the modules top to bottom, each use of an earlier module as an arc on the left, and each use of a later one as a dashed orange arc on the right, with the items it uses named beside the module.
+A band marks each cycle, and hovering, focusing or tapping a module shows all of its uses and what uses it.
+Uses that a longer chain of earlier uses already implies are hidden until the checkbox shows them.
 
 ```ts
 import { defineReadingOrder } from '$lib/reading/spec';
@@ -305,40 +277,26 @@ export const order = defineReadingOrder({
 });
 ```
 
-- **The order is the spec's.** The component draws the modules in the order given; it does not
-  choose one. `bin/reading-order` (in `tools/reading-order/`) reads a crate's sources and computes
-  an order with as few items used ahead as can be.
-- **Items:** a name with a lower-case last segment (`narrow`, `Lowering.compile`) is a function or
-  method, and is shown with `()`.
-- A use of a module the spec does not list, a module listed twice, or a module set `apart` before
-  one that is not, fails with the figure's title in the message.
-- The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are
-  `src/styles/utils/reading.css`, from the graph palette's tokens.
+- **The order is the spec's.**
+  The component draws the modules in the order given; it does not choose one.
+  `bin/reading-order` (in `tools/reading-order/`) reads a crate's sources and computes an order with as few items used ahead as can be.
+- **Items:** a name with a lower-case last segment (`narrow`, `Lowering.compile`) is a function or method, and is shown with `()`.
+- A use of a module the spec does not list, a module listed twice, or a module set `apart` before one that is not, fails with the figure's title in the message.
+- The geometry is `src/lib/reading/layout.ts`, tested by `pnpm test`; the styles are `src/styles/utils/reading.css`, from the graph palette's tokens.
 
-`/reference/crates/<crate>/` is a page for each crate under `crates/`, from one template
-(`src/routes/reference/crates/[crate=slug]/`): the crate's purpose and dependencies from the crate
-map (`$lib/crates.ts`), its description from `content/reference/crates/<crate>/index.md`, and its
-reading order, computed from its sources when the site is built (and on every request under
-`pnpm dev`) by `$lib/server/reading.ts`. The description is plain Markdown, written at an entry's
-publish stage. The content database does not read it as a document of its own, so its links are
-not rewritten; its folder lies as deep as the page's URL, so a link written the way the files sit
-on disk works as it is. The crate map links each crate to its page, so a crate it lists must be one
-under `crates/`.
+`/reference/crates/<crate>/` is a page for each crate under `crates/`, from one template (`src/routes/reference/crates/[crate=slug]/`): the crate's purpose and dependencies from the crate map (`$lib/crates.ts`), its description from `content/reference/crates/<crate>/index.md`, and its reading order, computed from its sources when the site is built (and on every request under `pnpm dev`) by `$lib/server/reading.ts`.
+The description is plain Markdown, written at an entry's publish stage.
+The content database does not read it as a document of its own, so its links are not rewritten; its folder lies as deep as the page's URL, so a link written the way the files sit on disk works as it is.
+The crate map links each crate to its page, so a crate it lists must be one under `crates/`.
 
 ## The examples' figures
 
-`<ExampleFigure name="…" alt="…" caption="…" />` shows one of the examples' figures from
-`static/figures/`, inlined so that the page's stylesheet reaches it, and opens it in a dialog when
-it is clicked. `bin/figures` draws the figures from the data the examples write with
-`SKORO_FIGURES` set, each example's from its own data, skipping an example that was not run, and colours every mark through a `--fig-*` variable. Each figure carries its
-own light and dark values for use on its own (the README shows them as images), and
-`styles/utils/figures.css`, which `bin/figures` writes from the same palette, sets them from the
-site's theme instead. Do not edit that file: change the palette in `tools/figures/lib.ts` and draw
-the figures again.
+`<ExampleFigure name="…" alt="…" caption="…" />` shows one of the examples' figures from `static/figures/`, inlined so that the page's stylesheet reaches it, and opens it in a dialog when it is clicked.
+`bin/figures` draws the figures from the data the examples write with `SKORO_FIGURES` set, each example's from its own data, skipping an example that was not run, and colours every mark through a `--fig-*` variable.
+Each figure carries its own light and dark values for use on its own (the README shows them as images), and `styles/utils/figures.css`, which `bin/figures` writes from the same palette, sets them from the site's theme instead.
+Do not edit that file: change the palette in `tools/figures/lib.ts` and draw the figures again.
 
 ## For language models
 
-Every document is also served as Markdown at its URL with `.md` in place of the trailing slash
-(`/math/retraction.md`), with its frontmatter kept, file references expanded, statements inlined
-and links pointed at other `.md` files. `/llms.txt` indexes them ([llmstxt.org](https://llmstxt.org)),
-and `/llms-full.txt` concatenates all of them in reading order.
+Every document is also served as Markdown at its URL with `.md` in place of the trailing slash (`/math/retraction.md`), with its frontmatter kept, file references expanded, statements inlined and links pointed at other `.md` files.
+`/llms.txt` indexes them ([llmstxt.org](https://llmstxt.org)), and `/llms-full.txt` concatenates all of them in reading order.

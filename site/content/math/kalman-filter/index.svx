@@ -1,0 +1,86 @@
+---
+title: The Kalman filter
+part: estimation
+order: 9
+summary: The Kalman filter integrates the states of a linear-Gaussian chain out one at a time, so that what is left on each state is its prediction and, with its measurement, its update; its gain weighs the innovation, its evidence is the product of the innovations' densities, and in information or square-root form it is elimination along the chain, which carries a state its measurements do not yet determine.
+depends_on: [integrating-out, normal-equations]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as filter from './statements/filter.md';
+</script>
+
+A quantity that changes over time is a chain of states, each following the one before it, each measured.
+To know the latest state is to integrate every earlier one out, and when the chain is linear and Gaussian [what that leaves](../integrating-out/) is a normal on the latest state, which the next state's integral starts from.
+That recursion is the *Kalman filter* [](cite:kalman1960).
+This note states it in the form it is usually written, proves it from the integral, and then writes it as the elimination it is, which needs no covariance and so carries a state that the measurements do not yet determine.
+
+## The filter
+
+<Statement {...filter} />
+
+<Proof>
+
+By induction on $k$.
+For $k = 0$ the factor is the prior, with no evidence.
+Suppose the factor on $\point_k$ is as stated.
+With $\bfz_k$ observed, the terms that read $\point_k$ are that factor and the measurement's $\log \mathcal N(\hat z_k;\, H_k \point_k, R_k)$, and their sum, as a function of $\point_k$, is a factor of full rank, since $P_k^-$ is positive definite.
+By [%full](statement:math/normal-equations/normal-equations) it is a normal with the precision and the information vector
+
+$$
+	(P_k^+)^{-1} = (P_k^-)^{-1} + H_k\transpose R_k^{-1} H_k , \qquad
+	(P_k^+)^{-1} \mu_k^+ = (P_k^-)^{-1} \mu_k^- + H_k\transpose R_k^{-1} \hat z_k , @tag(information)
+$$
+
+and these agree with the statement's covariance form.
+Dropping the index $k$, $\bigl(P^{-1} + H\transpose R^{-1} H\bigr) P H\transpose = H\transpose R^{-1} (R + H P H\transpose)$, so $P^+ H\transpose R^{-1} = P H\transpose S^{-1} = K$.
+Then
+
+$$
+	\begin{gathered}
+		\mu^+ = P^+ \bigl( (P^+)^{-1} \mu^- - H\transpose R^{-1} H \mu^- + H\transpose R^{-1} \hat z \bigr) = \mu^- + K (\hat z - H \mu^-) , \\
+		P^+ = P^+ \bigl( (P^+)^{-1} - H\transpose R^{-1} H \bigr) P^- = P^- - K H P^- .
+	\end{gathered}
+$$
+
+The integral of the sum over $\point_k$ is the density of $\hat z_k$ when $\randomPoint_k \sim \mathcal N(\mu_k^-, P_k^-)$ and $\bfz_k = H_k \randomPoint_k + \varepsilon$ with $\varepsilon \sim \mathcal N(0, R_k)$ independent: a normal with mean $H_k \mu_k^-$ and covariance $S_k$, at $\hat z_k$, which is $\mathcal N(\nu_k;\, 0, S_k)$.
+So the sum is $\log \mathcal N(\point_k;\, \mu_k^+, P_k^+)$ plus that evidence, which is also the posterior of the statement.
+Adding the motion $\log \mathcal N(\point_{k+1};\, F_k \point_k, Q_k)$ and integrating $\point_k$ out leaves the density of $F_k \randomPoint_k + w$ with $\randomPoint_k \sim \mathcal N(\mu_k^+, P_k^+)$ and $w \sim \mathcal N(0, Q_k)$ independent, the normal $\mathcal N(\mu_{k+1}^-, P_{k+1}^-)$, and the evidence is carried along unchanged.
+
+</Proof>
+
+The names are the filter's own.
+$\mathcal N(\mu_k^-, P_k^-)$ is the *prediction* of the state from the measurements before it, and $\mathcal N(\mu_k^+, P_k^+)$ its *update* by its own measurement.
+The *innovation* $\nu_k$ is the measurement's residual at the prediction, the part of it that the past did not foresee, $S_k$ its covariance, and the *gain* $K_k$ the weight the update gives it: near zero when the measurement is noisy against the prediction, and near the weight that makes the update reproduce the measurement, $H_k \mu_k^+ = \hat z_k$, when it is precise.
+The constant left over is the *evidence*, the density of all the measurements so far, a product of the innovations' densities.
+
+**The scalar case.**
+Take $\randomPoint_0 \sim \mathcal N(a, s^2)$, $\bfz_0 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, r^2)$ and $\randomPoint_1 \mid \randomPoint_0 \sim \mathcal N(\randomPoint_0, q^2)$, and integrate $\randomPoint_0$ out with $\bfz_0$ observed at $\hat z_0$.
+Writing $\mathcal N(m, v)(\point)$ for the normal density of mean $m$ and variance $v$ at $\point$,
+
+$$
+	\logterm_B(\point_1) = \log \mathcal N(a, s^2 + r^2)(\hat z_0) + \log \mathcal N(\mu, P + q^2)(\point_1),
+	\qquad
+	K = \frac{s^2}{s^2 + r^2}, \quad \mu = a + K(\hat z_0 - a), \quad P = (1 - K)\, s^2 . @tag(kalman)
+$$
+
+The update moves the prior's mean toward the measurement by the fraction $K$ of the innovation, and shrinks its variance by the same fraction; the prediction keeps the mean and adds the motion's variance.
+
+## The filter as elimination
+
+The covariance form needs a covariance, and a state that its measurements do not yet determine has none.
+The *information form* [](eq:information) needs only a precision and an information vector, which is what the [normal equations](../normal-equations/) are, and it adds measurements by adding to them.
+Its prediction, integrating the state out of the update and the motion, is the integral of [%full](statement:math/integrating-out/integrate-block), which leaves a factor of any rank.
+So the information form starts from no prior at all, carries a state that is determined along some directions only, and becomes a normal at the first step whose factor has full rank.
+
+The square-root form goes one step further and keeps the factors as rows.
+At each step it stacks the rows of the factor left on $\point_k$, of the measurement, whitened by $R_k$, and of the motion, whitened by $Q_k$, and eliminates the block of $\point_k$ by an orthogonal factorization, which leaves the rows of a factor on $\point_{k+1}$.
+That is [elimination](../square-root-elimination/) of the chain in its own order, the order of a path, in which no block's elimination creates fill: each step is a dense factorization of a few blocks, and its cost does not grow with the chain.
+It works at the condition number of the rows, and not, as the covariance form's subtraction $(I - K H) P$ does, at that of the matrices built from them.
+
+**What the filter is not.**
+The filter's update is the posterior of the state given the measurements so far.
+Elimination along the chain, followed by back substitution from the last state to the first, gives instead the mode of every state given every measurement, the minimizer of the whole chain's objective; on a linear-Gaussian chain that is the mean of each state's posterior given all the data, the *smoothed* mean, which a filter, looking only backward, does not compute.
+And on a chain whose means are not linear, the filter that linearizes each step at its prediction takes one [Gauss–Newton step](../linearization/) per state, from that prediction, and is not the mode of anything: it is exact where the linearization is.

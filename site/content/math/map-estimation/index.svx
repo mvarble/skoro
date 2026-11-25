@@ -1,0 +1,98 @@
+---
+title: Maximum a posteriori estimation
+part: estimation
+order: 1
+summary: The estimate this part of the mathematics computes is the mode of the posterior, the point at which the negative log-density of the free quantities at the observations is least; it needs no normalizer, it depends on the reference measure the density is taken against, and its objective is a sum of terms that each read a few quantities.
+depends_on: [generative-models, chart-volume]
+---
+
+<script>
+	import Statement from '$lib/components/Statement.svelte';
+	import Proof from '$lib/components/Proof.svelte';
+	import * as mode from './statements/mode.md';
+	import * as changeOfMeasure from './statements/change-of-measure.md';
+</script>
+
+Once quantities are observed, a [model built forward](../generative-models/) describes the free ones by their posterior, the conditional law of [%full](statement:math/generative-models/conditioning).
+The posterior is a whole law.
+Its expectations are integrals over every free quantity at once, and have a closed form for almost no model.
+What can always be asked of it is where its density is greatest.
+That point is the estimate this part of the mathematics computes, and the Gaussian approximations later in the part are fitted around it.
+This note defines it, says why it is the first thing to compute, and shows the one property of it that is easy to forget: it depends on the measure its density is taken against.
+
+## The objective and its minimum
+
+<Statement {...mode} />
+
+The objective is the negative logarithm of the posterior's density, up to a constant.
+By [%full](statement:math/generative-models/conditioning) the posterior's density against $\nu_F$ is $\density(\point_F, \point_O) / \density_O(\point_O)$, and the denominator does not depend on $\point_F$.
+So
+
+$$
+	-\log \density_{F \mid O}(\point_F \mid \point_O) = f(\point_F) + \log \density_O(\point_O) , @tag(posterior)
+$$
+
+and the mode is found without the normalizer $\density_O$, an integral over every free quantity that is as hard to compute as the expectations themselves.
+That is why the mode comes first: it needs the joint density alone, evaluated at points, and its derivatives.
+
+A model with parameters describes the measure [](eq:math/generative-models/parameter), whose density is $S(\theta)\, \density_\theta(\point_F, \point_O)$.
+Its objective is the negative logarithm of that, $-\log S(\theta) - \log \density_\theta(\point_F, \point_O)$, and its minimizer is a maximum a posteriori estimate when the measure is a posterior and a maximum likelihood estimate of $\theta$ when $S \equiv 1$.
+The two are the same computation, and nothing below distinguishes them.
+
+A mode need not exist, nor be unique.
+A density that grows without bound toward the edge of its space has no mode, a symmetric one may have several, and a posterior that is not concentrated has modes that say little about where its mass is.
+The notes that follow find local modes, points where the [chart gradient](../derivatives-in-charts/) of $f$ vanishes and its curvature is positive, and say what can be read off one.
+
+## A mode depends on the measure
+
+A density is a density against a reference measure, and so is its mode.
+
+<Statement {...changeOfMeasure} />
+
+<Proof>
+
+For measurable $A$, $\int_A (\density_{F \mid O} / h)\, \dd \nu_F' = \int_A \density_{F \mid O}\, \dd \nu_F$, so $\density_{F \mid O} / h$ is the posterior's density against $\nu_F'$, and taking the negative logarithm of the joint density divided by $h$ gives $f'$.
+
+</Proof>
+
+This is not a change of variables.
+An optimizer that writes $f$ in other coordinates moves its minimizer with the coordinates, and finds the same point.
+A change of measure changes the function, and the point.
+The posterior does not move: the same law, the same expectations, the same credible sets.
+Only its density changes, and with it the point at which the density is greatest.
+The mode is a property of the pair of a law and a reference measure, and not of the law alone.
+
+**The positive reals.**
+Let $\randomPoint$ be log-normal, $\log \randomPoint \sim \mathcal N(m, s^2)$.
+Against Lebesgue measure its density is $\frac{1}{\point} \mathcal N(\log \point;\, m, s^2)$, and its objective $\log \point + (\log \point - m)^2 / 2 s^2$, up to a constant, is least at $\point = e^{m - s^2}$.
+Against the measure $\dd \point / \point$, $h(\point) = 1/\point$, the objective loses the $\log \point$, and the mode is $e^m$, the median.
+Both are the mode of the same law.
+At $s = 1$ they differ by a factor of $e$.
+
+**In a chart.**
+The [chart at a point](../chart-volume/) $\mu$ carries the reference measure to a measure on its coordinates, and by [](eq:math/chart-volume/chart-integral) the density of the coordinate $\tangent$ of $\mu \oplus \tangent$ against Lebesgue measure is the density of the point times $e^{\lambda_\mu(\tangent)}$.
+Its objective is the chart objective
+
+$$
+	f(\mu \oplus \tangent) - \lambda_\mu(\tangent) , @tag(chart-objective)
+$$
+
+whose minimizer is the image of a mode of $f$ only where the log-volume $\lambda_\mu$ is constant in $\tangent$ or its gradient vanishes there.
+On a Euclidean space it is zero.
+On a curved space it is not, and a mode read in a chart's coordinates is not the mode against the space's measure.
+A method that works in charts, as every method of this part does, says which of the two it computes: the steps of the next notes minimize $f$ and read its derivatives in charts, so they find a mode against the space's own measure, and a Gaussian fitted in a chart is fitted to [](eq:chart-objective).
+
+## The objective is a sum of terms
+
+The joint density of a model built forward is a product of its kernels' densities, its likelihood factors and its scores, so its objective is a sum,
+
+$$
+	f(\point_F) = \sum_t \phi_t(\point_F) , @tag(sum)
+$$
+
+one *term* $\phi_t$ for each kernel, factor and score, as the [logarithms of a model](../generative-models/#working-with-a-model-built-forward) are.
+Each term reads only the few quantities its kernel reads, its *variables* $K_t$, and the observed quantities are held at their values.
+The term of a free quantity's own kernel is its prior, and an optimizer would call it a *regularizer*, a penalty on the variables; the terms of observed quantities are the likelihood, which an optimizer calls the cost of the fit.
+So the gradient of $f$ is a sum of gradients that are each zero outside the coordinates of a few quantities, and its Hessian a sum of blocks, each on the variables of one term.
+Two quantities that share no term have a zero block between them.
+The methods that find a mode inherit this structure, and the factorization that ends this part's linear algebra is built around it.

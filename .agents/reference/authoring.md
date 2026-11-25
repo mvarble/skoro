@@ -1,8 +1,7 @@
 # Writing skoro's documents
 
-How the documents in `site/content/` are written: where each kind goes, its frontmatter, links,
-prose, and how mathematics, statements, citations and code are written. `site/README.md` covers
-the same ground for a person editing the site; this file is what an agent follows.
+How the documents in `site/content/` are written: where each kind goes, its frontmatter, links, prose, and how mathematics, statements, citations and code are written.
+`site/README.md` covers the same ground for a person editing the site; this file is what an agent follows.
 
 ## Where things go
 
@@ -24,23 +23,21 @@ site/content/
 
 The three kinds of writing differ in what they promise the reader.
 
-- **Pages say what is.** The guide (top-down) starts from what a user writes; the concepts
-  (bottom-up) build the library from its primitives, each page resting only on the ones before
-  it. Pages are rewritten whenever the library changes, quote the code that exists, and only ever
-  describe the current library. They change at an entry's `publish` stage.
-- **Math notes say what is true**, independently of skoro: one idea to a note (a retraction, the
-  Fisher information, a junction tree). Together they hold all the general mathematics the site
-  relies on, in an order: read from the first to the last they are one story, each note resting
-  only on the notes before it. A note the site already has is linked, never rewritten in another
-  document. [The math notes](#the-math-notes) says how they are written and kept.
-- **Archive documents discuss what may be.** They argue, weigh alternatives and leave room for
-  doubt, as they stood when approved. Once approved they are frozen: they may drift from the code,
-  and that is what they are for.
+- **Pages say what is.**
+  The guide (top-down) starts from what a user writes; the concepts (bottom-up) build the library from its primitives, each page resting only on the ones before it.
+  Pages are rewritten whenever the library changes, quote the code that exists, and only ever describe the current library.
+  They change at an entry's `publish` stage.
+- **Math notes say what is true**, independently of skoro: one idea to a note (a retraction, the Fisher information, a junction tree).
+  Together they hold all the general mathematics the site relies on, in an order: read from the first to the last they are one story, each note resting only on the notes before it.
+  A note the site already has is linked, never rewritten in another document.
+  [The math notes](#the-math-notes) says how they are written and kept.
+- **Archive documents discuss what may be.**
+  They argue, weigh alternatives and leave room for doubt, as they stood when approved.
+  Once approved they are frozen: they may drift from the code, and that is what they are for.
 
-Before writing about an idea, search for it: `grep -rni 'retraction' site/content/`. If the site
-explains it, link there. If a document needs a piece of general mathematics the site does not
-have, that mathematics is written as a math note, or as a section of one, at its place in the
-order, and the document links to it and keeps what is skoro's own.
+Before writing about an idea, search for it: `grep -rni 'retraction' site/content/`.
+If the site explains it, link there.
+If a document needs a piece of general mathematics the site does not have, that mathematics is written as a math note, or as a section of one, at its place in the order, and the document links to it and keeps what is skoro's own.
 
 ## Frontmatter
 
@@ -54,88 +51,78 @@ katex_macros:
 ---
 ```
 
-- `title` may contain inline math. An entry's documents default to their stage's name
-  ("Mathematics", "Plan"), which is usually right.
-- `summary` is shown in lists, the sidebar, previews and `llms.txt`. Without it, the first
-  paragraph stands in, so either write one or make the first paragraph a good summary.
-- `depends_on` lists what a reader must understand first: a bare slug is a math note, anything
-  else a key (`concepts/graph`, `archive/normal/math`). These are the solid arrows of the map on
-  the Mathematics page, so list real prerequisites, not everything mentioned.
-- A page also needs `order`, its place in its track. A page's `depends_on` names no page of its
-  own track at its place or after it.
-- A math note needs `part` and `order`: the part of the mathematics it belongs to (`geometry`,
-  `probability`, `estimation`; `MATH_PARTS` in `site/src/lib/site.ts`) and its place within it.
-  Its `depends_on` names math notes alone, and none at its own place or after it. The build
-  refuses a note that breaks either rule.
-- A page that moves lists the keys it had under `formerly` (`formerly: [start/old-slug]`), so
-  that the entries that name it, frozen once done, still resolve to it.
-- An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`), the
-  entries it `revises` (given to `wf start`), and what it `amends` in entries that are done
-  (`workflow.md`, under "Amending a done entry").
+- `title` may contain inline math.
+  An entry's documents default to their stage's name ("Mathematics", "Plan"), which is usually right.
+- `summary` is shown in lists, the sidebar, previews and `llms.txt`.
+  Without it, the first paragraph stands in, so either write one or make the first paragraph a good summary.
+- `depends_on` lists what a reader must understand first: a bare slug is a math note, anything else a key (`concepts/graph`, `archive/normal/math`).
+  These are the solid arrows of the map on the Mathematics page, so list real prerequisites, not everything mentioned.
+- A page also needs `order`, its place in its track.
+  A page's `depends_on` names no page of its own track at its place or after it.
+- A math note needs `part` and `order`: the part of the mathematics it belongs to (`geometry`, `probability`, `estimation`; `MATH_PARTS` in `site/src/lib/site.ts`) and its place within it.
+  Its `depends_on` names math notes alone, and none at its own place or after it.
+  The build refuses a note that breaks either rule.
+- A page that moves lists the keys it had under `formerly` (`formerly: [start/old-slug]`), so that the entries that name it, frozen once done, still resolve to it.
+- An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`), the entries it `revises` (given to `wf start`), and what it `amends` in entries that are done (`workflow.md`, under "Amending a done entry").
 
 ## The math notes
 
-**What belongs in a note.** A piece of mathematics is *general* when it can be stated and proved
-without naming anything skoro defines: no quantity, term, query, role, binding or key, and neither
-of the library's graphs. It is *skoro's own* when its subject is something skoro defines, or when
-it is a choice among true things (which chart the rotations use, that a volume is declared). The
-first kind is written in a note. The second stays in the archive, which argued for it, and in the
-concept pages, which say what it now is. Where a statement about skoro is an instance of a general
-one, the general one gets the note and the instance stays behind. A note never speaks of skoro,
-links to a page or to the archive, or lists either in its `depends_on`.
+**What belongs in a note.**
+A piece of mathematics is *general* when it can be stated and proved without naming anything skoro defines: no quantity, term, query, role, binding or key, and neither of the library's graphs.
+It is *skoro's own* when its subject is something skoro defines, or when it is a choice among true things (which chart the rotations use, that a volume is declared).
+The first kind is written in a note.
+The second stays in the archive, which argued for it, and in the concept pages, which say what it now is.
+Where a statement about skoro is an instance of a general one, the general one gets the note and the instance stays behind.
+A note never speaks of skoro, links to a page or to the archive, or lists either in its `depends_on`.
 
-**The geometry is written in tangent coordinates.** The first note,
-[Smooth manifolds, smooth maps, and retractions](../../site/content/math/retraction/index.svx),
-defines tangent spaces, differentials and retractions without coordinates, then fixes a basis
-$\basis_\point$ of each tangent space and ends with an index of the abuses of notation that follow
-from it. Every later note writes a tangent vector as a column in $\T_\point\manifold = \R^\dimension$,
-a derivative as the matrix $\D\map(\point)$, and a retraction as $\oplus$ and $\ominus$, and never
-writes $\retr$, $\dd\map_\point$ or $\basis_\point$. A note that needs a new abuse adds a row to
-that index. A result that compares tangent coordinates at nearby points (a second derivative, a
-density in a moving chart) assumes that $\oplus$ is smooth near the point, and says so.
+**The geometry is written in tangent coordinates.**
+The first note, [Smooth manifolds, smooth maps, and retractions](../../site/content/math/retraction/index.svx), defines tangent spaces, differentials and retractions without coordinates, then fixes a basis $\basis_\point$ of each tangent space and ends with an index of the abuses of notation that follow from it.
+Every later note writes a tangent vector as a column in $\T_\point\manifold = \R^\dimension$, a derivative as the matrix $\D\map(\point)$, and a retraction as $\oplus$ and $\ominus$, and never writes $\retr$, $\dd\map_\point$ or $\basis_\point$.
+A note that needs a new abuse adds a row to that index.
+A result that compares tangent coordinates at nearby points (a second derivative, a density in a moving chart) assumes that $\oplus$ is smooth near the point, and says so.
 
-**A note is a chapter.** It may assume the notes before it, use their notation and results without
-restating them, and refer back to them by equation and statement. It never rests on a note after
-it. It is still one idea, and its `depends_on` is still the least a reader needs, not everything
-before it.
+**A note is a chapter.**
+It may assume the notes before it, use their notation and results without restating them, and refer back to them by equation and statement.
+It never rests on a note after it.
+It is still one idea, and its `depends_on` is still the least a reader needs, not everything before it.
 
-**A feature's general mathematics is a note.** At an entry's `math` stage, whatever in its
-mathematics is general goes into a note, new or existing, at its place in the order; the entry's
-`math` document links to it and keeps the problem, the choices and the reading in skoro's terms.
-A chore never opens the notes. When a note is inserted, read the notes after it and rewrite the
-ones that explained what it now explains.
+**A feature's general mathematics is a note.**
+At an entry's `math` stage, whatever in its mathematics is general goes into a note, new or existing, at its place in the order; the entry's `math` document links to it and keeps the problem, the choices and the reading in skoro's terms.
+A chore never opens the notes.
+When a note is inserted, read the notes after it and rewrite the ones that explained what it now explains.
 
-**A rewrite keeps the archive's references true.** The archive's documents refer to the notes'
-equations (`eq:math/<slug>/<tag>`), statements (`statement:math/<slug>/<name>`) and headings
-(`math/<slug>/#<anchor>`): `grep -rn 'math/<slug>' site/content/archive` before rewriting a note.
-In order of preference: what is cited keeps its name and its note wherever the story has a place
-for it there; where it reads better in another note it moves, and the archive's reference is
-changed to follow it; where it belongs in no note any longer, it is written into the archive
-document that cited it. The last two are amendments of a done entry, made at `publish` and listed
-under `amends`.
+**A rewrite keeps the archive's references true.**
+The archive's documents refer to the notes' equations (`eq:math/<slug>/<tag>`), statements (`statement:math/<slug>/<name>`) and headings (`math/<slug>/#<anchor>`): `grep -rn 'math/<slug>' site/content/archive` before rewriting a note.
+In order of preference: what is cited keeps its name and its note wherever the story has a place for it there; where it reads better in another note it moves, and the archive's reference is changed to follow it; where it belongs in no note any longer, it is written into the archive document that cited it.
+The last two are amendments of a done entry, made at `publish` and listed under `amends`.
 
 ## Links
 
-- Write links the way the files sit on disk: `[retractions](../../math/retraction/)`,
-  `[the plan](plan.md)`, `[the guide](../../guide/)`. The build rewrites them to the site's URLs
-  and reports a link to a document that does not exist.
-- A section's anchor is its heading in lowercase, with `$` removed and every run of characters
-  other than `a`–`z` and digits turned into one hyphen: `## Fubini's theorem` is
-  `#fubini-s-theorem`. Anchors are not checked, so work them out from the heading as written.
+- Write links the way the files sit on disk: `[retractions](../../math/retraction/)`, `[the plan](plan.md)`, `[the guide](../../guide/)`.
+  The build rewrites them to the site's URLs and reports a link to a document that does not exist.
+- A section's anchor is its heading in lowercase, with `$` removed and every run of characters other than `a`–`z` and digits turned into one hyphen: `## Fubini's theorem` is `#fubini-s-theorem`.
+  Anchors are not checked, so work them out from the heading as written.
 - Never put a link inside a heading.
 
 ## Prose
 
-Write in complete sentences and paragraphs, in the register of a textbook, with tables and lists
-only where they genuinely help. Never refer to the conversation that produced a document: it is
-read later, by someone who was not there. Prefer a concrete example to an abstract definition
-alone. Name things the way the code names them, in backticks; generics such as `Q<B, M>` must be
-in backticks anyway, since `<` and `{` are Svelte syntax outside code and math.
+Write in complete sentences and paragraphs, in the register of a textbook, with tables and lists only where they genuinely help.
+Never refer to the conversation that produced a document: it is read later, by someone who was not there.
+Prefer a concrete example to an abstract definition alone.
+Name things the way the code names them, in backticks; generics such as `Q<B, M>` must be in backticks anyway, since `<` and `{` are Svelte syntax outside code and math.
+
+**One sentence to a line.**
+In every `.md` and `.svx` file, each sentence of prose starts on a new line and runs to its end on that line, however long; never break a line inside a sentence to keep it short.
+A paragraph is its sentences on consecutive lines, and a blank line still ends it.
+In a list item or a callout, each sentence after the first starts a new line at the item's indent or after the `> `.
+A diff then shows which sentences changed.
+Prettier leaves prose as it is written (its `proseWrap` is `preserve`, the default), and displayed equations, tables, code and frontmatter keep their own lines.
+Archive documents approved before this rule are frozen as they were written.
 
 ## Mathematics
 
-Inline math is `$x + y$`. A displayed equation opens with `$$` alone on a line, has its body
-indented by one tab, and closes with `$$` alone on a line:
+Inline math is `$x + y$`.
+A displayed equation opens with `$$` alone on a line, has its body indented by one tab, and closes with `$$` alone on a line:
 
 ```
 $$
@@ -143,23 +130,22 @@ $$
 $$
 ```
 
-Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. In a `.md` file write a star in
-inline math as `\ast` (`$q^\ast$`): Prettier does not read math, pairs two asterisks of a paragraph
-as emphasis, and rewrites them. The site-wide macros are in
-`site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
-one document goes in its `katex_macros`.
+Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`.
+In a `.md` file write a star in inline math as `\ast` (`$q^\ast$`): Prettier does not read math, pairs two asterisks of a paragraph as emphasis, and rewrites them.
+The site-wide macros are in `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for one document goes in its `katex_macros`.
 
 Lay equations out so that they read the way the argument runs:
 
-- **Chains are displayed.** A chain of equations, `a = b = c`, never goes inline, least of all one
-  with stacked vectors. An equation between stacked vectors is displayed even when it is a single
-  equality. A lone short equation, such as $w\transpose x = \lvert x \rvert^2 - \alpha x_1$, may
-  stay in the sentence.
-- **A short chain takes one line.** If the reader can take it in at once, it goes on one line. Several
-  such chains in a row go in one `gathered` block, a chain to a row. Give a chain one relation per
-  row, in `aligned`, only when it is a derivation to follow step by step or too wide for one line.
-- **Align on the last relation of the first row.** When the first row holds several relations,
-  the `&` goes before the last of them, so that the next row continues from it:
+- **Chains are displayed.**
+  A chain of equations, `a = b = c`, never goes inline, least of all one with stacked vectors.
+  An equation between stacked vectors is displayed even when it is a single equality.
+  A lone short equation, such as $w\transpose x = \lvert x \rvert^2 - \alpha x_1$, may stay in the sentence.
+- **A short chain takes one line.**
+  If the reader can take it in at once, it goes on one line.
+  Several such chains in a row go in one `gathered` block, a chain to a row.
+  Give a chain one relation per row, in `aligned`, only when it is a derivation to follow step by step or too wide for one line.
+- **Align on the last relation of the first row.**
+  When the first row holds several relations, the `&` goes before the last of them, so that the next row continues from it:
 
   ```
   $$
@@ -171,61 +157,46 @@ Lay equations out so that they read the way the argument runs:
   ```
 
   Never put it before the first, as in `a &= b + c + d = f + g`.
-- **Prose separates equations that do not continue each other.** Write the first in a display,
-  then "and" or "where", then the second, rather than aligning them together or setting them side
-  by side with `\qquad`. There are two exceptions. Short definitions that fit side by side, such as
-  a small example's $A$ and $b$, may share a display with `\qquad` between them. A parallel pair
-  that shares one `@tag` goes in a `gathered` block. A tag after `\end{aligned}` or
-  `\end{gathered}` numbers the whole block.
-- **Commas stack blocks.** The tuple $(v, u)$ is the column vector with $v$ above $u$; never write
-  it with semicolons. Say so where a document first uses one. Write a row by juxtaposition, as in
-  $[A \;\, b]$. Matrices and displayed vectors use `bmatrix`.
+- **Prose separates equations that do not continue each other.**
+  Write the first in a display, then "and" or "where", then the second, rather than aligning them together or setting them side by side with `\qquad`.
+  There are two exceptions.
+  Short definitions that fit side by side, such as a small example's $A$ and $b$, may share a display with `\qquad` between them.
+  A parallel pair that shares one `@tag` goes in a `gathered` block.
+  A tag after `\end{aligned}` or `\end{gathered}` numbers the whole block.
+- **Commas stack blocks.**
+  The tuple $(v, u)$ is the column vector with $v$ above $u$; never write it with semicolons.
+  Say so where a document first uses one.
+  Write a row by juxtaposition, as in $[A \;\, b]$.
+  Matrices and displayed vectors use `bmatrix`.
 
-skoro's own notation is written with its macros, never with the letters they stand for, so that it
-can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`,
-`\randomPoint` and `\otherRandomPoint` (the random variables, in boldface), `\tangent` and
-`\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`,
-`\discretePoint`, `\order` and `\req`; `\positive` for the positive reals $(0, \infty)$, written
-$\mathbb R_{>0}$ and never $\mathbb R_+$, which some read as $[0, \infty)$; `\density`, `\logterm`,
-`\proposal`, `\weight`, `\kernel` and `\key`; and the typography `\D`, `\dd` and `\hvp`.
+skoro's own notation is written with its macros, never with the letters they stand for, so that it can change in one place: `\manifold` and `\otherManifold`, `\point` and `\otherPoint`, `\randomPoint` and `\otherRandomPoint` (the random variables, in boldface), `\tangent` and `\otherTangent` (a tangent vector or a frame of them alike), `\dimension`, `\map`, `\discretePoint`, `\order` and `\req`; `\positive` for the positive reals $(0, \infty)$, written $\mathbb R_{>0}$ and never $\mathbb R_+$, which some read as $[0, \infty)$; `\density`, `\logterm`, `\proposal`, `\weight`, `\kernel` and `\key`; and the typography `\D`, `\dd` and `\hvp`.
 `katex.config.ts` says what each stands for.
 
 ## Graphs
 
 skoro has several graphs, and a document never says "the graph" alone: it names the one it means.
 
-- The **compilation graph** has the model's values as nodes (quantities, constants, and mapped
-  values, among them the terms' log-densities) and an edge from each input of an operation to its
-  output. Its roots are the quantities and constants. Programs are compiled from it.
-- The **probabilistic graph** has the model's quantities and terms as nodes, an edge from each
-  quantity a term is conditioned on to the term, and an edge from the term to the quantity it
-  scores. Ancestral order and Markov blankets are read on it.
-- A program's **computation graph** has its slots as nodes and an edge from each input of a step to
-  its output; its **backpropagation graph** has the same nodes with every edge reversed, carrying
-  the pull-backs of the reverse pass.
+- The **compilation graph** has the model's values as nodes (quantities, constants, and mapped values, among them the terms' log-densities) and an edge from each input of an operation to its output.
+  Its roots are the quantities and constants.
+  Programs are compiled from it.
+- The **probabilistic graph** has the model's quantities and terms as nodes, an edge from each quantity a term is conditioned on to the term, and an edge from the term to the quantity it scores.
+  Ancestral order and Markov blankets are read on it.
+- A program's **computation graph** has its slots as nodes and an edge from each input of a step to its output; its **backpropagation graph** has the same nodes with every edge reversed, carrying the pull-backs of the reverse pass.
 
-A node with no incoming edge, and so no ancestor, is a *root*: the inputs of a computation are the
-roots of its graph, never its leaves. A *leaf* has no outgoing edge, so a node is a root of a
-computation graph if and only if it is a leaf of its backpropagation graph.
+A node with no incoming edge, and so no ancestor, is a *root*: the inputs of a computation are the roots of its graph, never its leaves.
+A *leaf* has no outgoing edge, so a node is a root of a computation graph if and only if it is a leaf of its backpropagation graph.
 
-Before a document reasons about a graph's structure (its roots, edges, paths or neighbours), it
-says what the nodes and edges represent and the properties it relies on ("the roots are the inputs
-of the map"), and shows a picture (see [Figures](#figures)), or it links to a part of the site that
-does all three. The core's mathematics introduces the compilation and probabilistic graphs
-(`archive/core/math`, under "The compilation graph" and "The probabilistic graph"), and the note
-on automatic differentiation the computation and backpropagation graphs, until the concepts pages
-do.
+Before a document reasons about a graph's structure (its roots, edges, paths or neighbours), it says what the nodes and edges represent and the properties it relies on ("the roots are the inputs of the map"), and shows a picture (see [Figures](#figures)), or it links to a part of the site that does all three.
+The core's mathematics introduces the compilation and probabilistic graphs (`archive/core/math`, under "The compilation graph" and "The probabilistic graph"), and the note on automatic differentiation the computation and backpropagation graphs, until the concepts pages do.
 
-Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
-and refer to them as `[](eq:slug)`, which renders as "(1)". The reference brings its own
-parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))". From another document:
-`[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
-should point at the equations it implements this way.
+Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line, and refer to them as `[](eq:slug)`, which renders as "(1)".
+The reference brings its own parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))".
+From another document: `[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`.
+An implementation companion should point at the equations it implements this way.
 
 ## Statements and proofs
 
-A definition, theorem or lemma that the text states formally and returns to is a statement: a
-short document of its own in a `statements/` folder beside the document that shows it.
+A definition, theorem or lemma that the text states formally and returns to is a statement: a short document of its own in a `statements/` folder beside the document that shows it.
 
 ```yaml
 ---
@@ -235,7 +206,8 @@ title: Whitening # optional
 ---
 ```
 
-Its body is the statement alone. The document must be `.svx` to show it:
+Its body is the statement alone.
+The document must be `.svx` to show it:
 
 ```svelte
 <script>
@@ -253,17 +225,17 @@ The covariance of $L^{-1} \varepsilon$ is $L^{-1} L L^\top L^{-\top} = I$.
 </Proof>
 ```
 
-Statements and equations share one count within a document. Refer to one as
-`[%full](statement:whitening)` ("Lemma 2"). Never number or italicise a statement by hand.
+Statements and equations share one count within a document.
+Refer to one as `[%full](statement:whitening)` ("Lemma 2").
+Never number or italicise a statement by hand.
 
 ## Citations
 
-Entries go in `site/content/references.bib`, keyed `<surname><year>`. `[](cite:absil2008)` renders
-as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`. A citation
-brings its own brackets, so never wrap it in parentheses: "a smooth local frame
-[Chapter 8](cite:lee2013)", not "([Chapter 8](cite:lee2013))". Each page ends with
-exactly what it cites. Cite only sources you are certain of, with their real details: leave a
-citation out rather than guess one.
+Entries go in `site/content/references.bib`, keyed `<surname><year>`.
+`[](cite:absil2008)` renders as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`.
+A citation brings its own brackets, so never wrap it in parentheses: "a smooth local frame [Chapter 8](cite:lee2013)", not "([Chapter 8](cite:lee2013))".
+Each page ends with exactly what it cites.
+Cite only sources you are certain of, with their real details: leave a citation out rather than guess one.
 
 ## Callouts
 
@@ -274,25 +246,22 @@ GitHub-style blockquotes, with an optional title after the marker:
 > ...
 ```
 
-`NOTE`, `TIP`, `WARNING`, `DECISION`, `TODO`. A `[!TODO]` is an open question: `wf approve`
-refuses a document that still has one, so a draft carries its open questions as `[!TODO]`s until
-they are answered. A page's `[!DECISION]` says briefly why something is the way it is and links
-to the archive entry that decided it.
+`NOTE`, `TIP`, `WARNING`, `DECISION`, `TODO`.
+A `[!TODO]` is an open question: `wf approve` refuses a document that still has one, so a draft carries its open questions as `[!TODO]`s until they are answered.
+A page's `[!DECISION]` says briefly why something is the way it is and links to the archive entry that decided it.
 
 ## Code
 
-- **Pages quote real code.** A fence whose only line is `{path}` or `{path:start..end}` is
-  replaced by those lines of the file (1-indexed, inclusive), with a caption linking to GitHub.
-  Paths are relative to the document. Quoting doc comments renders them as Markdown.
-- **Archive documents never quote with `{path}`.** The quote is re-read at every build, so it
-  would change as the code does, and a line range would eventually break the build. Sketch the
-  code inline, and when an existing interface matters, paste the lines and name the file and the
-  commit they were read at.
-- Sketches are Rust, compile-plausible, and show signatures and types rather than bodies, unless
-  the body is the point.
+- **Pages quote real code.**
+  A fence whose only line is `{path}` or `{path:start..end}` is replaced by those lines of the file (1-indexed, inclusive), with a caption linking to GitHub.
+  Paths are relative to the document.
+  Quoting doc comments renders them as Markdown.
+- **Archive documents never quote with `{path}`.**
+  The quote is re-read at every build, so it would change as the code does, and a line range would eventually break the build.
+  Sketch the code inline, and when an existing interface matters, paste the lines and name the file and the commit they were read at.
+- Sketches are Rust, compile-plausible, and show signatures and types rather than bodies, unless the body is the point.
 
 ## Figures
 
-A graph of any of the kinds in [Graphs](#graphs) is drawn with `<ModelGraph spec={name} />` from a
-`*.graph.ts` file beside the document (see `site/README.md`). Any other figure is an image or a Svelte component in the
-document's folder, referenced relatively.
+A graph of any of the kinds in [Graphs](#graphs) is drawn with `<ModelGraph spec={name} />` from a `*.graph.ts` file beside the document (see `site/README.md`).
+Any other figure is an image or a Svelte component in the document's folder, referenced relatively.

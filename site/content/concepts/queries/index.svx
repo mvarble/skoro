@@ -10,11 +10,10 @@ depends_on: [concepts/terms, derivatives-in-charts]
 	import { cache, expansion, folding, passes, refusal, retraction } from './queries.walk';
 </script>
 
-A model holds a joint distribution and computes nothing by itself. Computation starts with a
-**query**: what to compute, and which quantities are observed. A query is compiled from a
-[snapshot](../building/#snapshots-readers-and-branches) for a **target** (a device and a
-precision) into a **program**, whose passes compute values and derivatives. This page describes
-the three in turn.
+A model holds a joint distribution and computes nothing by itself.
+Computation starts with a **query**: what to compute, and which quantities are observed.
+A query is compiled from a [snapshot](../building/#snapshots-readers-and-branches) for a **target** (a device and a precision) into a **program**, whose passes compute values and derivatives.
+This page describes the three in turn.
 
 ## A query
 
@@ -22,36 +21,27 @@ the three in turn.
 {../../../../crates/skoro-core/src/query.rs:105..136}
 ```
 
-A query's targets are some nodes of the model, or the log-density: the sum of every
-[term](../terms/), or of some. Its **observations** give values to some quantities. Every quantity
-a target is computed from and that is not observed is **free**: the program takes its value as an
-input, and differentiates with respect to it. So the same model, with the same terms, answers
-different questions: with the measurements observed, the log-density is a posterior of the states
-up to a constant; with nothing observed, it is the joint; and the query of a term's own value
-needs no observations at all.
+A query's targets are some nodes of the model, or the log-density: the sum of every [term](../terms/), or of some.
+Its **observations** give values to some quantities.
+Every quantity a target is computed from and that is not observed is **free**: the program takes its value as an input, and differentiates with respect to it.
+So the same model, with the same terms, answers different questions: with the measurements observed, the log-density is a posterior of the states up to a constant; with nothing observed, it is the joint; and the query of a term's own value needs no observations at all.
 
-`Observations` are built up one quantity at a time, each extension a new set with an identity of
-its own. A caller keeps one set and passes it to every compile, and the identity is what the
-compiled program is cached under.
+`Observations` are built up one quantity at a time, each extension a new set with an identity of its own.
+A caller keeps one set and passes it to every compile, and the identity is what the compiled program is cached under.
 
-A value that differs from row to row of a batch, such as one that generation drew, is observed
-whole, one value per row, by `observe_value`; a value that does not fit the quantity is refused when
-the set is used, as `observe` refuses one:
+A value that differs from row to row of a batch, such as one that generation drew, is observed whole, one value per row, by `observe_value`; a value that does not fit the quantity is refused when the set is used, as `observe` refuses one:
 
 ```rust
 {../../../../crates/skoro-core/src/query.rs:45..58}
 ```
 
-A query gives back what it was made with, so that an algorithm handed one can compile programs of
-its own under the same observations, as [the linearizer](../linearization/#linearizing-a-query)
-does with the nodes the terms bind:
+A query gives back what it was made with, so that an algorithm handed one can compile programs of its own under the same observations, as [the linearizer](../linearization/#linearizing-a-query) does with the nodes the terms bind:
 
 ```rust
 {../../../../crates/skoro-core/src/query.rs:138..152}
 ```
 
-Two sets of observations join by `Observations::union`, which keeps the first set's value of a
-quantity both observe, and is the first set itself when the second adds nothing.
+Two sets of observations join by `Observations::union`, which keeps the first set's value of a quantity both observe, and is the first set itself when the second adds nothing.
 
 ## A target
 
@@ -62,37 +52,26 @@ A target is where a program computes and at what precision, checked once, when i
 ```
 
 skoro computes on burn's Flex device (the CPU) and on wgpu devices, in single or double precision.
-The model itself commits to neither: precision belongs to the query, and two programs compiled from
-one snapshot may run at different precisions side by side. `Target::host()` is the Flex device at
-double precision, where the model folds its constants.
+The model itself commits to neither: precision belongs to the query, and two programs compiled from one snapshot may run at different precisions side by side.
+`Target::host()` is the Flex device at double precision, where the model folds its constants.
 
-A target's elementary functions are not equally accurate everywhere. The CPU's sine is accurate
-relative to its value, as a library's is. A GPU's is accurate only to an absolute error, about
-$4 \cdot 10^{-7}$ on the adapter skoro is tested on, whatever the argument. Near $0$, where
-$\sin x \approx x$ is small, that is a large relative error. A formula that cancels its
-numerator to a power of a small argument and divides by that power amplifies it, and so do the
-formula's derivatives, more with each order, as the note on
-[removable singularities in floating point](../../math/removable-singularities/) works out. skoro's
-own such formulas, the removable
-singularities of its rotations, switch to a series far enough from $0$ that they hold on a GPU whose
-sine and cosine err by up to $2^{-20}$ on $[-\pi, \pi]$ (see
-[the rotations](../rotations-and-motions/#derivatives)). A model that writes one of its own needs the
-same care.
+A target's elementary functions are not equally accurate everywhere.
+The CPU's sine is accurate relative to its value, as a library's is.
+A GPU's is accurate only to an absolute error, about $4 \cdot 10^{-7}$ on the adapter skoro is tested on, whatever the argument.
+Near $0$, where $\sin x \approx x$ is small, that is a large relative error.
+A formula that cancels its numerator to a power of a small argument and divides by that power amplifies it, and so do the formula's derivatives, more with each order, as the note on [removable singularities in floating point](../../math/removable-singularities/) works out.
+skoro's own such formulas, the removable singularities of its rotations, switch to a series far enough from $0$ that they hold on a GPU whose sine and cosine err by up to $2^{-20}$ on $[-\pi, \pi]$ (see [the rotations](../rotations-and-motions/#derivatives)).
+A model that writes one of its own needs the same care.
 
 > [!DECISION] Designed for a stated error, not for one adapter
-> The WGSL specification promises the sine an absolute error of only $2^{-11}$, under which nothing
-> computed from a rotation agrees with double precision to $10^{-4}$. skoro designs instead for a
-> stated $2^{-20}$, about two and a half times what was measured, and its tests measure the adapter
-> before they run. [Accuracy on the GPU](../../archive/wgpu-accuracy/) works out why and how far.
+> The WGSL specification promises the sine an absolute error of only $2^{-11}$, under which nothing computed from a rotation agrees with double precision to $10^{-4}$.
+> skoro designs instead for a stated $2^{-20}$, about two and a half times what was measured, and its tests measure the adapter before they run.
+> [Accuracy on the GPU](../../archive/wgpu-accuracy/) works out why and how far.
 
 ## Compiling
 
-A snapshot compiles a query for a target with
-`Snapshot::compile(&self, query: &Query, target: &Target) -> Result<Arc<Program>, Error>`.
-Compiling walks back from the targets through the compilation graph, keeping only the operations
-they need, lowers each operation for the target, and folds what the observations fix: an operation
-all of whose inputs are observed or constant is computed once, when the program is made, and never
-again.
+A snapshot compiles a query for a target with `Snapshot::compile(&self, query: &Query, target: &Target) -> Result<Arc<Program>, Error>`.
+Compiling walks back from the targets through the compilation graph, keeping only the operations they need, lowers each operation for the target, and folds what the observations fix: an operation all of whose inputs are observed or constant is computed once, when the program is made, and never again.
 
 <Walkthrough spec={folding}>
 
@@ -102,9 +81,8 @@ again.
 
 </Walkthrough>
 
-A selection by an observed index, shared by every row, keeps only the branch it selects. And a
-[composite](../operations/#composites) is lowered by expanding its body in place, so that the
-program differentiates through the primitives it is built from:
+A selection by an observed index, shared by every row, keeps only the branch it selects.
+And a [composite](../operations/#composites) is lowered by expanding its body in place, so that the program differentiates through the primitives it is built from:
 
 <Walkthrough spec={expansion}>
 
@@ -114,8 +92,7 @@ program differentiates through the primitives it is built from:
 
 </Walkthrough>
 
-A snapshot keeps its most recently used programs, so compiling the same query again, for the same
-target and the same set of observations, returns the same program:
+A snapshot keeps its most recently used programs, so compiling the same query again, for the same target and the same set of observations, returns the same program:
 
 <Walkthrough spec={cache}>
 
@@ -127,8 +104,8 @@ target and the same set of observations, returns the same program:
 
 ## Passes
 
-A program runs a **pass** over a batch of rows, given a value of each free quantity. Here are the
-passes over the program compiled above:
+A program runs a **pass** over a batch of rows, given a value of each free quantity.
+Here are the passes over the program compiled above:
 
 <Walkthrough spec={passes}>
 
@@ -138,23 +115,15 @@ passes over the program compiled above:
 
 </Walkthrough>
 
-`forward` gives the targets' values. `tangent` pushes tangent frames forward from the free
-quantities to the targets; `cotangent` pulls cotangent frames back from the targets to every free
-quantity; and `hessian` does the latter with velocities at the free quantities, giving the
-second-order products as well. For a program whose single target is a `Real`, such as a
-log-density, `gradient` and `hessian_products` seed that target with one.
+`forward` gives the targets' values.
+`tangent` pushes tangent frames forward from the free quantities to the targets; `cotangent` pulls cotangent frames back from the targets to every free quantity; and `hessian` does the latter with velocities at the free quantities, giving the second-order products as well.
+For a program whose single target is a `Real`, such as a log-density, `gradient` and `hessian_products` seed that target with one.
 
-Every derivative is taken in tangent charts: with respect to a tangent vector at the point, through
-the [retraction](../spaces/#how-a-value-moves) of each free quantity, so a gradient has the
-dimension of the quantity's tangent space and an estimator's step is retracted back onto it. The
-note on [smooth maps and retractions](../../math/retraction/#derivatives-through-the-retraction)
-says what such a derivative is, and the note on
-[gradients and Hessians in tangent charts](../../math/derivatives-in-charts/) says where the
-Hessian in a chart differs from the Hessian of the pulled-back function.
+Every derivative is taken in tangent charts: with respect to a tangent vector at the point, through the [retraction](../spaces/#how-a-value-moves) of each free quantity, so a gradient has the dimension of the quantity's tangent space and an estimator's step is retracted back onto it.
+The note on [smooth maps and retractions](../../math/retraction/#derivatives-through-the-retraction) says what such a derivative is, and the note on [gradients and Hessians in tangent charts](../../math/derivatives-in-charts/) says where the Hessian in a chart differs from the Hessian of the pulled-back function.
 
-A program's `layout` lays its free continuous quantities out in one tangent vector, in ancestral
-order, for algorithms that work with the whole of it at once. An estimator's step is such a vector,
-and the layout moves the quantities along it by the retraction of the product of their spaces:
+A program's `layout` lays its free continuous quantities out in one tangent vector, in ancestral order, for algorithms that work with the whole of it at once.
+An estimator's step is such a vector, and the layout moves the quantities along it by the retraction of the product of their spaces:
 
 <Walkthrough spec={retraction}>
 
@@ -164,9 +133,8 @@ and the layout moves the quantities along it by the retraction of the product of
 
 </Walkthrough>
 
-`Layout::local` inverts the step: the tangent coordinates at one point that reach another, by the
-product's inverse retraction. It measures how far an estimate is from a value, such as the truth,
-in the estimate's own chart, where its covariance is:
+`Layout::local` inverts the step: the tangent coordinates at one point that reach another, by the product's inverse retraction.
+It measures how far an estimate is from a value, such as the truth, in the estimate's own chart, where its covariance is:
 
 ```rust
 {../../../../crates/skoro-core/src/layout.rs:112..133}
@@ -174,14 +142,11 @@ in the estimate's own chart, where its covariance is:
 
 ## What a pass may refuse
 
-Before running anything, a pass checks that it can be carried: every step on it must have a kernel
-of the [order](../operations/#kernels-and-how-far-they-differentiate) it needs. A step is on a pass
-when its output is continuous and reaches a target, and one of its continuous inputs is reached from
-a free quantity. It needs order one on a gradient pass, and order two on a Hessian pass when one of
-its inputs carries a velocity. A program that cannot carry a pass refuses it, naming the first step
-that falls short, the composites it was expanded from, and its node, rather than computing a wrong
-derivative. The tests of admissibility ask passes of a small model whose one operation they choose
-the order of:
+Before running anything, a pass checks that it can be carried: every step on it must have a kernel of the [order](../operations/#kernels-and-how-far-they-differentiate) it needs.
+A step is on a pass when its output is continuous and reaches a target, and one of its continuous inputs is reached from a free quantity.
+It needs order one on a gradient pass, and order two on a Hessian pass when one of its inputs carries a velocity.
+A program that cannot carry a pass refuses it, naming the first step that falls short, the composites it was expanded from, and its node, rather than computing a wrong derivative.
+The tests of admissibility ask passes of a small model whose one operation they choose the order of:
 
 <Walkthrough spec={refusal}>
 
@@ -191,10 +156,8 @@ the order of:
 
 </Walkthrough>
 
-In the same spirit, an algorithm that differentiates refuses a program with a free discrete
-quantity, which it could not condition on.
+In the same spirit, an algorithm that differentiates refuses a program with a free discrete quantity, which it could not condition on.
 
 > [!DECISION] Algorithms refuse by structure
-> What a model can do is read off its structure when a pass is asked for, never declared by its
-> user. See
-> [position 6 of the charter](../../archive/charter/writeup.md#6-algorithms-refuse-by-structure).
+> What a model can do is read off its structure when a pass is asked for, never declared by its user.
+> See [position 6 of the charter](../../archive/charter/writeup.md#6-algorithms-refuse-by-structure).
