@@ -1,10 +1,13 @@
 # Writing skoro's documents
 
-How the documents in `site/content/` are written: where each kind goes, its frontmatter, links,
-prose, and how mathematics, statements, citations and code are written. `site/README.md` covers
-the same ground for a person editing the site; this file is what an agent follows.
+skoro's own conventions for the documents in `site/content/`, over the ones every project
+documented this way shares: `.agents/reference/mesearch/authoring.md` (what each kind of writing
+promises, frontmatter, links, prose, callouts, code and figures) and `markup.md` beside it
+(mathematics, numbered equations, statements and citations). Where they differ, this file wins.
+`site/README.md` covers the same ground for a person editing the site.
 
 ## Where things go
+
 
 ```
 site/content/
@@ -44,36 +47,17 @@ order, and the document links to it and keeps what is skoro's own.
 
 ## Frontmatter
 
-```yaml
----
-title: Retractions
-summary: Maps from a tangent space back onto the manifold. # one plain sentence
-depends_on: [tangent-space, archive/normal/math]
-katex_macros:
-    '\retr': '\operatorname{R}'
----
-```
+As the shared conventions say, and:
 
-- `title` may contain inline math. An entry's documents default to their stage's name
-  ("Mathematics", "Plan"), which is usually right.
-- `summary` is shown in lists, the sidebar, previews and `llms.txt`. Without it, the first
-  paragraph stands in, so either write one or make the first paragraph a good summary.
-- `depends_on` lists what a reader must understand first: a bare slug is a math note, anything
-  else a key (`concepts/graph`, `archive/normal/math`). These are the solid arrows of the map on
-  the Mathematics page, so list real prerequisites, not everything mentioned.
-- A page also needs `order`, its place in its track. A page's `depends_on` names no page of its
-  own track at its place or after it.
-- A math note needs `part` and `order`: the part of the mathematics it belongs to (`geometry`,
-  `probability`, `estimation`; `MATH_PARTS` in `site/src/lib/site.ts`) and its place within it.
-  Its `depends_on` names math notes alone, and none at its own place or after it. The build
-  refuses a note that breaks either rule.
-- A page that moves lists the keys it had under `formerly` (`formerly: [start/old-slug]`), so
-  that the entries that name it, frozen once done, still resolve to it.
-- An entry's `index.md` lists the `pages` and the `crates` it changed (written at `publish`), the
-  entries it `revises` (given to `wf start`), and what it `amends` in entries that are done
-  (`workflow.md`, under "Amending a done entry").
+- A math note's `part` is one of `geometry`, `probability` and `estimation` (`MATH_PARTS` in
+  `site/src/lib/site.ts`).
+- An entry's `index.md` also lists the `crates` it changed, by their directories under `crates/`,
+  written at `publish`. `wf approve` refuses a changed crate that is not listed, a listed one the
+  branch did not change, and a changed crate with no description in
+  `site/content/reference/crates/<crate>/index.md`.
 
 ## The math notes
+
 
 **What belongs in a note.** A piece of mathematics is *general* when it can be stated and proved
 without naming anything skoro defines: no quantity, term, query, role, binding or key, and neither
@@ -114,40 +98,10 @@ changed to follow it; where it belongs in no note any longer, it is written into
 document that cited it. The last two are amendments of a done entry, made at `publish` and listed
 under `amends`.
 
-## Links
-
-- Write links the way the files sit on disk: `[retractions](../../math/retraction/)`,
-  `[the plan](plan.md)`, `[the guide](../../guide/)`. The build rewrites them to the site's URLs
-  and reports a link to a document that does not exist.
-- A section's anchor is its heading in lowercase, with `$` removed and every run of characters
-  other than `a`–`z` and digits turned into one hyphen: `## Fubini's theorem` is
-  `#fubini-s-theorem`. Anchors are not checked, so work them out from the heading as written.
-- Never put a link inside a heading.
-
-## Prose
-
-Write in complete sentences and paragraphs, in the register of a textbook, with tables and lists
-only where they genuinely help. Never refer to the conversation that produced a document: it is
-read later, by someone who was not there. Prefer a concrete example to an abstract definition
-alone. Name things the way the code names them, in backticks; generics such as `Q<B, M>` must be
-in backticks anyway, since `<` and `{` are Svelte syntax outside code and math.
-
 ## Mathematics
 
-Inline math is `$x + y$`. A displayed equation opens with `$$` alone on a line, has its body
-indented by one tab, and closes with `$$` alone on a line:
-
-```
-$$
-	R_x(0) = x @tag(fixed-point)
-$$
-```
-
-Never write `$$f(x) = 0$$` on one line, and never use `\[ ... \]`. In a `.md` file write a star in
-inline math as `\ast` (`$q^\ast$`): Prettier does not read math, pairs two asterisks of a paragraph
-as emphasis, and rewrites them. The site-wide macros are in
-`site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`, `\retr`, ...); notation for
-one document goes in its `katex_macros`.
+The site-wide macros are in `site/katex.config.ts` (`\bbR`, `\calI`, `\bfx`, `\defeq`, `\R`, `\E`,
+`\retr`, ...); notation for one document goes in its `katex_macros`.
 
 Lay equations out so that they read the way the argument runs:
 
@@ -190,7 +144,14 @@ $\mathbb R_{>0}$ and never $\mathbb R_+$, which some read as $[0, \infty)$; `\de
 `\proposal`, `\weight`, `\kernel` and `\key`; and the typography `\D`, `\dd` and `\hvp`.
 `katex.config.ts` says what each stands for.
 
+Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
+and refer to them as `[](eq:slug)`, which renders as "(1)". The reference brings its own
+parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))". From another document:
+`[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
+should point at the equations it implements this way.
+
 ## Graphs
+
 
 skoro has several graphs, and a document never says "the graph" alone: it names the one it means.
 
@@ -210,89 +171,13 @@ computation graph if and only if it is a leaf of its backpropagation graph.
 
 Before a document reasons about a graph's structure (its roots, edges, paths or neighbours), it
 says what the nodes and edges represent and the properties it relies on ("the roots are the inputs
-of the map"), and shows a picture (see [Figures](#figures)), or it links to a part of the site that
-does all three. The core's mathematics introduces the compilation and probabilistic graphs
+of the map"), and shows a picture (see "Figures" in `mesearch/authoring.md`), or it links to a part of
+the site that does all three. The core's mathematics introduces the compilation and probabilistic graphs
 (`archive/core/math`, under "The compilation graph" and "The probabilistic graph"), and the note
 on automatic differentiation the computation and backpropagation graphs, until the concepts pages
 do.
 
-Number only the equations the text refers back to, with `@tag(slug)` at the end of the last line,
-and refer to them as `[](eq:slug)`, which renders as "(1)". The reference brings its own
-parentheses, so never wrap it in more: "by [](eq:slug)", not "([](eq:slug))". From another document:
-`[](eq:math/<slug>/<eq>)` or `[](eq:archive/<entry>/<document>/<eq>)`. An implementation companion
-should point at the equations it implements this way.
-
-## Statements and proofs
-
-A definition, theorem or lemma that the text states formally and returns to is a statement: a
-short document of its own in a `statements/` folder beside the document that shows it.
-
-```yaml
----
-type: statement
-kind: lemma # theorem, proposition, corollary, definition, remark, example
-title: Whitening # optional
----
-```
-
-Its body is the statement alone. The document must be `.svx` to show it:
-
-```svelte
-<script>
-	import Statement from '$lib/components/Statement.svelte';
-	import Proof from '$lib/components/Proof.svelte';
-	import * as whitening from './statements/whitening.md';
-</script>
-
-<Statement {...whitening} />
-
-<Proof>
-
-The covariance of $L^{-1} \varepsilon$ is $L^{-1} L L^\top L^{-\top} = I$.
-
-</Proof>
-```
-
-Statements and equations share one count within a document. Refer to one as
-`[%full](statement:whitening)` ("Lemma 2"). Never number or italicise a statement by hand.
-
-## Citations
-
-Entries go in `site/content/references.bib`, keyed `<surname><year>`. `[](cite:absil2008)` renders
-as `[Absi08]`, and `[Section 4.1](cite:absil2008)` as `[Absi08, Section 4.1]`. A citation
-brings its own brackets, so never wrap it in parentheses: "a smooth local frame
-[Chapter 8](cite:lee2013)", not "([Chapter 8](cite:lee2013))". Each page ends with
-exactly what it cites. Cite only sources you are certain of, with their real details: leave a
-citation out rather than guess one.
-
-## Callouts
-
-GitHub-style blockquotes, with an optional title after the marker:
-
-```
-> [!DECISION] Why conditioning belongs to the query
-> ...
-```
-
-`NOTE`, `TIP`, `WARNING`, `DECISION`, `TODO`. A `[!TODO]` is an open question: `wf approve`
-refuses a document that still has one, so a draft carries its open questions as `[!TODO]`s until
-they are answered. A page's `[!DECISION]` says briefly why something is the way it is and links
-to the archive entry that decided it.
-
 ## Code
 
-- **Pages quote real code.** A fence whose only line is `{path}` or `{path:start..end}` is
-  replaced by those lines of the file (1-indexed, inclusive), with a caption linking to GitHub.
-  Paths are relative to the document. Quoting doc comments renders them as Markdown.
-- **Archive documents never quote with `{path}`.** The quote is re-read at every build, so it
-  would change as the code does, and a line range would eventually break the build. Sketch the
-  code inline, and when an existing interface matters, paste the lines and name the file and the
-  commit they were read at.
-- Sketches are Rust, compile-plausible, and show signatures and types rather than bodies, unless
-  the body is the point.
-
-## Figures
-
-A graph of any of the kinds in [Graphs](#graphs) is drawn with `<ModelGraph spec={name} />` from a
-`*.graph.ts` file beside the document (see `site/README.md`). Any other figure is an image or a Svelte component in the
-document's folder, referenced relatively.
+Sketches are Rust, compile-plausible, and show signatures and types rather than bodies, unless the
+body is the point.

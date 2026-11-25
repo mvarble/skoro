@@ -18,31 +18,31 @@ taken to be the parent of the working directory.
 
 ## Layout
 
-| Path                                     | What it is                                                                                                                                                                                                                               |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content/landing.md`                     | The prose on the home page.                                                                                                                                                                                                              |
-| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. A page that moves lists the keys it had under `formerly`, so that entries naming it still resolve. |
-| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note. `part` names the part of the mathematics it belongs to and `order` places it within the part; read in order, each note rests only on the notes before it.                                     |
-| `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                                                                                                                    |
-| `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                                                                                                                               |
-| `content/archive/<slug>/workflow.json`   | Its stage record, written by `bin/wf` alone and shown as the entry's history.                                                                                                                                                            |
-| `content/**/*.bib`                       | Bibliography entries, for `[](cite:key)`.                                                                                                                                                                                                |
-| `src/lib/site.ts`                        | Site name, repo URL, the tracks, the parts of the mathematics, and the names of an entry's documents. The navigation comes from here.                                                                                                    |
-| `src/lib/crates.ts`                      | The crate map's data. Keep it in step with `cargo metadata`.                                                                                                                                                                             |
-| `src/styles/`                            | CSS, split as `tokens/{colors,dimensions,typography}.css` + element and utility sheets. Colors exist only as tokens.                                                                                                                     |
-| `plugins/`                               | skoro's own Markdown plugins: callouts, quoted source, heading anchors.                                                                                                                                                                  |
-| `katex.config.ts`                        | Site-wide KaTeX macros.                                                                                                                                                                                                                  |
-| `test/content/`                          | A fixture with a document of every kind. `SITE_CONTENT=test/content pnpm build` builds it instead of `content/`.                                                                                                                         |
-| `src/lib/cms/`                           | The content layout: what each file under `content/` is, how its links resolve, and the queries the routes call.                                                                                                                          |
-| `test/cms/`                              | The fixture `src/lib/cms/preset.test.ts` reads, with a few documents that are wrong on purpose.                                                                                                                                          |
+| Path                                     | What it is                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content/landing.md`                     | The prose on the home page.                                                                                                                                                                                                                                                                                            |
+| `content/<track>/<slug>/index.{md,svx}`  | A page: what skoro _is_. The folder is its track (`start`, `guide`, `concepts`, `reference`), and `order` places it within the track. A page that moves lists the keys it had under `formerly`, so that entries naming it still resolve.                                                                               |
+| `content/math/<slug>/index.{md,svx}`     | A note of mathematics, one idea to a note. `part` names the part of the mathematics it belongs to and `order` places it within the part; read in order, each note rests only on the notes before it.                                                                                                                   |
+| `content/archive/<slug>/index.md`        | An archive entry: one piece of development, opened by `bin/wf start`.                                                                                                                                                                                                                                                  |
+| `content/archive/<slug>/<name>.{md,svx}` | Its documents: `math`, `implementation`, `plan` (a feature), `writeup` (a decision). Frozen once approved.                                                                                                                                                                                                             |
+| `content/archive/<slug>/workflow.json`   | Its stage record, written by `bin/wf` alone and shown as the entry's history.                                                                                                                                                                                                                                          |
+| `content/**/*.bib`                       | Bibliography entries, for `[](cite:key)`.                                                                                                                                                                                                                                                                              |
+| `src/lib/site.ts`                        | Site name, repo URL, the tracks, the parts of the mathematics, the names of an entry's documents and of its stages, and the archive's and `llms.txt`'s paragraphs. The shared pages read it as `$site`.                                                                                                                |
+| `src/lib/server/site.ts`                 | The hooks the shared pages call: an entry's crates under "What it changed", and the walkthroughs in the Markdown export.                                                                                                                                                                                               |
+| `src/lib/crates.ts`                      | The crate map's data. Keep it in step with `cargo metadata`.                                                                                                                                                                                                                                                           |
+| `src/styles/`                            | `tokens/colors.css` (colours exist only as tokens), skoro's own sheets (`utils/`, `site.css`), over the shared stylesheet.                                                                                                                                                                                             |
+| managed files                            | Written by `pnpm exec mesearch-wf sync` and listed in `../.workflow/managed.json`: the routes the package ships, `src/params/`, and what documents import by `$lib` path (`Statement`, `Proof`, `ModelGraph`, `ImageFigure`, `TrackCard`, `graph/spec`). Each is a few lines around the package's own; never edit one. |
+| `katex.config.ts`                        | Site-wide KaTeX macros.                                                                                                                                                                                                                                                                                                |
+| `test/content/`                          | A fixture with a document of every kind. `SITE_CONTENT=test/content pnpm build` builds it instead of `content/`.                                                                                                                                                                                                       |
 
-The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms)
-with the preset in `src/lib/cms/`: it reads every document, resolves links, numbers equations and statements,
+The site is built by [`@mvarble/mesearch-workflow`](https://github.com/mvarble/mesearch/tree/main/packages/workflow),
+which every project documented through the workflow shares: `vite.config.ts` calls its `docsSite()`,
+and its routes, components, styles and content preset are the site's, with skoro's own parts
+handed in as `$site`. The content goes through [`@mvarble/mesearch-cms`](https://github.com/mvarble/mesearch/tree/main/packages/cms)
+with that preset: it reads every document, resolves links, numbers equations and statements,
 collects citations, and serves all of it to the routes as `$cms`. A link to a document that does
-not exist, or a `depends_on` that names nothing, is reported when the site builds. KaTeX and the
-scroll box around display math come from
-[`@mvarble/mesearch-markdown`](https://github.com/mvarble/mesearch/tree/main/packages/markdown),
-and the map on the Mathematics page is `@mvarble/mesearch-ui`'s, in skoro's colours.
+not exist, or a `depends_on` that names nothing, is reported when the site builds. A change to a
+shared page or component is made in mesearch, and comes here with the next `sync`.
 
 ## Writing a document
 
@@ -205,7 +205,7 @@ export const normal = defineGraph({
   HTML layer over the SVG rather than inside it, so it needs no `<foreignObject>` and no JavaScript.
 - **Styling:** `arrow` (`end`, `start`, `both`, `none`), `label` / `labelAt`, `muted`, and the
   escape hatches `class` / `style` on nodes and edges. The hues are tokens `--graph-<hue>` in
-  `src/styles/tokens/colors.css`, and the rules are in `src/styles/utils/graph.css`.
+  `src/styles/tokens/colors.css`, and the rules are the shared stylesheet's `utils/graph.css`.
 - A mistake, such as an edge to a missing node or a kind the figure does not define, fails the
   build with the figure's title in the message.
 - In the `.md` exports, the tag is replaced by a list of the figure's nodes and edges with the

@@ -1,9 +1,2 @@
-import { cms } from '$cms';
-
-import { documentData } from '$lib/server/document';
-import type { EntryGenerator, PageServerLoad } from './$types';
-
-export const entries: EntryGenerator = () =>
-    cms.pages.list().map((page) => ({ track: page.track, slug: page.slug }));
-
-export const load: PageServerLoad = ({ params }) => documentData(`${params.track}/${params.slug}`);
+// Managed by @mvarble/mesearch-workflow, which `mesearch-wf sync` writes it from.
+export * from '@mvarble/mesearch-workflow/app/routes/[track=track]/[slug=slug]/+page.server.ts';

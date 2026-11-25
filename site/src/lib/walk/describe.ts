@@ -1,4 +1,4 @@
-import { hasTex } from '$lib/tex';
+import { hasTex } from '@mvarble/mesearch-workflow/app/lib/tex.ts';
 import { codeMatches, edgeId, matchLines, showMatch, type WalkthroughSpec } from './spec';
 
 // A walkthrough as Markdown text, for the `.md` exports: each step's note, the code it points at,

@@ -12,7 +12,7 @@ branch, sketch ideas in the reply: none of that needs a workflow, and none of it
 **The development workflow runs only when the user invokes it**, through the `/wf-*` commands
 (`.agents/skills/wf-*`). Every change to the library's code goes through an entry of the
 workflow: its mathematics, its implementation companion, its plan, its build, and its pages, each
-approved by the user. The procedure is in `.agents/reference/workflow.md`. In short:
+approved by the user. The procedure is in `.agents/reference/mesearch/workflow.md`. In short:
 
 | command                                         | what it does                                           |
 | ----------------------------------------------- | ------------------------------------------------------ |
@@ -37,6 +37,19 @@ Rules that hold whether or not a command was invoked:
 - Not gated: the tooling (`bin/`, `tools/`), the skills, CI, and the site's own code
   (`site/src/`). Changes to those are ordinary work.
 
+## Managed files
+
+The workflow's engine, its shared skills and documents, and most of the documentation site are
+[`@mvarble/mesearch-workflow`](https://github.com/mvarble/mesearch/tree/main/packages/workflow)'s,
+shared with the other projects documented this way. `cd site && pnpm exec mesearch-wf sync` writes
+them, and `.workflow/managed.json` lists them: `bin/wf` and `.workflow/engine/`, the `wf-*` skills
+but `wf-math` and `wf-implementation`, `.agents/reference/mesearch/`, and the site's shared routes
+and components. `bin/wf guard` refuses an edit to one, and `bin/wf check` fails when one has
+changed. A change to one is made in mesearch, published, and brought here by `sync` after
+updating the package in `site/`. What skoro does differently lives here: `workflow.config.ts` (its
+kinds, stages, code and crate rules), `.agents/reference/authoring.md`,
+`.agents/reference/stages/<stage>.md`, its own skills, and the site's own pages and components.
+
 ## Layout
 
 | path                                        | what it is                                                                   |
@@ -45,16 +58,19 @@ Rules that hold whether or not a command was invoked:
 | `site/`                                     | the documentation site; `site/README.md` says how it works                   |
 | `site/content/`                             | pages, math notes, and the archive of entries                                |
 | `site/content/reference/crates/<crate>/`    | each crate's description, which its page shows above its reading order       |
-| `bin/wf`, `tools/wf/`                       | the workflow's command line and its tests                                    |
+| `workflow.config.ts`                        | the workflow's kinds, stages and code, and skoro's crate rules (`tools/workflow/`) |
+| `bin/wf`, `.workflow/engine/`               | the workflow's command line, managed                                         |
 | `bin/reading-order`, `tools/reading-order/` | the order in which to read a crate's modules, and its tests                  |
 | `bin/figures`, `tools/figures/`             | the examples' figures, drawn from the data they write with `SKORO_FIGURES` |
 | `.workflow/active`                          | the entry this branch works on, written by `bin/wf` alone                    |
 | `.agents/skills/`                           | the skills (linked into `.claude/skills/` for Claude Code)                   |
-| `.agents/reference/`                        | `workflow.md` (the procedure) and `authoring.md` (how documents are written) |
+| `.agents/reference/mesearch/`               | managed: `workflow.md` (the procedure), `authoring.md` and `markup.md` (how documents are written) |
+| `.agents/reference/`                        | `authoring.md` (skoro's own conventions) and `stages/` (what each stage asks of skoro) |
 
 ## Writing documents
 
-Everything in `site/content/` is written as `.agents/reference/authoring.md` says. The short of
+Everything in `site/content/` is written as `.agents/reference/mesearch/authoring.md` and
+`markup.md` say, with skoro's own conventions in `.agents/reference/authoring.md`. The short of
 it: pages say what is and quote real code; math notes say what is true, one idea to a note, in an
 order in which each rests only on the notes before it; archive documents discuss what may be,
 sketch code inline, and are frozen once approved.
@@ -83,7 +99,7 @@ cargo run --release -p skoro --example pose_graph
 cargo run --release -p skoro --example sliding_window
 cargo run --release -p skoro --example g2o
 node --test 'tools/*/*.test.ts' && site/node_modules/.bin/tsc -p tools
-cd site && pnpm check && pnpm lint && pnpm test && pnpm build
+cd site && pnpm exec mesearch-wf diff && pnpm check && pnpm lint && pnpm test && pnpm build
 SITE_CONTENT=test/content pnpm build      # in site/: the fixture, with a document of every kind
 ```
 

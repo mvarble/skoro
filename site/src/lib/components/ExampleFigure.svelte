@@ -11,7 +11,7 @@
     can be opened before trying.
 -->
 <script lang="ts">
-    import Icon from './Icon.svelte';
+    import Icon from '@mvarble/mesearch-workflow/app/lib/components/Icon.svelte';
 
     let { name, alt, caption }: { name: string; alt: string; caption?: string } = $props();
 

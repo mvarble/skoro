@@ -1,17 +1,2 @@
-import { cms } from '$cms';
-
-import { markdownOf } from '$lib/server/markdown';
-import { SITE } from '$lib/site';
-import type { RequestHandler } from './$types';
-
-export const prerender = true;
-
-export const GET: RequestHandler = () => {
-    const header = `# ${SITE.name}\n\n> ${SITE.description}\n`;
-    const body = cms
-        .all()
-        .map((doc) => `\n---\n\n<!-- document: ${doc.key} -->\n\n${markdownOf(doc)}`);
-    return new Response(header + body.join(''), {
-        headers: { 'content-type': 'text/plain; charset=utf-8' },
-    });
-};
+// Managed by @mvarble/mesearch-workflow, which `mesearch-wf sync` writes it from.
+export * from '@mvarble/mesearch-workflow/app/routes/llms-full.txt/+server.ts';

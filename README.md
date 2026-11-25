@@ -48,7 +48,9 @@ and last the documentation pages that say what now is. Each stage is approved by
 the next begins, and an approved document is frozen unless its stage is reopened.
 
 - [`AGENTS.md`](AGENTS.md): how to work in this repository, for people and agents alike.
-- [`.agents/reference/workflow.md`](.agents/reference/workflow.md): the procedure.
+- [`.agents/reference/mesearch/workflow.md`](.agents/reference/mesearch/workflow.md): the
+  procedure, which [`@mvarble/mesearch-workflow`](https://github.com/mvarble/mesearch/tree/main/packages/workflow)
+  writes from [`workflow.config.ts`](workflow.config.ts).
 - `bin/wf`: the command line that keeps the record and enforces it (`bin/wf help`).
 - [`site/`](site/README.md): the documentation (`cd site && pnpm install && pnpm dev`).
 

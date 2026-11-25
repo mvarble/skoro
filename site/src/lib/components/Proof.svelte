@@ -1,12 +1,8 @@
+<!-- Managed by @mvarble/mesearch-workflow, which `mesearch-wf sync` writes it from. -->
 <script lang="ts">
-    import type { Snippet } from 'svelte';
+    import Component from '@mvarble/mesearch-workflow/app/lib/components/Proof.svelte';
 
-    // A proof, ending in ∎.
-    let { children, title = 'Proof' }: { children: Snippet; title?: string } = $props();
+    let props = $props();
 </script>
 
-<div class="proof">
-    <span class="proof-heading">{title}.</span>
-    {@render children()}
-    <span class="qed" aria-label="End of proof">∎</span>
-</div>
+<Component {...props} />

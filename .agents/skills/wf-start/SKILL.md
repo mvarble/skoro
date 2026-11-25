@@ -10,15 +10,19 @@ argument-hint: '<slug> <feature|decision|chore> [what it is about] [revises <slu
 ## Steps
 
 1. Work out the slug (lowercase words joined by hyphens, named after the idea), the kind, a title,
-   and any entry it revises from what the user wrote. Ask if the kind is unclear: a **feature**
-   needs mathematics worked out; a **decision** is an argued position; a **chore** is a port or
-   a refactor with no new mathematics or design.
+   and any entry it revises from what the user wrote. Ask if the kind is unclear. The kinds, as
+   `bin/wf kinds` lists them:
+
+   - **feature** (`math` → `implementation` → `plan` → `build` → `publish`): an algorithm, a distribution, an example: the mathematics worked out first, then how it is built
+   - **decision** (`writeup` → `publish`): a position the library takes, argued in prose
+   - **chore** (`plan` → `build` → `publish`): a port or a refactor: no new mathematics, no new design
+
 2. If the current branch is `main`, make a branch for the entry first (`git switch -c <slug>`),
    unless your environment names the branch to work on.
 3. Run `bin/wf start <slug> --kind <kind> --title "<Title>"`, adding `--revises <slug>,...` when
    it changes the story of finished entries. If it refuses, tell the user what it said and stop.
-4. Replace the `[!TODO]` in `site/content/archive/<slug>/index.md` with a paragraph saying what
-   the entry sets out to do and why, from what the user said. Ask for what is missing rather than
+4. Replace the `[!TODO]` in `site/content/archive/<slug>/index.md` with a paragraph saying what the
+   entry sets out to do and why, from what the user said. Ask for what is missing rather than
    inventing it.
 5. Commit the entry folder and `.workflow/active` ("Start <slug>: <title>").
 6. Reply with the first stage's skill (`bin/wf status` names it). Do not start that stage until

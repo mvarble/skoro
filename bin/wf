@@ -1,3 +1,5 @@
 #!/bin/sh
-# The development workflow's command line; see .agents/reference/workflow.md.
-exec node "$(dirname "$0")/../tools/wf/main.ts" "$@"
+# The development workflow's command line; see .agents/reference/mesearch/workflow.md. The engine
+# is @mvarble/mesearch-workflow's, vendored by `mesearch-wf sync` so that it runs before anything
+# is installed.
+exec node "$(dirname "$0")/../.workflow/engine/main.js" "$@"

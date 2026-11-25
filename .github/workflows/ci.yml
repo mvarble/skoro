@@ -60,6 +60,8 @@ jobs:
                   cache: pnpm
                   cache-dependency-path: site/pnpm-lock.yaml
             - run: pnpm install --frozen-lockfile
+            - name: Check the files @mvarble/mesearch-workflow manages
+              run: pnpm exec mesearch-wf diff
             - run: pnpm check
             - run: pnpm lint
             - run: pnpm test

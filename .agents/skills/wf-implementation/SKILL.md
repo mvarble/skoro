@@ -16,8 +16,9 @@ that will show the design works.
 
 Run `bin/wf status --expect implementation`. If it fails, stop and tell the user what it said.
 
-Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the
-entry's `index.md`, its approved `math.md`, and the current draft (`bin/wf path`), if any. The
+Read `.agents/reference/mesearch/workflow.md`, `.agents/reference/mesearch/authoring.md`,
+`markup.md` beside it, and `.agents/reference/authoring.md` once per session, the entry's
+`index.md`, its approved `math.md`, and the current draft (`bin/wf path`), if any. The
 mathematics is frozen: if the design shows it to be wrong, stop and say so, and suggest
 `/wf-reopen math <reason>`. Do not design around it.
 

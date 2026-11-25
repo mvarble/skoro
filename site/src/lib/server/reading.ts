@@ -3,9 +3,9 @@ import path from 'node:path';
 
 import { resolve } from '$app/paths';
 import type { ReadingOrderSpec } from '$lib/reading/spec';
-import { REPO_ROOT } from '../../../plugins/file-ref';
+import { parseFrontmatter } from '@mvarble/mesearch-cms';
+import { REPO_ROOT } from '@mvarble/mesearch-workflow/app/lib/server/repo.ts';
 import { DEFAULT_LAST, readCrate, readingOrder } from '../../../../tools/reading-order/lib.ts';
-import { frontmatterList } from '../../../../tools/wf/lib.ts';
 
 // The reading orders of the workspace's crates, computed from their sources when the site is
 // built (and on every request under `pnpm dev`), so the pages follow the code as it is.
@@ -71,7 +71,8 @@ export interface CrateLink {
 export function entryCrates(filename: string): CrateLink[] {
     const text = fs.readFileSync(path.resolve(process.cwd(), filename), 'utf8');
     const existing = crateNames();
-    return (frontmatterList(text, 'crates') ?? [])
+    const listed = parseFrontmatter(text).crates;
+    return (Array.isArray(listed) ? listed.map(String) : [])
         .filter((crate) => existing.includes(crate))
         .map((crate) => ({ crate, href: resolve('/reference/crates/[crate=slug]', { crate }) }));
 }
