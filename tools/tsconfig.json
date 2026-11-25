@@ -14,7 +14,11 @@
         "noUncheckedIndexedAccess": true,
         "skipLibCheck": true,
         "typeRoots": ["../site/node_modules/@types"],
+        // The workflow's types, for `workflow.config.ts` and its checks: the site installs it.
+        "paths": {
+            "@mvarble/mesearch-workflow": ["../site/node_modules/@mvarble/mesearch-workflow/dist/index.d.ts"]
+        },
         "types": ["node"]
     },
-    "include": ["**/*.ts"]
+    "include": ["**/*.ts", "../workflow.config.ts"]
 }

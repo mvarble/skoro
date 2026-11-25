@@ -18,7 +18,7 @@ is never given on their behalf.
    has not seen.
 3. Run `bin/wf approve`. If it refuses, report each problem it lists and stop: the stage is not
    done. Do not fix the problems in the same breath; the user decides what happens next.
-4. Commit what `wf` changed (`workflow.json`, and `.workflow/active` when the entry is finished)
-   as "Approve the <stage> of <slug>".
+4. Commit what `wf` changed (`workflow.json`, the `workflow.json` of every entry it amended, and
+   `.workflow/active` when the entry is finished) as "Approve the <stage> of <slug>".
 5. Reply with the next stage and its skill. When the entry is done, say so, and that the branch
    can be merged once `bin/wf check --merge` passes.

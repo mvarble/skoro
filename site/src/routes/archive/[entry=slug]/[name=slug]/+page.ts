@@ -1,4 +1,2 @@
-import { withComponent } from '$lib/load';
-import type { PageLoad } from './$types';
-
-export const load: PageLoad = ({ data }) => withComponent(data);
+// Managed by @mvarble/mesearch-workflow, which `mesearch-wf sync` writes it from.
+export * from '@mvarble/mesearch-workflow/app/routes/archive/[entry=slug]/[name=slug]/+page.ts';

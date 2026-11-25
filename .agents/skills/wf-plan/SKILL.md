@@ -1,49 +1,49 @@
 ---
 name: wf-plan
-description: Write or revise the plan, a checklist distilled from the approved implementation companion (or, for a chore, from the request), in skoro's development workflow. Use only when the user invokes /wf-plan.
+description: Write or revise the plan of the active entry, a checklist the build works through in order, in skoro's development workflow. Use only when the user invokes /wf-plan.
 disable-model-invocation: true
 argument-hint: '[what to change]'
 ---
 
 # /wf-plan: the plan
 
-The implementation companion's prose, distilled into a checklist that the build works through in
-order. It should need few revisions: everything in it is already decided. A chore has no
-implementation companion; its plan is distilled from what the user asked and from the code.
+What will be done, in order, and how anyone will know it worked: a checklist that the build works
+through task by task. Whatever the plan rests on is already decided, in an earlier stage or in a
+decision entry; a choice that is expensive to reverse does not belong buried in a task.
 
 ## Before anything
 
 Run `bin/wf status --expect plan`. If it fails, stop and tell the user what it said.
 
-Read `.agents/reference/workflow.md` once per session, the entry's `index.md`, and its approved
-`implementation.md` (for a feature). If writing the plan shows a hole in the design, stop and
-suggest `/wf-reopen implementation <reason>` rather than deciding it here.
+Read `.agents/reference/mesearch/workflow.md` once per session, the entry's `index.md`, and
+`.agents/reference/stages/plan.md` if the project has it: what this project's plan is distilled
+from, what else to read first, and the plan's template. If writing the plan shows a hole in an
+earlier stage, stop and suggest `/wf-reopen <stage> <reason>` rather than deciding it here.
 
 ## Writing
 
-`site/content/archive/<slug>/plan.md`:
+`site/content/archive/<slug>/plan.md`, in groups of tasks, each a box:
 
 ```markdown
 ---
 summary: <one sentence>
-depends_on: [archive/<slug>/implementation]
 ---
 
-## <Group, such as a crate or a layer>
+## <Group>
 
-- [ ] <One task, small enough for one commit.> Tests: `<test_name>`, `<test_name>`.
+- [ ] <One task, small enough for one commit, and how to know it is done.>
 - [ ] ...
 
 ## Done when
 
-<The checks that must pass at the end: cargo test, clippy, the site build, and anything the
-implementation's tests section singles out.>
+<The checks that must pass at the end.>
 ```
 
-- Every test named in the implementation's `## Tests` appears in exactly one task.
-- Order tasks so that each builds on finished ones, and the code compiles and passes its tests
-  after each.
-- A task says what to do, not how: the how is in the implementation companion.
+The project's template, where it has one, says what else the plan holds and how a task names its
+check.
+
+- Order the tasks so that each builds on finished ones, and what is built works after each.
+- A task says what to do, not how: the how is decided in an earlier stage or in the build.
 
 Commit each revision. When the plan is right, reply that `/wf-approve` starts the build. Never
 approve yourself.

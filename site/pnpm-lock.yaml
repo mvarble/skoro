@@ -19,14 +19,17 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.12.0)
       '@mvarble/mesearch-cms':
-        specifier: ^0.3.0
-        version: 0.3.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))
+        specifier: ^0.4.0
+        version: 0.4.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))
       '@mvarble/mesearch-markdown':
-        specifier: ^0.1.0
-        version: 0.1.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+        specifier: ^0.2.0
+        version: 0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
       '@mvarble/mesearch-ui':
         specifier: ^0.2.1
         version: 0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      '@mvarble/mesearch-workflow':
+        specifier: ^0.1.0
+        version: 0.1.0(@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2))))(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
         version: 3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)))
@@ -207,8 +210,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@mvarble/mesearch-cms@0.3.0':
-    resolution: {integrity: sha512-Ur+q/q3dnFfOO4sZ+IWgPdrmK7tlWy/CYrCiC2iKISeD1jXU80inhU5JGH96KOoPg+US8KCB5lNZ5pUJ7/BA5w==}
+  '@mvarble/mesearch-cms@0.4.0':
+    resolution: {integrity: sha512-it4fns720yv4Wcy6EqnAZCAQ270o/7dF/4WjfqR8boPDKhOeJ/JyDAf9UBmv3a5uiDemwlVyCXxnFvErNFnUnw==}
     engines: {node: '>=22.18'}
     peerDependencies:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -219,11 +222,27 @@ packages:
     peerDependencies:
       svelte: ^5.0.0
 
+  '@mvarble/mesearch-markdown@0.2.0':
+    resolution: {integrity: sha512-c4RFacXNk9QGVEcQgfctXj4ouIQ2mmmZO4FvaFqyhh/EZpwhIhTc2lUm95ppxiyJVwpZ/E834SuDbnxIBwH4Eg==}
+    engines: {node: '>=22.18'}
+    peerDependencies:
+      svelte: ^5.0.0
+
   '@mvarble/mesearch-ui@0.2.1':
     resolution: {integrity: sha512-edIJdmyCD9Ej/+aIkk8/bpoEjTlUc/dOSRUZSq+iU2y843riE+Kj9pEvbtELk/HJ5HWL6SptlDhnyByftBcfvg==}
     engines: {node: '>=22.18'}
     peerDependencies:
       svelte: ^5.0.0
+
+  '@mvarble/mesearch-workflow@0.1.0':
+    resolution: {integrity: sha512-qyTrsir0ICaeOed7g9WHBBFArjqu1UlZ/vyKbEERpRfc/3Y9A8se2+tsKwndya6o3SCGkt5DZey1GSAIea1fZw==}
+    engines: {node: '>=22.18'}
+    hasBin: true
+    peerDependencies:
+      '@sveltejs/adapter-static': ^3.0.10
+      '@sveltejs/kit': ^2.63.0
+      svelte: ^5.56.1
+      vite: ^8.0.16
 
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
@@ -272,42 +291,36 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@rolldown/binding-linux-arm64-musl@1.2.13':
     resolution: {integrity: sha512-xU+Kvv9N2A3SY35zFh1FWWNjxbadE/BKeqnkXe7vScU4GZsw757BlVmDLITZEq8DPpk6m7uoDYkK7P+x/uU5Ow==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@rolldown/binding-linux-ppc64-gnu@1.2.13':
     resolution: {integrity: sha512-XMk/hnhh25oQ756Lclb1Q11h4ll0xC0Esa5w4Vzp+mAE2S3AGJgeM0SonrIgY8fHhjarb6hcoTuwoFG0VVP2ig==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
-    libc: [glibc]
 
   '@rolldown/binding-linux-s390x-gnu@1.2.13':
     resolution: {integrity: sha512-U1BoTHYmlywE2n3HUWjzZ+8EQsKr+OwpxYuDWaubx42tUL8QSL7nOqRz/NVHanibbFP3M1Rxuprz/wNcbMKjqw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [s390x]
     os: [linux]
-    libc: [glibc]
 
   '@rolldown/binding-linux-x64-gnu@1.2.13':
     resolution: {integrity: sha512-J4cm80Pc6wEwV5AZ42o62sIQgDk+Y7R2s646jIwuvO+4V46QB58N4vVuMPWCBaNgursXLpmUWJV//WQAkPvHBQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@rolldown/binding-linux-x64-musl@1.2.13':
     resolution: {integrity: sha512-W0euZS40U4V6JkmEnVCIX9mcsL6cbXQ4X8c2w+MMOIjFg68TXUW+u3RT+2e1t1pv9mg/EP3pDtK3POXdQ7Rxyw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@rolldown/binding-openharmony-arm64@1.2.13':
     resolution: {integrity: sha512-do/AF/4n9MRshia3a5aXoy8xM2c6mgfT6D7H/dY6my5z+hfCIR4ab7mk4IRj++nsEQpKy39kd0DQnDq+r692tw==}
@@ -971,28 +984,24 @@ packages:
     engines: {node: '>= 12.0.0'}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   lightningcss-linux-arm64-musl@1.33.0:
     resolution: {integrity: sha512-yiO5ROMuYQgXbC60yjZU5CYSFZGKXL0HFATXt9mHJn1+zW55oCtMI9NfcVhYLMFDL7gV7oBPon/EmMMGg2OvtQ==}
     engines: {node: '>= 12.0.0'}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   lightningcss-linux-x64-gnu@1.33.0:
     resolution: {integrity: sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg==}
     engines: {node: '>= 12.0.0'}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   lightningcss-linux-x64-musl@1.33.0:
     resolution: {integrity: sha512-RYiYbkokw0trfKqqzfF55lginwEPrD3OJDfTuJzFs1MK6iFnDenaz1fqLLtX4ITG3OktJQXOeTaw1awrBAlZPw==}
     engines: {node: '>= 12.0.0'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   lightningcss-win32-arm64-msvc@1.33.0:
     resolution: {integrity: sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA==}
@@ -1682,9 +1691,9 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@mvarble/mesearch-cms@0.3.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))':
+  '@mvarble/mesearch-cms@0.4.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))':
     dependencies:
-      '@mvarble/mesearch-markdown': 0.1.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      '@mvarble/mesearch-markdown': 0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
       bibtex: 0.9.0
       devalue: 5.9.4
       esast-util-from-js: 2.0.1
@@ -1709,6 +1718,15 @@ snapshots:
       shiki: 4.5.0
       svelte: 5.57.2(@typescript-eslint/types@8.71.2)
 
+  '@mvarble/mesearch-markdown@0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))':
+    dependencies:
+      katex: 0.18.10
+      mdsvex: 0.12.8(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      remark-frontmatter: 2.0.0
+      remark-math: 3.0.0
+      shiki: 4.5.0
+      svelte: 5.57.2(@typescript-eslint/types@8.71.2)
+
   '@mvarble/mesearch-ui@0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))':
     dependencies:
       '@fontsource-variable/inter': 5.3.0
@@ -1718,6 +1736,23 @@ snapshots:
       d3-force: 3.0.0
       katex: 0.18.10
       svelte: 5.57.2(@typescript-eslint/types@8.71.2)
+
+  '@mvarble/mesearch-workflow@0.1.0(@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2))))(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))':
+    dependencies:
+      '@fontsource-variable/inter': 5.3.0
+      '@fontsource/jetbrains-mono': 5.3.0
+      '@mvarble/mesearch-cms': 0.4.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2))
+      '@mvarble/mesearch-markdown': 0.2.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      '@mvarble/mesearch-ui': 0.2.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      '@sveltejs/adapter-static': 3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)))
+      '@sveltejs/kit': 2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@8.3.4(@types/node@24.19.2)))(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2))
+      katex: 0.18.10
+      mdsvex: 0.12.8(svelte@5.57.2(@typescript-eslint/types@8.71.2))
+      remark-math: 3.0.0
+      svelte: 5.57.2(@typescript-eslint/types@8.71.2)
+      vite: 8.3.4(@types/node@24.19.2)
+    transitivePeerDependencies:
+      - supports-color
 
   '@oxc-project/types@0.153.0': {}
 

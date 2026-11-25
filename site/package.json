@@ -16,9 +16,10 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@mvarble/mesearch-cms": "^0.3.0",
-        "@mvarble/mesearch-markdown": "^0.1.0",
+        "@mvarble/mesearch-cms": "^0.4.0",
+        "@mvarble/mesearch-markdown": "^0.2.0",
         "@mvarble/mesearch-ui": "^0.2.1",
+        "@mvarble/mesearch-workflow": "^0.1.0",
         "@sveltejs/adapter-static": "^3.0.10",
         "@sveltejs/kit": "^2.63.0",
         "@sveltejs/vite-plugin-svelte": "^7.1.2",

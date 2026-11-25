@@ -1,8 +1,2 @@
-import { cms } from '$cms';
-
-import { documentData } from '$lib/server/document';
-import type { EntryGenerator, PageServerLoad } from './$types';
-
-export const entries: EntryGenerator = () => cms.math.list().map((note) => ({ slug: note.slug }));
-
-export const load: PageServerLoad = ({ params }) => documentData(`math/${params.slug}`);
+// Managed by @mvarble/mesearch-workflow, which `mesearch-wf sync` writes it from.
+export * from '@mvarble/mesearch-workflow/app/routes/math/[slug=slug]/+page.server.ts';
