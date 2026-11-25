@@ -1,7 +1,7 @@
 # Plan
 
 What skoro means to do next, kept here so the plan outlives any one session.
-Each item returns as an entry of its own, through the workflow (`.agents/reference/workflow.md`), and ends with the command that would open it; nothing here starts one.
+Each item returns as an entry of its own, through the workflow (`.agents/reference/mesearch/workflow.md`), and ends with the command that would open it; nothing here starts one.
 The slug and the kind in each command are proposals, settled when the entry is opened.
 Items that cite measurements take them from `EVALUATION.md`, the evaluation of the core of 2026-11-10, which says how each was made.
 The archive is the branch `archive`, tagged `archive-2026-10-09`; read it with `git show archive-2026-10-09:<path>`.

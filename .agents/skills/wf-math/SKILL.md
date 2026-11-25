@@ -16,8 +16,8 @@ Run `bin/wf status --expect math`. If it fails, stop and tell the user what it s
 step it points to. Answering a question about the mathematics needs no skill: do that in
 conversation instead, without writing the document.
 
-Read `.agents/reference/workflow.md` and `.agents/reference/authoring.md` once per session, the
-entry's `index.md`, and the current draft (`bin/wf path`), if there is one.
+Read `.agents/reference/mesearch/workflow.md`, `.agents/reference/mesearch/authoring.md`,
+`markup.md` beside it, and `.agents/reference/authoring.md` once per session, the entry's `index.md`, and the current draft (`bin/wf path`), if there is one.
 
 ## Writing
 
