@@ -1,3 +1,5 @@
+# Our own packages, released and adopted together: every version of the mesearch family is exempt
+# from the minimum release age, so a release brought in by `mesearch-wf sync` installs in CI the day
+# it is published.
 minimumReleaseAgeExclude:
-    - '@mvarble/mesearch-cms@0.2.1 || 0.3.0'
-    - '@mvarble/mesearch-ui@0.2.1'
+    - '@mvarble/mesearch*'
