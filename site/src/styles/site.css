@@ -1,0 +1,37 @@
+/* skoro's own rules over the shared stylesheet: its lockup on the home page, the examples'
+ * showcase under it, and the crates' dependencies on their cards. */
+
+.hero .logo-lockup {
+    width: min(30rem, 100%);
+    margin: 0 auto;
+}
+
+/* The examples' figures, under the hero: one wide, and a pair beneath it. */
+.landing-showcase {
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: 0 var(--gutter) var(--space-8);
+
+    .showcase-lede {
+        max-width: 42rem;
+        margin: 0 auto;
+        text-align: center;
+        color: var(--fg-3);
+    }
+
+    .showcase-link {
+        margin-top: calc(-1 * var(--space-3));
+        text-align: center;
+    }
+
+    .showcase-pair {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+        gap: var(--space-4);
+    }
+}
+
+.crate .crate-deps code {
+    font-weight: 400;
+    color: var(--fg-3);
+}

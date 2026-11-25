@@ -93,7 +93,7 @@
 </section>
 
 {#if data.crates}
-    <section class="landing-crates">
+    <section class="landing-section landing-crates">
         <h2>The workspace</h2>
         <p>
             The crates in layers, foundations first: each is built on the crates it names, which lie

@@ -1,5 +1,6 @@
-// The one place that defines the site's structure. `vite.config.ts` hands the tracks and the
-// entry documents to the content database, and the navigation is built from the same lists.
+// The one place that defines the site's structure. `docsSite()` hands the tracks, the parts and
+// the entry documents to the content database, and the pages `@mvarble/mesearch-workflow` shares
+// read this module as `$site`, with defaults for what it leaves out.
 
 export const SITE = {
     name: 'skoro',
@@ -109,6 +110,37 @@ export const ARCHIVE = {
     blurb:
         'How each part of skoro came to be: the mathematics worked out for it, the implementation ' +
         'it was given, and the plan it was built by, kept as they were approved.',
+    // The paragraph the archive's page opens with.
+    about:
+        'An entry is opened for each piece of development and moves through its stages: for a ' +
+        'feature, the mathematics, then the implementation, the plan, the build, and last the ' +
+        'pages that say what the feature made true. What each stage approved is kept here as it ' +
+        'was approved. When the library later changes, a new entry revises the old one rather ' +
+        'than rewriting it.',
+};
+
+// The math notes are the third track a reader reads, after the guide and the concepts: the
+// navigation lists them before the reference, which is looked up.
+export const NAV = { mathBefore: 'reference' };
+
+// What `llms.txt` says of the pages, after "Every document below links to its Markdown source."
+export const LLMS = {
+    about:
+        'The pages have two reading orders: the Guide is top-down (start from usage), and ' +
+        'Concepts is bottom-up (from the foundations up). Mathematics is listed in the order it ' +
+        'is read: each note rests only on the notes before it, and none depends on skoro. The ' +
+        'pages say what skoro is now; the Archive keeps how each part came to be, and may ' +
+        'describe what has since changed.',
+};
+
+// How an entry's stages are named on its page; the others are their names, capitalized.
+export const STAGE_LABELS: Record<string, string> = {
+    math: 'Mathematics',
+    implementation: 'Implementation',
+    plan: 'Plan',
+    build: 'Build',
+    publish: 'Publish',
+    writeup: 'Writeup',
 };
 
 // The documents an archive entry may hold, in the order they are written.

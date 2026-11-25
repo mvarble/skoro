@@ -3,7 +3,7 @@
     import { page } from '$app/state';
     import ReadingOrder from '$lib/components/ReadingOrder.svelte';
     import { SITE } from '$lib/site';
-    import type { NavSection } from '../../../+layout.server';
+    import type { NavSection } from '@mvarble/mesearch-workflow/app/lib/nav.ts';
 
     // The template of every crate's page: what the crate is for, from its description, and the
     // order in which to read its modules.

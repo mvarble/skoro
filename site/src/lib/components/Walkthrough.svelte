@@ -1,10 +1,13 @@
 <script lang="ts">
     import { onMount, untrack, type Snippet } from 'svelte';
 
-    import Icon from '$lib/components/Icon.svelte';
-    import { layoutGraph, type TextLayout } from '$lib/graph/geometry';
+    import Icon from '@mvarble/mesearch-workflow/app/lib/components/Icon.svelte';
+    import {
+        layoutGraph,
+        type TextLayout,
+    } from '@mvarble/mesearch-workflow/app/lib/graph/geometry.ts';
     import { edgeKindClasses, nodeKindClasses, type NodeSpec } from '$lib/graph/spec';
-    import { renderMixed } from '$lib/tex';
+    import { renderMixed } from '@mvarble/mesearch-workflow/app/lib/tex.ts';
     import { frameAt, kindsUsed } from '$lib/walk/frames';
     import { codeMatches, edgeId, matchLines, type WalkthroughSpec } from '$lib/walk/spec';
 
